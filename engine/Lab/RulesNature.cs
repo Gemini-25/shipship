@@ -85,6 +85,7 @@ public static partial class Program
 
         NatureInsideRules();
         NatureHandsRules();
+        NatureMailRules();
     }
 
     private const string CrateShip = @"
@@ -225,5 +226,63 @@ public static partial class Program
         Check("일하다 다침: 손보다 공구가 미끄러지면 세상(⑦)이 다치게 한다 (원인: 그 손봄) · 몫 0이면 다치지 않는다",
             hurt.blunt > 0.2f && hurt.hurtWhy.Contains("미끄러져") && calm.blunt < 0.01f,
             $"미끄러짐: 타박 {hurt.blunt:0.00} · \"{hurt.hurtWhy}\" / 몫 0: 타박 {calm.blunt:0.00}");
+    }
+
+    /// <summary>⑫ 자연 사건 (라) — 고향 편지 (통신 창 · 안테나 · 빛의 늦음 → 받은 이의 마음) · 교통량의 조난선.</summary>
+    private static void NatureMailRules()
+    {
+        Console.WriteLine("\n[⑫ 자연 사건 (라) — 고향 편지 · 조난선]");
+        var legend = new Dictionary<char, string> { ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['R'] = "SensorArray" };
+        var lay = Worlds.Ascii(WeatherShip, legend);
+
+        // ── 고향 편지: 저녁 통신 창에 안테나(센서 배열)가 돌면 사람마다 편지 — 소식은 시드에서 · 빛이 고향에서 오는 만큼 늦게 · 받은 이의 마음이 받아들인다 /
+        //    안테나가 멈췄으면 편지는 고향에 쌓였다가 안테나가 돌아온 다음 창에 온다 · 항해에 나서지 않은 배(시험)는 고향과 잇지 않았다 ──
+        {
+            var s = Worlds.Full(lay, 61);
+            var m = s.Get<Mind>(); var o = s.Get<Outside>(); var soc = s.Get<Society>(); var net = s.Get<Network>();
+            var people = new[] { m.AddPerson(s, Worlds.At(lay, 3, 1)), m.AddPerson(s, Worlds.At(lay, 5, 2)), m.AddPerson(s, Worlds.At(lay, 25, 2)) };
+            o.Route = 4; o.StartVoyage(s, 1.52); o.VoyageStart = s.Tick - Time.Days(100);   // 출항한 지 백 날 (고향이 멀어졌다)
+            soc.LetterChance = 1; soc.MailHour = 0.1;
+            var arrays = net.Devices.Where(d => d.Type == "SensorArray").Select(d => d.Id).ToList();
+            foreach (int d in arrays) net.Broken[d * 4 + (int)Part.Electric] = 1;   // 안테나가 멈췄다
+            s.Run(Time.Hours(0.15));
+            long blocked = soc.Letters;
+            foreach (int d in arrays) net.Repair(d, Part.Electric);
+            soc.MailHour = 0.2;   // 다음 창
+            var before = people.Select(p => (m[p].C.Joy, m[p].C.Sad)).ToArray();
+            long f0 = s.Facts.Total;
+            s.Run(Time.Hours(0.1));
+            var letters = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Letter).ToList();
+            bool felt = letters.All(l => { int i = Array.IndexOf(people, l.Actor); var (j0, s0) = before[i]; return l.Size > 0 ? m[l.Actor].C.Joy > j0 : l.Size < 0 ? m[l.Actor].C.Sad > s0 : m[l.Actor].C.Joy >= j0; });
+            double light = o.HomeLightMinutes(s.Tick);
+            string one = letters.Count > 0 ? s.Causes.Text(letters[0].Cause) : "";
+            var still = Worlds.Full(lay, 61); var sm = still.Get<Mind>(); sm.AddPerson(still, Worlds.At(lay, 3, 1));
+            still.Get<Society>().LetterChance = 1; still.Get<Society>().MailHour = 0.1; still.Run(Time.Hours(0.2));
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var l in letters) Console.WriteLine($"    {s.Causes.Text(l.Cause)}");
+            Check("고향 편지: 저녁 통신 창에 안테나가 돌면 사람마다 편지 (소식은 시드에서 · 빛이 고향에서 오는 만큼 늦게) · 받은 이의 마음이 받아들인다 · 안테나가 멈춘 창엔 오지 않고 다음 창에 · 항해하지 않은 배는 고향과 잇지 않았다",
+                blocked == 0 && letters.Count == 3 && felt && light > 1 && one.Contains("편지") && one.Contains("분") && still.Get<Society>().Letters == 0,
+                $"안테나 멈춤: 편지 {blocked} / 돌아온 창: 편지 {letters.Count} · 마음이 움직임 {felt} · 고향까지 빛 {light:0.0}분 · \"{one}\" / 항해 전 배: {still.Get<Society>().Letters}");
+        }
+
+        // ── 조난선은 교통량대로: 지나는 배 중 몇은 조난선 — 붐비는 항로(8)는 고요한 항로(1)보다 자주 만난다 ──
+        {
+            (int boats, int distress) Run(int route)
+            {
+                var s = Worlds.Full(lay, 62);
+                var o = s.Get<Outside>();
+                o.Route = route; o.TrafficOn = true; o.Distance = 1.52 - 0.01;   // 행성 궤도 곁 (교통이 붐빈다)
+                int distress = 0; var seen = new HashSet<int>();
+                for (int k = 0; k < Time.Days(2); k++)
+                {
+                    s.Step();
+                    foreach (var c in o.Contacts) if (seen.Add(c.Id) && c.Kind == ContactKind.Distress) distress++;
+                }
+                return (o.ContactSeq, distress);
+            }
+            var calmT = Task.Run(() => Run(1)); var busy = Run(8); var calm = calmT.Result;
+            Check("조난선은 교통량대로: 붐비는 항로(8)는 지나는 배를 고요한 항로(1)보다 자주 만난다 (그중 몇은 조난선 — 갈지는 주컴퓨터 · 함장 방침)",
+                busy.boats > calm.boats && busy.boats >= 2,
+                $"이틀 · 행성 궤도 곁: 항로 8 배 {busy.boats} (조난선 {busy.distress}) · 항로 1 배 {calm.boats} (조난선 {calm.distress})");
+        }
     }
 }

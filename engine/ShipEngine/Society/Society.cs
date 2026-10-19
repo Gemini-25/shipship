@@ -172,6 +172,7 @@ public sealed partial class Society : IEngine
         Resize(_mind.Agents.Count);
         Events(sim);     // 세상에 일어난 일 (마음은 이것을 보고 정했다 — 손보다 상한 일은 행동보다 먼저 기록돼야 한다)
         TakeActs(sim);   // 판단 이관: 마음이 이번 틱에 한 사회적 행동의 결과를 계산한다
+        MailStep(sim);   // ⑫ 고향 편지 (통신 창)
         if (sim.Tick % TogetherEvery == 0)
         {
             Together(sim, TogetherEvery * dt);
@@ -554,6 +555,7 @@ public sealed partial class Society : IEngine
         w.I32(keys.Count); foreach (var k in keys) { w.I32(k); w.Arr(_sharedSeen[k]); }
         SaveSecrets(w);
         SaveCouncil(w);
+        SaveMail(w);
     }
 
     public void Load(StateReader r)
@@ -568,5 +570,6 @@ public sealed partial class Society : IEngine
         _sharedSeen.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { int k = r.I32(); _sharedSeen[k] = r.Arr<int>(); }
         LoadSecrets(r);
         LoadCouncil(r);
+        LoadMail(r);
     }
 }

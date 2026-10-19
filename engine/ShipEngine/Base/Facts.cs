@@ -126,6 +126,7 @@ public enum FactKind : ushort
     Culture,           // 관습 (Size: CultureEvent — 1 관습 · 2 관습이 사라짐 · 3 금기 · 4 금기가 풀림 · 5 침대 금기 · 6 별명 · 7 추모 · 8 축하 · 9 규칙 · 10 부결 · 11 규칙을 어김 · 12 추모를 미룸 · Actor: 그 사람 · Other: 방 · 시 · 별명 · 규칙)
     // ⑥ 감지 · ⑫ 자연 사건
     Sensed,            // 센서에 잡혔다 (Other: TrackKind 0 운석 · 1 파편 구름 · 2 배 · 3 폭발 조짐 · Size: 거리 km)
+    Letter,            // 고향에서 편지가 왔다 (Actor: 받은 이 · Size: 2 아주 기쁜 · 1 기쁜 · 0 안부 · −1 슬픈 · −2 부고 · Other: 빛이 걸린 분)
 }
 
 public static class FactNames
@@ -150,7 +151,7 @@ public static class FactNames
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
-        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", FactKind.Diagnosed => "병을 짐작했다", FactKind.Surgery => "수술했다", FactKind.Heart => "마음", FactKind.Culture => "관습", FactKind.Sensed => "센서에 잡혔다", _ => "",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", FactKind.Diagnosed => "병을 짐작했다", FactKind.Surgery => "수술했다", FactKind.Heart => "마음", FactKind.Culture => "관습", FactKind.Sensed => "센서에 잡혔다", FactKind.Letter => "고향 편지", _ => "",
     };
 }
 

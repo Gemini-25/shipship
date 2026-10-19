@@ -299,6 +299,24 @@ public sealed partial class Outside
         }
     }
 
+    /// <summary>
+    /// 고향(떠난 천체)까지 빛이 가는 분 — 배는 전이 궤도 위 (근점 이각 ν: r = a(1−e²)/(1+e·cosν)) · 고향은 제 원 궤도를 돈다 (주기 r^1.5년) ·
+    /// 둘 다 출발 때 같은 쪽에서 — 코사인 법칙으로 거리 (AU) × 8.317분. 항해 전이면 가까이 (0).
+    /// </summary>
+    public double HomeLightMinutes(long tick)
+    {
+        if (VoyageTicks <= 0 && Distance == VoyageFrom) return 0;
+        double home = VoyageFrom > 0 ? VoyageFrom : 1, r = Distance;
+        double a = (VoyageFrom + VoyageTo) / 2, e = Math.Abs(VoyageTo - VoyageFrom) / Math.Max(1e-9, VoyageTo + VoyageFrom);
+        double nu = 0;
+        if (e > 1e-9) nu = Math.Acos(Math.Clamp((a * (1 - e * e) / r - 1) / e, -1, 1));
+        if (VoyageTo < VoyageFrom) nu = Math.PI - nu;   // 안으로 가면 원일점에서
+        double years = (tick - VoyageStart) / (double)Time.TicksPerDay / DaysPerYear;
+        double th = 2 * Math.PI * years / Math.Pow(home, 1.5);
+        double d = Math.Sqrt(Math.Max(0, r * r + home * home - 2 * r * home * Math.Cos(nu - th)));
+        return d * 8.317;
+    }
+
     /// <summary>지금 지나는 구간 (별계 지도 — 아는 것 · 항로만의 구간은 그 항로일 때) · 없으면 null.</summary>
     public ZoneDef? ZoneAt(double au)
     {

@@ -41,7 +41,6 @@ public sealed partial class Mind
             {
                 FactKind.Contact => 0.1f,
                 FactKind.Burn when f.Other == (int)BurnKind.Arrive => 0.4f,
-                FactKind.StorySeed when f.Other == (int)SeedKind.GoodNews => 0.08f,
                 _ => 0,
             };
             if (k <= 0) continue;

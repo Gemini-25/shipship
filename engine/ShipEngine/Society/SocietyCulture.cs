@@ -126,7 +126,7 @@ public sealed partial class Society
                     _feastWeight += f.Kind is FactKind.Ignition or FactKind.FireSpread ? 1 : 2;   // 불 한 번은 작은 일 — 번지거나 · 뚫리거나 · 사람이 쓰러져야 넘긴 '위기'다
                     break;
                 }
-                case FactKind.StorySeed when f.Other == (int)SeedKind.GoodNews:
+                case FactKind.Letter when f.Size >= 2:   // 고향의 아주 기쁜 소식 (아이 · 결혼)
                 case FactKind.Burn when f.Other == (int)BurnKind.Arrive:
                     if (_feastFrom < 0) { _feastFrom = f.Tick; _feastCause = f.Cause; _feastWeight = 2; _feastNews = 1; _feastHero = -1; }
                     break;
