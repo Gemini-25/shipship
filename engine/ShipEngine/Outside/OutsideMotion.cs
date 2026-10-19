@@ -306,6 +306,14 @@ public sealed partial class Outside
     public double HomeLightMinutes(long tick)
     {
         if (VoyageTicks <= 0 && Distance == VoyageFrom) return 0;
+        var (home, r, ang) = HomeGeometry(tick);
+        double d = Math.Sqrt(Math.Max(0, r * r + home * home - 2 * r * home * Math.Cos(ang)));
+        return d * 8.317;
+    }
+
+    /// <summary>고향 · 배의 자리: 고향 궤도 반지름 · 배까지 별에서 거리 (AU) · 별에서 본 둘 사이 각 (라디안).</summary>
+    private (double home, double r, double ang) HomeGeometry(long tick)
+    {
         double home = VoyageFrom > 0 ? VoyageFrom : 1, r = Distance;
         double a = (VoyageFrom + VoyageTo) / 2, e = Math.Abs(VoyageTo - VoyageFrom) / Math.Max(1e-9, VoyageTo + VoyageFrom);
         double nu = 0;
@@ -313,9 +321,28 @@ public sealed partial class Outside
         if (VoyageTo < VoyageFrom) nu = Math.PI - nu;   // 안으로 가면 원일점에서
         double years = (tick - VoyageStart) / (double)Time.TicksPerDay / DaysPerYear;
         double th = 2 * Math.PI * years / Math.Pow(home, 1.5);
-        double d = Math.Sqrt(Math.Max(0, r * r + home * home - 2 * r * home * Math.Cos(nu - th)));
-        return d * 8.317;
+        return (home, r, nu - th);
     }
+
+    /// <summary>
+    /// ⑤ 통신 지연 (나) 태양 합: 고향에서 본 별과 배 사이 각 (SEP · 도) — 2° 안이면 별의 코로나가 신호를 삼킨다 (실제: 화성 합 때 두 주 넘게 명령을 멈춘다).
+    /// 항해 전이면 180 (고향 곁).
+    /// </summary>
+    public double HomeSepDeg(long tick)
+    {
+        if (VoyageTicks <= 0 && Distance == VoyageFrom) return 180;
+        var (home, r, ang) = HomeGeometry(tick);
+        // 고향 (home, 0) · 별 (0, 0) · 배 (r cos ang, r sin ang): 고향에서 별 쪽 (−home, 0) 과 배 쪽 사이 각
+        double sx = r * Math.Cos(ang) - home, sy = r * Math.Sin(ang);
+        double len = Math.Sqrt(sx * sx + sy * sy);
+        if (len < 1e-9) return 180;
+        double cos = Math.Clamp(-sx / len, -1, 1);
+        return Math.Acos(cos) * 180 / Math.PI;
+    }
+
+    public const double ConjunctionDeg = 2;
+    /// <summary>태양 합 — 고향과 통신이 끊겼다.</summary>
+    public bool Conjunction(long tick) => Route > 0 && HomeSepDeg(tick) < ConjunctionDeg;
 
     /// <summary>지금 지나는 구간 (별계 지도 — 아는 것 · 항로만의 구간은 그 항로일 때) · 없으면 null.</summary>
     public ZoneDef? ZoneAt(double au)

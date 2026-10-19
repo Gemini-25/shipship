@@ -30,6 +30,7 @@ public sealed partial class Society
         if (_mailDay < 0) _mailDay = today - 1;
         var sense = sim.Find<Sensors>();
         if (sense == null || !sense.Up) return;   // 안테나가 멈췄다 — 편지는 고향에 쌓인다
+        if (o.Conjunction(sim.Tick)) return;      // ⑤ 태양 합 — 별이 신호를 삼킨다 (편지는 쌓인다)
         double delay = o.HomeLightMinutes(sim.Tick);
         for (long d = _mailDay + 1; d <= today; d++)
             for (int p = 0; p < N; p++)

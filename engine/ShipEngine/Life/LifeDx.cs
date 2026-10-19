@@ -73,6 +73,22 @@ public sealed partial class Life
     /// 맞힐 몫: 바탕 + 0.6 × 몸 지식 + 도구 — 의료 침대(피 검사 · 혈액 가스: 일산화탄소 · 시안화수소 · 과용 · 곪음 · 간 · 속 출혈 · 맹장염) +0.5 ·
     /// 진단 장치(심전도 · 몸 훑기: 모두) +0.6 · 기체 센서(그 칸 공기의 일산화탄소 · 시안화수소) +0.5. 덮지 않은 상처의 고름은 누구나 본다. 많아야 0.98.
     /// </summary>
+    /// <summary>⑤ 통신 지연 (가) 원격 진료 — 고향 관제 의사가 증상 기록 · 생체 신호만 보고 맞힐 몫 (진단 장치 기록이 있으면 더 · 시험이 바꾼다).</summary>
+    public double HomeDxChance = 0.85, HomeDxScanChance = 0.95;
+    public long HomeDxAnswered;
+
+    /// <summary>배가 보내는 생체 신호 (그 몸의 지금 병 — 보낸 때의 것이 고향에 닿는다).</summary>
+    public Ail Telemetry(int body) => body >= 0 && body < Bodies.Count ? Ailment(Bodies[body]) : Ail.None;
+
+    /// <summary>고향 관제 의사의 답: 보낸 생체 신호로 (세상의 확률 · 난수 갈래 '원격 진료') — 틀리면 닮은 병으로.</summary>
+    public Ail HomeDx(Sim sim, Ail sent, bool scan, int body)
+    {
+        HomeDxAnswered++;
+        if (sent is Ail.None or Ail.Cold) return sent;
+        bool right = Rng.Unit(sim.Seed, Rng.Key("원격 진료"), sim.Tick, body) < (scan ? HomeDxScanChance : HomeDxChance);
+        return right ? sent : LookAlike(sent);
+    }
+
     public static double DxChance(Ail a, in Body b, double knBody, bool bed, bool scanner, bool sniff)
     {
         if (a is Ail.None or Ail.Cold) return 1;

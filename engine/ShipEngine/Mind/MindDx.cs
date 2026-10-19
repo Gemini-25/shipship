@@ -63,6 +63,19 @@ public sealed partial class Mind
         return seen;
     }
 
+    public long RemoteChanged;
+
+    /// <summary>⑤ 원격 진료의 답 (주컴퓨터가 전한다): 진료 기록과 다르면 고친다 (본 이 −1 '고향 관제') · 같으면 그대로 — 고쳤으면 참.</summary>
+    public bool RemoteChart(Sim sim, int agent, Ail ail, int cause)
+    {
+        if (agent < 0 || agent >= Agents.Count) return false;
+        ref var pc = ref Agents[agent].C;
+        if (pc.DxAil == ail) return false;
+        pc.DxAil = ail; pc.DxAt = sim.Tick; pc.DxBy = -1; pc.DxCause = cause;
+        RemoteChanged++;
+        return true;
+    }
+
     /// <summary>
     /// 다시 보아야 하나 (주컴퓨터가 읽는다): 돌봄을 부를 만한 증상이 있고 — 본 적이 없거나 · 본 뒤 쓰러졌거나 (10분) · 새 증상이 났거나 (30분) ·
     /// 네 시간이 지나도 남았다 (진료 기록이 감기이고 열 · 기침이 있으면 감기와 맞으니 하루).
