@@ -466,10 +466,11 @@ public sealed partial class Mind : IEngine
         ClearOldActs(sim.Tick);   // 오랜 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
-        if (Agents.Count == 0) { HoldDoorsByItems(); return; }
+        if (Agents.Count == 0) { HoldDoorsByItems(); ApplyPlugs(); return; }
         F.RebuildNow();
         IndexBodies();
         HearCall();     // 판단 이관 (가): 새 모임의 부름을 듣고 저마다 갈지 정한다
+        Drag(sim, dt);  // ③ 국소 현상 — 감압 돌풍에 끌려가는 사람 · 구멍에 빨려 붙은 몸과 물건
         foreach (var a in Agents) UpdateUp(sim, a);
         Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
         BodyJolt(sim);  // ④ 칸 강체 — 몸이 덜컹이면 선 사람이 넘어진다
@@ -546,9 +547,11 @@ public sealed partial class Mind : IEngine
         {
             ref var b = ref _life![a.C.Body];
             a.C.Cell = b.Cell;
-            bool up = b.Alive != 0 && b.Conscious != 0 && b.Asleep == 0;
+            bool up = b.Alive != 0 && b.Conscious != 0 && b.Asleep == 0 && a.C.Adrift == 0;   // ③ 우주로 떠내려간 이는 아무것도 할 수 없다
             if (a.C.Up != 0 && !up && b.Asleep == 0) Fall(sim, a);
             a.C.Up = (byte)(up ? 1 : 0);
+            // ③ 국소 현상: 누운 이 · 자는 이는 머리가 낮다 (업힌 이는 어깨 높이) · 깨어 있는 이는 머리 높이에 연기 · 열기가 차면 몸을 낮춰 기어간다 (본능)
+            b.Low = (byte)(a.C.CarriedBy < 0 && (!up || b.Cell >= 0 && b.Cell < L.N && F.Grav[b.Cell] >= FloatG && (SmokeBad(a, b.Cell) || F.HeadTemp(b.Cell, false) > CrouchK)) ? 1 : 0);
             if (b.Alive == 0 || b.Conscious == 0) { a.C.Goal = GoalKind.Down; a.C.Mode = 0; }
         }
         else

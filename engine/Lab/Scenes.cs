@@ -186,6 +186,7 @@ public static partial class Program
             case "vibration": VibrationScene(dir); return;
             case "map": MapScene(dir); return;
             case "longarc": LongArcScene(dir); return;
+            case "local": LocalScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

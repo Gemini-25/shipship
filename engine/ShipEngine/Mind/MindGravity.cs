@@ -8,6 +8,7 @@ namespace ShipEngine;
 public sealed partial class Mind
 {
     public const float FloatG = Field.LowG;
+    public const double CrouchK = 323;   // ③ 머리 높이 공기가 50℃를 넘으면 몸을 낮춘다 (연기 속처럼)
     public const double FloatSlow = 0.4, FloatFast = 1.0, FloatLearnH = 8, LandFall = 0.45;
     public long Floats, Landings, LandFalls, Braced, StaleWakes, Vomits;
     /// <summary>우주 멀미 (전정 기관이 무중력에 맞추는 동안): 6시간쯤에 가장 심하고 사흘(72시간)이면 사라진다 · 사람마다 타고난 정도 0.3 ~ 1.</summary>

@@ -6,7 +6,8 @@ public sealed class Link
     public int A, B;            // 양쪽 칸 (B = -1: 바깥)
     public int RA, RB;          // 양쪽 구역 (RB = -1: 바깥)
     public int Via;             // 틈이 있는 칸 (문 · 벽 칸) — 바람 방향
-    public double Area;         // m²
+    public double Area;         // m² (구멍 틈은 막은 만큼 줄어든다 — ③ 국소 현상 · 틱마다 Area0에서 다시 센다)
+    public double Area0;        // 틈을 지을 때의 넓이
     public LinkKind Kind;
     public int[] NearA = Array.Empty<int>(), NearB = Array.Empty<int>();
     public double[] WA = Array.Empty<double>(), WB = Array.Empty<double>();
@@ -218,7 +219,7 @@ public sealed partial class Field
         int rb = b >= 0 && !IsOut(b) && Passable(b) ? RegionOf[b] : -1;
         if (rb < 0) b = -1;
         if (ra == rb) return; // 같은 구역 안의 금 — 압력이 같다
-        var k = new Link { A = a, B = b, RA = ra, RB = rb, Via = via, Area = area, Kind = kind };
+        var k = new Link { A = a, B = b, RA = ra, RB = rb, Via = via, Area = area, Area0 = area, Kind = kind };
         if (rb < 0) (k.Dx, k.Dy) = OutDir(a, via, kind);
         Links.Add(k);
     }

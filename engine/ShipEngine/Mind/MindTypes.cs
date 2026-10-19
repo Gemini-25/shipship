@@ -239,6 +239,11 @@ public struct AgentCore
     /// <summary>⑥ 로봇 · 드론의 몸 번호 (망의 로봇 몸 — 사람은 쓰지 않는다) · 느낀 몸 (1 다리가 망가졌다 · 2 손을 못 쓴다 · 4 눈이 흐리다).</summary>
     public int Mech;
     public byte MechFelt;
+    /// <summary>③ 국소 현상: 빨려 붙은 구멍 칸 + 1 (0: 없음) · 구멍 밖으로 빨려 나가 떠내려간다(1) · 떠내려가는 쪽 · 감압 돌풍에 붙잡고 버틴 때.</summary>
+    public int PinAt;
+    public byte Adrift;
+    public sbyte AdriftDx, AdriftDy;
+    public long HeldAt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>
@@ -248,6 +253,7 @@ public struct LooseItem
     public byte Item;
     public int Cell;
     public float Charge;
+    public int PlugAt;   // ③ 빨려 붙어 막은 구멍 칸 + 1 (0: 없음)
 }
 
 /// <summary>한동안 다시 고르지 않을 목표 (막혀서 실패한 것).</summary>

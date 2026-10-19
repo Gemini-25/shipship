@@ -109,6 +109,7 @@ public sealed partial class Field : IEngine
         BuildSolids();
         Array.Fill(Ts, 293.15);
         Array.Fill(Tf, 293.15);
+        InitLayers();
         _dirty = true;
     }
 
@@ -396,6 +397,7 @@ public sealed partial class Field : IEngine
         if (_dirty) Rebuild();
         t = Lap("구역", t);
         Array.Clear(WindX); Array.Clear(WindY); Array.Clear(WindPa);
+        PlugLinks();   // ③ 구멍에 빨려 붙은 몸 · 물건이 막은 만큼
         FlowLinks(dt);
         t = Lap("틈 흐름", t);
         Equalize();
@@ -412,7 +414,9 @@ public sealed partial class Field : IEngine
             Heat(slow);
             t = Lap("열", t);
             PhaseChange(slow);
-            Lap("상 변화", t);
+            t = Lap("상 변화", t);
+            Layers(slow);   // ③ 국소 현상 — 칸 안 위아래 두 층
+            Lap("층", t);
             MarkAllDirty(); // 온도가 바뀌어 압력이 달라졌다
         }
     }
@@ -428,6 +432,7 @@ public sealed partial class Field : IEngine
         w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole); w.Arr(DoorTaped); w.Arr(_topoTaped); w.Arr(DoorBleed); w.Arr(_topoBleed);
         w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore);
         w.Tag("중력"); w.Arr(Grav); w.Arr(Drops); w.Arr(Airflow);
+        w.Tag("층"); w.Arr(Strat); w.Arr(Plug);
     }
 
     public void Load(StateReader r)
@@ -438,6 +443,7 @@ public sealed partial class Field : IEngine
         r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>(); r.ArrInto(DoorTaped); _topoTaped = r.Arr<byte>(); r.ArrInto(DoorBleed); _topoBleed = r.Arr<byte>();
         r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore);
         r.Tag("중력"); r.ArrInto(Grav); r.ArrInto(Drops); r.ArrInto(Airflow); _dropsAny = Drops.Any(v => v > 0);
+        r.Tag("층"); r.ArrInto(Strat); r.ArrInto(Plug);
         SolidLinks(); // 끊긴 칸의 전도 · 우주를 보는 면은 도면 + 끊김에서 다시 센다 (찍지 않는다)
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
         RestoreTopology();

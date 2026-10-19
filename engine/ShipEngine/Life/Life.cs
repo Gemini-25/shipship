@@ -28,6 +28,7 @@ public struct Body
     public float SuitO2;       // 우주복 산소 (몰)
     public float MaskO2;       // 산소 마스크 병의 산소 (몰 — 기압이 남은 곳에서만 쓸모가 있다)
     public byte Mask;          // 산소 마스크를 썼다
+    public byte Low;           // ③ 국소 현상: 머리가 낮다 (기어감 · 누움 · 잠 · 쓰러짐 — 칸의 아래 층을 마신다 · 마음이 요청한다)
     public float LastKPa;
     public int DeathCause;
     public long DiedAt;
@@ -344,11 +345,12 @@ public sealed partial class Life : IEngine
         int c = b.Cell;
         if (c < 0 || c >= L.N) return;
         double p = F.Pressure(c), tair = F.Temp(c);
-        bool suit = b.Suit != 0;
+        bool suit = b.Suit != 0, low = b.Low != 0;
+        double thead = F.HeadTemp(c, low);   // ③ 머리 높이의 공기 (뜨거운 층이 서면 선 이는 위 · 기어가거나 누운 이는 아래)
         // 산소 마스크: 기압이 남아 있으면 병의 산소를 마신다 (얼굴을 덮어 연기 · 독도 덜 들이쉰다 — 진공에는 소용없다 · 날숨은 밸브로: 장부는 우주복과 같다)
         bool mask = !suit && b.Mask != 0 && b.MaskO2 > 0 && p > 6.3;
         bool own = suit || mask;   // 제 병의 숨
-        double pO2 = suit ? 21 : F.Partial(T.gO2, c);
+        double pO2 = suit ? 21 : F.HeadPartial(T.gO2, c, low);
         // 무중력: 날숨이 부력으로 떠오르지 않아 가만히 있는 이의 얼굴 앞에 고인다 (10분에 걸쳐 · 많아야 2kPa) — 공조 바람이 닿거나 움직이면 흩어진다
         float gc = F.Grav[c];
         if (!own && gc < Field.LowG && p > 20)
@@ -358,11 +360,11 @@ public sealed partial class Life : IEngine
             b.FaceCO2 += (float)((target - b.FaceCO2) * (1 - Math.Exp(-dt / tauF)));
         }
         else if (b.FaceCO2 > 0) b.FaceCO2 = (float)(b.FaceCO2 * Math.Exp(-dt / 60));
-        double pCO2 = own ? 0.04 : F.Partial(T.gCO2, c) + b.FaceCO2;
-        double co = own ? 0 : F.Ppm(T.gCO, c), nh3 = own ? 0 : F.Ppm(T.gNH3, c), o3 = own ? 0 : F.Ppm(T.gO3, c), soot = own ? 0 : F.Ppm(T.gSoot, c);
-        double hcn = own ? 0 : F.Ppm(T.gHCN, c), hcl = own ? 0 : F.Ppm(T.gHCl, c);
+        double pCO2 = own ? 0.04 : F.HeadPartial(T.gCO2, c, low) + b.FaceCO2;
+        double co = own ? 0 : F.HeadPpm(T.gCO, c, low), nh3 = own ? 0 : F.HeadPpm(T.gNH3, c, low), o3 = own ? 0 : F.HeadPpm(T.gO3, c, low), soot = own ? 0 : F.HeadPpm(T.gSoot, c, low);
+        double hcn = own ? 0 : F.HeadPpm(T.gHCN, c, low), hcl = own ? 0 : F.HeadPpm(T.gHCl, c, low);
         // ② (라) 배터리가 뿜은 플루오린 화합물 — 플루오린화수소로 센다 (POF₃는 둘 · PF₅는 셋을 낸다)
-        double hf = own ? 0 : F.Ppm(T.gHF, c) + 2 * F.Ppm(T.gPOF3, c) + 3 * F.Ppm(T.gPF5, c);
+        double hf = own ? 0 : F.HeadPpm(T.gHF, c, low) + 2 * F.HeadPpm(T.gPOF3, c, low) + 3 * F.HeadPpm(T.gPF5, c, low);
         int env = 0; // 이번에 몸을 해친 것의 원인
         string? harm = null;
         if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
@@ -472,7 +474,7 @@ public sealed partial class Life : IEngine
         bool inBed = b.Asleep != 0 && L.FurnitureAt[c] >= 0 && L.Furniture[L.FurnitureAt[c]].Type == "Bed";
         double icl = suit ? 1.2 : inBed ? 2.5 * 0.155 : 0.155;                            // 우주복은 열을 거의 막는다 (냉각 속옷이 뺀다)
         double h = hc + hr;
-        double top = h > 0 ? (hc * tair + hr * tsurf) / h : tair;                           // 느끼는 온도 (공기 · 겉면 평균)
+        double top = h > 0 ? (hc * thead + hr * tsurf) / h : thead;                         // 느끼는 온도 (머리 높이 공기 · 겉면 평균)
         double dry = (skin - top) * SkinArea / (icl + 1 / Math.Max(0.5, h));                // W (+ 몸이 잃음)
         double conv = h > 0 ? dry * hc / h : 0, rad = h > 0 ? dry * hr / h : 0;
         double sweat = 0;
@@ -515,7 +517,7 @@ public sealed partial class Life : IEngine
         if (!suit && p > 1) { F.AddGas(c, T.gH2O, insens, BodyTemp); b.CoreK -= insens * ((T.Gases[T.gH2O].Hf - _waterL.Hf) * 1000 + T.Gases[T.gH2O].C * (BodyTemp - 298.15)) / BodyC; }
 
         // ── 화상 · 동상 ──
-        if (!suit && tair > 330) { b.Burn += (float)((tair - 330) / 100 * dt / 60); harm ??= "뜨거운 공기에 데었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
+        if (!suit && thead > 330) { b.Burn += (float)((thead - 330) / 100 * dt / 60); harm ??= "뜨거운 공기에 데었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         if (chem != null)
         {
             // 불 속: 불꽃에 닿는다
@@ -530,7 +532,7 @@ public sealed partial class Life : IEngine
                 harm ??= "불의 열기에 데었다"; env = env == 0 ? (chem.FireCause[src] != 0 ? chem.FireCause[src] : EnvCause(sim, c, st, chem)) : env;
             }
         }
-        if (!suit && tair < 250 && p > 1) b.Frost += (float)((250 - tair) / 100 * dt / 600);
+        if (!suit && thead < 250 && p > 1) b.Frost += (float)((250 - thead) / 100 * dt / 600);
         if (b.CoreK < 306.5 && b.Alive != 0) { harm ??= "추위에 몸이 식었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
 
         // ── 압력 · 충격 · 방사선 ──

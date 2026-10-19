@@ -25,7 +25,18 @@ public sealed partial class Mind
             ref var it = ref span[k];
             int c = it.Cell;
             if (c < 0 || c >= L.N || L.Kind[c] == CellKind.Door && _st != null && _st.DoorJam[L.DoorAt[c]] != 0) continue; // 문틀에 걸린 것은 거기 있다
-            double wx = F.WindX[c], wy = F.WindY[c], v = Math.Sqrt(wx * wx + wy * wy), pa = F.WindPa[c];
+            if (it.PlugAt != 0)
+            {
+                // ③ 구멍에 빨려 붙은 물건: 구멍을 덧대거나 기압이 빠지면 (누르는 힘이 무게보다 작아지면) 떨어진다
+                int h = it.PlugAt - 1;
+                double face0 = Math.Pow(ItemKg(it.Item) / ItemDensity, 2.0 / 3);
+                if (F.Hole[h] <= 0.01f || F.Severed[h] != 0 || HoleSuction(c, h, face0) < ItemKg(it.Item) * Gravity) it.PlugAt = 0;
+                continue;
+            }
+            double wx = F.WindX[c], wy = F.WindY[c], v = Math.Sqrt(wx * wx + wy * wy), pa = v >= 0.5 ? F.WindPa[c] : 0;
+            // ③ 구멍 곁: 구멍 입으로 모이는 흐름 (방 바람보다 세면 그쪽으로 — 구멍이 나는 그 순간에도)
+            double qMouth = MouthPull(c, out int mouth);
+            if (qMouth > pa) { pa = qMouth; wx = L.X(mouth) - L.X(c); wy = L.Y(mouth) - L.Y(c); v = 1; }
             bool windy = v >= 0.5 && pa >= 1;
             double sx = 0, sy = 0, jx = 0, jy = 0;
             if (bodies) { (sx, sy) = _st!.Felt(c); (jx, jy) = _st.JoltDv(c); }
@@ -61,6 +72,14 @@ public sealed partial class Mind
                 if (!L.In(x, y)) break;
                 int j = L.Index(x, y);
                 var kind = L.Kind[j];
+                if (kind == CellKind.Wall && F.Hole[j] > 0.01f && face > F.Hole[j] * 1.2)
+                {
+                    // ③ 구멍보다 큰 물건은 빠져나가지 못하고 구멍에 빨려 붙어 막는다 (둘레 틈으로만 샌다)
+                    int pc = sim.Causes.Add(ck, $"{Ko.I(ItemNames[it.Item])} {(src == 0 ? "바람에 날려" : "미끄러져")} 구멍에 빨려 붙었다 — 새는 것을 거의 막았다", sim.Tick, j, cause);
+                    sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, it.Cell, (float)kg, pc, other: it.Item);
+                    it.PlugAt = j + 1; HolesPlugged++;
+                    break;
+                }
                 if (kind == CellKind.Outside || kind == CellKind.Wall && F.Hole[j] > 0.01f)
                 {
                     // 구멍 밖 우주로

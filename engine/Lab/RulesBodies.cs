@@ -27,6 +27,7 @@ public static partial class Program
             s.Get<Mind>().Crew(s, 2, 0, 0);
             var st = s.Get<Structure>(); var mind = s.Get<Mind>();
             s.Run(Time.Minutes(1));
+            mind.AddPerson(s, Worlds.At(lay, 15, 3));   // 방 가운데 (뚫릴 윗벽에서 먼 이) — 조각과 함께 간다
             int cause = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
             st.Destroy(s, Worlds.At(lay, 18, 0), s.Causes.Add(CauseKind.Setup, "파편이 오른쪽 방 윗벽을 뚫었다", s.Tick));
@@ -36,14 +37,18 @@ public static partial class Program
             var tumble = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Tumble);
             string story = tumble.Kind == FactKind.Tumble ? s.Causes.Story(tumble.Cause) : "";
             var frag = st.Bodies.Count > 1 ? st.Bodies[1] : default; var ship = st.Bodies.Count > 0 ? st.Bodies[0] : default;
+            // ③ 국소 현상: 뚫린 윗벽 바로 곁에 있던 이는 구멍 입으로 빨려 나간다 — 나머지는 조각과 함께 간다
+            var spaced = inRight.Where(a => a.C.Adrift != 0).ToList();
+            bool spacedTold = spaced.All(a => s.Facts.Since(0).Any(x => x.Kind == FactKind.WentOutside && x.Actor == a.Id));
+            inRight = inRight.Where(a => a.C.Adrift == 0).ToList();
             double moved = inRight.Count == 0 ? 0 : inRight.Min(a => { var (x, y) = st.ShipFrameOf(a.C.Cell); return Math.Sqrt((x - lay.X(a.C.Cell) - 0.5) * (x - lay.X(a.C.Cell) - 0.5) + (y - lay.Y(a.C.Cell) - 0.5) * (y - lay.Y(a.C.Cell) - 0.5)); });
             int pump = lay.Furniture.FindIndex(fu => fu.Cells.Length > 0 && lay.Room[fu.Cells[0]] == right);
             bool devWith = pump >= 0 && st.BodyOf(lay.Furniture[pump].Cells[0]) == 1;
-            if (Debug) Console.WriteLine($"    {story}");
-            Check("뿜으며 돈다: 떨어져 나간 조각의 뚫린 윗벽 끝으로 공기가 빠지며 조각을 반대로 밀어 돌리고 멀어진다 · 안의 사람 · 설비는 스크립트 없이 함께 간다 · 원인 사슬이 그 구멍까지",
+            if (Debug) Console.WriteLine($"    {story} · 사람: " + string.Join(" · ", inRight.Select(a => $"{mind.NameOf(a.Id)}@{lay.X(a.C.Cell)},{lay.Y(a.C.Cell)} 몸 {st.BodyOf(a.C.Cell)} 떠감 {a.C.Adrift} 붙음 {a.C.PinAt}")));
+            Check("뿜으며 돈다: 떨어져 나간 조각의 뚫린 윗벽 끝으로 공기가 빠지며 조각을 반대로 밀어 돌리고 멀어진다 · 안의 사람 · 설비는 스크립트 없이 함께 간다 (구멍 바로 곁의 이는 빨려 나간다) · 원인 사슬이 그 구멍까지",
                 st.Bodies.Count == 2 && Math.Abs(frag.W) > 0.05 && st.Fragments[0].Dist > 20 && Math.Sqrt(ship.Vx * ship.Vx + ship.Vy * ship.Vy) < 0.1 &&
-                inRight.Count > 0 && inRight.All(a => st.BodyOf(a.C.Cell) == 1) && moved > 20 && devWith && story.StartsWith("파편이 오른쪽 방 윗벽을 뚫었다") && story.Contains("돌기 시작했다"),
-                $"조각 {frag.Mass / 1000:0.0}t · 분에 {frag.W * 60 / (2 * Math.PI):0.0}바퀴 · 떨어진 거리 {(st.Fragments.Count > 0 ? st.Fragments[0].Dist : 0):0}m · 배 빠르기 {Math.Sqrt(ship.Vx * ship.Vx + ship.Vy * ship.Vy):0.000}m/s · 사람 {inRight.Count}명 {moved:0}m 옮겨짐 · 설비 함께 {devWith} · \"{story}\"");
+                inRight.Count > 0 && inRight.All(a => st.BodyOf(a.C.Cell) == 1) && moved > 20 && spacedTold && devWith && story.StartsWith("파편이 오른쪽 방 윗벽을 뚫었다") && story.Contains("돌기 시작했다"),
+                $"조각 {frag.Mass / 1000:0.0}t · 분에 {frag.W * 60 / (2 * Math.PI):0.0}바퀴 · 떨어진 거리 {(st.Fragments.Count > 0 ? st.Fragments[0].Dist : 0):0}m · 배 빠르기 {Math.Sqrt(ship.Vx * ship.Vx + ship.Vy * ship.Vy):0.000}m/s · 사람 {inRight.Count}명 {moved:0}m 옮겨짐 (구멍 곁에서 빨려 나간 이 {spaced.Count}) · 설비 함께 {devWith} · \"{story}\"");
 
             // ── 그림: 화면은 돌아간 조각을 그 자리에 그린다 — 처음 자리는 우주가 되고 · 조각이 간 자리에 조각이 보인다 ──
             var p = new Painter(lay);
