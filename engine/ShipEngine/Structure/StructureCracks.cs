@@ -18,7 +18,7 @@ public sealed partial class Structure
 
     // ── 상태 (찍는다) ──
     /// <summary>금의 반길이 (m) · 원인 마디 · 막은(덧판) 길이 · 응력 되돌이 (지난 꺾임 · 지금 끝 · 방향).</summary>
-    public float[] Crack, CrackPatch, SigTurn, SigRun;
+    public float[] Crack, CrackPatch, SigTurn, SigRun, ThTurn, ThRun;
     public int[] CrackCause;
     public sbyte[] SigDir;
     public long CrackGrowths, Tears, CrackLeaks;
@@ -140,28 +140,30 @@ public sealed partial class Structure
     /// <summary>하중 한 주기 (0 → σ → 0)를 이 칸에 준다 — 시험 · 바깥에서 오는 되풀이 하중(점화 · 도킹)을 한꺼번에 셀 때.</summary>
     public void LoadCycle(Sim sim, int c, double rangeMPa, int cycles = 1)
     {
-        for (int i = 0; i < cycles; i++) { HalfCycle(sim, c, rangeMPa); HalfCycle(sim, c, rangeMPa); }
+        for (int i = 0; i < cycles; i++) { HalfCycle(sim, c, rangeMPa, 0); HalfCycle(sim, c, rangeMPa, 0); }
     }
 
     /// <summary>응력 되돌이 (반 주기 세기): 오르다 2MPa 넘게 꺾이면 반 주기 하나 — 그 폭으로 금이 자란다.</summary>
-    private void Cycle(Sim sim, int c, double sigma)
+    /// <param name="th">그 가운데 막힌 열 응력 (④ 열 · 진동 — 꺾인 자리마다 함께 적어 반 주기의 열 몫을 안다).</param>
+    private void Cycle(Sim sim, int c, double sigma, double th)
     {
-        float s = (float)sigma;
+        float s = (float)sigma, h = (float)th;
         if (SigDir[c] >= 0)
         {
-            if (s >= SigRun[c]) { SigRun[c] = s; if (SigDir[c] == 0 && s > 0) SigDir[c] = 1; }
-            else if (SigRun[c] - s > CycleMPa) { HalfCycle(sim, c, SigRun[c] - SigTurn[c]); SigTurn[c] = SigRun[c]; SigRun[c] = s; SigDir[c] = -1; }
+            if (s >= SigRun[c]) { SigRun[c] = s; ThRun[c] = h; if (SigDir[c] == 0 && s > 0) SigDir[c] = 1; }
+            else if (SigRun[c] - s > CycleMPa) { HalfCycle(sim, c, SigRun[c] - SigTurn[c], Math.Abs(ThRun[c] - ThTurn[c])); SigTurn[c] = SigRun[c]; ThTurn[c] = ThRun[c]; SigRun[c] = s; ThRun[c] = h; SigDir[c] = -1; }
         }
         else
         {
-            if (s <= SigRun[c]) SigRun[c] = s;
-            else if (s - SigRun[c] > CycleMPa) { HalfCycle(sim, c, SigTurn[c] - SigRun[c]); SigTurn[c] = SigRun[c]; SigRun[c] = s; SigDir[c] = 1; }
+            if (s <= SigRun[c]) { SigRun[c] = s; ThRun[c] = h; }
+            else if (s - SigRun[c] > CycleMPa) { HalfCycle(sim, c, SigTurn[c] - SigRun[c], Math.Abs(ThRun[c] - ThTurn[c])); SigTurn[c] = SigRun[c]; ThTurn[c] = ThRun[c]; SigRun[c] = s; ThRun[c] = h; SigDir[c] = 1; }
         }
     }
 
-    private void HalfCycle(Sim sim, int c, double range)
+    private void HalfCycle(Sim sim, int c, double range, double thRange)
     {
-        if (Crack[c] <= 0 || range <= 0) return;
+        if (range <= 0) return;
+        if (Crack[c] <= 0) { FatigueHalfCycle(sim, c, range, thRange); return; }   // 금이 없으면 피로가 쌓인다 (마이너)
         var m = T.Materials[L.Material[c]].Def;
         if (m.ParisC <= 0) return;
         double dk = StressIntensity(c, range);

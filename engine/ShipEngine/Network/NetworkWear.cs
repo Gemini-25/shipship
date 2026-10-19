@@ -14,7 +14,7 @@ namespace ShipEngine;
 /// </summary>
 public sealed partial class Network
 {
-    private const int Why = 5;                       // 까닭: 0 그냥 씀 · 1 열 · 2 습기 · 3 그을음 · 4 기름 마름
+    private const int Why = 6;                       // 까닭: 0 그냥 씀 · 1 열 · 2 습기 · 3 그을음 · 4 기름 마름 · 5 볼트 풀림 (④ 열 · 진동)
     private float[] _wearBy = Array.Empty<float>();  // [장치 × 4 + 부품] × 5 — 지난 수리 뒤 까닭별로 쌓인 마모 (시간)
     private int[] _condCause = Array.Empty<int>();   // [장치 × 4 + 부품] × 5 — 그 까닭을 만든 원인 마디 (처음 컸을 때)
     private float[] _run = Array.Empty<float>();     // [장치 × 4 + 부품] 지난 수리(정비) 뒤 돈 시간
@@ -48,22 +48,23 @@ public sealed partial class Network
         int k = d * 4 + p, b = k * Why;
         var dev = Devices[d];
         double life = Math.Max(1, dev.Life((Part)p));
-        double heat = 1, wet = 1, dust = 1, dry = 1;
+        double heat = 1, wet = 1, dust = 1, dry = 1, rattle = 1;
         switch ((Part)p)
         {
             case Part.Electric: heat = Math.Pow(2, Math.Clamp((temp - 298) / 10, -2, 8)); break;
             case Part.Mechanical:
                 heat = 1 + Math.Max(0, temp - 298) / 50;
                 if (running) dry = 1 + 3 * Math.Max(0, _run[k] / life - 0.8);   // 정비 때(수명의 80%)를 넘겨 돈 베어링
+                if (running && d < Loose.Length && Loose[d] >= 1) rattle = 3;      // 볼트가 풀려 덜컹거리는 모터 (④ 열 · 진동)
                 break;
             case Part.Seal: wet = 1 + Math.Max(0, rh); heat = 1 + Math.Max(0, temp - 298) / 80; break;
             default: dust = 1 + soot / 100; break;   // 거르개: 그을음 100ppm마다 한 배 더
         }
-        double amount = hours * (running ? 1 : 0.15) * heat * wet * dust * dry;
+        double amount = hours * (running ? 1 : 0.15) * heat * wet * dust * dry * rattle;
         Wear[k] += (float)amount;
         if (running) _run[k] += (float)hours;
         // 까닭별 몫: 늘린 배수의 로그 비로 나눈다 (1보다 작은 배수 — 찬 방의 전기 — 는 그냥 씀으로)
-        double up = Math.Max(1, heat) * wet * dust * dry;
+        double up = Math.Max(1, heat) * wet * dust * dry * rattle;
         if (up > 1.0001)
         {
             double extra = amount * (1 - 1 / up), lsum = Math.Log(up);
@@ -71,12 +72,14 @@ public sealed partial class Network
             if (wet > 1) _wearBy[b + 2] += (float)(extra * Math.Log(wet) / lsum);
             if (dust > 1) _wearBy[b + 3] += (float)(extra * Math.Log(dust) / lsum);
             if (dry > 1) _wearBy[b + 4] += (float)(extra * Math.Log(dry) / lsum);
+            if (rattle > 1) _wearBy[b + 5] += (float)(extra * Math.Log(rattle) / lsum);
             _wearBy[b] += (float)(amount - extra);
         }
         else _wearBy[b] += (float)amount;
         // 그 까닭을 만든 것 (처음 크게 닿았을 때)
         if (heat > 1.5 && _condCause[b + 1] == 0) _condCause[b + 1] = HeatCondCause(sim, dev.Cell);
         if (wet > 1.5 && _condCause[b + 2] == 0) _condCause[b + 2] = WetCondCause(dev);
+        if (rattle > 1.5 && _condCause[b + 5] == 0) _condCause[b + 5] = LooseCause[d];
         if (dust > 1.5 && _condCause[b + 3] == 0) _condCause[b + 3] = dev.Room >= 0 && dev.Room < _sootCause.Length && _sootCause[dev.Room] != 0 ? _sootCause[dev.Room] : _lastFireCause;
         if (Wear[k] / _limit[k] >= 1) Fail(sim, d, (Part)p);
     }
@@ -138,6 +141,7 @@ public sealed partial class Network
             (1, _) => $"{dev.Name}의 {Ko.I(what)} 뜨거운 데서 일찍 닳아 망가졌다",
             (2, _) => $"{dev.Name}의 {Ko.I(what)} 습기에 부풀어 망가졌다",
             (3, _) => $"{dev.Name}의 거르개에 그을음이 끼어 막혔다",
+            (5, _) => $"{dev.Name}의 {Ko.I(what)} 볼트가 풀린 채 덜컹거리다 닳아 망가졌다",
             _ => $"{dev.Name}의 모터 베어링 기름이 말라 망가졌다 — 정비 없이 {_run[k]:0}시간을 돌았다",
         };
         return (text, _condCause[b + top]);

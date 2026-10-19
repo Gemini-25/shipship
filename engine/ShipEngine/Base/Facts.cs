@@ -125,6 +125,8 @@ public enum FactKind : ushort
     // ⑥ 감지 · ⑫ 자연 사건
     Sensed,            // 센서에 잡혔다 (Other: TrackKind 0 운석 · 1 파편 구름 · 2 배 · 3 폭발 조짐 · Size: 거리 km)
     Letter,            // 고향에서 편지가 왔다 (Actor: 받은 이 · Size: 2 아주 기쁜 · 1 기쁜 · 0 안부 · −1 슬픈 · −2 부고 · Other: 빛이 걸린 분)
+    // ④ 열 · 진동
+    Rattle,            // 볼트가 진동에 풀려 장치가 덜컹거린다 (Other: 장치 · Size: 진동 세기 MPa)
 }
 
 public static class FactNames

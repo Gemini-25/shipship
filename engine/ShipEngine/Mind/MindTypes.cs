@@ -75,6 +75,7 @@ public enum GoalKind : byte
     Withdraw,   // ⑧ 우울 — 일하는 시간에 제 침대에 틀어박힌다
     Counsel,    // ⑧ 상담 — 주컴퓨터의 부탁으로 마음이 힘든 이 곁에 앉아 이야기를 들어 준다 (대상: 몸)
     Haul,       // ⑪ 공급 사슬 — 헌 부품을 정제기로 나른다 (맡긴 일: 대상 정제기 설비 · Arg 헌 부품이 있는 설비 × 256 + 물건)
+    Tighten,    // ④ 열 · 진동 — 진동에 풀려 덜컹거리는 장치의 볼트를 조인다 (대상: 장치)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -103,6 +104,7 @@ public enum StepKind : byte
     Door,      // ⑧ 문을 연다(Arg 1) · 닫는다(Arg 0) (Cell: 문 — 제 궁리의 걸음)
     Put,       // ⑪ 든 물건을 설비에 넣는다 (Target: 설비 — 나르기)
     Rebuild,   // ⑪ 부서진 설비의 틀을 외장 틀로 새로 짠다 (Target: 장치)
+    Tighten,   // ④ 풀린 볼트를 조인다 (Target: 장치)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

@@ -67,6 +67,7 @@ public sealed partial class Mind
             case StepKind.Stow: StowStep(sim, a, st); return;
             case StepKind.Put: PutStep(sim, a, st); return;
             case StepKind.Rebuild: RebuildStep(sim, a, st); return;
+            case StepKind.Tighten: TightenStep(sim, a, st); return;
             case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.Salvage: SalvageStep(sim, a, st); return;

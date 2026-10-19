@@ -151,7 +151,7 @@ public sealed partial class Mind
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
-                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
         if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
@@ -701,6 +701,14 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Put, Target = refinery });
                 return true;
             }
+            case GoalKind.Tighten:
+            {
+                // ④ 풀린 볼트: 장치 곁으로 가서 조인다 (연장은 몸에 — 사람 손 · 로봇 팔)
+                if (_net == null || o.Target < 0 || o.Target >= _net.Devices.Count) return false;
+                plan.Add(Go(_net.Devices[o.Target].Cell, 1));
+                plan.Add(new PlanStep { Kind = StepKind.Tighten, Target = o.Target });
+                return true;
+            }
             case GoalKind.Evacuate:
             {
                 int refuge = FindRefuge(a, here, o.Target, o.Cell);
@@ -825,7 +833,7 @@ public sealed partial class Mind
 
     /// <summary>일상 목표 (위기를 다루는 일이 아닌 것) — 빠져나온 위험한 방으로는 이것 때문에 돌아가지 않는다.</summary>
     private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize
-        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook or GoalKind.Haul;
+        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook or GoalKind.Haul or GoalKind.Tighten;
 
     /// <summary>
     /// 피하는 칸: 사람이 방금(10분) 빠져나온 방이고 아직 위험하다고 믿는다 (지금 그 방 안이면 아니다).
@@ -918,11 +926,12 @@ public sealed partial class Mind
         if (c.Holding == iRation) Add(GoalKind.Restock, c.AssignedGoal == GoalKind.Restock && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
         // ⑪ 헌 부품을 들고 있으면 (나르기가 끊겼어도) 정제기에 넣는다
         if (c.Holding == iScrap || c.Holding == iScrapElec) Add(GoalKind.Haul, c.AssignedGoal == GoalKind.Haul && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
-        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul)) return;
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten)) return;
         int cell = c.AssignedGoal switch
         {
             GoalKind.Craft => L.Furniture[c.AssignedTarget].Cells[0],
             GoalKind.Maintain => _net != null ? _net.Devices[c.AssignedTarget / 4].Cell : -1,
+            GoalKind.Tighten => _net != null && c.AssignedTarget < _net.Devices.Count ? _net.Devices[c.AssignedTarget].Cell : -1,
             GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,
             GoalKind.Restock => c.AssignedArg >= 0 && c.AssignedArg < L.Furniture.Count ? L.Furniture[c.AssignedArg].Cells[0] : -1,
             GoalKind.Haul => c.AssignedArg >= 0 && c.AssignedArg / 256 < L.Furniture.Count ? L.Furniture[c.AssignedArg / 256].Cells[0] : -1,

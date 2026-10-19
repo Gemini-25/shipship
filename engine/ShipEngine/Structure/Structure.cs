@@ -88,7 +88,7 @@ public sealed partial class Structure : IEngine
                 L.Neighbors(c, nb);
                 foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall) _lockWall[j] = true;
             }
-        Crack = new float[L.N]; CrackPatch = new float[L.N]; SigTurn = new float[L.N]; SigRun = new float[L.N]; CrackCause = new int[L.N]; SigDir = new sbyte[L.N];
+        Crack = new float[L.N]; CrackPatch = new float[L.N]; SigTurn = new float[L.N]; SigRun = new float[L.N]; ThTurn = new float[L.N]; ThRun = new float[L.N]; CrackCause = new int[L.N]; SigDir = new sbyte[L.N];
         Frag = new int[L.N]; FurnHit = new float[L.Furniture.Count]; FurnBroken = new byte[L.Furniture.Count]; FurnCause = new int[L.Furniture.Count];
         ThermalJam = new byte[L.Doors.Count]; _pPrev = new float[L.N];
         BuildCrackGeometry();
@@ -313,10 +313,11 @@ public sealed partial class Structure : IEngine
             if (F.Hole[c] >= 2 || F.Severed[c] != 0) { Stress[c] = 0; continue; }
             double dp = DeltaP(c);
             // 금: 응력 되돌이(반 주기마다 파리스 법칙) · 금 끝의 K가 파괴 인성을 넘으면 찢어진다
-            if (kind == CellKind.Wall && (dp >= 1 || SigRun[c] != 0 || SigTurn[c] != 0 || ThrustG > 0))
+            if (kind == CellKind.Wall && (dp >= 1 || SigRun[c] != 0 || SigTurn[c] != 0 || ThrustG > 0 || L.Hull[c]))
             {
-                double sig = Sigma(c, dp);
-                Cycle(sim, c, sig);
+                double th = ThermalSigma(c);
+                double sig = Sigma(c, dp) + th;   // ④ 열 · 진동 (가): 막힌 열 응력도 되돌이를 만든다
+                Cycle(sim, c, sig, th);
                 if (Crack[c] > 0) { Fracture(sim, c, sig); if (F.Hole[c] >= 2) { Stress[c] = 0; continue; } }
             }
             if (dp < 1) { Stress[c] = 0; continue; }
@@ -606,6 +607,7 @@ public sealed partial class Structure : IEngine
         w.Tag("금"); w.Arr(Crack); w.Arr(CrackPatch); w.Arr(SigTurn); w.Arr(SigRun); w.Arr(CrackCause); w.Arr(SigDir); w.I64(CrackGrowths); w.I64(Tears); w.I64(CrackLeaks);
         w.Tag("조각"); w.Arr(Frag); w.List(Fragments); w.I32(SplitVersion); w.I64(DeckBursts); w.I64(Smashed); w.I64(Splits); w.I64(DebrisLost); w.I64(SectionFails);
         w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
+        w.Tag("열 · 진동"); w.Arr(ThTurn); w.Arr(ThRun); w.I64(VibGrowths); w.I64(ThermalCracks);
         SaveBodies(w);
     }
 
@@ -617,6 +619,7 @@ public sealed partial class Structure : IEngine
         r.Tag("금"); r.ArrInto(Crack); r.ArrInto(CrackPatch); r.ArrInto(SigTurn); r.ArrInto(SigRun); r.ArrInto(CrackCause); r.ArrInto(SigDir); CrackGrowths = r.I64(); Tears = r.I64(); CrackLeaks = r.I64();
         r.Tag("조각"); r.ArrInto(Frag); Fragments.Clear(); Fragments.AddRange(r.List<Fragment>()); SplitVersion = r.I32(); DeckBursts = r.I64(); Smashed = r.I64(); Splits = r.I64(); DebrisLost = r.I64(); SectionFails = r.I64();
         r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();
+        r.Tag("열 · 진동"); r.ArrInto(ThTurn); r.ArrInto(ThRun); VibGrowths = r.I64(); ThermalCracks = r.I64();
         LoadBodies(r);
         Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)
     }

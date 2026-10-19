@@ -58,6 +58,13 @@ public sealed partial class ShipMind
                     if (!SpareKnown(p)) continue; // 갈아 끼울 그 갈래 부품이 없다 (⑪ 공급 사슬)
                     Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);
                 }
+        // ④ 진동 센서: 볼트가 풀려 덜컹거리는 장치 — 조이기 (로봇 먼저 · 사람은 고치는 솜씨가 조금 있으면)
+        if (_net != null)
+            for (int d = 0; d < _net.Loose.Length; d++)
+            {
+                if (_net.Loose[d] < 1 || Jobs.Any(j => j.Kind == GoalKind.Tighten && j.Target == d)) continue;
+                Post(sim, new Job { Kind = GoalKind.Tighten, Target = d }, _net.Devices[d].Cell, person => person.C.SkRepair >= 0.3f);
+            }
         // 사람이 알린 이상한 기계 소리 (⑧이 남긴 알림을 읽는다 — 배 안 통신): 아직 끽끽거리면 그 장치의 기계 부품을 미리 간다 (로봇 먼저)
         if (_net != null)
             foreach (var rp in mind.GrindReports)
@@ -112,6 +119,7 @@ public sealed partial class ShipMind
         GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < Work.HarvestAt * 0.5f * _life.CropArea(_net, j.Target),
         GoalKind.Restock => _work!.FoodAt(j.Target) >= Work.RestockBelow * 2 || _work.FoodAt(j.Arg) < 1,
         GoalKind.Haul => HaulDone(j.Arg, j.Agent),
+        GoalKind.Tighten => _net == null || j.Target >= _net.Loose.Length || _net.Loose[j.Target] < 1,
         _ => true,
     };
 
@@ -148,7 +156,7 @@ public sealed partial class ShipMind
     }
 
     private static bool ChoreBusy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
-        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul;
+        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten;
 
     public readonly List<string> Blocks = new();
     public readonly List<int> BlockCauses = new();        // 막힌 곳마다 원인 마디 (⑪ — 같은 막힘이면 같은 마디 · 망가진 설비 때문이면 그 고장의 원인에 잇는다)

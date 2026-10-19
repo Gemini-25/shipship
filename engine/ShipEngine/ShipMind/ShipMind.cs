@@ -1059,7 +1059,7 @@ public sealed partial class ShipMind : IEngine
             {
                 if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
                 int from = -1;
-                if (a.C.AssignedUntil > sim.Tick && !Root(x) && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock)) // 일상 일(⑪)은 놓고 온다
+                if (a.C.AssignedUntil > sim.Tick && !Root(x) && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten)) // 일상 일(⑪)은 놓고 온다
                 {
                     // 이미 맡은 일이 있다 (불의 뿌리 — 눌어붙은 합선 — 는 하던 일을 놓고 간다) · 급한 일(쓰러진 사람 · 불 · 공기 빠짐 · 샘)에는 덜 급한 사건 일을 하던 로봇도 데려온다 (쉬는 로봇이 없을 때만)
                     from = Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;
@@ -1126,7 +1126,7 @@ public sealed partial class ShipMind : IEngine
             if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone || !_mind.HandsOk(a) || !_mind.LegsOk(a)) continue;
             bool mine = a.Id == x.RobotA || a.Id == x.RobotB;
             int from = -1;
-            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock))
+            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten))
             {
                 // 덜 급한 사건 일을 하던 로봇은 데려올 수 있다 (급한 차례 — 로봇을 맡기는 때와 같은 셈 · take일 때만)
                 from = take && Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;

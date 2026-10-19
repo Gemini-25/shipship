@@ -1045,6 +1045,7 @@ public sealed partial class Network : IEngine
                 WearPart(sim, d, p, hours, running, temp, rh, soot);
             }
         }
+        VibrationStep(sim, hours);
         CablesAge(sim, hours);
         PipesRust(sim, hours);
         Noise(sim);
@@ -1276,7 +1277,7 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
-        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w); SaveChips(w); SaveRobots(w);
+        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w); SaveChips(w); SaveRobots(w); SaveVibration(w);
     }
 
     public void Load(StateReader r)
@@ -1296,6 +1297,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
-        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r); LoadChips(r); LoadRobots(r);
+        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r); LoadChips(r); LoadRobots(r); LoadVibration(r);
     }
 }
