@@ -71,6 +71,8 @@ public enum GoalKind : byte
     Improvise,  // ⑧ 판단 엔진 — 제 궁리를 한다 (막혀서 지어낸 몸 걸음 · 대상: 막으려던 구멍)
     Cpr,        // ⑦ 멎은 심장 — 곁에서 가슴을 누르고 · 제세동기를 가져와 친다 (대상: 몸)
     Surgery,    // ⑦ (라) 수술 — 치료 침대에서 마취하고 속 출혈을 멈추거나 맹장을 떼어 낸다 (대상: 몸)
+    Attack,     // ⑧ 공황 발작 — 그 자리에 주저앉아 숨을 고른다
+    Withdraw,   // ⑧ 우울 — 일하는 시간에 제 침대에 틀어박힌다
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -214,6 +216,18 @@ public struct AgentCore
     public byte DxAwake;
     /// <summary>⑦ (라) 집도의: 이번 수술의 마취를 한 때 (목표를 잡은 때보다 앞이면 아직 안 했다).</summary>
     public long OpAnesAt;
+    /// <summary>⑧ 기억 · 정신 건강 (바퀴 3 — MindHeart): 충격(갓 겪은 일) · 외상(오래 남는다) · 우울 · 불안 (0~1).</summary>
+    public float Shock, Trauma, Depress, Anxiety;
+    /// <summary>충격의 원인 마디 · 그 방 · 갈래 · 이번 일에서 가장 컸던 충격 · 가장 큰 한 몫 · 그때 · 마지막으로 위험에 맞선 때(불 끄기 · 구하기 · 막기) · 외상이 0.3을 넘었었나(1).</summary>
+    public int ShockCause, ShockRoom;
+    public ShockKind ShockKind;
+    public float ShockPeak, ShockTop;
+    public long ShockAt, CopedAt;
+    public byte TraumaHigh;
+    /// <summary>처음 성격 (겪은 일로 바뀌어도 ±0.2 안).</summary>
+    public float Neuro0, Brave0, Agree0;
+    /// <summary>악몽 · 공황 발작 · 되살아남 · 그 방에서 떠오름의 마지막 때 · 공황 발작이 끝나는 때.</summary>
+    public long NightmareAt, AttackAt, AttackUntil, FlashAt, RoomFlashAt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

@@ -181,7 +181,7 @@ public sealed partial class Mind
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
             float sick = _life != null && c.Body >= 0 ? _life[c.Body].Nausea : 0;   // 우주 멀미: 속이 울렁거려 덜 먹는다
-            if ((c.Hunger > 0.55f + 0.3f * sick || kinMeal >= 0 && sick < 0.3f) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
+            if ((c.Hunger > 0.55f + 0.3f * sick + 0.25f * c.Depress || kinMeal >= 0 && sick < 0.3f && c.Depress < 0.3f) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
             {
                 float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0) + (kinMeal >= 0 ? 0.6f : 0);
                 Add(GoalKind.Eat, -1, -1, eat);
@@ -206,7 +206,8 @@ public sealed partial class Mind
             if (c.Unfit > 0.5f && !InWindow(hour, c.ShiftHour, 8) && c.Sleepy < 0.6f)
                 Add(GoalKind.Exercise, -1, -1, c.Unfit * (0.2f + 1.4f * c.Consc + 0.4f * c.Extra - 0.4f * c.Neuro));
             // 어울리기: 어울릴 사람이 깨어 있고 일하지 않을 때만 (모두 자거나 일하는데 혼자 휴게실에 앉아 몇 시간씩 기다리지 않는다)
-            if ((c.Lonely > 0.3f || grief > 0.3f) && SomeoneFree(a)) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
+            if ((c.Lonely > 0.3f || grief > 0.3f) && SomeoneFree(a)) Add(GoalKind.Socialize, -1, -1, (Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief) * (1 - c.Depress));   // ⑧ 우울하면 사람을 덜 찾는다
+            HeartOptions(a, here, InWindow(hour, c.ShiftHour, 8));   // ⑧ 공황 발작 · 침대에 틀어박힘
             Add(GoalKind.Idle, -1, here, 0.3f * (1 - DreadAt(a, here)));   // 꺼리는 방에서는 우두커니 머물지 않는다
             JobOption(a);
             // ⑨ 몸싸움: 덤빈 이는 그 자리에서 · 맞는 이는 겁이 많으면 방을 빠져나가 문을 닫는다
@@ -418,6 +419,7 @@ public sealed partial class Mind
             case GoalKind.Treat: return BuildTreat(a, o, plan, here);
             case GoalKind.Cpr: return BuildCpr(a, o, plan, here);
             case GoalKind.Surgery: return BuildSurgery(a, o, plan, here);
+            case GoalKind.Attack or GoalKind.Withdraw: return BuildHeart(a, o, plan, here);
             case GoalKind.Pilfer:
             {
                 if (o.Target < 0) return false;

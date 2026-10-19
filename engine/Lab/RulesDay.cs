@@ -53,6 +53,11 @@ public static partial class Program
                 + $" · 금 {day.Facts.CountOf(FactKind.WallCrack)}");
         }
 
+        // ── ⑧ 마음 건강: 보통의 하루에는 아무도 우울 · 불안해지지 않고 · 악몽 · 공황 발작 · 되살아남이 없다 ──
+        Check("평시 하루의 마음: 아무도 우울 · 불안 0.05를 넘지 않고 · 악몽 · 공황 발작 · 되살아남이 없다",
+            people.All(a => a.C.Depress < 0.05f && a.C.Anxiety < 0.05f) && m.Nightmares == 0 && m.PanicAttacks == 0 && m.Flashbacks == 0,
+            $"우울 많아야 {people.Max(a => a.C.Depress):0.000} · 불안 {people.Max(a => a.C.Anxiety):0.000} · 충격 {people.Max(a => a.C.Shock):0.00} · 악몽 {m.Nightmares} · 발작 {m.PanicAttacks} · 되살아남 {m.Flashbacks}");
+
         // ── 망: 사람이 탄 하루 끝 — 공급이 수요를 채우고 · 방 온도가 288~300K · 원자로 멀쩡 ──
         {
             var net = day.Get<Network>(); var f = day.Get<Field>();

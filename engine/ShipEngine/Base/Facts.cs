@@ -121,6 +121,7 @@ public enum FactKind : ushort
     Dosed,             // 약을 줬다 (Actor: 몸 번호 · Size: 양 · Other: 약 — Drug)
     Diagnosed,         // 병을 짐작했다 (Actor: 본 이 · Other: 본 사람 · Size: 1 맞힘 · 0 틀림 · 2 바로잡음)
     Surgery,           // 수술했다 (Actor: 집도한 이 · Other: 받은 사람 · Size: 1 잘됨 · 0 합병증 · 열어 보기)
+    Heart,             // ⑧ 마음 (Actor: 그 사람 · Size: HeartEvent — 1 악몽 · 2 공황 발작 · 3 되살아남 · 4 겁이 많아짐 · 5 단단해짐 · 6 우울 · 7 불안 · 8 외상 뒤 성장 · Other: 함께한 이)
 }
 
 public static class FactNames
@@ -145,7 +146,7 @@ public static class FactNames
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
-        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", FactKind.Diagnosed => "병을 짐작했다", FactKind.Surgery => "수술했다", _ => "",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", FactKind.Diagnosed => "병을 짐작했다", FactKind.Surgery => "수술했다", FactKind.Heart => "마음", _ => "",
     };
 }
 

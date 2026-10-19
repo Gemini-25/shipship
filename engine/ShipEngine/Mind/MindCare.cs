@@ -245,7 +245,7 @@ public sealed partial class Mind
     {
         ref var b = ref _life![a.C.Body];
         float f = Life.Sick(b) ? 0.4f + 0.6f * a.C.Consc : 1;
-        return f;
+        return f * (1 - 0.8f * a.C.Depress);   // ⑧ 우울 — 일손을 놓는다
     }
 
     /// <summary>걸음 빠르기에 곱하는 몫: 앓으면 0.85 · 몸무게를 10% 넘게 잃으면 줄어 20%면 0.85.</summary>
@@ -276,7 +276,7 @@ public sealed partial class Mind
         double tc = F.Temp(cell) - 273.15;
         double temp = Math.Min(1, tc < 18 ? (18 - tc) / 6 : tc > 26 ? (tc - 26) / 6 : 0);
         double body = b.Pain * 0.8 + Math.Min(0.4, Life.FeverK(b) * 0.25);
-        double q = Math.Clamp(1 - 0.5 * noise - 0.3 * light - 0.4 * temp - 0.6 * body - 0.3 * c.Stress, 0.15, 1);
+        double q = Math.Clamp(1 - 0.5 * noise - 0.3 * light - 0.4 * temp - 0.6 * body - 0.3 * c.Stress - 0.3 * c.Anxiety - 0.2 * c.Depress, 0.15, 1);   // ⑧ 불안 · 우울은 잠을 얕게
         c.SleepLoss = (float)(c.SleepLoss + ((1 - q) - c.SleepLoss) * Math.Min(1, h * 2));
         c.SleepNoise = (float)(c.SleepNoise * Math.Exp(-h * 6));   // 10분이면 흐려진다
     }

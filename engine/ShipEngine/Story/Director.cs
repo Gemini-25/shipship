@@ -75,7 +75,7 @@ public sealed partial class Director
         FactKind.Repaired => 10, FactKind.ComputerSeal => 18, FactKind.ComputerAlarm => 10, FactKind.DebrisNear => 15, FactKind.Impact => 12,
         FactKind.StorySeed => 6, FactKind.Hurt => 12, FactKind.Fled => 10, FactKind.DoorSealed => 6, FactKind.Warned => 5, FactKind.Noticed => 4,
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
-        FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8, FactKind.Gravity => 20, FactKind.Vomit => 6, FactKind.Arrest => 40, FactKind.Revived => 35,
+        FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8, FactKind.Gravity => 20, FactKind.Vomit => 6, FactKind.Arrest => 40, FactKind.Revived => 35, FactKind.Heart => 12,
         FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
         FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
         FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, FactKind.Meeting => 25, FactKind.Verdict => 45, FactKind.Elected => 35, FactKind.Mutiny => 60, FactKind.Devised => 30, FactKind.Consulted => 14,

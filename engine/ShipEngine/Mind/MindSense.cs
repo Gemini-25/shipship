@@ -64,9 +64,11 @@ public sealed partial class Mind
             if (size > 0) b.Size = size;
             list[i] = b;
             if (wasWeak && b.Conf >= 0.5f && Urgent(kind)) _fresh.Add(i);
+            if (wasWeak && b.Conf >= 0.3f) FlashCue(a, kind, b.Cause);   // ⑧ 그날이 되살아난다
             return wasWeak && b.Conf >= 0.5f;
         }
         var nb = new Belief { Kind = kind, Src = src, Cell = cell, Subject = subject, Conf = Math.Min(1, conf), Seen = tick, Cause = cause, Size = size };
+        if (conf >= 0.25f) FlashCue(a, kind, cause);   // ⑧ 그날이 되살아난다
         if (list.Count >= MaxBeliefs)
         {
             int weakest = 0;
@@ -328,6 +330,7 @@ public sealed partial class Mind
                     if (b.Kind is BeliefKind.Fire or BeliefKind.Vacuum or BeliefKind.Breach) c.Fear = Math.Max(c.Fear, person ? 0.5f + 0.4f * (1 - c.Brave) : 0);
                     if (b.Kind == BeliefKind.Dead && person) { c.Fear = Math.Max(c.Fear, 0.6f); c.Sad = Math.Min(1, c.Sad + 0.3f); }
                 }
+                if (person && c.Up != 0) HeartOnFresh(sim, a, b);   // ⑧ 곁에서 본 죽음 · 그날이 되살아났다
                 if (b.Conf > bc) { bc = b.Conf; best = i; }
             }
             if (best >= 0 && (person ? c.Up != 0 : true) && t - c.LastShout >= 10 && a.Beliefs[best].Src != BeliefSource.Told)
