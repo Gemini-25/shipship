@@ -10,6 +10,8 @@ public sealed class LiveFrame
     public Img Img = null!;
     public float SrcX, SrcY, SrcW, SrcH;
     public string Ship = "", Status = "", Story = "", Banner = "", Mood = "", Notice = "", Route = "";
+    /// <summary>이 장에서 카메라가 끊어 넘겼다 (화면이 짧게 어두워졌다 밝아지게 할 수 있다).</summary>
+    public bool Cut;
     public float BannerAlpha;
     public long Tick;
     public string Replay = "";            // 다시보기 중이면 그 하이라이트 제목
@@ -71,6 +73,9 @@ public sealed class LiveShow
     public double Aspect = 9.0 / 16.0;    // 화면 세로/가로
     public const int MaxTicksPerCall = 50; // 한 번에 이보다 많이 돌리지 않는다 (느린 기계에서 밀린 것은 버린다 — 화면이 끊기지 않게)
     public const double MinView = 12, MaxView = 96, FollowMin = 20, FollowMax = 48;
+    /// <summary>결정적 순간의 가까이 보기 (칸) · 이만큼(화면 너비의 몫)보다 먼 곳으로 옮길 땐 컷 · 이번 장이 컷인가 · 컷 수.</summary>
+    public const double CloseUp = 18, CutAt = 0.75;
+    public bool Cut; public long Cuts;
     public const double AnimFps = 8;      // 걷기 · 불꽃 그림이 바뀌는 빠르기 (도트 — 화면 프레임과 따로)
 
     private double _carry, _anim;
@@ -174,6 +179,14 @@ public sealed class LiveShow
             tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax);
         }
         else if (Follow && vd.FocusCell >= 0) { (tx, ty) = CellDrawn(vd.FocusCell); tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
+        // 카메라 연출 (그래픽 결정 13 — 위아래 검은 띠는 없다): 결정적 순간엔 가까이 · 먼 곳으로 옮길 땐 미끄러지지 않고 끊어 넘긴다 (컷)
+        bool auto = Follow && !Overview && !(Selected >= 0 && FollowSelected);
+        if (auto && (vd.Mood == "결정적 순간" || ShotNow is { Kind: "정점" })) tw = Math.Min(tw, CloseUp);
+        Cut = false;
+        if (auto && Math.Sqrt((tx - CamX) * (tx - CamX) + (ty - CamY) * (ty - CamY)) > ViewW * CutAt)
+        {
+            CamX = tx; CamY = ty; ViewW = tw; Cut = true; Cuts++;
+        }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
         Ears.Update(this, realSec);
@@ -480,7 +493,7 @@ public sealed class LiveShow
             Img = img,
             SrcX = srcX, SrcY = srcY,
             SrcW = (float)(w * Painter.T), SrcH = (float)(h * Painter.T),
-            Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood,
+            Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood, Cut = Cut,
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
             Tick = World.Tick, Replay = _replayOf == null ? "" : ShotNow is { } sn ? $"{_replayOf.Title} · 컷 {_shots.IndexOf(sn) + 1}/{_shots.Count} {sn.Kind}" : _replayOf.Title,
             CamLeft = left, CamTop = top, CamW = w, CamH = h,

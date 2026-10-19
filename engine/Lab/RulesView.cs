@@ -125,11 +125,11 @@ public static partial class Program
             foreach (var c in rs.Shots) Console.WriteLine($"    컷 {c.Kind} {c.From}~{c.To} (At {c.At}) ×{c.Speed} {c.Caption}");
         }
         long replayHits = 0; int replayHole = 0; bool liveStill = true; int replayFrames = 0;
-        var seenShots = new List<string>(); bool shotSpeed = true, jumped = false; string peakStory = "";
+        var seenShots = new List<string>(); bool shotSpeed = true, jumped = false; string peakStory = ""; double peakView = 99; int peakFrames = 0;
         for (int i = 0; i < 60 * 600 && rs.Replaying; i++)
         {
             var cut = rs.ShotNow;
-            if (cut != null) { if (seenShots.Count == 0 || seenShots[^1] != cut.Kind) seenShots.Add(cut.Kind); shotSpeed &= rs.Speed == cut.Speed; if (cut.Kind == "정점") peakStory = rs.Story(); }
+            if (cut != null) { if (seenShots.Count == 0 || seenShots[^1] != cut.Kind) seenShots.Add(cut.Kind); shotSpeed &= rs.Speed == cut.Speed; if (cut.Kind == "정점") { peakStory = rs.Story(); if (++peakFrames > 60) peakView = Math.Min(peakView, rs.ViewW); } }
             else if (rs.Replaying) jumped |= rs.Speed == LiveShow.JumpSpeed;
             rs.Advance(dt);
             if (rs.Replaying) { replayHits = rs.World.Get<Outside>().RockHits; replayHole = Enumerable.Range(0, rs.World.Layout.N).Count(c => rs.World.Get<Field>().Hole[c] > 0); replayFrames++; }
@@ -140,9 +140,9 @@ public static partial class Program
             started && replayHits == liveHits && liveHits > 0 && replayFrames > 60 && liveStill && !rs.Replaying && rs.World == rs.Sim,
             hl == null ? "하이라이트 없음" : $"'{hl.Title}' · 다시보기 {replayFrames}장 · 충돌 산 세계 {liveHits} / 다시보기 {replayHits} · 산 세계 멈춤 {liveStill} · 돌아옴 {!rs.Replaying}");
 
-        Check("⑬ 다시보기는 컷 목록을 따른다 — 조짐부터 정점 · 뒤까지 컷마다 그 빠르기 · 자막 '[정점] …' · 컷 사이는 건너뛴다",
-            seenShots.Count >= 3 && seenShots[0] == "조짐" && seenShots.Contains("정점") && seenShots[^1] == "뒤" && shotSpeed && jumped && peakStory.StartsWith("[정점] "),
-            $"본 컷 {string.Join(" → ", seenShots)} · 빠르기 맞음 {shotSpeed} · 건너뜀 {jumped} · \"{peakStory}\"");
+        Check("⑬ 다시보기는 컷 목록을 따른다 — 조짐부터 정점 · 뒤까지 컷마다 그 빠르기 · 자막 '[정점] …' · 컷 사이는 건너뛴다 · 정점 컷은 가까이 (그래픽 결정 13)",
+            seenShots.Count >= 3 && seenShots[0] == "조짐" && seenShots.Contains("정점") && seenShots[^1] == "뒤" && shotSpeed && jumped && peakStory.StartsWith("[정점] ") && peakView <= LiveShow.CloseUp + 1,
+            $"본 컷 {string.Join(" → ", seenShots)} · 빠르기 맞음 {shotSpeed} · 건너뜀 {jumped} · \"{peakStory}\" · 정점의 화면 {peakView:0.0}칸");
 
         // 판 (화면 바퀴 1): 하이라이트 목록(L) — 가장 새것이 위 · 골라 Enter면 그 장면 다시보기 / 항로(T) — 출항 전에 고르는 위험도 / 일지(J) · 아침 방송 자막
         rs.TogglePanel(PanelKind.Highlights);

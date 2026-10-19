@@ -45,6 +45,8 @@ public partial class LiveMain : Node2D
     private static readonly double[] GameSecPerSec = { 0, 1, 10, 60, 600, 3600 };
     private bool _help = true, _meter;
     private double _helpLeft = 12;
+    private const double CutDipSec = 0.18;
+    private double _cutDip;
     private int _gotFrames, _fpsFrames; private double _meterT; private int _picPerSec, _screenPerSec;
     private Vector2 _lastSize;
     private bool _dragging;
@@ -148,6 +150,7 @@ public partial class LiveMain : Node2D
 
     public override void _Process(double delta)
     {
+        _cutDip = Math.Max(0, _cutDip - delta);
         var size = GetViewportRect().Size;
         if (size != _lastSize && size.X > 0) { _lastSize = size; _aspect = size.Y / size.X; }
         // 손으로 카메라 옮기기 (누르고 있는 동안)
@@ -183,6 +186,7 @@ public partial class LiveMain : Node2D
             _show?.Recycle(img);                                  // 텍스처로 옮겼다 — 다음 장에 다시 쓴다
             if (_shown == null || _shown.Ship != f.Ship) DisplayServer.WindowSetTitle($"ShipSim · 새 엔진 판 — {f.Ship}");
             _shown = f;
+            if (f.Cut) _cutDip = CutDipSec;   // 카메라가 끊어 넘긴 장: 짧게 어두워졌다 밝아진다
             _gotFrames++; _picsTotal++;
         }
         PumpAudio();
@@ -247,6 +251,7 @@ public partial class LiveMain : Node2D
         }
         var f = _shown;
         DrawTextureRectRegion(_tex, new Rect2(Vector2.Zero, vp), new Rect2(f.SrcX, f.SrcY, f.SrcW, f.SrcH));
+        if (_cutDip > 0) DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, (float)(0.7 * _cutDip / CutDipSec)));   // 컷 전환
 
         // 위 줄: 배 · 시각 · 분위기 · 빠르기 · 사람
         var mood = MoodColor(f.Mood);

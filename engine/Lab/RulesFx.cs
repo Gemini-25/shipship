@@ -56,6 +56,35 @@ public static partial class Program
                 $"{bl.Size:0}dB · {Painter.BlastKg(bl.Size):0.00}kg · {reach:0.0}칸 · 띠 도트 {ring} · 흔들림 조용 {calmShake} · 폭발 {blastShake} · 뒤 {afterShake}");
         }
 
+        // ── 카메라 연출 (결정 13): 먼 곳의 폭발 → 카메라가 미끄러지지 않고 끊어 넘긴다 (컷) · 결정적 순간엔 가까이 ──
+        {
+            var s = ShipWorld.Create("Didim", 3);
+            s.Run(5);
+            var L = s.Layout;
+            var show = new LiveShow(s, "디딤호");
+            for (int i = 0; i < 30; i++) show.Advance(1.0 / 60);
+            var room = L.Rooms.First(r => r.Type == "Engine");
+            int at = room.Cells[room.Cells.Length / 2];
+            var far = L.Rooms.OrderByDescending(r => Math.Abs(L.X(r.Cells[0]) - L.X(at)) + Math.Abs(L.Y(r.Cells[0]) - L.Y(at))).First();
+            show.CamX = L.X(far.Cells[0]); show.CamY = L.Y(far.Cells[0]); show.ViewW = 24; show.Follow = true;
+            long cuts0 = show.Cuts;
+            s.Get<Structure>().Blast(s, at, 8e6, Cause(s, "폭발"));
+            double minW = 99; string moods = ""; bool near = false;
+            for (int i = 0; i < 240; i++)
+            {
+                show.Advance(1.0 / 60);
+                minW = Math.Min(minW, show.ViewW);
+                if (!moods.Contains(show.View.Mood)) moods += show.View.Mood + " ";
+                var (l, t, w, h) = show.Camera();
+                near |= L.X(at) + 0.5 >= l && L.X(at) + 0.5 <= l + w && L.Y(at) + 0.5 >= t && L.Y(at) + 0.5 <= t + h;
+            }
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    먼 방 {far.Name} ({L.X(far.Cells[0])},{L.Y(far.Cells[0])}) · 폭발 ({L.X(at)},{L.Y(at)}) · 연출 초점 {show.View.FocusCell}");
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    컷 {show.Cuts - cuts0} · 가장 가까이 {minW:0.0}칸 · 분위기 {moods}· 폭발이 화면 안 {near}");
+            Check("카메라 연출: 먼 곳의 폭발로 카메라가 끊어 넘긴다 (컷) · 폭발이 화면에 담긴다 · 결정적 순간이면 18칸까지 가까이",
+                show.Cuts > cuts0 && near && (!moods.Contains("결정적") || minW <= LiveShow.CloseUp + 1),
+                $"컷 {show.Cuts - cuts0} · 가장 가까이 {minW:0.0}칸 · 분위기 {moods}· 폭발이 화면 안 {near}");
+        }
+
         // ── 합선: 젖은 전선 칸 — '합선' 사실 2틱 안은 그 칸에 푸른 흰 불꽃 · 지나면 없다 (차단기가 떨어져 아크가 멎었다) ──
         {
             var s = ShipWorld.Create("Didim", 3);
