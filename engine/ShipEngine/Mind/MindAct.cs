@@ -825,6 +825,8 @@ public sealed partial class Mind
     private readonly List<int> _dangerFire = new(), _dangerVac = new();
 
     public const int MaxExpand = 40000;
+    /// <summary>길찾기 셈 (재기 — 찍지 않는다): 부른 수 · 못 찾은 수 · 펼친 칸 수.</summary>
+    public long PathCalls, PathFails, PathExpanded;
 
     /// <summary>4방향 A*: 가구 +0.5 · 닫힌 문 +2 · 안 열린다고 믿는 문은 막힘 · 불이라 믿는 곳 둘레 +15 · 진공이라 믿는 구역 +25.</summary>
     private bool FindPath(Agent a, int from, int to, int near, bool throughStuck = false)
@@ -881,7 +883,8 @@ public sealed partial class Mind
                 _pq.Enqueue(j, ng + H(j, to, near));
             }
         }
-        if (goal < 0) return false;
+        PathCalls++; PathExpanded += expanded;
+        if (goal < 0) { PathFails++; return false; }
         for (int x = goal; x != from && x >= 0; x = _from[x]) a.Path.Add(x);
         a.Path.Reverse();
         return true;
