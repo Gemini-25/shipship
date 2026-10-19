@@ -98,6 +98,24 @@ public static partial class Program
             int hot = Enumerable.Range(0, L.N).Where(c => L.IsSpace(c)).OrderByDescending(c => o.Dose[c]).First();
             Shot(s, p, hot, $"별 폭발 — 이 칸 {o.Dose[hot]:0}mGy/시 · 바깥 {o.DoseOut:0}mGy/시", 1);
         }
+        // ⑥ 재질 흔적: 오래된 배처럼 — 벽마다 부식 · 피로를 나이만큼 (장면 차리기) · 냉매 · 전해액이 쏟아진 바닥 · 그을음
+        {
+            var s = ShipWorld.Crewed("Didim", 3, 4, 2);
+            s.Run(Time.Hours(9));
+            var L = s.Layout; var st = s.Get<Structure>(); var f = s.Get<Field>(); var p = new Painter(L);
+            var room = L.Rooms.First(r => r.Type == "Engine");
+            int at = room.Cells[room.Cells.Length / 2];
+            for (int c = 0; c < L.N; c++)
+                if (L.Kind[c] == CellKind.Wall && Math.Abs(L.X(c) - L.X(at)) < 12 && Math.Abs(L.Y(c) - L.Y(at)) < 8)
+                {
+                    float u = DotHash.F(c, 5, 9);
+                    st.Corrode[c] = u < 0.5f ? 0 : (u - 0.5f) * 1.2f; st.Fatigue[c] = DotHash.F(c, 6, 9) < 0.25f ? 0.5f + DotHash.F(c, 7, 9) * 0.5f : 0;
+                }
+            var open = room.Cells.Where(c => L.FurnitureAt[c] < 0).ToList();
+            f.AddStore(open[0], f.T.sNH3l, 30); f.AddStore(open[Math.Min(3, open.Count - 1)], f.T.sEC, 15);
+            f.AddStore(open[Math.Min(6, open.Count - 1)], f.T.sWater, 40);
+            Shot(s, p, at, "재질 흔적 — 녹 (윗면 얼룩 · 앞면 흘러내림) · 실금 · 냉매(청록) · 전해액(호박) · 물 웅덩이", 2);
+        }
         File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>fx</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0}}img{{width:528px;image-rendering:pixelated}}</style>{page}");
         Console.WriteLine($"  fx: {k}장 → {dir}");
     }

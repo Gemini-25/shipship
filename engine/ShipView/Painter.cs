@@ -344,6 +344,7 @@ public sealed partial class Painter
                 if (y >= y0) SootStain(img, Px(x), Py(y), T, T, sg, c);
                 if (KindAt(x, y + 1) == CellKind.Floor) SootStain(img, Px(x), Py(y + 1), T, DotTiles.Face, sg, c + 7);
             }
+        if (st != null) WallTraces(img, st, x0, y0, w, h);   // 녹 · 실금 (④ 부식 · 피로)
         foreach (var d in L.Doors)
         {
             int x = L.X(d.Cell), y = L.Y(d.Cell);
@@ -459,6 +460,7 @@ public sealed partial class Painter
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 double sootG = f.SootGPerM2(c);
                 if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, sootG, c); // 바닥에 앉은 그을음
+                FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2) Put(img, Cached(Key(6, frame & 3, c & 7), () => DotFx.WaterTile(frame & 3, c & 7)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
                 double kpa = f.Pressure(c);
