@@ -14,6 +14,8 @@ public struct Job
 /// <summary>
 /// ⑪ 일과 물자 (docs/ENGINE.md §4 ⑪) — 월드 엔진: 켜진 설비(정제기 · 수집기)가 전기를 먹고 원료를 조금씩 만들고 · 물자 장부(재고 · 흐름 · 며칠 버티나)를 적는다.
 /// 일감판 · 막힌 곳 찾기 · 설비 켜고 끄기는 주컴퓨터의 살림이다 (⑩ <see cref="ShipMind"/> — 판단 이관 (아)).
+/// <para>공급 사슬 (재활용): 정제기는 헌 부품이 놓여 있으면 그것부터 녹인다 — 30분에 하나 → 원료 하나 (광석 · 부스러기로는 2시간) ·
+/// 헌 전기 부품이면 전자 소자를 건질 수도 있다 (세상의 확률 ChipBack — 난수 갈래 '헌 기판').</para>
 /// </summary>
 public sealed partial class Work : IEngine
 {
@@ -45,6 +47,9 @@ public sealed partial class Work : IEngine
     private Field? _f;
     public float[] MakerProgress = Array.Empty<float>();   // 설비마다 만드는 중 (시간)
     public long Crafted, Maintained, Cleaned, Made, Harvested;
+    public long Recycled, ChipsSaved;
+    public const double RecycleHours = 0.5;    // 헌 부품 하나를 녹이는 시간
+    public double ChipBack = 0.5;              // 헌 전기 부품에서 쓸 만한 전자 소자를 건질 확률 (시험이 바꾼다)
 
     public Work(Layout layout, Tables tables) { L = layout; T = tables; }
 
@@ -136,7 +141,7 @@ public sealed partial class Work : IEngine
             };
             lines.Add($"{line} → {D(days)} (만들지 못하면 {D(noMake)})");
         }
-        foreach (string name in new[] { "수리 꾸러미", "봉합 꾸러미", "소화기", "이산화탄소 소화기", "원료" })
+        foreach (string name in new[] { "수리 꾸러미", "봉합 꾸러미", "소화기", "이산화탄소 소화기", "원료", "전기 부품", "기계 부품", "봉함재", "거르개", "전자 소자", "헌 부품", "헌 전기 부품" })
         {
             int item = _mind!.ItemIndex(name);
             if (item < 0) continue;
@@ -160,9 +165,26 @@ public sealed partial class Work : IEngine
             int fu = dev.Furniture;
             if (_mind.Stock[fu * _mind.ItemCount + item] >= mk.Max) continue;   // 놓을 자리가 찼다 (켜고 끄기는 주컴퓨터의 살림 — ⑩)
             if (!_net.Working(dev.Id)) continue;
+            int scrap = dev.Type == "Refinery" ? ScrapAt(fu) : -1;   // 헌 부품부터 녹인다
             MakerProgress[fu] += (float)(dt / 3600);
-            if (MakerProgress[fu] >= mk.Hours) { MakerProgress[fu] = 0; _mind.Stock[fu * _mind.ItemCount + item]++; Made++; sim.Book.AddItem(item, Flow.Made, 1); }
+            if (MakerProgress[fu] < (scrap >= 0 ? RecycleHours : mk.Hours)) continue;
+            MakerProgress[fu] = 0;
+            _mind.Stock[fu * _mind.ItemCount + item]++; Made++; sim.Book.AddItem(item, Flow.Made, 1);
+            if (scrap < 0) continue;
+            _mind.Stock[fu * _mind.ItemCount + scrap]--; sim.Book.AddItem(scrap, Flow.Melted, -1); Recycled++;
+            if (scrap == _mind.iScrapElec && Rng.Unit(sim.Seed, Rng.Key("헌 기판"), sim.Tick, fu) < ChipBack)
+            {
+                _mind.Stock[fu * _mind.ItemCount + _mind.iChip]++; sim.Book.AddItem(_mind.iChip, Flow.Made, 1); ChipsSaved++;
+            }
         }
+    }
+
+    /// <summary>정제기에 놓인 헌 부품 (헌 전기 부품이 먼저 — 전자 소자를 건지려고 · 없으면 -1).</summary>
+    private int ScrapAt(int fu)
+    {
+        if (_mind!.Stock[fu * _mind.ItemCount + _mind.iScrapElec] > 0) return _mind.iScrapElec;
+        if (_mind.Stock[fu * _mind.ItemCount + _mind.iScrap] > 0) return _mind.iScrap;
+        return -1;
     }
 
     // ───────────────────────── 찍기 ─────────────────────────
@@ -170,12 +192,12 @@ public sealed partial class Work : IEngine
     public void Save(StateWriter w)
     {
         w.Arr(MakerProgress);
-        w.I64(Crafted); w.I64(Maintained); w.I64(Cleaned); w.I64(Made); w.I64(Harvested);
+        w.I64(Crafted); w.I64(Maintained); w.I64(Cleaned); w.I64(Made); w.I64(Harvested); w.I64(Recycled); w.I64(ChipsSaved);
     }
 
     public void Load(StateReader r)
     {
         MakerProgress = r.Arr<float>();
-        Crafted = r.I64(); Maintained = r.I64(); Cleaned = r.I64(); Made = r.I64(); Harvested = r.I64();
+        Crafted = r.I64(); Maintained = r.I64(); Cleaned = r.I64(); Made = r.I64(); Harvested = r.I64(); Recycled = r.I64(); ChipsSaved = r.I64();
     }
 }

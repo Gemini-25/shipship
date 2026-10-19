@@ -151,7 +151,7 @@ public sealed partial class Mind
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
-                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
         if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
@@ -308,7 +308,7 @@ public sealed partial class Mind
                 }
                 case BeliefKind.Grind when !drone && b.Subject >= 0 && _net != null && b.Subject < _net.Devices.Count && (!person || c.SkRepair >= GrindSkill):
                 {
-                    // 기계 소리가 이상하다: 로봇이 먼저 · 고치는 솜씨 있는 이가 기계 부품을 미리 간다 (수리 꾸러미 — 멈췄으면 가서 보고 고친다)
+                    // 기계 소리가 이상하다: 로봇이 먼저 · 고치는 솜씨 있는 이가 기계 부품을 미리 간다 (기계 부품 — 멈췄으면 가서 보고 고친다)
                     float imp = Importance(b.Subject);
                     float s = person ? b.Conf * (0.3f + c.SkRepair) * 2 * imp * caution : b.Conf * 3.5f * imp;
                     int key = b.Subject * 4 + (int)Part.Mechanical;
@@ -629,13 +629,15 @@ public sealed partial class Mind
             {
                 if (_net == null) return false;
                 int dev = o.Target / 4, part = o.Target % 4;
-                if (a.IsPerson && c.Holding != iRepair)
+                byte spare = SpareOf(part);   // ⑪ 그 갈래 부품
+                if (!a.IsPerson && !InPouch(c, part) && NearestStock(here, spare) < 0) return false;   // 로봇: 주머니에도 배에도 그 갈래가 없다
+                if (a.IsPerson && c.Holding != spare)
                 {
                     if (c.Holding != 255) return false;
-                    int src = NearestStock(here, iRepair);
+                    int src = NearestStock(here, spare);
                     if (src < 0) return false;
                     plan.Add(Go(L.Furniture[src].Cells[0], 1));
-                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iRepair });
+                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = spare });
                 }
                 plan.Add(Go(_net.Devices[dev].Cell, 1));
                 plan.Add(new PlanStep { Kind = StepKind.Maintain, Target = dev, Arg = (byte)part });
@@ -679,6 +681,23 @@ public sealed partial class Mind
                 }
                 plan.Add(Go(L.Furniture[point].Cells[0], 1));
                 plan.Add(new PlanStep { Kind = StepKind.Stow, Target = point });
+                return true;
+            }
+            case GoalKind.Haul:
+            {
+                // ⑪ 헌 부품: 놓인 설비 → 손에 들고 → 정제기 (맡긴 일: Target 정제기 · Arg 설비 × 256 + 물건 · 들고만 있으면 가까운 정제기)
+                if (c.Holding != 255 && c.Holding != iScrap && c.Holding != iScrapElec) return false;
+                int refinery = o.Target >= 0 ? o.Target : NearestRefinery(c.Cell);
+                if (refinery < 0) return false;
+                if (c.Holding == 255)
+                {
+                    int src = c.AssignedGoal == GoalKind.Haul ? c.AssignedArg / 256 : -1, item = c.AssignedArg % 256;
+                    if (src < 0 || src >= L.Furniture.Count || Stock[src * ItemCount + item] <= 0) return false;
+                    plan.Add(Go(L.Furniture[src].Cells[0], 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = (byte)item });
+                }
+                plan.Add(Go(L.Furniture[refinery].Cells[0], 1));
+                plan.Add(new PlanStep { Kind = StepKind.Put, Target = refinery });
                 return true;
             }
             case GoalKind.Evacuate:
@@ -805,7 +824,7 @@ public sealed partial class Mind
 
     /// <summary>일상 목표 (위기를 다루는 일이 아닌 것) — 빠져나온 위험한 방으로는 이것 때문에 돌아가지 않는다.</summary>
     private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize
-        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook;
+        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook or GoalKind.Haul;
 
     /// <summary>
     /// 피하는 칸: 사람이 방금(10분) 빠져나온 방이고 아직 위험하다고 믿는다 (지금 그 방 안이면 아니다).
@@ -896,13 +915,16 @@ public sealed partial class Mind
         // 거둔 것을 들고 있으면 (하던 일이 끊겼어도) 식량 창고에 넣는다
         if (c.Holding == iHarvest && _life != null && _life.Crops.Count > 0) Add(GoalKind.Harvest, 0, c.Cell, 1.0f);
         if (c.Holding == iRation) Add(GoalKind.Restock, c.AssignedGoal == GoalKind.Restock && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
-        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock)) return;
+        // ⑪ 헌 부품을 들고 있으면 (나르기가 끊겼어도) 정제기에 넣는다
+        if (c.Holding == iScrap || c.Holding == iScrapElec) Add(GoalKind.Haul, c.AssignedGoal == GoalKind.Haul && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul)) return;
         int cell = c.AssignedGoal switch
         {
             GoalKind.Craft => L.Furniture[c.AssignedTarget].Cells[0],
             GoalKind.Maintain => _net != null ? _net.Devices[c.AssignedTarget / 4].Cell : -1,
             GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,
             GoalKind.Restock => c.AssignedArg >= 0 && c.AssignedArg < L.Furniture.Count ? L.Furniture[c.AssignedArg].Cells[0] : -1,
+            GoalKind.Haul => c.AssignedArg >= 0 && c.AssignedArg / 256 < L.Furniture.Count ? L.Furniture[c.AssignedArg / 256].Cells[0] : -1,
             _ => c.AssignedTarget,
         };
         if (cell >= 0) Add(c.AssignedGoal, c.AssignedTarget, cell, 1.2f);

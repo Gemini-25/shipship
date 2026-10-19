@@ -151,7 +151,7 @@ public static partial class Program
                 var m = s.Get<Mind>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>(); var wk = s.Get<Work>();
                 sm.JournalHour = 1;
                 m.AddPerson(s, Worlds.At(ly, 3, 7));
-                foreach (string it in new[] { "원료", "수리 꾸러미" }) { int i = m.ItemIndex(it); for (int fu = 0; fu < ly.Furniture.Count; fu++) m.Stock[fu * m.ItemCount + i] = 0; }
+                foreach (string it in new[] { "원료", "수리 꾸러미", "기계 부품" }) { int i = m.ItemIndex(it); for (int fu = 0; fu < ly.Furniture.Count; fu++) m.Stock[fu * m.ItemCount + i] = 0; }
                 int rf = net.Devices.First(d => d.Type == "Refinery").Id;
                 if (broken)
                 {

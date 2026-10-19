@@ -74,6 +74,7 @@ public enum GoalKind : byte
     Attack,     // ⑧ 공황 발작 — 그 자리에 주저앉아 숨을 고른다
     Withdraw,   // ⑧ 우울 — 일하는 시간에 제 침대에 틀어박힌다
     Counsel,    // ⑧ 상담 — 주컴퓨터의 부탁으로 마음이 힘든 이 곁에 앉아 이야기를 들어 준다 (대상: 몸)
+    Haul,       // ⑪ 공급 사슬 — 헌 부품을 정제기로 나른다 (맡긴 일: 대상 정제기 설비 · Arg 헌 부품이 있는 설비 × 256 + 물건)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -100,6 +101,7 @@ public enum StepKind : byte
     Salvage,   // ⑥ 덜 중요한 장치에서 부품을 떼어 낸다 (Target: 떼어 올 장치 · Arg: 부품 · Cell: 고칠 장치)
     Rewire,    // ⑥ 연장선: Arg 0 옆 방 통풍구에서 꽂는다 · 1 그 방까지 깔고 잇는다 (Target: 방 · Cell: 옆 방)
     Door,      // ⑧ 문을 연다(Arg 1) · 닫는다(Arg 0) (Cell: 문 — 제 궁리의 걸음)
+    Put,       // ⑪ 든 물건을 설비에 넣는다 (Target: 설비 — 나르기)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
@@ -143,7 +145,7 @@ public struct AgentCore
     public long ExercisedAt;
     // 솜씨 0~1
     public float SkRepair, SkMedic, SkFire, SkSeal, SkCook, SkPilot, SkFarm, SkScience;
-    public byte Spares;        // ⑥ 로봇의 부품 주머니 (새 부품 · 고칠 때마다 하나)
+    public byte Spares;        // ⑥ 로봇의 부품 주머니 — 갈래마다 하나 (비트: 전기 · 기계 · 봉함 · 거르개 — ⑪ 공급 사슬 · 고칠 때마다 그 갈래를 쓴다)
     // 로봇
     public float Battery, Damage;
 

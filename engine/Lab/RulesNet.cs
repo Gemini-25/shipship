@@ -83,20 +83,20 @@ public static partial class Program
                 $"깔림 {laid} · 뽑음 {sm.JumpersCut} · 다시 어둠 {darkAgain} · 문이 닫힌 때 불 뒤 {closeMin}분 · \"{sm.Log.LastOrDefault(x => x.text.Contains("연장선")).text}\"");
         }
 
-        // ── 떼어 쓰기: 부품 주머니가 빈 로봇 · 작업대에 꾸러미도 없다 → 커피 기계에서 회로를 떼어 산소 발생기를 고친다 (헌 부품 — 닳은 만큼 그대로 · 커피 기계는 멈춘다) ──
+        // ── 떼어 쓰기: 부품 주머니가 빈 로봇 · 작업대에 전기 부품도 없다 → 커피 기계에서 회로를 떼어 산소 발생기를 고친다 (헌 부품 — 닳은 만큼 그대로 · 커피 기계는 멈춘다) ──
         {
             var s = Worlds.Full(lay, 3);
             var net = s.Get<Network>(); var m = s.Get<Mind>();
             int robot = m.AddRobot(s, At(12, 3), AgentKind.Robot, At(12, 3));
             m.Agents[robot].C.Spares = 0;
-            foreach (var fu in lay.Furniture) for (int i = 0; i < m.ItemCount; i++) m.Stock[fu.Id * m.ItemCount + i] = fu.Type == "Workbench" && m.ItemNames[i] == "수리 꾸러미" ? 0 : m.Stock[fu.Id * m.ItemCount + i];
+            foreach (var fu in lay.Furniture) for (int i = 0; i < m.ItemCount; i++) m.Stock[fu.Id * m.ItemCount + i] = fu.Type == "Workbench" && m.ItemNames[i] is "수리 꾸러미" or "전기 부품" ? 0 : m.Stock[fu.Id * m.ItemCount + i];   // ⑪ 회로는 전기 부품으로 고친다
             int o2 = net.Devices.First(d => d.Type == "OxygenGenerator").Id, coffee = net.Devices.First(d => d.Type == "CoffeeMachine").Id;
             net.Age(coffee, Part.Electric, 0.6);
             float donorWear = net.WearFraction(coffee, Part.Electric);
             net.Broken[o2 * 4 + (int)Part.Electric] = 1;
             for (int k = 0; k < 12 && net.Broken[o2 * 4] != 0; k++) s.Run(Time.Minutes(5));
             string story = s.Facts.Since(0).Where(x => x.Kind == FactKind.Repaired && x.Other == o2).Select(x => s.Causes.Story(x.Cause)).FirstOrDefault() ?? "";
-            Check("떼어 쓰기: 부품 주머니가 비고 꾸러미도 없으면 커피 기계에서 회로를 떼어 산소 발생기를 고친다 — 헌 부품이라 수명을 쓴 몫이 그대로 · 커피 기계는 멈춘다 · 장부가 맞는다",
+            Check("떼어 쓰기: 부품 주머니가 비고 전기 부품도 없으면 커피 기계에서 회로를 떼어 산소 발생기를 고친다 — 헌 부품이라 수명을 쓴 몫이 그대로 · 커피 기계는 멈춘다 · 장부가 맞는다",
                 net.Broken[o2 * 4] == 0 && net.Broken[coffee * 4] != 0 && Math.Abs(net.WearFraction(o2, Part.Electric) - donorWear) < 0.01f && story.Contains("떼어") && m.Salvages == 1
                 && Math.Abs(s.Book.OfItem(m.ItemIndex("떼어 낸 부품"), Flow.Salvaged) + s.Book.OfItem(m.ItemIndex("떼어 낸 부품"), Flow.Used)) < 1e-9,
                 $"산소 발생기 고장 {net.Broken[o2 * 4]} · 커피 기계 고장 {net.Broken[coffee * 4]} · 수명 쓴 몫 {net.WearFraction(o2, Part.Electric):0.00}/{donorWear:0.00} · \"{story}\"");

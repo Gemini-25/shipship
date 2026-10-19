@@ -241,7 +241,8 @@ public static partial class Program
                 life[m[p].C.Body].Blunt, mis.Count > 0 ? s.Causes.Story(mis[0].Cause) : "", hurt.Kind == FactKind.Hurt ? s.Causes.Story(hurt.Cause) : "");
         }
         var honestT = Task.Run(() => Run(10, 0, 0.95f, 0.9f, 0.1f)); var closedT = Task.Run(() => Run(10, 0, 0.6f, 0f, 1f));   // 몫 10 — 솜씨가 좋아도 반드시
-        var hurtT = Task.Run(() => Run(0, 1, 0.5f, 0.5f, 0.5f)); var calm = Run(0, 0, 0.5f, 0.5f, 0.5f);
+        var hurtT = Task.Run(() => Run(0, 3, 0.5f, 0.5f, 0.5f));   // 솜씨 1이면 몫 × 0.4 — 3이면 반드시 (1이면 40%: 고친 틱의 난수에 따라 갈렸다)
+        var calm = Run(0, 0, 0.5f, 0.5f, 0.5f);
         var honest = honestT.Result; var closed = closedT.Result; var hurt = hurtT.Result;
         if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    {honest.why}\n    {hurt.hurtWhy}");
         Check("손보다 상함: 펌프를 미리 갈다 다른 부품을 상하게 했다 (세상이 솜씨 · 졸림 · 서두름으로 계산 — 사실 '실수') · 알아챈 정직한 이는 털어놓고 · 입이 무거운 이는 말하지 않는다 (그 사람의 판단)",

@@ -65,6 +65,7 @@ public sealed partial class Mind
             case StepKind.Clean: CleanStep(sim, a, st); return;
             case StepKind.Harvest: HarvestStep(sim, a, st); return;
             case StepKind.Stow: StowStep(sim, a, st); return;
+            case StepKind.Put: PutStep(sim, a, st); return;
             case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.Salvage: SalvageStep(sim, a, st); return;
@@ -450,14 +451,24 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int dev = st.Target, part = st.Arg;
-        if (_net == null || _net.Broken[dev * 4 + part] != 0) { JobDone(a, t); return; }
+        if (_net == null) { JobDone(a, t); return; }
+        if (_net.Broken[dev * 4 + part] != 0)
+        {
+            // 와 보니 이미 멈췄다 — 미리 갈 일이 아니라 고칠 일이다 (소리의 믿음을 지운다 · 예전: 그 믿음으로 같은 걸음을 끝없이 되풀이했다)
+            Forget(a, b => b.Kind == BeliefKind.Grind && b.Subject == dev);
+            JobDone(a, t);
+            return;
+        }
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
+        byte spare = SpareOf(part);
+        if (a.IsPerson && c.Holding != spare) { Fail(sim, a, $"{Ko.I(ItemNames[spare])} 없다", SnagKind.NoItem, c.Cell, spare); return; }
         Activity(a, "work");
-        double minutes = a.IsPerson ? 20 * (1.6 - c.SkRepair) : 15;
+        double minutes = a.IsPerson ? P.Items[ItemNames[spare]].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         if (a.IsPerson) UseHeld(sim, a);
-        else if (!TakeOne(c.Cell, iRepair, sim)) { Fail(sim, a, "갈아 끼울 부품이 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
+        else if (InPouch(c, part)) c.Spares &= (byte)~(1 << part);   // 로봇 부품 주머니
+        else if (!TakeOne(c.Cell, spare, sim)) { Fail(sim, a, "갈아 끼울 부품이 없다", SnagKind.NoItem, c.Cell, spare); return; }
+        LeaveScrap(sim, dev, part);   // ⑪ 갈아 낸 부품은 장치 곁에 (재활용)
         // 소리로 안 것인가: 제가 들었다 (맡긴 일이 아니다) · 아니면 누가 '소리가 이상하다'고 알린 장치 (세 시간 안)
         bool mech = (Part)part == Part.Mechanical;
         bool heard = mech && a.Beliefs.Any(b => b.Kind == BeliefKind.Grind && b.Subject == dev && b.Conf > 0.05f) && !(c.AssignedGoal == GoalKind.Maintain && c.AssignedUntil > t);
@@ -581,15 +592,16 @@ public sealed partial class Mind
         }
         if (_net == null || _net.Broken[dev * 4 + st.Arg] == 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-        if (!HasPart(a)) { Fail(sim, a, a.IsPerson ? "수리 꾸러미가 없다" : "부품이 없다"); return; }
+        if (!HasPart(a, st.Arg)) { Fail(sim, a, a.IsPerson ? $"{Ko.I(ItemNames[SpareOf(st.Arg)])} 없다" : "부품이 없다"); return; }
         Activity(a, "work");
-        double minutes = a.IsPerson ? P.Items["수리 꾸러미"].Minutes * (1.6 - c.SkRepair) : 15;
+        double minutes = a.IsPerson ? P.Items[ItemNames[SpareOf(st.Arg)]].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         float used = c.Holding == iSalvage ? c.HoldCharge : -1;   // ⑥ 떼어 온 헌 부품 (수명을 쓴 몫)
         _net.Repair(dev, (Part)st.Arg);
         if (used >= 0) _net.SetWear(dev, (Part)st.Arg, used);
-        if (c.Holding == iRepair || c.Holding == iSalvage) UseHeld(sim, a);
-        else if (!a.IsPerson && c.Spares > 0) c.Spares--;            // 로봇 부품 주머니
+        if (c.Holding == SpareOf(st.Arg) || c.Holding == iSalvage) UseHeld(sim, a);
+        else if (!a.IsPerson && InPouch(c, st.Arg)) c.Spares &= (byte)~(1 << st.Arg);   // 로봇 부품 주머니
+        LeaveScrap(sim, dev, st.Arg);   // ⑪ 망가진 부품은 장치 곁에 (재활용)
         if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.01f * Practice(c, "고치기") * UseSkill(a, 0, t));
         Repaired++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, used >= 0 ? $"{Ko.I(NameOf(a.Id))} 떼어 온 헌 부품으로 {Ko.Eul(_net.Devices[dev].Name)} 고쳤다" : $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);

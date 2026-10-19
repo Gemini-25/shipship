@@ -50,7 +50,7 @@ public static partial class Program
                 var dev = net.Devices.First(d => d.Has(Part.Electric) && d.Def.Role is not ("battery" or "reactor" or "panel"));
                 int p = m.AddPerson(s, dev.Cell, role);
                 m[p].C.Aim = (byte)aim; m[p].C.SkRepair = start; m[p].C.SkSeal = 0.5f;
-                m[p].C.Holding = (byte)m.ItemIndex("수리 꾸러미");
+                m[p].C.Holding = (byte)m.ItemIndex("전기 부품");   // ⑪ 회로는 전기 부품으로 고친다
                 net.Broken[dev.Id * 4 + (int)Part.Electric] = 1;
                 for (int k = 0; k < Time.Hours(1) && net.Broken[dev.Id * 4] != 0; k++) s.Step();
                 s.Run(30);

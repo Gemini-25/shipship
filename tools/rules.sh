@@ -15,7 +15,8 @@ wait
 fail=0; pass=0; code=0; groups=""
 for i in $(seq 0 $((N-1))); do
   f="$DIR/$i.txt"
-  grep -E "^\s*✘ [^통실]|✘ 멈춤|⚠ 느린" "$f" && { grep -qE "^\s*✘ [^통실]|✘ 멈춤" "$f" && code=1; }
+  # 실패 줄은 들여 쓴 '✘ ' (끝 줄 '✘ 통과 · 실패한 묶음'은 들여 쓰지 않는다 — 한글 범위식 [^통실]은 바이트로 읽혀 '솜 · 일'로 시작하는 줄을 놓쳤다)
+  grep -E "^\s+✘ |✘ 멈춤|⚠ 느린" "$f" && { grep -qE "^\s+✘ |✘ 멈춤" "$f" && code=1; }
   g=$(grep -E "^✘ 실패한 묶음: " "$f" | sed -E 's/^✘ 실패한 묶음: //'); [ -n "$g" ] && groups="${groups:+$groups,}$g"
   line=$(grep -E "통과 [0-9]+ · 실패 [0-9]+" "$f" | tail -1)
   if [ -z "$line" ]; then echo "✘ 갈래 $i: 끝 줄이 없다 (멈췄다)"; tail -20 "$f"; code=1; continue; fi

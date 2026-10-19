@@ -434,10 +434,14 @@ public sealed partial class ShipMind
                     F.AddGas(x, T.gCO, 0.5, 300); F.AddGas(x, T.gCO2, 4, 300);
                 }
             int kits = 2 + (int)(3 * Rng.Unit(sim.Seed, Rng.Key("건짐"), t, c.Id));
-            _mind!.Salvage(sim, cell, kits, pc);
+            // ⑪ 공급 사슬: 갈래 부품 (0~2개씩) · 전자 소자 (0~3) — 그 배에 무엇이 남았나는 세상의 확률
+            var parts = new int[4];
+            for (int p = 0; p < 4; p++) parts[p] = (int)(2.5 * Rng.Unit(sim.Seed, Rng.Key("건진 부품"), t, c.Id * 4 + p));
+            int chips = (int)(4 * Rng.Unit(sim.Seed, Rng.Key("건진 소자"), t, c.Id));
+            _mind!.Salvage(sim, cell, kits, pc, parts, chips);
             Salvaged += kits;
             sim.Facts.Emit(t, FactKind.Contact, cell, c.Id, pc, -1, 7);
-            Say(sim, $"{name}에서 수리 꾸러미 {kits}개를 건졌다");
+            Say(sim, $"{name}에서 수리 꾸러미 {kits}개 · 부품 {parts.Sum()}개 · 전자 소자 {chips}개를 건졌다");
         }
         o.Undock(sim, c.Id);
         GoingTo = -1; GoPhase = 0;

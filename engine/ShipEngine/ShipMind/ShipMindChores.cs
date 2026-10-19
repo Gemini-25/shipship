@@ -44,16 +44,8 @@ public sealed partial class ShipMind
         long now = sim.Tick;
         // 끝났거나 기한이 지난 일은 내린다
         Jobs.RemoveAll(j => j.Until < now || Done(j));
-        // 모자란 물건 만들기
-        foreach (var (name, r) in T.People.Recipes)
-        {
-            int item = mind.ItemIndex(name);
-            if (item < 0 || mind.TotalOf(item) >= r.Keep || Jobs.Any(j => j.Kind == GoalKind.Craft && j.Arg == item)) continue;
-            if (!r.Needs.All(kv => mind.TotalOf(mind.ItemIndex(kv.Key)) >= kv.Value)) continue; // 재료가 없다
-            int bench = L.Furniture.FindIndex(f => f.Type == r.At && f.Cells.Length > 0);
-            if (bench < 0) continue;
-            Post(sim, new Job { Kind = GoalKind.Craft, Target = bench, Arg = item }, L.Furniture[bench].Cells[0], person => person.C.SkRepair >= 0.4f);
-        }
+        // 모자란 물건 만들기 — 원료가 모자라면 무엇을 먼저 만들지 고른다 (⑪ 공급 사슬 (라))
+        PlanCrafts(sim);
         // 예방 정비: 표준 수명의 80%를 쓴 부품 (숨은 한계는 모른다)
         if (_net != null)
             foreach (var dev in _net.Devices)
@@ -63,7 +55,7 @@ public sealed partial class ShipMind
                     int k = dev.Id * 4 + p;
                     if (life <= 0 || _net.Broken[k] != 0 || _net.Wear[k] < Work.MaintainAt * life) continue;
                     if (Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k)) continue;
-                    if (mind.TotalOf(mind.iRepair) <= 0) continue; // 갈아 끼울 부품(수리 꾸러미)이 없다
+                    if (!SpareKnown(p)) continue; // 갈아 끼울 그 갈래 부품이 없다 (⑪ 공급 사슬)
                     Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);
                 }
         // 사람이 알린 이상한 기계 소리 (⑧이 남긴 알림을 읽는다 — 배 안 통신): 아직 끽끽거리면 그 장치의 기계 부품을 미리 간다 (로봇 먼저)
@@ -72,7 +64,7 @@ public sealed partial class ShipMind
             {
                 if (now - rp.Tick > Time.Hours(2) || rp.Device < 0 || rp.Device >= _net.Devices.Count || _net.WornDb(rp.Device) < Network.GrindFromDb) continue;
                 int k = rp.Device * 4 + (int)Part.Mechanical;
-                if (_net.Broken[k] != 0 || Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k) || mind.TotalOf(mind.iRepair) <= 0) continue;
+                if (_net.Broken[k] != 0 || Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k) || !SpareKnown((int)Part.Mechanical)) continue;
                 Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, _net.Devices[rp.Device].Cell, person => person.C.SkRepair >= 0.5f);
             }
         // 거두기: 다 자란 작물 (로봇 먼저 · 사람은 기르는 솜씨가 조금이라도 있으면)
@@ -96,6 +88,8 @@ public sealed partial class ShipMind
             }
             if (best >= 0) Post(sim, new Job { Kind = GoalKind.Restock, Target = point, Arg = best }, L.Furniture[best].Cells[0], person => true);
         }
+        // 헌 부품 나르기 (⑪ 공급 사슬 (다)): 장치 곁에 남은 헌 부품을 정제기로 (로봇 먼저 · 사람은 누구나)
+        PlanHauls(sim);
         // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
         foreach (var room in L.Rooms)
         {
@@ -117,31 +111,44 @@ public sealed partial class ShipMind
         GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && F.Stored(T.sWater, j.Target) < 2,
         GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < Work.HarvestAt * 0.5f * _life.CropArea(_net, j.Target),
         GoalKind.Restock => _work!.FoodAt(j.Target) >= Work.RestockBelow * 2 || _work.FoodAt(j.Arg) < 1,
+        GoalKind.Haul => HaulDone(j.Arg, j.Agent),
         _ => true,
     };
 
-    /// <summary>맡길 이를 찾는다: 놀고 있는 로봇이 먼저 (가까운 순) — 없으면 깨어 있고 바쁘지 않은 솜씨 맞는 사람.</summary>
-    private void Post(Sim sim, Job j, int cell, Func<Agent, bool> canPerson)
+    /// <summary>나르기 끝: 놓인 곳에 헌 부품이 없고 맡은 이도 들고 있지 않다.</summary>
+    private bool HaulDone(int arg, int agent)
+    {
+        var mind = _mind!;
+        if (arg / 256 >= L.Furniture.Count) return true;
+        if (mind.Stock[arg / 256 * mind.ItemCount + arg % 256] > 0) return false;
+        return agent < 0 || agent >= mind.Agents.Count || mind.Agents[agent].C.Holding != arg % 256;
+    }
+
+    /// <summary>맡길 이를 찾는다: 놀고 있는 로봇이 먼저 (가까운 순) — 없으면 깨어 있고 바쁘지 않은 솜씨 맞는 사람 (맡겼으면 참).</summary>
+    /// <param name="stalled">⑪ 부품을 기다리는 고치기를 맡았지만 손을 놓고 있는 로봇에게도 맡긴다 (그 부품을 먼저 만들게).</param>
+    private bool Post(Sim sim, Job j, int cell, Func<Agent, bool> canPerson, bool stalled = false)
     {
         var mind = _mind!;
         int best = -1, bd = int.MaxValue;
         foreach (var a in mind.Agents)
         {
-            if (a.C.Up == 0 || a.C.AssignedUntil > sim.Tick || a.C.Kind == AgentKind.Drone) continue;
+            bool waitingPart = stalled && !a.IsPerson && a.C.AssignedGoal is GoalKind.Repair or GoalKind.Maintain && a.C.Goal != a.C.AssignedGoal;
+            if (a.C.Up == 0 || a.C.AssignedUntil > sim.Tick && !waitingPart || a.C.Kind == AgentKind.Drone) continue;
             if (ChoreBusy(a.C.Goal)) continue;
             if (!a.IsPerson && (a.C.Battery < 0.4f || !mind.RobotCan(a, j.Kind))) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
             if (a.IsPerson && (!canPerson(a) || a.C.Goal != GoalKind.Work)) continue; // 사람은 일하는 시간에만
             int d = mind.Dist(a.C.Cell, cell) + (a.IsPerson ? 1000 : 0); // 로봇 먼저
             if (d < bd) { bd = d; best = a.Id; }
         }
-        if (best < 0) return;
+        if (best < 0) return false;
         j.Agent = best; j.Until = sim.Tick + Time.Hours(2);
         mind.AssignJob(best, j.Kind, j.Target, j.Arg, j.Until);
         Jobs.Add(j);
+        return true;
     }
 
     private static bool ChoreBusy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
-        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock;
+        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul;
 
     public readonly List<string> Blocks = new();
     public readonly List<int> BlockCauses = new();        // 막힌 곳마다 원인 마디 (⑪ — 같은 막힘이면 같은 마디 · 망가진 설비 때문이면 그 고장의 원인에 잇는다)
@@ -171,11 +178,11 @@ public sealed partial class ShipMind
             if (bench < 0) why = $"{T.Equip(r.At).Name}가 없다";
             else if (bdev >= 0 && (_net!.IsBroken(bdev, Part.Electric) || _net.IsBroken(bdev, Part.Mechanical))) { why = $"{_net.Devices[bdev].Name}가 망가졌다"; _why = BrokenCause(bdev); }
             else
-                foreach (var (need, amount) in r.Needs)
+                foreach (var (need, amount) in r.Needs.OrderBy(kv => kv.Key == "전자 소자" ? 0 : 1))   // 배에서 만들 수 없는 것을 먼저 댄다 (원료는 기다리면 생긴다)
                 {
                     int ni = mind.ItemIndex(need);
                     if (ni >= 0 && mind.TotalOf(ni) >= amount) continue;
-                    why = $"{need}가 없다 ← {MakerWhy(need)}";
+                    why = ni == mind.iChip ? $"{Ko.I(need)} 없다 ← 배에서 만들 수 없다 (실어 온 것 · 헌 전기 부품에서 건진 것 · 보급뿐)" : $"{Ko.I(need)} 없다 ← {MakerWhy(need)}";
                     break;
                 }
             if (why == null && !mind.Agents.Any(a => a.C.Up != 0 && (!a.IsPerson && a.C.Kind != AgentKind.Drone || a.IsPerson && a.C.SkRepair >= 0.4f))) why = "만들 솜씨가 있는 이가 없다";

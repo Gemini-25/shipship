@@ -182,6 +182,7 @@ public static partial class Program
             }
             case "heart": HeartScene(dir); return;
             case "culture": CultureScene(dir); return;
+            case "supply": SupplyScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

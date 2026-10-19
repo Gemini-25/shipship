@@ -139,8 +139,8 @@ public sealed partial class Mind
         }
     }
 
-    /// <summary>⑩ 난파선에서 건진 수리 꾸러미를 가장 가까운 작업대에 둔다.</summary>
-    public void Salvage(Sim sim, int nearCell, int kits, int cause)
+    /// <summary>⑩ 난파선에서 건진 수리 꾸러미 · 갈래 부품 · 전자 소자를 가장 가까운 작업대에 둔다 (⑪ 공급 사슬).</summary>
+    public void Salvage(Sim sim, int nearCell, int kits, int cause, int[]? parts = null, int chips = 0)
     {
         int best = -1, bd = int.MaxValue;
         foreach (var fu in L.Furniture)
@@ -152,5 +152,8 @@ public sealed partial class Mind
         if (best < 0) return;
         Stock[best * ItemCount + iRepair] += kits;
         sim.Book.AddItem(iRepair, Flow.Salvaged, kits);
+        if (parts != null) for (int p = 0; p < 4 && p < parts.Length; p++) { Stock[best * ItemCount + iSpare[p]] += parts[p]; sim.Book.AddItem(iSpare[p], Flow.Salvaged, parts[p]); }
+        Stock[best * ItemCount + iChip] += chips;
+        sim.Book.AddItem(iChip, Flow.Salvaged, chips);
     }
 }
