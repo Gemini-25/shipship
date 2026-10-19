@@ -62,7 +62,7 @@ public sealed class Chemistry : IEngine
 
     /// <summary>탈 것마다: 완전 · 일산화탄소 · 검댕 · 독가스 갈래 (불완전 몫을 나누는 비율) · 저장 · '넉넉한 양' (kg — 이만큼이면 제 빠르기로 탄다).</summary>
     private readonly (Reaction full, Reaction? co, Reaction? soot, Reaction? tox, double coShare, double sootShare, double toxShare, int store, double kgFull)[] _fuels;
-    private readonly Reaction _pvcPyro, _burnPvc, _burnPoly;
+    private readonly Reaction _pvcPyro, _burnPvc, _burnPoly, _ventEc, _ventSalt, _pf5Hydro;
     /// <summary>달궈진 피복의 탈염화수소 활성화 에너지 (J/몰 — 300℃에서 초당 0.1% · 250℃면 7분의 1 · 430℃면 45배).</summary>
     public const double PyroEa = 100_000;
     public double PyroHcl;
@@ -87,6 +87,7 @@ public sealed class Chemistry : IEngine
             (T.R("burn_pu"), T.R("burn_pu_co"), T.R("burn_pu_soot"), T.R("burn_pu_hcn"), 0.5, 0.35, 0.15, T.sPu, 2.8),
         };
         _pvcPyro = T.R("pvc_pyro"); _burnPvc = T.R("burn_pvc"); _burnPoly = T.R("burn_poly");
+        _ventEc = T.R("vent_ec"); _ventSalt = T.R("vent_lipf6"); _pf5Hydro = T.R("pf5_hydro");
         // 연소 범위 (공기 중 부피 %): 수소 4~75 · 메탄 5~15 · 일산화탄소 12.5~74 · 암모니아 15~28
         _gasFires = new[]
         {
@@ -140,6 +141,7 @@ public sealed class Chemistry : IEngine
             GasFire(sim, i, dt, nb);
             Quench(i);
             Pyro(sim, i, dt);
+            Hydrolyze(sim, i, dt);
             if (!HasFuel(i)) { if (Burning[i] != 0) { HandOff(sim, i, nb); Out(sim, i); } continue; }
             double tf = F.Tf[i], x = O2Frac(i), pf = PressureFactor(i);
             if (Burning[i] == 0)
@@ -320,6 +322,32 @@ public sealed class Chemistry : IEngine
             Light(sim, j, nb);   // 앞머리가 닿았다 — 피복 위의 불꽃 (그 칸 바닥까지 달굴 것은 없다 · 산소가 옅으면 다음 틱에 꺼진다)
         }
         return heat;
+    }
+
+    /// <summary>
+    /// ② (라) 배터리 셀의 안전 밸브가 열렸다 (⑥ 망이 요청 — 셀 묶음이 150℃를 넘었다): 그 칸 전해액 · 염의 frac를 끓여 갈라 뿜는다 —
+    /// 4 탄산에틸렌 → 5.5CO₂ + 4H₂ + 2CH₄ + CO + 3.5숯 (뿜는 기체: 이산화탄소 44% · 수소 32% · 메탄 16% · 일산화탄소 8% — 실측 범위) · LiPF₆ → LiF + PF₅ (공기의 물과 만나 플루오린화수소).
+    /// 갈라지며 드는 열(흡열 — 실제는 음극의 리튬이 낸다)은 <paramref name="heatJ"/>로 돌려주고 부른 쪽이 맡는다 (배터리: 저장 에너지 · 셀 묶음 열에서). 뿜은 기체 몰을 돌려준다.
+    /// </summary>
+    public double Vent(Sim sim, int cell, double frac, out double heatJ)
+    {
+        heatJ = 0;
+        if (cell < 0 || cell >= Cells || frac <= 0) return 0;
+        double budget = double.MaxValue;
+        double ec = F.Stored(T.sEC, cell) * Math.Min(1, frac) / _ventEc.In[0].Nu, salt = F.Stored(T.sLiPF6, cell) * Math.Min(1, frac) / _ventSalt.In[0].Nu;
+        heatJ = React(sim, cell, _ventEc, ec, ref budget) + React(sim, cell, _ventSalt, salt, ref budget);
+        return ec * GasOut(_ventEc) + salt * GasOut(_ventSalt);
+    }
+
+    private double GasOut(Reaction r) { double n = 0; foreach (var x in r.Out) if (T.Substances[x.S].Gas >= 0) n += x.Nu; return n; }
+
+    /// <summary>PF₅는 공기의 물과 곧 만난다 → POF₃ + 2HF (초당 5% — 습한 배 공기에서 몇십 초).</summary>
+    private void Hydrolyze(Sim sim, int i, double dt)
+    {
+        double pf5 = F.Gas(T.gPF5, i);
+        if (pf5 < 1e-9) return;
+        double budget = double.MaxValue;
+        F.AddHeat(i, React(sim, i, _pf5Hydro, pf5 * (1 - Math.Exp(-_pf5Hydro.Def.Rate * dt)), ref budget));
     }
 
     /// <summary>

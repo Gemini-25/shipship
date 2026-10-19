@@ -201,12 +201,12 @@ public sealed partial class Mind
 
         if (person && asleep)
         {
-            // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹 · 코와 목을 찌르는 기체(암모니아 50ppm · 오존 1ppm · 염화수소 20ppm — 시안화수소는 아니다) · 아픔
+            // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹 · 코와 목을 찌르는 기체(암모니아 50ppm · 오존 1ppm · 염화수소 20ppm · 플루오린화수소 10ppm — 시안화수소는 아니다) · 아픔
             // 연기 냄새로는 잘 깨지 않는다 (그래서 경보가 있다)
             double p = F.Pressure(cell);
             ref var sb = ref _life![c.Body];
             if (F.Partial(T.gO2, cell) < 15 || F.Ppm(T.gCO2, cell) > 30000 || F.Temp(cell) < 283 || F.Temp(cell) > 315 || Math.Abs(p - c.LastKPa) > 3
-                || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || F.Ppm(T.gHCl, cell) > 20 || sb.Pain > 0.5f)
+                || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || F.Ppm(T.gHCl, cell) > 20 || F.Ppm(T.gHF, cell) + 2 * F.Ppm(T.gPOF3, cell) + 3 * F.Ppm(T.gPF5, cell) > 10 || sb.Pain > 0.5f)
                 Wake(sim, a, "몸이 깨웠다");
             c.LastKPa = (float)p;
             Decay(a, t, dt);
@@ -284,13 +284,16 @@ public sealed partial class Mind
             double hcl = F.Ppm(T.gHCl, cell), hcn = F.Ppm(T.gHCN, cell);
             if (hcl >= 1) Noticed(sim, a, t, cell, (float)Math.Min(1, 0.5 + hcl / 40), BeliefSource.Smelled, "코를 찌르는 매캐한 냄새를 맡았다");
             if (hcn >= 1 && SmellsAlmond(sim.Seed, a.Id)) Noticed(sim, a, t, cell, (float)Math.Min(1, 0.5 + hcn / 20), BeliefSource.Smelled, "쓴 아몬드 냄새를 맡았다");
+            // ② (라) 배터리가 뿜은 플루오린 화합물: 코와 눈을 찌른다 (누구나 · 1ppm부터)
+            double hf = F.Ppm(T.gHF, cell) + 2 * F.Ppm(T.gPOF3, cell) + 3 * F.Ppm(T.gPF5, cell);
+            if (hf >= 1) Noticed(sim, a, t, cell, (float)Math.Min(1, 0.5 + hf / 20), BeliefSource.Smelled, "코와 눈을 찌르는 냄새를 맡았다");
             // 몸
             if (F.Partial(T.gO2, cell) < 16 || F.Ppm(T.gCO2, cell) > 20000) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.7f, BeliefSource.Felt);
             // 두통 — 냄새는 없다. 머리가 점점 아파질 때(일산화탄소 헤모글로빈이 오를 때)만 '여기 공기가 이상하다'
             if (body.COHb > 0.08f && body.COHb > c.LastCOHb + 1e-4f) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.5f, BeliefSource.Felt);
             c.LastCOHb = body.COHb;
             // 증상: 염화수소 5ppm 넘게면 눈이 따갑고 기침 · 시안화수소가 몸에 쌓이면 어지럽고 머리가 아프다 (냄새를 못 맡는 사람도 이걸로 안다 — 늦게)
-            if (hcl > 5) Noticed(sim, a, t, cell, 0.8f, BeliefSource.Felt, "눈이 따갑고 기침이 난다");
+            if (hcl > 5 || hf > 2) Noticed(sim, a, t, cell, 0.8f, BeliefSource.Felt, "눈이 따갑고 기침이 난다");
             if (body.CN > 0.1f && hcn > 10) Noticed(sim, a, t, cell, 0.7f, BeliefSource.Felt, "어지럽고 머리가 아프다");
             double temp = F.Temp(cell);
             if (temp < 285) Learn(a, t, BeliefKind.Cold, cell, -1, 0.6f, BeliefSource.Felt);

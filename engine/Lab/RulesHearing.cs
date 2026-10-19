@@ -257,11 +257,12 @@ public static partial class Program
             var n = s.Get<Network>(); var f = s.Get<Field>(); var snd = s.Get<Sound>();
             var bat = n.Devices.First(d => d.Def.Role == "battery");
             long from = snd.Logged;
-            f.AddSurfaceHeat(bat.Cell, (460 - f.Tf[bat.Cell]) * Field.SurfaceC);
+            n.CrushCell(bat, s.Causes.Add(CauseKind.Story, "파편이 배터리를 찌그러뜨렸다", s.Tick));   // 묶음 하나가 속 합선 → 안전 밸브 → 폭주 (② (라))
             s.Run(Time.Minutes(2));
-            var bang = snd.LogSince(from).Where(e => e.Kind == SoundKind.Bang && e.Cell == bat.Cell).Select(e => e.Db).DefaultIfEmpty(0).Max();
+            var bangs = snd.LogSince(from).Where(e => e.Kind == SoundKind.Bang && e.Cell == bat.Cell).OrderByDescending(e => e.Db).ToList();
+            double bang = bangs.Count > 0 ? bangs[0].Db : 0;
             var hiss = snd.LogSince(from).Where(e => e.Kind == SoundKind.Hiss && e.Cell == bat.Cell).ToList();
-            string story = hiss.Count > 0 ? s.Causes.Story(hiss[0].Cause) : "";
+            string story = bangs.Count > 0 ? s.Causes.Story(bangs[0].Cause) : "";   // 쉬익(안전 밸브)이 먼저 · 펑(폭주)의 원인 사슬
             Check("소리: 배터리 열폭주 — 셀이 터지는 펑(105dB 넘게)과 분출 쉬익 · 원인 사슬이 열폭주",
                 bang > 105 && hiss.Count > 0 && story.Contains("열폭주"), $"펑 {bang:0}dB · 쉬익 {hiss.Count}번 · {story}");
         }

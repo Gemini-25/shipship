@@ -90,6 +90,8 @@ public sealed partial class Network : IEngine
     public float[] OverSec;       // 정격을 넘은 채 지난 초
     public int[] FaultCell;       // 합선 칸 (-1)
     public byte[] BreakerStuck;   // 1: 낡아 떨어지지 않는다
+    /// <summary>[장치] 배전반 주 차단기(윗단 보호)도 낡아 듣지 않는다 — 그 배전반 회로의 눌어붙은 합선은 손으로 끊어야 한다 (겹겹 보호의 셋째 겹).</summary>
+    public byte[] MainStuck = Array.Empty<byte>();
     public float[] Amps;
     // ── 상태 (방마다) ──
     public byte[] Damper;         // 1: 열림
@@ -165,10 +167,12 @@ public sealed partial class Network : IEngine
         BuildData();
         BuildLines();
         BuildWear();
+        BuildCells();
         BuildPipes();
         int nf = Feeders.Count;
         Breaker = Enumerable.Repeat((byte)1, nf).ToArray();
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
+        MainStuck = new byte[Devices.Count];
         Damper = Enumerable.Repeat((byte)1, L.Rooms.Count).ToArray();
         Exhaust = new byte[L.Rooms.Count];
         WaterTank = (L.WaterL > 0 ? L.WaterL : 800) * 55.5;      // 물 (도면에 적힌 L — 없으면 800L)
@@ -564,7 +568,7 @@ public sealed partial class Network : IEngine
                 amps = Volts / (CableOhmPerM * fd.Path.Length + ArcOhm);
                 // 윗단 보호 장치 (배전반 주 차단기 · 시간 지연 과전류): 아래 차단기가 눌어붙어도 20초 뒤 끊는다 — 그사이 아크가 그 자리에 불씨를 남긴다
                 OverSec[k] += (float)dt;
-                if (OverSec[k] > 20)
+                if (OverSec[k] > 20 && MainStuck[fd.Panel] == 0)
                 {
                     Trip(sim, k, cause, "윗단 보호 장치가 회로를 끊었다 — 아래 차단기는 눌어붙어 있었다");
                     continue;
@@ -786,6 +790,7 @@ public sealed partial class Network : IEngine
                     HeatInto(dev, kw * 1000 * 0.4 * dt);
                     break;
                 case "battery":
+                    if (HasCells(dev)) { Cells(sim, dev, dt); break; }   // ② (라) 전해액이 든 배터리 — 셀 묶음 (축전기는 아래 옛 방식)
                     if (F.Tf[c] > 430 || F.Ts[c] > 430)
                     {
                         // 열폭주: 저장된 에너지가 한꺼번에 열로
@@ -1061,7 +1066,8 @@ public sealed partial class Network : IEngine
             SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"부서진 {Ko.I(dev.Name)} 틈으로 암모니아가 새어 나온다", sim.Tick, dev.Cell, cause);
             sim.Facts.Emit(sim.Tick, FactKind.Toxic, dev.Cell, 0, SealLeakCause[d], other: d);
         }
-        if (dev.Def.Role == "battery" && Charge[d] > 0.5) sim.Find<Chemistry>()?.Abuse(dev.Cell, cause);   // 찌그러진 셀 — 속 합선
+        if (dev.Def.Role == "battery" && HasCells(dev)) CrushCell(dev, cause);   // 찌그러진 셀 — 묶음 하나가 속 합선 (② (라))
+        else if (dev.Def.Role == "battery" && Charge[d] > 0.5) sim.Find<Chemistry>()?.Abuse(dev.Cell, cause);
     }
 
     private void Fail(Sim sim, int d, Part p)
@@ -1200,7 +1206,7 @@ public sealed partial class Network : IEngine
     {
         w.Arr(DataBroken); w.Arr(DataBrokenCause); w.Arr(DataCutCell); w.I64(DataCuts); w.I64(DataSplices);
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
-        w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause); w.Arr(OnCause); w.Arr(PanK); w.Arr(PanWater);
+        w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(MainStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause); w.Arr(OnCause); w.Arr(PanK); w.Arr(PanWater);
         w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(WaterProcessed); w.F64(WaterRecovered); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased); w.Arr(RoomAir); w.F64(AirRecovered);
         w.F64(VentedCH4); w.F64(VentedCO2); w.F64(CO2Store); w.Arr(Duty); w.F64(PpO2);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
@@ -1212,14 +1218,14 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
-        SaveLines(w); SaveWear(w); SavePipes(w);
+        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w);
     }
 
     public void Load(StateReader r)
     {
         r.ArrInto(DataBroken); r.ArrInto(DataBrokenCause); r.ArrInto(DataCutCell); DataCuts = r.I64(); DataSplices = r.I64();
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
-        r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);
+        r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(MainStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);
         ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); WaterProcessed = r.F64(); WaterRecovered = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64(); RoomAir = r.Arr<double>(); AirRecovered = r.F64();
         VentedCH4 = r.F64(); VentedCO2 = r.F64(); CO2Store = r.F64(); r.ArrInto(Duty); PpO2 = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();
@@ -1231,6 +1237,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
-        LoadLines(r); LoadWear(r); LoadPipes(r);
+        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r);
     }
 }

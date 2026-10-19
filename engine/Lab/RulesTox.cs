@@ -102,6 +102,94 @@ public static partial class Program
                 !cold.alive && hot.alive && !low.alive, $"12% 차가운 방: {(cold.alive ? "탄다" : "꺼짐")} ({cold.burned:P0}) · 12% 뜨거운 둘레: {(hot.alive ? "탄다" : "꺼짐")} ({hot.burned:P0}) · 8% 뜨거운 둘레: {(low.alive ? "탄다" : "꺼짐")}");
         }
 
+        // ── (라) 플루오린화수소: 찌르는 냄새 · 자던 이를 깨운다 · 폐를 다친다 (배터리가 뿜은 PF₅가 물과 만나서) ──
+        {
+            var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            int room = lay.Room[Worlds.At(lay, 12, 2)];
+            var s = Worlds.Full(lay, 3); var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
+            int awake = m.AddPerson(s, Worlds.At(lay, 12, 2)), sleeper = m.AddPerson(s, Worlds.At(lay, 17, 4));
+            life[m[sleeper].C.Body].Asleep = 1; m[sleeper].C.Sleepy = 1;
+            foreach (int c in s.Layout.Rooms[room].Cells) f.AddGas(c, f.T.gHF, f.Moles(c) * 60e-6, f.Temp(c));
+            long woke = -1;
+            for (int k = 0; k < Time.Minutes(3); k++) { s.Step(); if (woke < 0 && life[m[sleeper].C.Body].Asleep == 0) woke = k; }
+            var smell = m[awake].Beliefs.Where(b => b.Kind == BeliefKind.BadAir && b.Src == BeliefSource.Smelled).Select(b => s.Causes.Text(b.Cause)).FirstOrDefault() ?? "";
+            // 피할 곳이 없으면 (배 전체가 같은 공기) 마신 만큼 폐를 다친다
+            foreach (int c in s.Layout.Rooms.SelectMany(r => r.Cells)) f.AddGas(c, f.T.gHF, Math.Max(0, f.Moles(c) * 60e-6 - f.Gas(f.T.gHF, c)), f.Temp(c));
+            s.Run(Time.Minutes(5));
+            float lung = Math.Min(life[m[awake].C.Body].LungDamage, life[m[sleeper].C.Body].LungDamage);
+            Check("플루오린화수소 60ppm: 코와 눈을 찌르는 냄새를 맡고 · 자던 이도 곧 깬다 (그 방을 피한다) · 피할 곳이 없으면 폐를 다친다",
+                smell.Contains("찌르는") && woke >= 0 && woke < Time.Minutes(1) && lung > 0,
+                $"냄새 \"{smell}\" · 깸 {(woke < 0 ? "못 깼다" : $"{Time.ToSeconds(woke):0}초")} · 배 전체 5분 뒤 폐 손상 {lung:0.0000}");
+        }
+
+        // ── (라) 리튬 전지 열폭주: 셀 묶음 여덟 · SEI · 안전 밸브 · 폭주 · 번짐 ──
+        {
+            var blay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            (Sim s, Network net, Device bat) Pack(ulong seed = 1)
+            {
+                var s = Worlds.Full(blay, seed); var net = s.Get<Network>();
+                return (s, net, net.Devices.First(d => d.Type == "Battery"));
+            }
+            float MaxCell(Network net, Device b) => Enumerable.Range(0, Network.CellGroups).Max(k => net.CellK[b.Id * Network.CellGroups + k]);
+            int Stage(Network net, Device b, int st) => Enumerable.Range(0, Network.CellGroups).Count(k => net.CellStage[b.Id * Network.CellGroups + k] >= st);
+            void Hold(Sim s, Device b, double k) { var f = s.Get<Field>(); foreach (int x in s.Layout.Furniture[b.Furniture].Cells) f.Tf[x] = Math.Max(f.Tf[x], k); }
+
+            // 80℃: SEI가 조금 데우지만 겉으로 빠지는 열이 더 크다 — 한 시간 두어도 스스로 폭주하지 않는다
+            {
+                var (s, net, b) = Pack();
+                for (int k = 0; k < Time.Hours(1); k++) { Hold(s, b, 353); s.Step(); }
+                Check("80℃로 한 시간 데워 둔 배터리: SEI가 조금 데우지만 빠지는 열이 더 커 스스로 폭주하지 않는다 (셀은 겉면 언저리)",
+                    Stage(net, b, 1) == 0 && MaxCell(net, b) < 365 && net.HasCells(b), $"셀 최고 {MaxCell(net, b) - 273:0}℃ · 뿜음 {Stage(net, b, 1)} · 폭주 {Stage(net, b, 2)}");
+            }
+
+            // 불 곁: 겉면이 계속 달궈지면 셀이 오른다 → 150℃ 안전 밸브 (불붙는 기체 · 플루오린화수소) → 200℃ 폭주 → 불
+            {
+                var (s, net, b) = Pack(); var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+                int room = s.Layout.Room[b.Cell];
+                long vent = -1, run = -1; double h2 = 0, co = 0, hf = 0;
+                for (int k = 0; k < Time.Minutes(40); k++)
+                {
+                    if (run < 0) Hold(s, b, 650);
+                    s.Step();
+                    if (vent < 0 && Stage(net, b, 1) > 0) vent = k;
+                    if (run < 0 && Stage(net, b, 2) > 0) run = k;
+                    h2 = Math.Max(h2, s.Layout.Rooms[room].Cells.Max(c => f.Ppm(f.T.gH2, c)));
+                    co = Math.Max(co, s.Layout.Rooms[room].Cells.Max(c => f.Ppm(f.T.gCO, c)));
+                    hf = Math.Max(hf, s.Layout.Rooms[room].Cells.Max(c => f.Ppm(f.T.gHF, c)));
+                }
+                Check("불 곁에서 달궈진 배터리: 셀이 150℃에 안전 밸브를 열어 수소 · 일산화탄소 · 플루오린화수소를 뿜고 → 뒤이어 200℃에 폭주해 불이 난다",
+                    vent >= 0 && run > vent && h2 > 1000 && co > 300 && hf > 5 && ch.Ignitions > 0 && net.IsBroken(b.Id, Part.Electric),
+                    $"뿜음 {Time.ToSeconds(vent) / 60:0.0}분 · 폭주 {Time.ToSeconds(run) / 60:0.0}분 · 방 최고 수소 {h2:0} · 일산화탄소 {co:0} · 플루오린화수소 {hf:0.0}ppm · 발화 {ch.Ignitions}");
+            }
+
+            // 찌그러짐: 묶음 하나가 속 합선 → 곧 폭주 → 그 열이 이웃 묶음을 달궈 차례로 번진다 (몇 분 간격)
+            {
+                var (s, net, b) = Pack();
+                net.CrushCell(b, s.Causes.Add(CauseKind.Story, "파편이 배터리를 찌그러뜨렸다", s.Tick));
+                var at = new long[Network.CellGroups]; Array.Fill(at, -1);
+                for (int k = 0; k < Time.Hours(1); k++)
+                {
+                    s.Step();
+                    for (int g = 0; g < Network.CellGroups; g++) if (at[g] < 0 && net.CellStage[b.Id * Network.CellGroups + g] == 2) at[g] = k;
+                }
+                int n = at.Count(t => t >= 0);
+                double gap = at[1] >= 0 && at[0] >= 0 ? Time.ToSeconds(at[1] - at[0]) / 60 : -1;
+                Check("찌그러진 배터리: 묶음 하나가 곧 폭주하고 · 그 열에 이웃 묶음이 몇 분 뒤 따라 폭주한다 (한 시간에 절반 넘게 번진다)",
+                    at[0] >= 0 && at[0] < Time.Minutes(1) && gap > 1 && gap < 20 && n >= 4,
+                    $"첫 폭주 {Time.ToSeconds(at[0]):0}초 · 이웃 {gap:0.0}분 뒤 · 한 시간에 {n}/{Network.CellGroups}");
+            }
+
+            // 다 쓴 배터리: 찌그러져도 뿜기만 하고 불은 나지 않는다 (스스로 데울 에너지가 없다 — 낮은 충전은 덜 위험하다)
+            {
+                var (s, net, b) = Pack(); var ch = s.Get<Chemistry>();
+                net.Charge[b.Id] = 0;
+                net.CrushCell(b, 0);
+                s.Run(Time.Minutes(20));
+                Check("다 쓴 배터리를 찌그러뜨리면: 안전 밸브로 뿜기는 하지만 폭주 불은 나지 않는다 (스스로 데울 저장 에너지가 없다)",
+                    Stage(net, b, 1) >= 1 && ch.Ignitions == 0, $"뿜음 {Stage(net, b, 1)} · 발화 {ch.Ignitions}");
+            }
+        }
+
         // ── (나) 냄새 · 증상 · 센서 ──
         var mlay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
         int MAt(int x, int y) => Worlds.At(mlay, x, y);

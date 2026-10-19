@@ -240,7 +240,7 @@ public static partial class Program
                 $"30분 켜짐 {on30} · 90분 뒤 {(sm.Online ? "켜짐" : "꺼짐")} · 남은 전지 {net.Charge[comp.Id]:0.00}kWh");
         }
 
-        // ── 눌어붙은 차단기의 합선: 주컴퓨터가 로봇을 배전반으로 보내 손으로 끊는다 (하던 일도 놓고) ──
+        // ── 눌어붙은 차단기의 합선 + 윗단 보호도 낡았다: 주컴퓨터가 로봇을 배전반으로 보내 손으로 끊는다 (하던 일도 놓고) ──
         {
             var s = World(6);
             var m = s.Get<Mind>(); var net = s.Get<Network>();
@@ -250,10 +250,11 @@ public static partial class Program
             var dev = net.Devices.First(d => d.Feeder >= 0 && d.Room == s.Layout.Room[At(17, 2)]);
             int fd = dev.Feeder;
             net.BreakerStuck[fd] = 1; net.FaultCell[fd] = dev.Cell;
+            net.MainStuck[net.Feeders[fd].Panel] = 1;   // 배전반 주 차단기(윗단 보호)도 낡아 듣지 않는다 — 20초 뒤 끊어 주지 않는다
             long pulledAt = -1;
             for (int k = 0; k < Time.Minutes(15) && pulledAt < 0; k++) { s.Step(); if (net.Breaker[fd] == 0) pulledAt = s.Tick; }
             var fact = s.Facts.Since(0).Where(f => f.Kind == FactKind.Repaired).Select(f => s.Causes.Text(f.Cause)).FirstOrDefault() ?? "";
-            Check("눌어붙은 차단기의 합선: 로봇이 하던 일을 놓고 배전반에서 그 급전선을 손으로 끊는다", pulledAt > 0 && fact.Contains("손으로 끊었다"),
+            Check("눌어붙은 차단기의 합선 (윗단 보호도 낡았다): 로봇이 하던 일을 놓고 배전반에서 그 급전선을 손으로 끊는다", pulledAt > 0 && fact.Contains("손으로 끊었다"),
                 pulledAt > 0 ? $"{(pulledAt - 10) / 25.0:0.0}분 만에 · {fact}" : "끊지 못했다");
         }
 

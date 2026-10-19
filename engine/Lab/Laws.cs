@@ -297,6 +297,33 @@ public static partial class Program
             Check("피복 · 폼이 타도 · 달궈진 피복에서 염소가 빠져도 에너지 장부가 같다", Rel(e0, e1) < 1e-9 && ch.PyroHcl > 0, $"{Rel(e0, e1):0.0e0}");
         }
 
+        if (Do("독가스"))
+        {
+            Console.WriteLine("\n[② 사고 화학 — 배터리가 안전 밸브로 뿜어도 원소 · 에너지 장부 (단열 · 닫힌 방)]");
+            // 배터리 칸의 전해액을 셋으로 나눠 뿜는다 → 전해액 증기(EC) · 전해질 염(LiPF₆) → 수소 · 일산화탄소 · PF₅ → 공기의 물과 만나 POF₃ · HF
+            int bc = -1;
+            var s = Worlds.WithChem(Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend), 1, (f, c) =>
+            {
+                f.Adiabatic = true;
+                bc = Worlds.At(f.L, 5, 3);
+            });
+            var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+            var el0 = f.ElementTotals(); double e0 = f.EnergyLedger();
+            double gas = 0;
+            for (int i = 0; i < Time.Minutes(20); i++)
+            {
+                if (i == 0 || i == Time.Minutes(3) || i == Time.Minutes(6)) { gas += ch.Vent(s, bc, i == 0 ? 1.0 / 3 : i == Time.Minutes(3) ? 0.5 : 1, out double q); f.AddHeat(bc, q); }   // 갈라지는 흡열: 배터리 없이 그 칸이 낸다 (공기 몫을 넘는 만큼은 고체가)
+                s.Step();
+            }
+            var el1 = f.ElementTotals(); double e1 = f.EnergyLedger();
+            double worst = el0.Zip(el1).Max(p => Rel(p.First, p.Second));
+            int li = Array.IndexOf(f.T.ElementSymbols, "Li"), ph = Array.IndexOf(f.T.ElementSymbols, "P"), fl = Array.IndexOf(f.T.ElementSymbols, "F");
+            Check("배터리가 뿜어도 원소 총량이 같다 (리튬 → 플루오린화리튬 · 인 · 플루오린 → PF₅ → POF₃ · 플루오린화수소)",
+                worst < 1e-9 && el0[li] > 0 && el0[ph] > 0 && el0[fl] > 0 && f.Total(f.T.gHF) > 0 && f.Total(f.T.gPOF3) > 0 && f.Stored(f.T.sEC, bc) < 1e-9,
+                $"{worst:0.0e0} · 뿜은 기체 {gas:0}몰 · 수소 {f.Total(f.T.gH2):0} · 플루오린화수소 {f.Total(f.T.gHF):0.00} · POF₃ {f.Total(f.T.gPOF3):0.00} · 남은 PF₅ {f.Total(f.T.gPF5):0.000}몰");
+            Check("배터리가 뿜어도 · PF₅가 물과 만나도 에너지 장부가 같다 (공기 열을 넘는 흡열은 고체가 낸다 — 0에서 잘리지 않는다)", Rel(e0, e1) < 1e-9, $"{Rel(e0, e1):0.0e0}");
+        }
+
         if (Do("소리"))
         {
             Console.WriteLine("\n[③ 소리]");

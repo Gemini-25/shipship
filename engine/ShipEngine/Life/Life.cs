@@ -294,6 +294,8 @@ public sealed partial class Life : IEngine
         double pCO2 = own ? 0.04 : F.Partial(T.gCO2, c);
         double co = own ? 0 : F.Ppm(T.gCO, c), nh3 = own ? 0 : F.Ppm(T.gNH3, c), o3 = own ? 0 : F.Ppm(T.gO3, c), soot = own ? 0 : F.Ppm(T.gSoot, c);
         double hcn = own ? 0 : F.Ppm(T.gHCN, c), hcl = own ? 0 : F.Ppm(T.gHCl, c);
+        // ② (라) 배터리가 뿜은 플루오린 화합물 — 플루오린화수소로 센다 (POF₃는 둘 · PF₅는 셋을 낸다)
+        double hf = own ? 0 : F.Ppm(T.gHF, c) + 2 * F.Ppm(T.gPOF3, c) + 3 * F.Ppm(T.gPF5, c);
         int env = 0; // 이번에 몸을 해친 것의 원인
         string? harm = null;
         if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
@@ -365,10 +367,13 @@ public sealed partial class Life : IEngine
         // 염화수소: 암모니아보다 두 배쯤 독하다 (쥐 LC50 1시간 3100 대 7300ppm) — 50ppm 넘으면 눈 · 목 · 폐를 찌른다
         if (hcl > 50) lung += 0.0167 * Math.Pow(hcl / 1500, 1.3);
         if (hcl > 5) b.Pain = (float)Math.Min(1, b.Pain + Math.Min(0.5, hcl / 1000) * dt / 300);   // 눈이 따갑고 기침
+        // 플루오린화수소: 염화수소보다 약 3.5배 독하다 (AEGL-3 10분 170ppm 대 620ppm) — 폐 · 눈 · 피부
+        if (hf > 15) lung += 0.0167 * Math.Pow(hf / 430, 1.3);
+        if (hf > 2) b.Pain = (float)Math.Min(1, b.Pain + Math.Min(0.5, hf / 300) * dt / 300);
         if (o3 > 5) lung += o3 / 200;
         if (soot > 2000) lung += soot / 200_000;
         if (Mold[c] > 0.3f) lung += 0.002;
-        if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= hcl > 50 ? "염화수소를 마셨다" : nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
+        if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= hf > 15 ? "플루오린화수소를 마셨다" : hcl > 50 ? "염화수소를 마셨다" : nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         else b.LungDamage = (float)Math.Max(0, b.LungDamage - dt / (14 * 86400));
 
         // ── 체온 ──

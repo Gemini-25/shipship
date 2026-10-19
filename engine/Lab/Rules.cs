@@ -334,8 +334,8 @@ public static partial class Program
             var s8 = ShipWorld.Create("Didim", 5);
             var n8 = s8.Get<Network>(); var f8 = s8.Get<Field>(); var ch8 = s8.Get<Chemistry>();
             var bat = n8.Devices.First(d => d.Def.Role == "battery");
-            f8.AddSurfaceHeat(bat.Cell, (460 - f8.Tf[bat.Cell]) * Field.SurfaceC);
-            s8.Run(Time.Minutes(2));
+            for (int i = 0; i < Time.Minutes(30) && !n8.IsBroken(bat.Id, Part.Electric); i++) { f8.Tf[bat.Cell] = Math.Max(f8.Tf[bat.Cell], 650); s8.Step(); }   // 불 곁에서 계속 달궈진다 (셀 묶음이 데워지는 데 몇 분 — ② (라))
+            s8.Run(Time.Minutes(0.5));
             Check("뜨거워진 배터리는 열폭주로 불이 난다", ch8.Ignitions > 0 && n8.IsBroken(bat.Id, Part.Electric), $"발화 {ch8.Ignitions}");
 
             // 산소 발생기: 배 공기의 산소가 모자라면(5% 뺌 → 19.9kPa) 물을 갈라 산소를 낸다 · 물탱크가 준다 (넉넉하면 쉰다 — ⑪ 물자의 산소 조절 시험)

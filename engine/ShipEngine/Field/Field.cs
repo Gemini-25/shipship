@@ -213,7 +213,17 @@ public sealed partial class Field : IEngine
     /// <summary>AddHeat과 같다 — 칸 기체 열용량(GasC)을 이미 셌을 때 (그 사이 기체가 바뀌지 않았어야 한다).</summary>
     public void AddHeat(int i, double joules, double gasC)
     {
-        if (gasC > 50) { U[i] = Math.Max(0, U[i] + joules); if (RegionOf.Length > i) MarkDirty(RegionOf[i], joules / Math.Max(1, U[i])); }
+        if (gasC > 50)
+        {
+            // 공기 열의 절반을 넘는 흡열(배터리 전해액이 갈라질 때)은 그 칸의 고체(열용량이 큰 쪽 · 없으면 겉면)가 낸다 — 0에서 잘려 에너지가 생기던 빈틈
+            if (joules < -0.5 * U[i] && (Cs[i] > 0 || HasSurface(i)))
+            {
+                double rest = joules + 0.5 * U[i];
+                if (Cs[i] > 0) AddSolidHeat(i, rest); else AddSurfaceHeat(i, rest);
+                joules = -0.5 * U[i];
+            }
+            U[i] = Math.Max(0, U[i] + joules); if (RegionOf.Length > i) MarkDirty(RegionOf[i], joules / Math.Max(1, U[i]));
+        }
         else AddSolidHeat(i, joules);
     }
 

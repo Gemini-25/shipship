@@ -17,7 +17,7 @@
   "MainComputer":    { "name": "주컴퓨터",     "parts": { "steel": 80, "polymer": 20, "copper": 20, "glass": 5 }, "heat": 2500 },
   "RecorderVault":   { "name": "기록 보관함",  "parts": { "steel": 60, "titanium": 20, "polymer": 3 }, "heat": 50 },
   "SensorArray":     { "name": "센서 묶음",    "parts": { "aluminum": 30, "copper": 5, "glass": 5 }, "heat": 80 },
-  "Battery":         { "name": "배터리",       "parts": { "steel": 60, "copper": 20, "polymer": 15 }, "heat": 60 },
+  "Battery":         { "name": "배터리",       "parts": { "steel": 60, "copper": 20, "polymer": 15, "electrolyte": 24 }, "heat": 60 },
   "CapacitorBank":   { "name": "축전기",       "parts": { "steel": 40, "copper": 15, "polymer": 8 }, "heat": 40 },
   "PowerPanel":      { "name": "배전반",       "parts": { "steel": 40, "copper": 30, "polymer": 10 }, "heat": 200 },
   "SurgeProtector":  { "name": "과전압 보호기", "parts": { "steel": 10, "copper": 5, "polymer": 3 } },

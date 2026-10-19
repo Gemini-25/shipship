@@ -334,9 +334,11 @@ public sealed partial class Storyteller : IEngine
                 var withSeal = net.Devices.Where(d => d.Feeder >= 0 && d.Has(Part.Seal) && !net.IsBroken(d.Id, Part.Seal)).ToList();
                 if (withSeal.Count == 0) return false;
                 var dev = withSeal[_rng.Range(0, withSeal.Count)];
-                text = $"{dev.Name}의 봉함이 삭았고, 그 방 차단기는 눌어붙어 있었다";
+                bool main = _rng.Chance(1.0 / 3);   // 배전반 주 차단기도 낡았다 — 윗단 보호가 듣지 않아 손으로 끊어야 한다
+                text = $"{dev.Name}의 봉함이 삭았고, 그 방 차단기는 눌어붙어 있었다" + (main ? " — 배전반 주 차단기도 낡아 있었다" : "");
                 int c0 = sim.Causes.Add(CauseKind.Wear, text, sim.Tick, dev.Cell);
                 net.BreakerStuck[dev.Feeder] = 1;
+                if (main) net.MainStuck[net.Feeders[dev.Feeder].Panel] = 1;
                 net.AgeLeft(dev.Id, Part.Seal, _rng.Range(3.0, 12.0) / g, c0);
                 return Record(sim, kind, c0, dev.Cell, 1);
             }
