@@ -159,5 +159,20 @@ public static partial class Program
             Check("정거장: 띠 보급소(1.21AU)는 황도면 가까운 항로(4 보통 길 · 0.6°)만 곁을 지나 교신 거리에 든다 · 높은 고요 길(2°)은 지나치지 못한다",
                 low.met && low.contacts == 1 && !high.met && high.contacts == 0, $"보통 길: 지남 {low.met} · 정거장 {low.contacts} / 높은 고요 길: 지남 {high.met} · {high.contacts}");
         }
+        // ── 부품 → 장치: 부서진 배식기(④)는 부품만 끼우면 부서진 그대로 — 주컴퓨터가 원료 셋으로 외장 틀을 만들게 하고 · 로봇이 틀부터 새로 짠 뒤 부품을 끼운다 ──
+        {
+            var s = Worlds.Full(lay, 7);
+            var m = s.Get<Mind>(); var net = s.Get<Network>(); var st = s.Get<Structure>(); var sm = s.Get<ShipMind>();
+            m.AddRobot(s, At(8, 7), AgentKind.Robot, At(8, 7));
+            Bench(m, s, ("원료", 3), ("기계 부품", 2), ("전기 부품", 2), ("봉함재", 2), ("거르개", 2), ("수리 꾸러미", 2), ("봉합 꾸러미", 4), ("소화기", 3), ("이산화탄소 소화기", 2));
+            var disp = net.Devices.First(d => d.Type == "MealDispenser");
+            st.HitFurniture(s, disp.Furniture, 2, s.Causes.Add(CauseKind.Setup, "선반에서 떨어진 화물 상자", s.Tick, disp.Cell), "떨어진 상자에");
+            for (int k = 0; k < 24 && !(st.FurnBroken[disp.Furniture] == 0 && net.Working(disp.Id)); k++) s.Run(Time.Minutes(15));
+            string story = s.Facts.Since(0).Where(f => f.Kind == FactKind.Repaired && f.Other == disp.Id && f.Size == 9).Select(f => s.Causes.Story(f.Cause)).FirstOrDefault() ?? "";
+            string said = sm.Log.Select(l => l.text).FirstOrDefault(t => t.Contains("외장 틀")) ?? "";
+            Check("부품 → 장치: 부서진 설비는 틀부터 — 주컴퓨터가 원료 셋으로 외장 틀을 먼저 만들게 하고 · 로봇이 틀을 새로 짠 뒤 부품을 끼워 다시 돈다 (원인 사슬은 떨어진 상자까지)",
+                m.Rebuilt == 1 && st.FurnBroken[disp.Furniture] == 0 && net.Working(disp.Id) && story.Contains("틀을 새로 짰다") && story.Contains("떨어진") && m.TotalOf(m.ItemIndex("원료")) == 0,
+                $"다시 지음 {m.Rebuilt} · 돈다 {net.Working(disp.Id)} · 원료 {m.TotalOf(m.ItemIndex("원료"))} · \"{story}\"");
+        }
     }
 }

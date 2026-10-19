@@ -36,6 +36,51 @@ public sealed partial class Mind
         return best;
     }
 
+    /// <summary>④가 부서졌다고 한 설비인가 (틀부터 다시 지어야 한다 — 부품만 끼우면 다시 부서진 것으로 돈다).</summary>
+    public bool Smashed(int dev) => _net != null && _st != null && dev >= 0 && dev < _net.Devices.Count && _net.Devices[dev].Furniture is int fu && fu >= 0 && fu < _st.FurnBroken.Length && _st.FurnBroken[fu] != 0;
+
+    /// <summary>다시 짓기 계획: 외장 틀을 들고 (작업대) 장치로 가서 틀을 짠다 (없으면 false — 주컴퓨터가 만들기를 맡긴다).</summary>
+    private bool PlanRebuild(Agent a, int dev, int here, List<PlanStep> plan)
+    {
+        ref var c = ref a.C;
+        if (c.Holding != iFrame)
+        {
+            if (c.Holding != 255) return false;
+            int src = NearestStock(here, iFrame);
+            if (src < 0) return false;
+            plan.Add(Go(L.Furniture[src].Cells[0], 1));
+            plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iFrame });
+        }
+        plan.Add(Go(_net!.Devices[dev].Cell, 1));
+        plan.Add(new PlanStep { Kind = StepKind.Rebuild, Target = dev });
+        return true;
+    }
+
+    public long Rebuilt;
+
+    /// <summary>틀을 새로 짠다 (사람 90분 × (1.6 − 솜씨) · 로봇 60분) — 구조(④)에 요청 · 원인 마디 · 사실 '고쳤다'.</summary>
+    private void RebuildStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        int dev = st.Target;
+        if (_net == null || _st == null || !Smashed(dev)) { Next(a, t); return; }
+        if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        if (c.Holding != iFrame) { Fail(sim, a, "외장 틀이 없다", SnagKind.NoItem, c.Cell, iFrame); return; }
+        Activity(a, "hard");
+        double minutes = a.IsPerson ? P.Items["외장 틀"].Minutes * (1.6 - c.SkRepair) : 60;
+        if (t - c.StepStart < Time.Minutes(minutes)) return;
+        int fu = _net.Devices[dev].Furniture;
+        int broke = _st.FurnCause[fu];
+        _st.Rebuild(fu);
+        UseHeld(sim, a);
+        Rebuilt++;
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 부서진 {_net.Devices[dev].Name}의 틀을 새로 짰다 — 이제 부품을 끼운다", t, _net.Devices[dev].Cell, broke, 0, a.Id);
+        sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, 9, cause, a.Id, dev);
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.01f * Practice(c, "고치기") * UseSkill(a, 0, t));
+        Next(a, t);
+    }
+
     /// <summary>든 물건을 설비에 넣는다 (나르기 — Target: 설비).</summary>
     private void PutStep(Sim sim, Agent a, PlanStep st)
     {

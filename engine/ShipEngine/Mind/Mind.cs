@@ -41,7 +41,7 @@ public sealed partial class Mind : IEngine
     public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest, iRation, iSalvage, iCO2, iAed;
     public readonly byte iOpioid, iApap, iAbx, iAntidote, iEpi;   // ⑦ 약품고 (의료 침대)
     public readonly byte iRegen, iArtHeart, iArtLung, iHypnotic;             // ⑦ (라-2) 재생 젤 (의료 침대) · 인공 심장 · 인공 폐 (진단 장치)
-    public readonly byte iChip, iScrap, iScrapElec;                          // ⑪ 공급 사슬 — 전자 소자 · 헌 부품 · 헌 전기 부품
+    public readonly byte iChip, iScrap, iScrapElec, iFrame;                  // ⑪ 공급 사슬 — 전자 소자 · 헌 부품 · 헌 전기 부품 · 외장 틀
     /// <summary>⑪ 부품 갈래마다 갈아 끼울 부품 (전기 · 기계 · 봉함 · 거르개 — <see cref="Part"/> 차례).</summary>
     public readonly byte[] iSpare;
     /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
@@ -81,7 +81,7 @@ public sealed partial class Mind : IEngine
         iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품"); iCO2 = Item("이산화탄소 소화기"); iAed = Item("제세동기");
         iOpioid = Item("진통제"); iApap = Item("해열제"); iAbx = Item("항생제"); iAntidote = Item("해독제"); iEpi = Item("아드레날린");
         iRegen = Item("재생 젤"); iArtHeart = Item("인공 심장"); iArtLung = Item("인공 폐"); iHypnotic = Item("수면제");
-        iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품");
+        iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품"); iFrame = Item("외장 틀");
         iSpare = new[] { Item("전기 부품"), Item("기계 부품"), Item("봉함재"), Item("거르개") };
 
         Stock = new int[L.Furniture.Count * ItemCount];

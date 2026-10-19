@@ -102,6 +102,7 @@ public enum StepKind : byte
     Rewire,    // ⑥ 연장선: Arg 0 옆 방 통풍구에서 꽂는다 · 1 그 방까지 깔고 잇는다 (Target: 방 · Cell: 옆 방)
     Door,      // ⑧ 문을 연다(Arg 1) · 닫는다(Arg 0) (Cell: 문 — 제 궁리의 걸음)
     Put,       // ⑪ 든 물건을 설비에 넣는다 (Target: 설비 — 나르기)
+    Rebuild,   // ⑪ 부서진 설비의 틀을 외장 틀로 새로 짠다 (Target: 장치)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

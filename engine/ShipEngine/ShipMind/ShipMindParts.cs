@@ -65,6 +65,14 @@ public sealed partial class ShipMind
                 if (waiting != null) { rank = LifeSupport(waiting) ? 0 : 1; why = $"{Ko.I(waiting.Name)} 기다린다"; cause = _net.PartCause(waiting.Id, (Part)part); }
                 else if (due != null) { rank = 2; why = $"{due.Name}의 {Device.PartName((Part)part)} 부품을 갈 때가 됐다"; }
             }
+            if (item == mind.iFrame && have == 0 && _net != null && _st != null)
+            {
+                // 부서진 설비가 틀을 기다린다 (④ — 생명 유지가 먼저)
+                Device? smashed = null;
+                foreach (var d in _net.Devices)
+                    if (d.Furniture >= 0 && d.Furniture < _st.FurnBroken.Length && _st.FurnBroken[d.Furniture] != 0 && (smashed == null || LifeSupport(d) && !LifeSupport(smashed))) smashed = d;
+                if (smashed != null) { rank = LifeSupport(smashed) ? 0 : 1; why = $"부서진 {Ko.I(smashed.Name)} 틀을 기다린다"; cause = _st.FurnCause[smashed.Furniture]; }
+            }
             if (rank < 0) continue;
             wants.Add(new CraftWant(item, r, rank, order, why, cause));
         }

@@ -66,6 +66,7 @@ public sealed partial class Mind
             case StepKind.Harvest: HarvestStep(sim, a, st); return;
             case StepKind.Stow: StowStep(sim, a, st); return;
             case StepKind.Put: PutStep(sim, a, st); return;
+            case StepKind.Rebuild: RebuildStep(sim, a, st); return;
             case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.Salvage: SalvageStep(sim, a, st); return;
@@ -592,6 +593,7 @@ public sealed partial class Mind
         }
         if (_net == null || _net.Broken[dev * 4 + st.Arg] == 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        if (Smashed(dev)) { Fail(sim, a, "부서진 틀부터 다시 지어야 한다"); return; }   // ⑪ 부품만 끼우면 부서진 그대로다
         if (!HasPart(a, st.Arg)) { Fail(sim, a, a.IsPerson ? $"{Ko.I(ItemNames[SpareOf(st.Arg)])} 없다" : "부품이 없다"); return; }
         Activity(a, "work");
         double minutes = a.IsPerson ? P.Items[ItemNames[SpareOf(st.Arg)]].Minutes * (1.6 - c.SkRepair) : 15;

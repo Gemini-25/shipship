@@ -589,7 +589,8 @@ public sealed partial class Mind
                         plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iRepair });
                     }
                 }
-                else if (!PlanPart(a, dev, part, here, plan)) return false;   // ⑥ 부품: 로봇 주머니 · 수리 꾸러미 · 없으면 덜 중요한 장치에서 떼어 온다
+                else if (Smashed(dev)) return PlanRebuild(a, dev, here, plan);   // ⑪ 부서진 설비: 틀부터 (외장 틀) — 부품은 그다음
+                else if (!PlanPart(a, dev, part, here, plan)) return false;   // ⑥ 부품: 로봇 주머니 · 갈래 부품 · 없으면 덜 중요한 장치에서 떼어 온다
                 plan.Add(Go(_net.Devices[dev].Cell, 1));
                 plan.Add(new PlanStep { Kind = StepKind.Fix, Target = dev, Arg = (byte)part });
                 return true;

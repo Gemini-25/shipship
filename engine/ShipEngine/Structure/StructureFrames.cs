@@ -358,6 +358,13 @@ public sealed partial class Structure
         sim.Facts.Emit(sim.Tick, FactKind.MachineFail, c, FurnHit[f], FurnCause[f], -1, -1 - f);
     }
 
+    /// <summary>⑧의 요청: 부서진 설비의 틀을 새로 짰다 (⑪ 외장 틀) — 부서짐을 걷는다 (부품은 망 ⑥이 따로 — 하나씩 끼워야 돈다).</summary>
+    public void Rebuild(int f)
+    {
+        if (f < 0 || f >= FurnBroken.Length) return;
+        FurnBroken[f] = 0; FurnHit[f] = 0; FurnCause[f] = 0;
+    }
+
     // ───────────── 폭풍 (큰 충돌의 충격파) ─────────────
 
     /// <summary>TNT 1kg의 에너지 (J) · 폭풍이 해를 끼치지 않는 압력 (kPa).</summary>
