@@ -18,16 +18,18 @@ public sealed partial class Mind
     }
 
     /// <summary>
-    /// 그 사람에게 잡을 수술 (주컴퓨터가 읽는다 · 집도의가 마칠 때 다시 본다) — 차례: 속 출혈 · 맹장염 (진료 기록) > 간 이식 (간 0.6 넘게) >
+    /// 그 사람에게 잡을 수술 (주컴퓨터가 읽는다 · 집도의가 마칠 때 다시 본다) — 심장이 멎었거나 산소가 깊이 모자라면 잡지 않는다 (먼저 살린다) ·
+    /// 미뤄도 되는 수술은 깨어나 숨이 고른 뒤에. 차례: 속 출혈 · 맹장염 (진료 기록) > 간 이식 (간 0.6 넘게) >
     /// 인공 심장 (심장 바닥 0.25 넘게 · 진단 장치 곁에 있으면) > 심장 이식 > 인공 폐 (폐 흉터 0.3 넘게) > 폐 이식. 이식은 여섯 시간 안에 숨진 이의 성한 장기.
     /// </summary>
     public (Op op, int donor) PlannedOp(long now, Agent a, Life life)
     {
         if (!a.IsPerson) return (Op.None, -1);
         var b = life[a.C.Body];
-        if (b.Alive == 0) return (Op.None, -1);
+        if (b.Alive == 0 || b.Arrest != 0 || b.Hypoxia > 0.5f) return (Op.None, -1);   // 먼저 살린다 (가슴 압박 · 산소) — 수술은 그 뒤
         if (a.C.DxAt > 0 && a.C.DxAil == Ail.InternalBleed) return (Op.Bleed, -1);
         if (a.C.DxAt > 0 && a.C.DxAil == Ail.Appendicitis) return (Op.Appendix, -1);
+        if ((b.Conscious == 0 || b.Hypoxia > 0.1f) && !UnderSurgery(a.C.Body)) return (Op.None, -1);   // 미뤄도 되는 수술 (인공 장기 · 이식)은 깨어나 숨이 고른 뒤에 (이미 수술대 위면 — 마취로 잠들었어도 — 이어 한다)
         int d;
         if (b.Liver > 0.6f && (b.Implant & 8) == 0 && (d = life.FindDonor(now, Op.TxLiver)) >= 0) return (Op.TxLiver, d);
         if (Life.HeartKeep * b.HeartPeak > 0.25f && (b.Implant & (1 | 4)) == 0)
@@ -70,6 +72,8 @@ public sealed partial class Mind
         if (vb < 0 || vb >= _life!.Bodies.Count || vb == c.Body || c.Carrying >= 0) return false;
         var body = _life.Bodies[vb];
         if (body.Alive == 0) return false;
+        int pa = AgentOfBody(vb);
+        if (pa >= 0 && PlannedOp(_nowTick, Agents[pa], _life).op == Op.None) return false;   // 수술할 것이 남지 않았다 (마친 뒤 다시 맡긴 것 · 그 사이 나았다)
         int bed = SurgeryBed(vb);
         if (bed < 0) return false;
         if (body.Conscious == 0 && body.Cell != bed)
@@ -93,6 +97,8 @@ public sealed partial class Mind
         if (vb < 0 || vb >= _life!.Bodies.Count) return 1;
         ref var body = ref _life[vb];
         if (body.Alive == 0) return 1;
+        if (body.Arrest != 0) { EndPlan(a); return -1; }   // 수술대에서 심장이 멎었다 — 수술을 멈추고 살린다 (가슴 압박 · 제세동)
+        if (body.Cell != st.Cell && IsMedBedCell(body.Cell)) { EndPlan(a); return -1; }   // 다른 치료 침대에 누웠다 — 그 침대로 다시 간다 (고른 침대 곁에서 한 시간 기다리던 것)
         if (body.Cell != st.Cell && Dist(body.Cell, st.Cell) > 0 || Dist(c.Cell, body.Cell) > 1)
         {
             c.StepStart = sim.Tick;   // 누운 때부터 센다

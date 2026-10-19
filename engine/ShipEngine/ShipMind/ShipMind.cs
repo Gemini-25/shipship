@@ -504,7 +504,7 @@ public sealed partial class ShipMind : IEngine
                 var b = _life.Bodies[a.C.Body];
                 int r = _mind.RoomOf(b.Cell);
                 if (r < 0 || RoomSeen[r] == 0 || b.Alive == 0) continue;
-                bool wound = Life.NeedsWoundCare(b) || _mind.HasDrugFor(b), exam = !wound && Mind.NeedsExam(sim.Tick, a, b) && (b.Conscious != 0 || !RoomKnownBad(r));   // ⑦ (다) 몸이 이상하다 — 본 적 없거나 · 나빠졌거나 · 낫지 않는다 (위험을 이미 아는 방에 쓰러진 이는 구하기의 몫)
+                bool wound = Life.NeedsWoundCare(b) || _mind.HasDrugFor(b), exam = !wound && Mind.NeedsExam(sim.Tick, a, b) && (b.Conscious != 0 || !RoomKnownBad(r)) && !_mind.UnderSurgery(a.C.Body);   // ⑦ (다) 몸이 이상하다 — 본 적 없거나 · 나빠졌거나 · 낫지 않는다 (위험을 이미 아는 방에 쓰러진 이는 구하기의 몫)
                 if (wound || exam)
                 {
                     Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(0.2f, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect))), a.C.Body,

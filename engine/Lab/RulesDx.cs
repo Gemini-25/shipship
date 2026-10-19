@@ -218,5 +218,39 @@ public static partial class Program
                 hOk && lOk && !late.planned && late.why == "",
                 $"인공 심장: '{h.why}' · 심장 {h.organ:0.00} · 붙인 것 {h.implant} / 간 이식: '{l.why}' ← '{l.chain}' · 간 {l.organ:0.00} · 내준 것 {l.donated} / 일곱 시간 전: 잡음 {late.planned}");
         }
+
+        // ── (라) 심정지 중에는 수술을 잡지 않는다: 심장 바닥 0.4 (인공 심장이 있다)인 이의 심장이 떨면 — 누르고 · 제세동하는 동안 아무도 업어 가거나 마취하지 않는다 ·
+        //    다시 뛰고 깨어난 뒤에야 인공 심장을 넣는다 (고치기 전: 관찰 장면 '식당에서 멎은 심장'에서 사람이 압박 중인 이를 업어 의무실로 가 진통제 30mg으로 마취했다) ──
+        {
+            var lay = SurgShip();
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            var s = Worlds.Full(lay, 26);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+            int p = m.AddPerson(s, At(14, 2)), f = m.AddPerson(s, At(16, 2));
+            { ref var fc = ref m[f].C; fc.SkMedic = 0.6f; }
+            m.AddRobot(s, At(22, 4), AgentKind.Robot, At(22, 4));
+            s.Run(5);
+            int vb = m[p].C.Body;
+            life[vb].Heart = 0.4f; life[vb].HeartPeak = 0.8f;
+            life.StopHeart(s, vb, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Story, "지난 사고", s.Tick));
+            bool carriedInArrest = false, opInArrest = false, planned = false;
+            for (long k = 0; k < Time.Hours(3); k++)
+            {
+                s.Step();
+                foreach (var ag in m.Agents) if (ag.IsPerson) { ag.C.Hunger = 0; ag.C.Thirst = 0; }
+                var b = life[vb];
+                if (b.Arrest != 0)
+                {
+                    planned |= m.PlannedOp(s.Tick, m[p], life).op != Op.None;
+                    carriedInArrest |= m[p].C.CarriedBy >= 0;
+                    opInArrest |= m.Agents.Any(ag => ag.C.Goal == GoalKind.Surgery);
+                }
+            }
+            var op = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Surgery);
+            string why = op.Kind == FactKind.Surgery ? s.Causes.Text(op.Cause) : "";
+            Check("수술 — 심정지 중에는 잡지 않는다: 심장 바닥 0.4 (인공 심장이 있다)인 이의 심장이 떨면 누르고 제세동하는 동안 아무도 업어 가거나 수술하지 않고 · 다시 뛰고 깨어난 뒤 인공 심장을 넣는다",
+                !planned && !carriedInArrest && !opInArrest && life[vb].Alive != 0 && why.Contains("인공 심장"),
+                $"멎은 동안 수술 잡음 {planned} · 업어 감 {carriedInArrest} · 수술하러 감 {opInArrest} / 삶 {life[vb].Alive} · '{why}'");
+        }
     }
 }

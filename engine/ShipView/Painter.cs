@@ -710,7 +710,7 @@ public sealed class Painter
             "소화기" => DotHeld.Extinguisher,
             "수리 꾸러미" => DotHeld.Wrench,
             "봉합 꾸러미" => DotHeld.Box,
-            "구급 상자" => DotHeld.MedKit,
+            "구급 상자" or "제세동기" => DotHeld.MedKit,
             "수확물" => DotHeld.Plate,
             "식량 상자" => DotHeld.Box,
             _ => DotHeld.None,
@@ -732,16 +732,19 @@ public sealed class Painter
         }
         var step = c.StepIndex < a.Plan.Count ? a.Plan[c.StepIndex].Kind : StepKind.None;
         bool moving = a.PathIdx < a.Path.Count && step == StepKind.GoTo;
+        bool pressing = step == StepKind.Use && c.Goal == GoalKind.Cpr;   // ⑦ 가슴 압박: 무릎 꿇고 누른다 (두 그림마다 한 번 내려앉는다)
         DotPose pose = c.Mode == 2 ? DotPose.Cower
             : c.Carrying >= 0 ? DotPose.Carry
             : moving ? DotPose.Walk
+            : pressing ? DotPose.Kneel
+            : step == StepKind.Use && c.Goal is GoalKind.Treat or GoalKind.Surgery ? DotPose.Work   // ⑦ 돌보기 · 수술
             : step is StepKind.Spray or StepKind.Seal or StepKind.Fix or StepKind.Brace or StepKind.Craft or StepKind.Maintain or StepKind.Clean ? DotPose.Work
             : step == StepKind.Use && c.Goal is GoalKind.Eat or GoalKind.Relax or GoalKind.Socialize or GoalKind.Work ? DotPose.Sit
             : DotPose.Stand;
         var face = FacingOf(L, a);
         if (c.Floated != 0 && pose is DotPose.Walk or DotPose.Sit) pose = DotPose.Stand;   // 떠서는 걷지도 앉지도 않는다 (손잡이를 잡고 민다)
         var dot = DotPeople.Draw(l, face, pose, pose == DotPose.Walk ? (frame + a.Id) & 3 : 0).ToImg();
-        int ox = px + T / 2 - DotPeople.Cx, oy = py + T - DotPeople.Foot - 2 - lift;
+        int ox = px + T / 2 - DotPeople.Cx, oy = py + T - DotPeople.Foot - 2 - lift + (pressing ? (frame + a.Id) & 1 : 0);
         img.Draw(dot, ox, oy);
         if (c.Carrying >= 0)
         {

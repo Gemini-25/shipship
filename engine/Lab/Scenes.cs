@@ -137,6 +137,28 @@ public static partial class Program
                 every = 25; count = 60;
                 break;
             }
+            case "arrest":
+            {
+                // ⑦ 장기 · 약 · 수술 관찰 장면 '식당에서 멎은 심장': 디딤호 첫날 점심 — 심장이 상해 있던 이(지난 사고 · 심장 0.6)가 밥을 먹다 심장이 떤다 (잔떨림).
+                // 곁의 동료가 무릎 꿇고 누르나 · 주컴퓨터가 '심정지'를 알리고 로봇이 제세동기를 가져오나 · 아드레날린 · 몇 번 만에 다시 뛰나 ·
+                // 다시 뛰면 진단 · 수술(인공 심장)까지 이어지나
+                int robots = int.TryParse(Environment.GetEnvironmentVariable("ROBOTS"), out int rb) ? rb : 2;
+                s = ShipWorld.Crewed("Didim", 7, 6, robots);
+                while (Time.HourOfDay(s.Tick) < 12.15) s.Run(25);   // 점심때까지
+                var L = s.Layout; var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int mess = L.Rooms.FindIndex(r => r.Type == "Mess");
+                var victim = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).OrderBy(a => L.Room[a.C.Cell] == mess ? 0 : 1).First();
+                ref var vb = ref life[victim.C.Body];
+                vb.Heart = 0.6f; vb.HeartPeak = 0.6f;
+                life.StopHeart(s, victim.C.Body, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Story, "지난 사고에 상한 심장", s.Tick, vb.Cell));
+                int room = L.Room[victim.C.Cell] >= 0 ? L.Room[victim.C.Cell] : mess;
+                var rc = L.Rooms[room].Cells;
+                int x0 = rc.Min(L.X) - 6, y0 = rc.Min(L.Y) - 4;
+                dots = (x0, y0, rc.Max(L.X) - x0 + 7, rc.Max(L.Y) - y0 + 5);
+                _arrestBody = victim.C.Body; _arrestWho = victim.Id;
+                every = 25; count = 90;
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
@@ -152,9 +174,11 @@ public static partial class Program
                 Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
                 // 그 틱의 일 (사실 — 소리 · 깸은 뺀다)
                 var lines = new List<string>();
-                bool fire = name == "foambed", zg = name == "zerogmess";
+                bool fire = name == "foambed", zg = name == "zerogmess", ar = name == "arrest";
                 foreach (var f in s.Facts.Since(seen))
-                    if (zg) { if (f.Kind is FactKind.Gravity or FactKind.Fell or FactKind.Vomit or FactKind.Woke or FactKind.ComputerAlarm or FactKind.ComputerAssign or FactKind.Short
+                    if (ar) { if (f.Kind is FactKind.Arrest or FactKind.Revived or FactKind.Dosed or FactKind.Treated or FactKind.Diagnosed or FactKind.Surgery or FactKind.ComputerAlarm
+                                 or FactKind.ComputerAssign or FactKind.Died or FactKind.Collapsed or FactKind.Rescue) lines.Add(s.Causes.Text(f.Cause)); }
+                    else if (zg) { if (f.Kind is FactKind.Gravity or FactKind.Fell or FactKind.Vomit or FactKind.Woke or FactKind.ComputerAlarm or FactKind.ComputerAssign or FactKind.Short
                                  or FactKind.BreakerTrip or FactKind.MachineFail or FactKind.Hurt or FactKind.Panicked) lines.Add(s.Causes.Text(f.Cause)); }
                     else if (!fire && f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
                     else if (fire && f.Kind is FactKind.Ignition or FactKind.FireSpread or FactKind.FireOut or FactKind.Noticed or FactKind.Woke or FactKind.Warned or FactKind.Fled
@@ -164,8 +188,9 @@ public static partial class Program
                 string head;
                 if (fire) head = FireCaption(s);
                 else if (zg) head = ZeroGCaption(s);
+                else if (ar) head = ArrestCaption(s);
                 else { var stc = s.Get<Structure>(); head = $"몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t"; }
-                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(head)}{string.Concat(lines.Distinct().Take(fire || zg ? 6 : 4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
+                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(head)}{string.Concat(lines.Distinct().Take(fire || zg || ar ? 6 : 4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
             }
             else Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
             for (int i = 0; i < every; i++)
@@ -202,7 +227,19 @@ public static partial class Program
 
 public static partial class Program
 {
-    private static int _fireRoom = -1, _sleeper = -1, _zgRoom = -1;
+    private static int _fireRoom = -1, _sleeper = -1, _zgRoom = -1, _arrestBody = -1, _arrestWho = -1;
+
+    /// <summary>심정지 장면 그림 밑 글: 그 사람 (뜀 · 잔떨림 · 멎음 · 깨어 있나) · 산소 부족 · 뇌 · 심장 · 누른 분 · 제세동 · 진료 기록 · 주컴퓨터의 마지막 말.</summary>
+    private static string ArrestCaption(Sim s)
+    {
+        var m = s.Get<Mind>(); var life = s.Get<Life>();
+        var b = life[_arrestBody];
+        string beat = b.Alive == 0 ? "숨짐" : b.Arrest == 1 ? "잔떨림" : b.Arrest == 2 ? "멎음" : b.Conscious != 0 ? "뛴다 · 깨어 있다" : "뛴다 · 정신을 잃었다";
+        var sm = s.Find<ShipMind>();
+        string said = sm != null && sm.Log.Count > 0 ? " · 주컴퓨터: " + sm.Log[^1].text : "";
+        string chart = m[_arrestWho].C.DxAt > 0 ? $" · 기록 {Life.AilName(m[_arrestWho].C.DxAil)}" : "";
+        return $"{m.NameOf(_arrestWho)}: {beat} · 산소 부족 {b.Hypoxia:0.00} · 뇌 {b.Brain:0.00} · 심장 {b.Heart:0.00} · 압박 {b.LowFlow:0}분 · 압박 없이 {b.NoFlow:0}분 · 제세동 {life.Shocks}번{chart}{said}";
+    }
 
     /// <summary>중력 장면 그림 밑 글: 식당 바닥 중력 · 떠 있는 이 · 멀미 · 떠 있는 물 · 들러붙은 물 · 발생기 · 주컴퓨터의 마지막 말.</summary>
     private static string ZeroGCaption(Sim s)
