@@ -328,6 +328,36 @@ public static partial class Program
                 $"방 기온 가장 높게 {hot:0}K · 산소 {f.Partial(f.T.gO2, lay3.Rooms[mid].Cells[0]):0.0}kPa · 불 사건 {fire}");
         }
 
+        // ── 연기에 밀려난 소방 (관찰 장면 '폼 침대 불'에서 찾은 결함): 불 앞이 연기로 캄캄해 몸을 피한 사람은 곧바로 되들어가지 않는다 —
+        //    틱마다 들어가 뿌리고 · 물러나기를 되풀이했다 ('몸을 피했다' 여섯 번 · 원인 없이). 이제 '연기 · 열에 밀려났다'는 막힘 (원인 마디) · 몇 분은 그 일로 돌아가지 않는다 ──
+        {
+            var mlay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            var s = Worlds.Full(mlay, 5); var m = s.Get<Mind>(); var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+            int fireAt = Worlds.At(mlay, 15, 3), from = Worlds.At(mlay, 6, 8);
+            int who = m.AddPerson(s, from);
+            m[who].C.Brave = 0.6f;
+            s.Run(5);
+            f.AddStore(fireAt, f.T.sPoly, 200);
+            int fire = s.Causes.Add(CauseKind.Setup, "의자에 불", s.Tick);
+            ch.Ignite(fireAt, 3e6, fire);
+            m.Assign(s, who, GoalKind.FightFire, fireAt, new Belief { Kind = BeliefKind.Fire, Cell = fireAt, Subject = -1, Conf = 1f, Cause = fire }, s.Tick + Time.Minutes(10));
+            long f0 = s.Facts.Total;
+            var thick = new List<int>();
+            for (int y = 2; y <= 4; y++) for (int x = 13; x <= 17; x++) thick.Add(Worlds.At(mlay, x, y));
+            for (int k = 0; k < Time.Minutes(2); k++)
+            {
+                foreach (int c in thick) if (f.Ppm(f.T.gSoot, c) < 3000) f.AddGas(c, f.T.gSoot, f.Moles(c) * 3000e-6, f.Temp(c));   // 불 둘레는 캄캄한 연기 (보이는 거리 1m 남짓)
+                s.Step();
+            }
+            var fled = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Fled && x.Actor == who).ToList();
+            long gap = fled.Count < 2 ? long.MaxValue : fled.Zip(fled.Skip(1), (p, q) => q.Tick - p.Tick).Min();   // 되들어가기까지 가장 짧은 틈 (틱)
+            var back = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Blocked && x.Actor == who && x.Size == (float)SnagKind.DrivenBack);
+            string why = fled.Count > 0 ? s.Causes.Story(fled[0].Cause) : "";
+            Check("연기에 밀려난 소방: 불 앞이 캄캄해 몸을 피한 사람은 곧바로 되들어가지 않는다 (2분에 '몸을 피했다' 세 번 아래 · 피함 사이 5틱 넘게) · '연기 · 열에 밀려났다' 막힘이 원인 마디로 남고 · 피한 까닭이 그 불에 닿는다",
+                fled.Count is >= 1 and <= 3 && gap > 5 && back.Kind == FactKind.Blocked && why.Contains("의자에 불"),
+                $"몸을 피함 {fled.Count}번 · 가장 짧은 틈 {(gap == long.MaxValue ? "-" : gap + "틱")} · 막힘 \"{(back.Kind == FactKind.Blocked ? s.Causes.Text(back.Cause) : "")}\" · 피한 까닭 \"{why}\"");
+        }
+
         // ── 로봇이 없는 배: 주컴퓨터가 사람에게 부탁하고 그 사람과 함께 궁리한다 — 사람은 우주복을 먼저 입고 · 주컴퓨터가 가운데 방 공기를 되돌리고 · 사람이 들어가 막는다 ──
         {
             var lay4 = Worlds.Ascii(@"

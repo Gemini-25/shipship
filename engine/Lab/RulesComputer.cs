@@ -104,6 +104,30 @@ public static partial class Program
             on.seals > 0 && on.right > 60 && down.right < 20 && down.seals == 0,
             $"옆 방: 주컴퓨터 있음 {on.right:0}kPa (봉쇄 {on.seals}) · 멈춤 {down.right:0}kPa");
 
+        // ── 같은 방의 사건 둘 (폼 불 → 불 · 독한 기체): 봉쇄는 한 번 (사건마다 따로 봉쇄해 일지 · 하이라이트에 두 번 남던 것 — 관찰 장면 '폼 침대 불') ──
+        {
+            var s = World();
+            var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var sm = s.Get<ShipMind>(); var net = s.Get<Network>();
+            s.Run(3);
+            int room = lay.Room[At(15, 3)];
+            int bed = lay.Rooms[room].Cells.Where(c => net.LineAt[c] == 0 && lay.FurnitureAt[c] < 0).OrderBy(c => Math.Abs(lay.X(c) - 15) + Math.Abs(lay.Y(c) - 3)).First();   // 전선이 없는 칸 (불이 센서 선을 먼저 태우면 주컴퓨터가 그 방을 못 본다)
+            f.AddStore(bed, f.T.sPu, 300);
+            ch.Ignite(bed, 3e6, s.Causes.Add(CauseKind.Setup, "폼 침대에 불", s.Tick));
+            var kinds = new HashSet<IncidentKind>();
+            for (int k = 0; k < Time.Minutes(4); k++)
+            {
+                s.Step();
+                foreach (var x in sm.Incidents) if (x.Active != 0 && x.Room == room && x.Kind is IncidentKind.Fire or IncidentKind.Toxic or IncidentKind.Leak or IncidentKind.Vacuum) kinds.Add(x.Kind);
+            }
+            int seals = s.Facts.Since(0).Count(x => x.Kind == FactKind.ComputerSeal && x.Other == room);
+            int said = sm.Log.Count(l => l.text == $"{lay.Rooms[room].Name} 봉쇄");
+            if (Debug) foreach (var l in sm.Log) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}");
+            if (Debug) Console.WriteLine($"    {lay.Rooms[room].Name}({room}) 불 {ch.BurningCount} · 발화 {ch.Ignitions} · 시안화수소 {lay.Rooms[room].Cells.Max(c => f.Ppm(f.T.gHCN, c)):0}ppm");
+            Check("같은 방의 사건 둘 (폼 불 → 불 · 독한 기체): 주컴퓨터의 봉쇄는 한 번 (사실 · 일지)",
+                kinds.Count >= 2 && seals == 1 && said == 1,
+                $"봉쇄할 사건 {string.Join(" · ", kinds)} · 봉쇄 사실 {seals} · 일지 {said}");
+        }
+
         // ── 상상: 사람이 안에 있는 방을 봉쇄할지 — 세계를 복제해 두 안을 2분씩 돌려 보고 고른다 ──
         {
             // (가) 뚫린 방에 쓰러진 사람 · 열린 문 너머 옆 방에도 쓰러진 사람 → 지금 닫는 쪽이 옆 방 사람을 살린다

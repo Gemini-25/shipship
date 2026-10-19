@@ -65,12 +65,12 @@ public static partial class Program
             }
             var none = Run(false, 1); var withRobot = Run(true, 1);
             Check("로봇이 없으면 사람에게 부탁한다: 1분 기다린 뒤 가까운 이에게 '불을 꺼 주시겠어요?' — 받은 이가 불을 끄러 간다 · 로봇이 있으면 사람에게 묻지 않는다",
-                none.asked >= 1 && none.accepted >= 1 && none.firstAsk >= Time.Minutes(1) && none.went && none.log.Contains("주시겠어요") && withRobot.asked == 0,
-                $"로봇 없음: 부탁 {none.asked} · 받음 {none.accepted} · 첫 부탁 {Time.ToSeconds(none.firstAsk):0}초 뒤 · 끄러 감 {none.went} / 로봇 있음: 부탁 {withRobot.asked}");
+                none.asked >= 1 && none.accepted >= 1 && none.firstAsk >= Time.Minutes(1) && none.went && none.log.Contains("주시겠어요? 로봇이 없습니다") && !none.log.Contains("바쁩니다") && withRobot.asked == 0,
+                $"로봇 없음: 부탁 {none.asked} · 받음 {none.accepted} · 첫 부탁 {Time.ToSeconds(none.firstAsk):0}초 뒤 · 끄러 감 {none.went} · \"{none.log.Split(" / ").FirstOrDefault(l => l.Contains("주시겠어요"))}\" / 로봇 있음: 부탁 {withRobot.asked}");
             var off = Run(false, 0); var both = Run(true, 2);
             Check("함장 방침 '사람에게 맡기기': 끄면 로봇이 없어도 묻지 않고(스스로 나서는 것은 그 사람 몫) · '함께'면 로봇과 함께 곧바로 묻는다",
-                off.asked == 0 && both.asked >= 1 && both.firstAsk >= 0 && both.firstAsk < Time.Minutes(1),
-                $"끔: 부탁 {off.asked} / 함께: 부탁 {both.asked} · 첫 부탁 {Time.ToSeconds(both.firstAsk):0}초 뒤");
+                off.asked == 0 && both.asked >= 1 && both.firstAsk >= 0 && both.firstAsk < Time.Minutes(1) && both.log.Contains("로봇도 함께 갑니다"),
+                $"끔: 부탁 {off.asked} / 함께: 부탁 {both.asked} · 첫 부탁 {Time.ToSeconds(both.firstAsk):0}초 뒤 · \"{both.log.Split(" / ").FirstOrDefault(l => l.Contains("주시겠어요"))}\"");
         }
 
         // ── 거절할 수 있다: 겁에 질린 이는 '무서워서' 거절 → 1분 뒤 다른 이에게 '급합니다'로 다시 — 그 사람이 받는다 ──

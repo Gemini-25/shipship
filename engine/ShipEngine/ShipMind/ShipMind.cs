@@ -1101,6 +1101,9 @@ public sealed partial class ShipMind : IEngine
             if (a.IsPerson && _life!.Bodies[a.C.Body].Alive != 0 && _mind.RoomOf(a.C.Cell) == x.Room) { peopleIn = true; break; }
         bool waitOver = t - x.Since >= Time.Minutes(Policy.SealWaitMin);
         if (x.Sealed == 0)
+            foreach (var y in Incidents)
+                if (y.Id != x.Id && y.Active != 0 && y.Room == x.Room && y.Sealed != 0) { x.Sealed = 1; break; }   // 같은 방은 이미 봉쇄했다 (불 · 독한 기체 — 사건마다 따로 봉쇄해 일지 · 사실이 두 번 남던 것)
+        if (x.Sealed == 0)
         {
             // 사람이 안에 있다: 기다릴까 · 지금 닫을까 — 세계를 복제해 2분 앞을 돌려 보고 고른다 (한 번만 · 사건이 몰렸거나 느려졌으면 그려 보지 않고 방침대로)
             int xr = x.Room; long xs = x.Since;

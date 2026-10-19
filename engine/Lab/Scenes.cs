@@ -97,6 +97,27 @@ public static partial class Program
                 every = 1; count = 40; dots = (-14, -12, l.W + 28, l.H + 24);
                 break;
             }
+            case "foambed":
+            {
+                // ② 사고 화학 관찰 장면: 둘째 날 새벽 두 시 · 디딤호 '침실 둘'에서 한 사람이 자고 나머지는 당직 —
+                // 빈 침대 곁 충전기의 불꽃이 폼 매트리스에 튄다. 폼이 타며 연기 · 일산화탄소 · 시안화수소 (산소가 모자랄수록) —
+                // 자던 이는 깨나 · 누가 무엇을 들고 오나 · 주컴퓨터는 무엇을 알리나
+                int robots = int.TryParse(Environment.GetEnvironmentVariable("ROBOTS"), out int rb) ? rb : 2;
+                s = ShipWorld.Crewed("Didim", 5, 4, robots);
+                s.Run(Time.Hours(26));
+                var L = s.Layout; var m = s.Get<Mind>(); var life = s.Get<Life>();
+                var sleeper = m.Agents.FirstOrDefault(a => a.IsPerson && life[a.C.Body].Asleep != 0 && L.FurnitureAt[a.C.Cell] >= 0 && L.Furniture[L.FurnitureAt[a.C.Cell]].Type == "Bed");
+                int room = sleeper != null ? L.Room[sleeper.C.Cell] : L.Furniture.First(fu => fu.Type == "Bed").Room;
+                var bed = L.Furniture.Where(fu => fu.Type == "Bed" && fu.Room == room && (sleeper == null || !fu.Cells.Contains(sleeper.C.Cell)))
+                    .OrderBy(fu => sleeper == null ? 0 : Math.Abs(L.X(fu.Cells[0]) - L.X(sleeper.C.Cell)) + Math.Abs(L.Y(fu.Cells[0]) - L.Y(sleeper.C.Cell))).First();
+                s.Get<Chemistry>().Ignite(bed.Cells[0], 3e6, s.Causes.Add(CauseKind.Story, "빈 침대 곁 충전기가 합선해 불꽃이 폼 매트리스에 튀었다", s.Tick, bed.Cells[0]));
+                var rc = L.Rooms[room].Cells;
+                int x0 = rc.Min(L.X) - 7, y0 = rc.Min(L.Y) - 5;
+                dots = (x0, y0, rc.Max(L.X) - x0 + 8, rc.Max(L.Y) - y0 + 6);
+                _fireRoom = room; _sleeper = sleeper?.Id ?? -1;
+                every = 25; count = 48;
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
@@ -112,11 +133,17 @@ public static partial class Program
                 Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
                 // 그 틱의 일 (사실 — 소리 · 깸은 뺀다)
                 var lines = new List<string>();
+                bool fire = name == "foambed";
                 foreach (var f in s.Facts.Since(seen))
-                    if (f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
+                    if (!fire && f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
+                    else if (fire && f.Kind is FactKind.Ignition or FactKind.FireSpread or FactKind.FireOut or FactKind.Noticed or FactKind.Woke or FactKind.Warned or FactKind.Fled
+                             or FactKind.Extinguished or FactKind.ComputerAlarm or FactKind.ComputerAssign or FactKind.ComputerSeal or FactKind.DoorSealed or FactKind.Hurt or FactKind.Collapsed
+                             or FactKind.Died or FactKind.Rescue or FactKind.Short or FactKind.BreakerTrip or FactKind.CableCut or FactKind.Panicked or FactKind.Treated) lines.Add(s.Causes.Text(f.Cause));
                 seen = s.Facts.Total;
-                var stc = s.Get<Structure>();
-                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · 몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t{string.Concat(lines.Distinct().Take(4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
+                string head;
+                if (fire) head = FireCaption(s);
+                else { var stc = s.Get<Structure>(); head = $"몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t"; }
+                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(head)}{string.Concat(lines.Distinct().Take(fire ? 6 : 4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
             }
             else Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
             for (int i = 0; i < every; i++)
@@ -126,7 +153,9 @@ public static partial class Program
                 {
                     var a = tm.Agents[ti];
                     int r = tm.RoomOf(a.C.Cell);
-                    Console.WriteLine($"    [{tm.NameOf(ti)}] {Time.Clock(s.Tick)} {(r >= 0 ? s.Layout.Rooms[r].Name : "문")} {tm.Thought(ti)} · {s.Get<Field>().Pressure(a.C.Cell):0}kPa · 믿음 {string.Join(",", a.Beliefs.Where(b => b.Conf >= 0.3f).Select(b => $"{Mind.BeliefName(b.Kind)}@{(tm.RoomOf(b.Cell) >= 0 ? s.Layout.Rooms[tm.RoomOf(b.Cell)].Name : "?")}:{b.Conf:0.0}{b.Src.ToString()[0]}"))}");
+                    var fq = s.Get<Field>(); var lq = s.Find<Light>(); var cq = s.Find<Chemistry>();
+                    string near = cq == null ? "" : string.Join(",", Enumerable.Range(0, s.Layout.N).Where(j => cq.Burning[j] != 0 && Math.Abs(s.Layout.X(j) - s.Layout.X(a.C.Cell)) <= 1 && Math.Abs(s.Layout.Y(j) - s.Layout.Y(a.C.Cell)) <= 1));
+                    Console.WriteLine($"    [{tm.NameOf(ti)}] {Time.Clock(s.Tick)} 틱 {s.Tick} 칸 {a.C.Cell} {fq.Temp(a.C.Cell):0}K 시야 {(lq != null ? lq.Visibility(a.C.Cell) : 99):0.0} 곁불 [{near}] 모드 {a.C.Mode} {(r >= 0 ? s.Layout.Rooms[r].Name : "문")} {tm.Thought(ti)} · {s.Get<Field>().Pressure(a.C.Cell):0}kPa · 믿음 {string.Join(",", a.Beliefs.Where(b => b.Conf >= 0.3f).Select(b => $"{Mind.BeliefName(b.Kind)}@{(tm.RoomOf(b.Cell) >= 0 ? s.Layout.Rooms[tm.RoomOf(b.Cell)].Name : "?")}:{b.Conf:0.0}{b.Src.ToString()[0]}"))}");
                 }
             }
         }
@@ -146,6 +175,29 @@ public static partial class Program
             if (sm != null) foreach (var (t, txt) in sm.Log) Console.WriteLine($"    [주컴퓨터] {Time.Clock(t)} {txt}");
             if (mind != null) foreach (var a in mind.Agents) Console.WriteLine($"    {mind.NameOf(a.Id)}: {mind.Thought(a.Id)} · {(a.IsPerson ? (s.Get<Life>()[a.C.Body].Alive != 0 ? "삶" : "죽음") : "")}");
         }
+    }
+}
+
+public static partial class Program
+{
+    private static int _fireRoom = -1, _sleeper = -1;
+
+    /// <summary>불 장면 그림 밑 글: 타는 칸 · 그 방 공기 (산소 · 일산화탄소 · 시안화수소 · 염화수소 · 가장 뜨거운 곳) · 자던 사람.</summary>
+    private static string FireCaption(Sim s)
+    {
+        var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var L = s.Layout;
+        var rc = L.Rooms[_fireRoom].Cells;
+        double Ppm(int g) => rc.Max(c => f.Partial(g, c) / Math.Max(1e-6, f.Pressure(c))) * 1e6;
+        double o2 = rc.Average(c => f.Partial(f.T.gO2, c) / Math.Max(1e-6, f.Pressure(c)));
+        string who = "";
+        var m = s.Find<Mind>();
+        if (m != null && _sleeper >= 0)
+        {
+            var a = m[_sleeper]; var b = s.Get<Life>()[a.C.Body];
+            int r = m.RoomOf(a.C.Cell);
+            who = $" · {m.NameOf(_sleeper)}: {(b.Alive == 0 ? "죽음" : b.Asleep != 0 ? "잠" : "깸")} · {(r >= 0 ? L.Rooms[r].Name : "문")} · {m.Thought(_sleeper)}";
+        }
+        return $"타는 칸 {ch.BurningCount} · 산소 {o2:P1} · 일산화탄소 {Ppm(f.T.gCO):0} · 시안화수소 {Ppm(f.T.gHCN):0} · 염화수소 {Ppm(f.T.gHCl):0}ppm · {rc.Max(c => f.Temp(c)) - 273:0}℃{who}";
     }
 }
 

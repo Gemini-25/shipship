@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>막힌 까닭 (⑧ 판단 엔진 — 사람 · 로봇이 남기고 주컴퓨터가 읽는다).</summary>
-public enum SnagKind : byte { None, Far, NoPath, DoorJammed, DoorUnpowered, DoorHeld, DoorVacuum, DoorPressure, DoorStuckBefore, NoWayOut, NoItem, Taken, Other, DoorLocked }
+public enum SnagKind : byte { None, Far, NoPath, DoorJammed, DoorUnpowered, DoorHeld, DoorVacuum, DoorPressure, DoorStuckBefore, NoWayOut, NoItem, Taken, Other, DoorLocked, DrivenBack }
 
 /// <summary>
 /// ⑧ 판단 엔진 (가) 막힘 — 일이 막히면 까닭 · 자리 · 대상을 남긴다 (docs/ENGINE.md 판단 엔진).
@@ -18,12 +18,12 @@ public sealed partial class Mind
     {
         SnagKind.Far => "멀다", SnagKind.NoPath => "갈 길이 없다", SnagKind.DoorJammed => "문이 끼었다", SnagKind.DoorUnpowered => "문에 전기가 없어 기압 차를 이기지 못한다",
         SnagKind.DoorHeld => "주컴퓨터가 문의 압력 맞춤 밸브를 잠가 두었다", SnagKind.DoorVacuum => "문 너머가 우주로 트여 기압을 맞출 수 없다",
-        SnagKind.DoorPressure => "기압 차로 문이 열리지 않는다", SnagKind.DoorStuckBefore => "지난번에 안 열린 문밖에 길이 없다", SnagKind.NoWayOut => "바깥으로 나갈 문이 없다", SnagKind.NoItem => "쓸 물건이 없다", SnagKind.Taken => "남이 먼저 했다", SnagKind.DoorLocked => "주컴퓨터가 문을 잠가 두었다", _ => "일이 틀어졌다",
+        SnagKind.DoorPressure => "기압 차로 문이 열리지 않는다", SnagKind.DoorStuckBefore => "지난번에 안 열린 문밖에 길이 없다", SnagKind.NoWayOut => "바깥으로 나갈 문이 없다", SnagKind.NoItem => "쓸 물건이 없다", SnagKind.Taken => "남이 먼저 했다", SnagKind.DoorLocked => "주컴퓨터가 문을 잠가 두었다", SnagKind.DrivenBack => "연기 · 열 · 나쁜 공기에 밀려났다", _ => "일이 틀어졌다",
     };
 
     /// <summary>문 · 길 · 물건의 막힘인가 (원인 마디 · 사실로 남길 만한).</summary>
     public static bool Telling(SnagKind k) => k is SnagKind.NoPath or SnagKind.DoorJammed or SnagKind.DoorUnpowered or SnagKind.DoorHeld or SnagKind.DoorVacuum or SnagKind.DoorPressure
-        or SnagKind.DoorStuckBefore or SnagKind.NoWayOut or SnagKind.NoItem or SnagKind.DoorLocked;
+        or SnagKind.DoorStuckBefore or SnagKind.NoWayOut or SnagKind.NoItem or SnagKind.DoorLocked or SnagKind.DrivenBack;
 
     public static bool DoorSnag(SnagKind k) => k is SnagKind.DoorJammed or SnagKind.DoorUnpowered or SnagKind.DoorHeld or SnagKind.DoorVacuum or SnagKind.DoorPressure or SnagKind.DoorLocked;
 

@@ -4,7 +4,7 @@ namespace ShipEngine;
 /// ⑩ 주컴퓨터 (깊이 바퀴 2) — 사람에게 맡기기 · 자기 상태.
 /// <para><b>사람에게 맡기기</b>: 로봇이 하나도 없으면 (함장 방침 — 기본은 1분 기다린 뒤) 사람 하나에게 부탁한다 — 깨어 있고 · 가깝고 · 그 일 솜씨가 있는 이부터
 /// (자는 이는 30칸만큼 뒤로 · 거절한 이는 빼고). 받을지는 그 사람이 정한다 (⑧ Mind.Ask). 거절하면 15초 뒤 다른 이에게 ·
-/// 두 번째부터는 급하다고 말한다 (사람이 쓰러졌다 · 불 · 공기가 빠진다 — "로봇이 없습니다, 급합니다").</para>
+/// 두 번째부터는 급하다고 말한다 (사람이 쓰러졌다 · 불 · 공기가 빠진다 — "로봇이 없습니다, 급합니다" · 로봇이 있되 모두 다른 일이면 "로봇이 모두 바쁩니다").</para>
 /// <para><b>자기 상태</b>: 제 방 공기 온도(빨아들이는 공기)로 안다 — 40℃ 넘으면 느려진다 (센서 읽기 세 배 드물게 · 37℃ 아래로 풀린다) · 60℃ 넘으면 멈춘다 (45℃ 아래로 식으면 다시 켠다) ·
 /// 맡기는 차례는 늘 급한 것부터 · 급한 일에는 덜 급한 일 하던 로봇도 데려온다 · 붙잡은 사건이 다섯을 넘거나 느려졌으면 앞일 그려 보기를 멈춘다. 일지에 제 상태를 적는다.</para>
 /// </summary>
@@ -44,7 +44,9 @@ public sealed partial class ShipMind
         if (best < 0) return;
         bool urgent = x.Asks > 0 && x.Kind is IncidentKind.PersonDown or IncidentKind.Fire or IncidentKind.Vacuum or IncidentKind.Leak;
         string name = _mind.NameOf(best);
-        Say(sim, $"{name}님, {RoomName(x.Room)} {KindName(x.Kind)} — {Mind.JobName(g)} 주시겠어요? {(urgent ? "로봇이 없습니다, 급합니다" : "로봇이 모두 바쁩니다")}");
+        // 로봇의 형편대로 말한다: 이 일에 로봇도 간다 (방침 '함께') · 움직이는 로봇이 있되 모두 다른 일 · 아예 없다 (로봇 없는 배에 '모두 바쁩니다'라 하던 것)
+        bool robots = _mind.Agents.Any(r => r.C.Kind == AgentKind.Robot && r.C.Up != 0), with = x.RobotA >= 0 || x.RobotB >= 0;
+        Say(sim, $"{name}님, {RoomName(x.Room)} {KindName(x.Kind)} — {Mind.JobName(g)} 주시겠어요? {(with ? "로봇도 함께 갑니다" : robots ? "로봇이 모두 바쁩니다" : "로봇이 없습니다")}{(urgent ? ", 급합니다" : "")}");
         bool yes = _mind.Ask(sim, best, g, target, BeliefOf(x), t + Time.Minutes(30), urgent, out string reply);
         x.AskedAt = t; x.Asks++; Asked++;
         if (reply.Length > 0) Say(sim, $"{name}: \"{reply}\"");

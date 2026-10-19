@@ -640,6 +640,17 @@ public sealed partial class Mind
         if (air && a.IsPerson && !HeatBad(c.Cell) && !SmokeBad(a, c.Cell) && F.Pressure(c.Cell) >= 25
             && (target < 0 || !SafeAt(target) && F.Partial(T.gO2, target) - F.Partial(T.gO2, c.Cell) < 3)) { Conserve(sim, a); return; }
         bool first = c.Mode != 1;
+        if (first && c.Mode == 0 && c.Goal is not (GoalKind.Idle or GoalKind.Flee or GoalKind.Evacuate or GoalKind.Down))
+        {
+            // 하던 일을 연기 · 열 · 나쁜 공기에 밀려 그만둔다 — 몇 분은 그 일로 되들어가지 않는다 (피함을 켜는 문턱과 푸는 문턱이 같아
+            // 불 앞 · 연기 번진 자리에서 틱마다 들어갔다 물러나기를 되풀이했다 — 그새 연기가 걷히거나 주컴퓨터가 배기하면 다시 간다) ·
+            // 위험을 다루던 일(불 끄기 · 구하기 · 막기 …)이면 막힘으로 남긴다 (원인 마디 — 주컴퓨터 · 일지가 읽는다)
+            if (c.Goal is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair or GoalKind.Investigate)
+                NoteSnag(sim, a, SnagKind.DrivenBack, c.Cell, -1);
+            a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + Time.Minutes(3) });
+            if (c.Goal != GoalKind.Investigate) a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Investigate, Target = c.Cell, Until = sim.Tick + Time.Minutes(3) });   // 방금 밀려난 그 연기를 '살피러' 되들어가지도 않는다
+            while (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
+        }
         c.Mode = 1; c.Goal = GoalKind.Flee; c.GoalSince = sim.Tick; c.GoalTarget = -1; c.GoalCell = target; c.GoalCause = DangerCause(a, c.Cell);
         a.Plan.Clear(); a.Path.Clear(); c.StepIndex = 0;
         if (target >= 0) a.Plan.Add(new PlanStep { Kind = StepKind.GoTo, Cell = target });
@@ -660,7 +671,7 @@ public sealed partial class Mind
         if (first)
         {
             FledCount++;
-            sim.Facts.Emit(sim.Tick, FactKind.Fled, c.Cell, 0, 0, a.Id, air ? 1 : 0);
+            sim.Facts.Emit(sim.Tick, FactKind.Fled, c.Cell, 0, c.GoalCause, a.Id, air ? 1 : 0);   // 피한 까닭 (그 위험의 원인 — 불 · 샘 · 달궈진 곳)
         }
     }
 
