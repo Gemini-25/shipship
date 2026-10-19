@@ -85,7 +85,18 @@ public static partial class Program
             {
                 var s = Worlds.WithChem(lay, 1, (f, c) => { Atmos(f, kpa, x); f.AddStore(bed, f.T.sPoly, 100); if (holdK <= 0) c.Ignite(bed, 3e6, 0); });
                 var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
-                for (int k = 0; k < Time.Minutes(minutes); k++) { if (holdK > 0 && ch.BurningCount == 0) f.Tf[bed] = holdK; if (keepK > 0) f.Tf[bed] = Math.Max(f.Tf[bed], keepK); s.Step(); }
+                var around = lay.Room[bed] >= 0 ? lay.Rooms[lay.Room[bed]].Cells : new int[4];
+                if (lay.Room[bed] < 0) lay.Neighbors(bed, around);
+                for (int k = 0; k < Time.Minutes(minutes); k++)
+                {
+                    if (holdK > 0 && ch.BurningCount == 0) f.Tf[bed] = holdK;
+                    if (keepK > 0)
+                    {
+                        f.Tf[bed] = Math.Max(f.Tf[bed], keepK);
+                        foreach (int j in around) if (j >= 0 && f.Moles(j) > 1 && f.Temp(j) < keepK) f.AddHeat(j, (keepK - f.Temp(j)) * f.GasC(j));   // 뜨거운 방: 불꽃을 먹이는 방 공기도 그 온도
+                    }
+                    s.Step();
+                }
                 return (1 - f.Stored(f.T.sPoly, bed) / 100, ch.BurningCount > 0);
             }
             var air = Fire(101.3, 0.21, 3); var thin = Fire(50, 0.21, 3); var vac = Fire(5, 0.21, 1);
@@ -291,6 +302,73 @@ public static partial class Program
                 Check("암모니아가 새는 방을 피하는 사람: 제 코로 안 나쁜 공기 믿음의 원인 사슬이 그 펌프의 봉함 샘에 닿는다 (불 > 샘 > 달궈진 곳)",
                     story.Contains("암모니아가 새어"), story == "" ? $"믿음 없음 ({string.Join(",", m[p].Beliefs.Where(x => x.Kind == BeliefKind.BadAir).Select(x => x.Src))})" : story);
             }
+        }
+
+        // ── (바) 소화제: 이산화탄소는 산소를 밀어내 끄고 (식히지 못한다) · 물은 식혀 끈다 · 전기가 흐르는 곳의 물은 감전 ──
+        {
+            var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);
+            int bed = Worlds.At(lay, 8, 3);
+            // 고분자 침대 불(붙은 지 1분 · 1m² · 100kW 남짓)에 소화기 하나를 그 칸과 둘레에 다 뿜는다 (이산화탄소 155몰을 15초에 · 물 500몰을 20초에)
+            (bool knocked, bool outAfter, bool relit, double tf, double minX) Douse(bool co2)
+            {
+                var s = Worlds.WithChem(lay, 1, (f, c) => { f.AddStore(bed, f.T.sPoly, 100); c.Ignite(bed, 3e6, 0); });
+                var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+                s.Run(Time.Minutes(1));
+                var cells = new List<int> { bed }; var nb = new int[4]; lay.Neighbors(bed, nb); foreach (int j in nb) if (j >= 0 && f.Moles(j) > 1) cells.Add(j);
+                double left = co2 ? 155 : 500, rate = co2 ? 10 : 25, minX = 1;
+                bool knocked = false;
+                while (left > 0)
+                {
+                    double n = Math.Min(left, rate * Time.SecondsPerTick); left -= n;
+                    foreach (int c in cells) ch.Douse(c, co2 ? Extinguishant.CO2 : Extinguishant.Water, n / cells.Count);
+                    s.Step(); minX = Math.Min(minX, ch.FeedAir(bed).x);
+                    if (ch.Burning[bed] == 0) knocked = true;
+                }
+                double tf = f.Tf[bed];
+                s.Run(Time.Minutes(0.5));
+                bool outAfter = ch.Burning[bed] == 0;
+                bool relit = !outAfter;
+                for (int k = 0; k < Time.Minutes(8); k++) { s.Step(); if (ch.Burning[bed] != 0) relit = true; }
+                return (knocked, outAfter, relit, tf, minX);
+            }
+            var gas = Douse(true); var wet = Douse(false);
+            Check("이산화탄소 소화기: 분사가 불꽃이 들이쉬는 공기에 섞여 뿜는 동안 불꽃을 눌러 끈다 — 식히지 못해 뜨거운 고체(침대)는 기체가 걷히면 다시 붙는다 · 물은 식혀 끄고 다시 붙지 않는다",
+                gas.knocked && gas.relit && wet.outAfter && !wet.relit && gas.tf > wet.tf + 150,
+                $"이산화탄소: 눌러 끔 {gas.knocked} · 둘레 산소 최저 {gas.minX:P0} · 다 뿜은 때 겉면 {gas.tf - 273:0}℃ · 다시 붙음 {gas.relit} / 물: 꺼짐 {wet.outAfter} · 겉면 {wet.tf - 273:0}℃ · 다시 붙음 {wet.relit}");
+        }
+
+        // 고르기: 전기가 흐르는 곳의 불 (차단기가 눌어붙어 아크가 이어진다 — 아크 위험 씨앗) — 로봇과 전기를 아는 사람은 이산화탄소 소화기 · 모르는 사람은 가까운 물 소화기를 뿌려 감전된다
+        {
+            var mlay2 = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            (double water, double gas, float burn, string hurt, bool firstGas) Fight(bool robot, float knows)
+            {
+                var s = Worlds.Full(mlay2, 7); var m = s.Get<Mind>(); var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var net = s.Get<Network>();
+                var dev = net.Devices.Where(d => d.Type == "MealDispenser").OrderByDescending(d => s.Layout.X(d.Cell)).First();   // 배식기 — 물 소화기(옷장)가 가깝고 이산화탄소 소화기(배전반)는 멀다
+                int fd = dev.Feeder;
+                net.BreakerStuck[fd] = 1; net.MainStuck[net.Feeders[fd].Panel] = 1; net.FaultCell[fd] = dev.Cell;   // 눌어붙은 차단기 · 윗단 보호도 낡았다 — 아크가 그 칸에 이어진다
+                int at = Worlds.At(mlay2, 16, 8);   // 아래 복도 (배식기 곁)
+                // 소화기 둘을 같은 복도에: 물 소화기는 가까운 작업대(2칸) · 이산화탄소 소화기는 먼 배식기(15칸) — 다른 곳의 것은 치운다
+                int bench = s.Layout.Furniture.FindIndex(fu => fu.Type == "Workbench"), far = s.Layout.Furniture.FindIndex(fu => fu.Type == "MealDispenser" && s.Layout.X(fu.Cells[0]) < 5);
+                for (int fu = 0; fu < s.Layout.Furniture.Count; fu++) { m.Stock[fu * m.ItemCount + m.iExt] = 0; m.Stock[fu * m.ItemCount + m.iCO2] = 0; }
+                m.Stock[bench * m.ItemCount + m.iExt] = 1; m.Stock[far * m.ItemCount + m.iCO2] = 1;
+                int who = robot ? m.AddRobot(s, at, AgentKind.Robot, at) : m.AddPerson(s, at);
+                if (!robot) m[who].C.KnElectric = knows;
+                s.Run(5);
+                long from = s.Facts.Total;
+                f.AddStore(dev.Cell, f.T.sPoly, 60);
+                int fire = s.Causes.Add(CauseKind.Setup, "배식기 회로의 아크", s.Tick);
+                ch.Ignite(dev.Cell, 3e6, fire);
+                m.Assign(s, who, GoalKind.FightFire, dev.Cell, new Belief { Kind = BeliefKind.Fire, Cell = dev.Cell, Subject = -1, Conf = 1f, Cause = fire }, s.Tick + Time.Minutes(10));   // 불을 끄러 간다
+                bool firstGas = false;
+                for (int k = 0; k < Time.Minutes(4); k++) { s.Step(); if (m.Co2Sprayed + m.WaterSprayed > 0 && !firstGas && m.WaterSprayed == 0) firstGas = true; }   // 먼저 든 것이 이산화탄소였나
+                float burn = robot ? 0 : s.Get<Life>()[m[who].C.Body].Burn;
+                string hurt = s.Facts.Since(from).Where(x => x.Kind == FactKind.Hurt).Select(x => s.Causes.Text(x.Cause)).FirstOrDefault() ?? "";
+                return (m.WaterSprayed, m.Co2Sprayed, burn, hurt, firstGas);
+            }
+            var rb = Fight(true, 0); var pro = Fight(false, 0.8f); var naive = Fight(false, 0);
+            Check("아크가 이어지는 배식기의 불: 로봇과 전기를 아는 사람은 멀어도 이산화탄소 소화기를 먼저 든다 · 모르는 사람은 가까운 물 소화기를 뿌려 감전된다 (화상 · 원인 마디)",
+                rb.gas > 0 && rb.firstGas && pro.gas > 0 && pro.water == 0 && !pro.hurt.Contains("감전") && naive.water > 0 && naive.hurt.Contains("감전") && naive.burn > 0.1f,
+                $"로봇: 이산화탄소 {rb.gas:0} · 물 {rb.water:0} / 아는 사람: 이산화탄소 {pro.gas:0} · 물 {pro.water:0} · 다침 \"{pro.hurt}\" / 모르는 사람: 물 {naive.water:0} · 화상 {naive.burn:0.00} · \"{naive.hurt}\"");
         }
 
         // ── (나) 냄새 · 증상 · 센서 ──

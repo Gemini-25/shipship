@@ -5,6 +5,7 @@ namespace ShipEngine;
 public sealed partial class Mind
 {
     public double WaterSprayed;   // 소화기에서 나온 물 (몰 — 장의 원소 장부 밖에서 들어온 것)
+    public double Co2Sprayed;     // 이산화탄소 소화기에서 나온 이산화탄소 (몰 — 장부 밖에서 · ② (바))
 
     // ───────────────────────── 단계 하기 ─────────────────────────
 
@@ -168,7 +169,7 @@ public sealed partial class Mind
     private double ItemCharge(byte item)
     {
         var d = P.Items[ItemNames[item]];
-        return d.Water > 0 ? d.Water : d.O2;
+        return d.Water > 0 ? d.Water : d.Co2 > 0 ? d.Co2 : d.O2;
     }
 
     /// <summary>손에 든 물건을 써서 없앤다 (막기 · 덧대기 · 고치기 · 빈 소화기) — 장부에 '썼다'.</summary>
@@ -290,9 +291,10 @@ public sealed partial class Mind
             else Fail(sim, a, "불이 손 닿는 곳에 없다");
             return;
         }
-        if (c.Holding != iExt || c.HoldCharge <= 0.5f)
+        bool co2 = c.Holding == iCO2;
+        if (c.Holding != iExt && !co2 || c.HoldCharge <= 0.5f)
         {
-            if (c.Holding == iExt) UseHeld(sim, a); // 빈 소화기는 버린다
+            if (c.Holding == iExt || co2) UseHeld(sim, a); // 빈 소화기는 버린다
             Fail(sim, a, "소화기가 비었다");
             return;
         }
@@ -300,10 +302,39 @@ public sealed partial class Mind
         int me = c.Cell;
         fires.Sort((p, q) => Dist(me, p).CompareTo(Dist(me, q)) is var k && k != 0 ? k : p.CompareTo(q));
         int n = Math.Min(4, fires.Count);
-        double amount = Math.Min(c.HoldCharge, 25 * Time.SecondsPerTick);
-        for (int k = 0; k < n; k++) F.AddStore(fires[k], T.sWater, amount / n);
+        // ② (바) 물은 초당 25몰 (식혀 끈다) · 이산화탄소는 초당 10몰 (−78℃ 기체로 산소를 밀어낸다 — 155몰이 15초)
+        double amount = Math.Min(c.HoldCharge, (co2 ? 10 : 25) * Time.SecondsPerTick);
+        bool first = c.HoldCharge >= ItemCharge(c.Holding) - 0.01;
+        if (co2 && _chem != null)
+        {
+            // 이산화탄소는 불과 그 둘레를 덮는다 (불꽃을 먹이는 공기를 옅게 — ② (바))
+            var cover = new List<int>();
+            Span<int> nb = stackalloc int[4];
+            for (int k = 0; k < n; k++)
+            {
+                if (!cover.Contains(fires[k])) cover.Add(fires[k]);
+                L.Neighbors(fires[k], nb);
+                foreach (int j in nb) if (j >= 0 && F.RegionOf.Length > j && F.RegionOf[j] >= 0 && !cover.Contains(j)) cover.Add(j);
+            }
+            foreach (int j in cover) _chem.Douse(j, Extinguishant.CO2, amount / cover.Count);
+        }
+        else
+            for (int k = 0; k < n; k++)
+            {
+                if (_chem != null) _chem.Douse(fires[k], Extinguishant.Water, amount / n);
+                else F.AddStore(fires[k], T.sWater, amount / n);
+            }
         c.HoldCharge -= (float)amount;
-        WaterSprayed += amount;
+        if (co2) Co2Sprayed += amount; else WaterSprayed += amount;
+        // 전기가 흐르는 곳에 물을 뿌리면 물줄기를 타고 감전된다 (첫 물줄기에 — 놀라 물러선다)
+        if (!co2 && first && a.IsPerson && _net != null && _life != null)
+            for (int k = 0; k < n; k++)
+                if (_net.LiveAt(fires[k]))
+                {
+                    int shock = sim.Causes.Add(CauseKind.Electric, $"{Ko.I(NameOf(a.Id))} 전기가 흐르는 곳의 불에 물을 뿌려 감전됐다", t, fires[k], c.GoalCause, 0, a.Id);
+                    _life.Scald(sim, c.Body, 0.15f, shock);
+                    break;
+                }
     }
 
     /// <summary>봉합 꾸러미 하나가 막는 넓이 (㎡ — 사람 몫 · 로봇은 두 배).</summary>

@@ -464,13 +464,19 @@ public sealed partial class Mind
             }
             case GoalKind.FightFire:
             {
-                if (c.Holding != iExt || c.HoldCharge < 20)
+                // ② (바) 소화기 고르기: 전기가 흐르는 곳의 불이면 아는 이(로봇 · 전기 0.3 넘게)는 이산화탄소 · 아니면 물 (식혀 다시 붙지 않게) · 모르면 가까운 것
+                var (want, picky) = ChooseExtinguisher(a, o.Cell, here);
+                bool held = (c.Holding == iExt || c.Holding == iCO2) && c.HoldCharge >= 20;
+                if (!held || picky && c.Holding != want)
                 {
-                    if (c.Holding != 255 && c.Holding != iExt) return false;
-                    int src = NearestStock(here, iExt);
-                    if (src < 0) return false;
-                    plan.Add(Go(L.Furniture[src].Cells[0], 1));
-                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iExt });
+                    int src = NearestStock(here, want);   // 다른 것을 들고 있으면 소화기를 집을 때 내려놓는다 (수리 꾸러미를 든 채 불을 못 끄던 빈틈)
+                    if (src < 0) { want = want == iCO2 ? iExt : iCO2; src = NearestStock(here, want); }
+                    if (src < 0) { if (!held) return false; }
+                    else
+                    {
+                        plan.Add(Go(L.Furniture[src].Cells[0], 1));
+                        plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = want });
+                    }
                 }
                 plan.Add(Go(o.Cell, 2));
                 plan.Add(new PlanStep { Kind = StepKind.Spray, Cell = o.Cell });
@@ -908,6 +914,28 @@ public sealed partial class Mind
             if (d < bd) { bd = d; best = fu; }
         }
         return best;
+    }
+
+    /// <summary>
+    /// ② (바) 불에 들고 갈 소화기: 불 자리가 전기가 흐르는 곳이면 — 로봇 · 전기를 아는 사람(0.3 넘게)은 이산화탄소 (없으면 물) ·
+    /// 아니면 — 로봇 · 화학을 아는 사람은 물 (식혀 다시 붙지 않게) · 모르는 사람은 가까운 것. picky: 아는 이는 다른 것을 들고 있으면 바꿔 든다.
+    /// </summary>
+    private (byte item, bool picky) ChooseExtinguisher(Agent a, int fire, int here)
+    {
+        bool live = false;
+        if (_net != null && fire >= 0)
+        {
+            int fx = L.X(fire), fy = L.Y(fire);
+            for (int y = Math.Max(0, fy - 1); y <= Math.Min(L.H - 1, fy + 1) && !live; y++)
+                for (int x = Math.Max(0, fx - 1); x <= Math.Min(L.W - 1, fx + 1) && !live; x++)
+                    if (_net.LiveAt(L.Index(x, y))) live = true;
+        }
+        bool knows = !a.IsPerson || (live ? a.C.KnElectric : a.C.KnChem) >= 0.3f;
+        int w = NearestStock(here, iExt), g = NearestStock(here, iCO2);
+        if (knows) return (live ? (g >= 0 ? iCO2 : iExt) : (w >= 0 ? iExt : iCO2), true);
+        if (w < 0) return (iCO2, false);
+        if (g < 0) return (iExt, false);
+        return (Manhattan(here, L.Furniture[w].Cells[0]) <= Manhattan(here, L.Furniture[g].Cells[0]) ? iExt : iCO2, false);
     }
 
     private int NearestStock(int from, byte item)

@@ -241,6 +241,32 @@ public sealed partial class Network : IEngine
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; }
     /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>
     public void PullFeeder(int feeder) { Breaker[feeder] = 0; BreakerStuck[feeder] = 0; OverSec[feeder] = 0; }
+    /// <summary>이 칸에 전기를 대는 살아 있는 급전선 (② (바)): 전기를 받는 장치가 차지한 칸 · 살아 있는 급전선이 지나는 칸 — 없으면 −1.</summary>
+    public int LiveFeederAt(int cell)
+    {
+        for (int d = 0; d < Devices.Count; d++)
+        {
+            var dev = Devices[d];
+            if (dev.Feeder < 0 || dev.Furniture < 0 || On[d] == 0 || Supply[d] <= 0.05f || Breaker[dev.Feeder] == 0) continue;
+            if (Array.IndexOf(L.Furniture[dev.Furniture].Cells, cell) >= 0) return dev.Feeder;
+        }
+        for (int k = 0; k < Feeders.Count; k++)
+            if (Breaker[k] != 0 && !Cut(k) && (FaultCell[k] == cell || Array.IndexOf(Feeders[k].Path, cell) >= 0)) return k;   // 합선 아크가 튀는 칸도
+        return -1;
+    }
+
+    /// <summary>이 칸에 전기가 흐르나 — 살아 있는 급전선 · 전기를 받는 장치 · 급전선 없이 전기를 내는 것(배전반 · 원자로 · 배터리).</summary>
+    public bool LiveAt(int cell)
+    {
+        if (LiveFeederAt(cell) >= 0) return true;
+        for (int d = 0; d < Devices.Count; d++)
+        {
+            var dev = Devices[d];
+            if (dev.Feeder >= 0 || dev.Furniture < 0 || dev.Def.Role is not ("panel" or "reactor" or "battery" or "aux")) continue;
+            if (On[d] != 0 && Broken[d * 4 + (int)Part.Electric] == 0 && Array.IndexOf(L.Furniture[dev.Furniture].Cells, cell) >= 0) return true;
+        }
+        return false;
+    }
     /// <summary>합선이 났는데 차단기가 눌어붙어 전기가 계속 흐르는 급전선 (없으면 -1).</summary>
     public int StuckFault(int panel = -1)
     {

@@ -140,7 +140,7 @@ public sealed partial class Work : IEngine
             };
             lines.Add($"{line} → {D(days)} (만들지 못하면 {D(noMake)})");
         }
-        foreach (string name in new[] { "수리 꾸러미", "봉합 꾸러미", "소화기", "원료" })
+        foreach (string name in new[] { "수리 꾸러미", "봉합 꾸러미", "소화기", "이산화탄소 소화기", "원료" })
         {
             int item = _mind!.ItemIndex(name);
             if (item < 0) continue;

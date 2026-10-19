@@ -2,7 +2,7 @@
 //   names: 이름 (사람마다 차례로 · 모자라면 숫자를 붙인다)
 //   roles: 맡은 일 → 일하는 방 종류 · 일하는 설비 · 솜씨 (0~1, 처음 값) · knows: 분야를 아는 정도 (0~1, 처음 값 — 판단 엔진 · knowledge.json)
 //   stock: 설비 안에 처음 들어 있는 물건 (개수)
-//   items: 물건 — 소화기 물(몰) · 우주복 산소(몰) · 쓰는 시간(분)
+//   items: 물건 — 소화기 물(몰) · 이산화탄소 소화기(몰) · 우주복 산소(몰) · 쓰는 시간(분)
 //   speed: m/s (칸 1m) · watts: 하는 일의 대사량 (W)
 //   needs: 욕구가 0 → 1 되는 시간 (시간)
 //   halfLife: 믿음 종류마다 확신이 반으로 주는 시간 (분)
@@ -27,7 +27,9 @@
     "Shelf":         { "소화기": 1, "봉합 꾸러미": 1 },
     "OxygenMaskBox": { "산소 마스크": 6 },
     "MedBed":        { "구급 상자": 1 },
-    "Refinery":      { "원료": 4 }
+    "Refinery":      { "원료": 4 },
+    "PowerPanel":    { "이산화탄소 소화기": 1 },
+    "MainComputer":  { "이산화탄소 소화기": 1 }
   },
   "items": {
     "소화기":      { "water": 500, "minutes": 0, "kg": 9 },
@@ -39,12 +41,14 @@
     "원료":        { "minutes": 0, "kg": 12 },
     "수확물":      { "minutes": 0, "kg": 3 },
     "식량 상자":   { "minutes": 0, "kg": 13 },
-    "떼어 낸 부품": { "minutes": 20, "kg": 3 }
+    "떼어 낸 부품": { "minutes": 20, "kg": 3 },
+    "이산화탄소 소화기": { "co2": 155, "minutes": 0, "kg": 12 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },
     "수리 꾸러미": { "at": "Workbench", "minutes": 40, "needs": { "원료": 2 }, "keep": 3 },
-    "소화기":      { "at": "Workbench", "minutes": 30, "needs": { "원료": 2 }, "keep": 3 }
+    "소화기":      { "at": "Workbench", "minutes": 30, "needs": { "원료": 2 }, "keep": 3 },
+    "이산화탄소 소화기": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 2 }
   },
   "makers": {
     "Refinery":  { "item": "원료", "hours": 2, "max": 8 },

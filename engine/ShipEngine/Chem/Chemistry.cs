@@ -1,5 +1,8 @@
 namespace ShipEngine;
 
+/// <summary>소화제 (② (바)).</summary>
+public enum Extinguishant : byte { Water, CO2 }
+
 /// <summary>
 /// ② 물질 — 칸의 화학 (불 · 기체 폭발 · 느린 반응). 반응식 표를 그대로 칸 위에서 돌린다.
 /// <para>
@@ -38,6 +41,8 @@ public sealed class Chemistry : IEngine
     public int[] FireCause;
     /// <summary>칸마다 불붙는 기체가 새어 나온 원인 (② (마) — ⑥이 요청: 봉함 샘 · 관 샘 · 배터리 뿜음). 그 칸에 불붙는 기체가 없어지면 지운다.</summary>
     public int[] GasCause;
+    /// <summary>이번 틱 칸에 뿜은 이산화탄소 소화기 분사 (몰/초 — 다음 틱 불꽃이 들이쉬는 공기에 섞인다 · ② (바)).</summary>
+    private double[] _jet = Array.Empty<double>(), _jetNext = Array.Empty<double>();
     /// <summary>칸을 달군 것의 원인 (켜 둔 조리대 · 과열 장치 — 위 층이 적는다) — 뜨거워 불이 붙으면 그 불의 부모가 된다.</summary>
     public int[] HeatCause;
     /// <summary>지난 틱에 낸 열 (kW) — 화면 · 연출.</summary>
@@ -74,7 +79,7 @@ public sealed class Chemistry : IEngine
     public Chemistry(Field f)
     {
         F = f; T = f.T; Cells = f.Cells;
-        Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells]; GasCause = new int[Cells];
+        Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells]; GasCause = new int[Cells]; _jet = new double[Cells]; _jetNext = new double[Cells];
         FuelLink = new byte[Cells]; Creep = new float[Cells];
         _spark = new byte[Cells]; _sparkNext = new byte[Cells]; _sparkCause = new int[Cells]; _sparkCauseNext = new int[Cells];
         // 넉넉한 양: 바퀴 1의 몰 잣대(200몰)를 그대로 질량으로 — 고분자 2.8kg · 섬유 32kg · 음식 36kg · 그을음 2.4kg · 피복 · 폼은 고분자와 같은 2.8kg
@@ -105,6 +110,17 @@ public sealed class Chemistry : IEngine
     }
 
     private int RoomSlot(int cell) => F.L.Room[cell] >= 0 ? F.L.Room[cell] : _boomJ.Length - 1;
+
+    /// <summary>
+    /// 소화기를 이 칸에 뿜는다 (② (바) — ⑧이 요청): 물은 바닥 저장으로 (겉면을 식혀 끈다 — <see cref="Quench"/>) ·
+    /// 이산화탄소는 −78℃(195K) 기체로 (산소 몰분율을 한계 산소 지수 아래로 밀어내 끈다 — 식히지는 못한다 · 남는 것이 없다).
+    /// </summary>
+    public void Douse(int cell, Extinguishant kind, double mol)
+    {
+        if (cell < 0 || cell >= Cells || mol <= 0) return;
+        if (kind == Extinguishant.CO2) { F.AddGas(cell, T.gCO2, mol, 195); _jetNext[cell] += mol / Time.SecondsPerTick; }
+        else F.AddStore(cell, T.sWater, mol);
+    }
 
     /// <summary>불붙는 기체가 이 칸에서 새어 나왔다 (⑥이 요청) — 그 방 칸 모두에 원인을 단다 (기체가 방에 고루 퍼진다).</summary>
     public void MarkGas(int cell, int cause)
@@ -143,6 +159,7 @@ public sealed class Chemistry : IEngine
         F.RebuildNow(); // 장보다 먼저 돈다 — 구역이 바뀌었으면 지금 짠다
         Array.Clear(Hrr);
         Array.Clear(_sparkNext);
+        _stamp++;
         int burning = 0;
         Span<int> nb = stackalloc int[4];
         for (int i = 0; i < Cells; i++)
@@ -156,11 +173,13 @@ public sealed class Chemistry : IEngine
             double tf = F.Tf[i], x = O2Frac(i), pf = PressureFactor(i);
             if (Burning[i] == 0)
             {
-                // 발화: 겉면이 그 연료의 발화 온도(산소가 짙을수록 낮다)를 넘었고 · 산소가 그 온도의 한계 산소 지수보다 짙다
+                // 발화: 겉면이 그 연료의 발화 온도(산소가 짙을수록 낮다)를 넘었고 · 산소가 불꽃을 먹일 공기의 한계 산소 지수보다 짙다 (꺼질 불이면 붙지도 않는다)
+                double feedK = 0, feedX = 0, jet = 0; bool fed = false;
                 foreach (var fu in _fuels)
                 {
-                    if (F.Stored(fu.store, i) < 1e-3) continue;
-                    if (tf >= IgniteK(fu.full.Def.MinK, x) && Vigor(fu.full.Def.Loi, x, tf, pf) > 0)
+                    if (F.Stored(fu.store, i) < 1e-3 || tf < IgniteK(fu.full.Def.MinK, x)) continue;
+                    if (!fed) { (feedK, feedX) = FeedAir(i); jet = JetAt(i); fed = true; }
+                    if (CanFlame(fu.full.Def.Loi, x, tf, pf, feedK, feedX, jet))
                     {
                         Light(sim, i, nb);
                         break;
@@ -175,6 +194,7 @@ public sealed class Chemistry : IEngine
         BurningCount = burning;
         Sounds(sim);
         (_spark, _sparkNext) = (_sparkNext, _spark);
+        (_jet, _jetNext) = (_jetNext, _jet); Array.Clear(_jetNext);
         (_sparkCause, _sparkCauseNext) = (_sparkCauseNext, _sparkCause);
         if (sim.Tick % 25 == 0) Slow(25 * dt);
     }
@@ -193,7 +213,7 @@ public sealed class Chemistry : IEngine
     /// <summary>기압 몫: 8kPa 아래 0 (불꽃이 못 선다) · 60kPa 넘으면 1 — 같은 몰분율이면 낮은 기압에서도 거의 같이 탄다 (NASA 시험).</summary>
     public double PressureFactor(int i) => Math.Sqrt(Math.Clamp((F.Pressure(i) - QuenchKPa) / 52, 0, 1));
 
-    /// <summary>겉면 온도 t(K)에서의 한계 산소 지수 — 1K에 0.018%p씩 낮아진다 (Fenimore · 큰 불은 낮은 산소에서도 탄다) · 많아야 절반까지 (뜨거운 방의 불꽃 한계 8~12%).</summary>
+    /// <summary>온도 t(K)에서의 한계 산소 지수 — 1K에 0.018%p씩 낮아진다 (Fenimore · 예열된 공기에선 낮은 산소에서도 탄다) · 많아야 절반까지 (뜨거운 방의 불꽃 한계 8~12%). 꺼짐은 둘레 공기 · 빠르기는 겉면 온도로 부른다.</summary>
     public static double LoiAt(double loi, double t) => Math.Max(loi * 0.5, loi - 0.00018 * (t - 298));
 
     /// <summary>탈 것 하나의 빠르기 몫 (1기압 공기의 뜨거운 고분자 ≈ 1.1 · 많아야 2.5) — 산소가 그 한계를 넘는 만큼.</summary>
@@ -202,12 +222,87 @@ public sealed class Chemistry : IEngine
     /// <summary>산소가 짙을수록 낮아지는 발화 온도 (100% 산소면 150K 낮다 — 아폴로 1호).</summary>
     public static double IgniteK(double minK, double x) => minK - 150 * Math.Clamp((x - 0.21) / 0.79, 0, 1);
 
-    /// <summary>그 칸에 아직 불꽃이 설 탈 것이 있나 (모두 한계 산소 지수 아래면 스스로 꺼진다).</summary>
+    /// <summary>
+    /// 그 칸에 아직 불꽃이 설 탈 것이 있나 — 불꽃을 먹이는 공기(<see cref="FeedAir"/>)의 산소가 그 공기 온도의 한계 산소 지수보다 짙어야 한다 (모두 아래면 스스로 꺼진다).
+    /// 꺼지는 한계는 둘레 공기의 예열로 낮아진다 (차가운 방 13~15% · 뜨거운 방 10% 언저리 — 구획 화재 실험 · 이산화탄소 설계 농도 34%) · 타는 빠르기는 겉면의 되먹임으로 (<see cref="Vigor"/>).
+    /// </summary>
     private bool Flames(int i, double x, double tf, double pf)
     {
-        foreach (var fu in _fuels) if (F.Stored(fu.store, i) > 1e-3 && Vigor(fu.full.Def.Loi, x, tf, pf) > 0) return true;
+        var (feedK, feedX) = FeedAir(i);
+        double jet = JetAt(i);
+        foreach (var fu in _fuels) if (F.Stored(fu.store, i) > 1e-3 && CanFlame(fu.full.Def.Loi, x, tf, pf, feedK, feedX, jet)) return true;
         return false;
     }
+
+    /// <summary>
+    /// 탈 것 하나에 불꽃이 설 수 있나 (붙을 때 · 버틸 때 같은 판정): 타는 빠르기가 있고 · 불꽃이 들이쉬는 공기의 산소가 그 꺼짐 한계보다 짙다.
+    /// 소화기 분사(jet 몰/초)는 들이쉬는 공기에 섞인다 — 들이쉬는 공기는 불이 셀수록 많다 (세기 1에 초당 25몰 ≈ 130kW): 작은 불은 꺼지고 큰 불은 못 끈다.
+    /// </summary>
+    private static bool CanFlame(double loi, double x, double tf, double pf, double feedK, double feedX, double jet)
+    {
+        double v = Vigor(loi, x, tf, pf);
+        if (v <= 0) return false;
+        double entrain = 25 * Math.Max(0.2, v);
+        return feedX * entrain / (entrain + jet) > FlameLimit(loi, feedK, tf);
+    }
+
+    /// <summary>그 칸과 이웃에 지난 틱 뿜은 소화기 분사 (몰/초).</summary>
+    private double JetAt(int i)
+    {
+        double j = _jet[i];
+        Span<int> nb = stackalloc int[4];
+        F.L.Neighbors(i, nb);
+        foreach (int k in nb) if (k >= 0) j += _jet[k];
+        return j;
+    }
+
+    /// <summary>
+    /// 불꽃이 꺼지는 산소 한계: 불꽃을 먹이는 공기 온도의 한계 산소 지수 − 큰 불의 되먹임 몫 (겉면 500K → 800K에 0 → 3.5%p — 뜨거운 겉면이 복사로 열분해를 돕는다:
+    /// 작은 시편의 LOI보다 방만 한 불은 옅은 산소에서도 버틴다 · 구획 화재의 불꽃 소멸 12~15%) · 많아야 LOI의 절반까지.
+    /// </summary>
+    public static double FlameLimit(double loi, double feedK, double tf) => Math.Max(loi * 0.5, LoiAt(loi, feedK) - 0.035 * Math.Clamp((tf - 500) / 300, 0, 1));
+
+    /// <summary>
+    /// 불꽃을 먹이는 공기 — 그 방의 불이 아닌 칸 공기의 몰 가중 평균 온도(K) · 산소 몰분율 (불기둥은 방 공기를 끌어들인다 — 구획 화재의 고루 섞인 아래층:
+    /// 닫힌 방이면 방 전체가 옅어져 꺼지고 · 뜨거운 방이면 한계가 낮아진다). 장에 대류가 없어 불 곁 칸만 옅어지는 것을 불꽃의 공기로 읽지 않게.
+    /// 방 밖 칸(문 · 통로)은 불이 아닌 이웃 · 그것도 없으면 그 칸.
+    /// </summary>
+    public (double k, double x) FeedAir(int i)
+    {
+        int r = F.L.Room[i];
+        if (r >= 0)
+        {
+            // 한 틱에 방마다 한 번 (처음 물을 때의 공기 — 불이 여럿이어도 방 칸을 다시 돌지 않는다)
+            if (_feedStamp.Length != F.L.Rooms.Count) { _feedStamp = new int[F.L.Rooms.Count]; _feedRoom = new (double, double)[F.L.Rooms.Count]; }
+            if (_feedStamp[r] == _stamp) return _feedRoom[r];
+            _feedStamp[r] = _stamp;
+            double tr = 0, xr = 0, wr = 0;
+            foreach (int j in F.L.Rooms[r].Cells)
+            {
+                if (Burning[j] != 0 || F.RegionOf.Length <= j || F.RegionOf[j] < 0) continue;
+                double m = F.Moles(j);
+                if (m < 1) continue;
+                tr += F.Temp(j) * m; xr += O2Frac(j) * m; wr += m;
+            }
+            if (wr > 0) return _feedRoom[r] = (tr / wr, xr / wr);
+            _feedStamp[r] = 0;
+        }
+        double t = 0, x = 0, w = 0;
+        {
+            Span<int> nb = stackalloc int[4];
+            F.L.Neighbors(i, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0 || Burning[j] != 0 || F.RegionOf.Length <= j || F.RegionOf[j] < 0 || F.Moles(j) < 1) continue;
+                t += F.Temp(j); x += O2Frac(j); w += 1;
+            }
+        }
+        return w > 0 ? (t / w, x / w) : (F.Temp(i), O2Frac(i));
+    }
+
+    private int _stamp = 1;
+    private int[] _feedStamp = Array.Empty<int>();
+    private (double k, double x)[] _feedRoom = Array.Empty<(double, double)>();
 
     /// <summary>불이 붙는다 — 원인: 불씨 > 불 붙은 이웃 > 뜨거운 공기.</summary>
     private void Light(Sim sim, int i, Span<int> nb)
@@ -221,6 +316,17 @@ public sealed class Chemistry : IEngine
             F.L.Neighbors(i, nb);
             foreach (int j in nb)
                 if (j >= 0 && Burning[j] != 0) { cause = sim.Causes.Add(CauseKind.Fire, "옆 칸으로 번졌다", sim.Tick, i, FireCause[j]); spread = true; break; }
+        }
+        if (cause == 0 && HeatCause[i] == 0)
+        {
+            // 달군 원인이 따로 없으면 남은 불의 열이다 — 꺼졌던 그 칸이 다시 · 꺼진 옆 칸의 열로 (불꽃이 잠깐 서지 못한 사이 — 원인 사슬이 끊기지 않게)
+            if (FireCause[i] != 0) cause = sim.Causes.Add(CauseKind.Fire, "남은 열에 다시 불이 붙었다", sim.Tick, i, FireCause[i]);
+            else
+            {
+                F.L.Neighbors(i, nb);
+                foreach (int j in nb)
+                    if (j >= 0 && FireCause[j] != 0) { cause = sim.Causes.Add(CauseKind.Fire, "옆 불의 열로 번졌다", sim.Tick, i, FireCause[j]); spread = true; break; }
+            }
         }
         if (cause == 0) cause = sim.Causes.Add(CauseKind.Heat, "뜨거워져 불이 붙었다", sim.Tick, i, HeatCause[i]);
         FireCause[i] = cause;
@@ -550,7 +656,7 @@ public sealed class Chemistry : IEngine
         w.I64(Ignitions); w.I64(GasBursts);
         w.Arr(FuelLink); w.Arr(Creep); w.I64(Creeps); w.F64(PyroHcl);
         w.Tag("폭발 소리"); w.Arr(_boomJ); w.Arr(_boomCell); w.Arr(_boomCause);
-        w.Arr(GasCause);
+        w.Arr(GasCause); w.Arr(_jet); w.Arr(_jetNext);
     }
 
     public void Load(StateReader r)
@@ -559,6 +665,6 @@ public sealed class Chemistry : IEngine
         Ignitions = r.I64(); GasBursts = r.I64();
         r.ArrInto(FuelLink); r.ArrInto(Creep); Creeps = r.I64(); PyroHcl = r.F64();
         r.Tag("폭발 소리"); r.ArrInto(_boomJ); r.ArrInto(_boomCell); r.ArrInto(_boomCause);
-        r.ArrInto(GasCause);
+        r.ArrInto(GasCause); r.ArrInto(_jet); r.ArrInto(_jetNext);
     }
 }
