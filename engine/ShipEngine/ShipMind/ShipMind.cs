@@ -503,7 +503,21 @@ public sealed partial class ShipMind : IEngine
                 var b = _life.Bodies[a.C.Body];
                 int r = _mind.RoomOf(b.Cell);
                 if (r < 0 || RoomSeen[r] == 0 || b.Alive == 0) continue;
-                if (Life.NeedsWoundCare(b) || _mind.HasDrugFor(b)) { Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect)), a.C.Body, b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : b.HurtCause); Mark(IncidentKind.Injured, r, a.C.Body); }
+                bool wound = Life.NeedsWoundCare(b) || _mind.HasDrugFor(b), exam = !wound && Mind.NeedsExam(sim.Tick, a, b) && (b.Conscious != 0 || !RoomKnownBad(r));   // ⑦ (다) 몸이 이상하다 — 본 적 없거나 · 나빠졌거나 · 낫지 않는다 (위험을 이미 아는 방에 쓰러진 이는 구하기의 몫)
+                if (wound || exam)
+                {
+                    Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(0.2f, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect))), a.C.Body,
+                        b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : a.C.DxCause != 0 ? a.C.DxCause : b.HurtCause, exam ? $"{_mind.NameOf(a.Id)} — 몸이 좋지 않다 ({Life.SymText(Life.Symptoms(b))})" : null);
+                    Mark(IncidentKind.Injured, r, a.C.Body);
+                }
+                // ⑦ (다) 진료 기록이 일산화탄소 중독이면 그 방을 알린다 (센서가 알림 아래거나 못 읽어도) — 로봇이 살피고 통풍구를 닫는다
+                if (a.C.DxAil == Ail.CO && a.C.DxAt > 0 && sim.Tick - a.C.DxAt < Time.Hours(1) && a.C.DxRoom >= 0 && a.C.DxRoom < L.Rooms.Count && _roomVent[a.C.DxRoom] >= 0)
+                {
+                    bool known = Find(IncidentKind.CO, a.C.DxRoom) >= 0;
+                    Raise(sim, IncidentKind.CO, a.C.DxRoom, _roomVent[a.C.DxRoom], Math.Max(RoomCO[a.C.DxRoom], 1), -1, a.C.DxCause, known ? null : $"진료 기록에 일산화탄소 중독 (센서 {RoomCO[a.C.DxRoom]:0}ppm)");
+                    Mark(IncidentKind.CO, a.C.DxRoom);
+                    if (!known) ChartAlerts++;
+                }
                 FeverWatch(sim, a.Id, b);
             }
         // 장치 · 전기
@@ -839,6 +853,13 @@ public sealed partial class ShipMind : IEngine
     }
 
     // ───────────────────────── 하기 ─────────────────────────
+
+    /// <summary>그 방에 위험한 사건(불 · 샘 · 진공 · 독한 기체 …)이 이미 열려 있나.</summary>
+    private bool RoomKnownBad(int room)
+    {
+        foreach (var x in Incidents) if (x.Active != 0 && x.Room == room && Dangerous(x.Kind)) return true;
+        return false;
+    }
 
     private static bool Dangerous(IncidentKind k) => k is IncidentKind.Fire or IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.CO or IncidentKind.BadAir or IncidentKind.Toxic or IncidentKind.Flammable;
 

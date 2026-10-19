@@ -205,6 +205,12 @@ public struct AgentCore
     public float ZeroGH;
     /// <summary>무중력에서 잘 자리 (칸 + 1 · 0 없음): 날숨이 고여 깬 뒤 고른 공조 바람이 닿는 자리 — 통풍구 앞에 침낭을 묶는다.</summary>
     public int ZeroGBed;
+    /// <summary>⑦ (다) 진료 기록 (그 사람의 — 돌보는 이가 남긴다): 본 병 · 본 때(0: 본 적 없음) · 본 이 · 원인 마디 · 그때 있던 방 · 그때의 증상 · 그때 깨어 있었나.</summary>
+    public Ail DxAil;
+    public long DxAt;
+    public int DxBy, DxCause, DxRoom;
+    public Sym DxSym;
+    public byte DxAwake;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

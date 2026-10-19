@@ -10,7 +10,7 @@ namespace ShipEngine;
 /// </summary>
 public sealed partial class ShipMind
 {
-    public long Asked, AskAccepted, AskDeclined, Throttles, HeatStops, Overloads, Preempts;
+    public long Asked, AskAccepted, AskDeclined, Throttles, HeatStops, Overloads, Preempts, ChartAlerts;
     public byte Throttled, HeatStopped, Overloaded;
     public float IntakeK;   // 주컴퓨터가 빨아들이는 공기 온도 (제 방 공기 · K)
     private int _effectiveRead = ReadEvery;
@@ -151,13 +151,13 @@ public sealed partial class ShipMind
 
     private void SaveCrew(StateWriter w)
     {
-        w.I64(Asked); w.I64(AskAccepted); w.I64(AskDeclined); w.I64(Throttles); w.I64(HeatStops); w.I64(Overloads); w.I64(Preempts);
+        w.I64(Asked); w.I64(AskAccepted); w.I64(AskDeclined); w.I64(Throttles); w.I64(HeatStops); w.I64(Overloads); w.I64(Preempts); w.I64(ChartAlerts);
         w.Arr(new[] { Throttled, HeatStopped, Overloaded }); w.I32(_effectiveRead); w.F32(IntakeK);
         w.Arr(new[] { _jT, _jH, _jO, _jA, _jY, _jN, _jP }); w.Arr(_feverSaid.OrderBy(x => x).ToArray());
     }
     private void LoadCrew(StateReader r)
     {
-        Asked = r.I64(); AskAccepted = r.I64(); AskDeclined = r.I64(); Throttles = r.I64(); HeatStops = r.I64(); Overloads = r.I64(); Preempts = r.I64();
+        Asked = r.I64(); AskAccepted = r.I64(); AskDeclined = r.I64(); Throttles = r.I64(); HeatStops = r.I64(); Overloads = r.I64(); Preempts = r.I64(); ChartAlerts = r.I64();
         var s = r.Arr<byte>(); Throttled = s[0]; HeatStopped = s[1]; Overloaded = s[2]; _effectiveRead = r.I32(); IntakeK = r.F32();
         var j = r.Arr<long>(); _jT = j[0]; _jH = j[1]; _jO = j[2]; _jA = j[3]; _jY = j[4]; _jN = j[5]; _jP = j[6]; _feverSaid.Clear(); foreach (int x in r.Arr<int>()) _feverSaid.Add(x);
     }

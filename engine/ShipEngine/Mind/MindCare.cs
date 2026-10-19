@@ -45,6 +45,7 @@ public sealed partial class Mind
         if (vb < 0 || vb >= _life!.Bodies.Count || _life.Bodies[vb].Alive == 0) return;
         bool kit = c.Holding == iMedkit, dress = Life.NeedsDressing(_life.Bodies[vb]);
         double pain = Life.FeltPain(_life.Bodies[vb]);   // 와서 본 아픔 (덮기 전)
+        bool open = _life.Bodies[vb].Dressed <= 0;          // 덮지 않은 상처였나 (고름이 보인다)
         _life.Treat(sim, vb, kit, abxDays: 0);
         if (kit && dress) UseHeld(sim, a); else if (dress) TreatsBare++;
         Treats++;
@@ -55,7 +56,8 @@ public sealed partial class Mind
             !dress ? $"{Ko.I(NameOf(a.Id))} {Ko.Eul(who)} 살폈다" : kit ? $"{Ko.I(NameOf(a.Id))} {Ko.Eul(who)} 돌봤다 — 붕대 · 화상 덮개" : $"{Ko.I(NameOf(a.Id))} 맨손으로 {Ko.Eul(who)} 돌봤다 — 구급 상자가 없었다",
             sim.Tick, c.Cell, _life.Bodies[vb].HurtCause, 0, a.Id);
         sim.Facts.Emit(sim.Tick, FactKind.Treated, c.Cell, kit ? 1 : 0, cause, a.Id, va);
-        Dispense(sim, a, vb, who, pain, cause);
+        Ail seen = Diagnose(sim, a, vb, who, cause);   // ⑦ (다) 증상으로 짐작한다 — 본 대로 약을 준다
+        Dispense(sim, a, vb, who, pain, seen, open, cause);
         if (c.AssignedGoal == GoalKind.Treat && c.AssignedTarget == vb) c.AssignedUntil = sim.Tick;   // 맡은 일을 마쳤다
     }
 
@@ -68,10 +70,11 @@ public sealed partial class Mind
     /// <summary>
     /// 돌보며 약을 준다 (약품고 — 가장 가까운 의료 침대에서). 솜씨 0.5 넘는 이 · 로봇은 셈을 하고 · 서툰 이는 실수한다:
     /// 아픔 0.4 넘으면 진통제 — 10mg × (1 + 내성) · 4시간 안에 준 적이 있으면 주지 않는다 / 서툰 이는 늘 10mg · 열에 둘은 두 배 · 4시간을 세지 않는다.
-    /// 열 1℃ 넘으면 해열제 1g — 하루 4g까지 / 서툰 이는 세지 않는다. 곪았거나 크게 데면 항생제 사흘 한 벌 — 약품고에 모자라면 있는 만큼 (내성균의 씨앗).
-    /// 시안화수소 중독이면 해독제. 약마다 원인 마디 (돌봄 아래) — 과용 · 간 · 내성균의 사슬이 여기서 시작한다.
+    /// 열 1℃ 넘으면 해열제 1g — 하루 4g까지 / 서툰 이는 세지 않는다 (간이 상했다고 보았으면 주지 않는다).
+    /// 크게 덴 상처 · 보이는 고름 · 곪음으로 보았으면 항생제 사흘 한 벌 — 약품고에 모자라면 있는 만큼 (내성균의 씨앗).
+    /// 시안화수소 중독으로 보았으면 해독제 (⑦ (다) 본 대로 — 틀리면 듣지 않는 약을 준다). 약마다 원인 마디 (돌봄 아래) — 과용 · 간 · 내성균의 사슬이 여기서 시작한다.
     /// </summary>
-    private void Dispense(Sim sim, Agent a, int vb, string who, double pain, int parent)
+    private void Dispense(Sim sim, Agent a, int vb, string who, double pain, Ail seen, bool open, int parent)
     {
         ref var c = ref a.C;
         var b = _life!.Bodies[vb];
@@ -93,14 +96,15 @@ public sealed partial class Mind
         // 해열제
         b = _life.Bodies[vb];
         bool over = b.ApapDay + 1000 > 4000;
-        if (Life.FeverK(b) * (1 - Life.FeverCut(b)) > 1 && (!skilled || !over) && TakeOne(c.Cell, iApap, sim))
+        if (Life.FeverK(b) * (1 - Life.FeverCut(b)) > 1 && (!skilled || !over) && seen != Ail.Liver && TakeOne(c.Cell, iApap, sim))
         {
             if (over) OverDay++;
             int k = sim.Causes.Add(kind, $"{me} {who}에게 해열제 1g을 먹였다{(over ? " — 하루 양을 세지 않았다" : "")}", sim.Tick, c.Cell, parent, 0, a.Id);
             _life.Give(sim, vb, Drug.Apap, 1000, k); FeverDoses++;
         }
-        // 항생제 — 사흘 한 벌 (하루 한 알)
-        if (Life.NeedsAbx(_life.Bodies[vb]))
+        // 항생제 — 사흘 한 벌 (하루 한 알): 크게 덴 상처 · 보이는 고름 · 곪음으로 보았으면
+        b = _life.Bodies[vb];
+        if (b.Abx <= 0 && (b.Burn > 0.5f || open && b.Infect > 0 || seen == Ail.Infection))
         {
             int pills = 0;
             while (pills < 3 && TakeOne(c.Cell, iAbx, sim)) pills++;
@@ -112,8 +116,8 @@ public sealed partial class Mind
                 _life.Give(sim, vb, Drug.Abx, 24.0 * pills, k); AbxCourses++;
             }
         }
-        // 해독제
-        if (Life.NeedsAntidote(_life.Bodies[vb]) && TakeOne(c.Cell, iAntidote, sim))
+        // 해독제 — 시안화수소 중독으로 보았으면
+        if (seen == Ail.Cyanide && _life.Bodies[vb].Antidote <= 0 && TakeOne(c.Cell, iAntidote, sim))
         {
             int k = sim.Causes.Add(kind, $"{me} {who}에게 해독제를 놓았다", sim.Tick, c.Cell, parent, 0, a.Id);
             _life.Give(sim, vb, Drug.Antidote, 1, k); Antidotes++;

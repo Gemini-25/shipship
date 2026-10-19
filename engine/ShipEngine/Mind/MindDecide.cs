@@ -185,6 +185,7 @@ public sealed partial class Mind
                 if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
             }
             SickOptions(a, here);    // ⑦ 앓는 이는 눕는다 (덜 성실할수록)
+            ChartOptions(a, here);   // ⑦ (다) 진료 기록대로 — 치료 침대에서 산소 · 제 침대에서 쉼
             AwaitCare(a, here);      // ⑦ 돌보러 오는 이가 있으면 기다린다
             PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
             ShelterOption(a, here);  // ⑩ 대피 방송을 따르는 이는 대피실로
@@ -381,6 +382,12 @@ public sealed partial class Mind
             }
             case GoalKind.Sleep:
             {
+                if (o.Target >= 0 && o.Target < L.N && IsMedBedCell(o.Target))   // ⑦ (다) 진료 기록: 치료 침대에 누워 산소를 마신다
+                {
+                    plan.Add(Go(o.Target));
+                    plan.Add(Use(UseKind.Sleep, Time.Hours(4)));
+                    return true;
+                }
                 if (Sheltering(a) && (c.Bed < 0 || RoomOf(c.Bed) != ShelterRoom))
                 {
                     if (RoomOf(here) != ShelterRoom) plan.Add(Go(ShelterSpot(a, ShelterCell), 1));
