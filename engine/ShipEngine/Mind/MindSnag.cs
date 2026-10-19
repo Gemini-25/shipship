@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>막힌 까닭 (⑧ 판단 엔진 — 사람 · 로봇이 남기고 주컴퓨터가 읽는다).</summary>
-public enum SnagKind : byte { None, Far, NoPath, DoorJammed, DoorUnpowered, DoorHeld, DoorVacuum, DoorPressure, DoorStuckBefore, NoWayOut, NoItem, Taken, Other, DoorLocked, DrivenBack }
+public enum SnagKind : byte { None, Far, NoPath, DoorJammed, DoorUnpowered, DoorHeld, DoorVacuum, DoorPressure, DoorStuckBefore, NoWayOut, NoItem, Taken, Other, DoorLocked, DrivenBack, NoHands, NoLegs }
 
 /// <summary>
 /// ⑧ 판단 엔진 (가) 막힘 — 일이 막히면 까닭 · 자리 · 대상을 남긴다 (docs/ENGINE.md 판단 엔진).

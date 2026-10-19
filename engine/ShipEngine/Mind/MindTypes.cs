@@ -231,6 +231,9 @@ public struct AgentCore
     public float Neuro0, Brave0, Agree0;
     /// <summary>악몽 · 공황 발작 · 되살아남 · 그 방에서 떠오름의 마지막 때 · 공황 발작이 끝나는 때.</summary>
     public long NightmareAt, AttackAt, AttackUntil, FlashAt, RoomFlashAt;
+    /// <summary>⑥ 로봇 · 드론의 몸 번호 (망의 로봇 몸 — 사람은 쓰지 않는다) · 느낀 몸 (1 다리가 망가졌다 · 2 손을 못 쓴다 · 4 눈이 흐리다).</summary>
+    public int Mech;
+    public byte MechFelt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

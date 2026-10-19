@@ -171,7 +171,7 @@ public sealed partial class Mind : IEngine
             SkRepair = 0.2f + 0.2f * rng.UnitF(), SkMedic = 0.1f + 0.2f * rng.UnitF(), SkFire = 0.3f + 0.2f * rng.UnitF(), SkSeal = 0.2f + 0.2f * rng.UnitF(),
             SkCook = 0.3f * rng.UnitF(), SkPilot = 0.2f * rng.UnitF(), SkFarm = 0.2f * rng.UnitF(), SkScience = 0.2f * rng.UnitF(),
             Battery = 1, Holding = 255, Carrying = -1, CarriedBy = -1, WaitDoor = -1, OpenedDoor = -1, GoalTarget = -1, GoalCell = -1,
-            LastKPa = (float)F.Pressure(cell), HeardUpTo = _snd?.LastEvent ?? 0, LastShout = -1_000_000, ShockRoom = -1,
+            LastKPa = (float)F.Pressure(cell), HeardUpTo = _snd?.LastEvent ?? 0, LastShout = -1_000_000, ShockRoom = -1, Mech = -1,
         };
         if (c.Role < RoleNames.Length)
             foreach (var (sk, v) in P.Roles[RoleNames[c.Role]].Skills) SetSkill(ref c, sk, (float)Math.Max(GetSkill(c, sk), v));
@@ -226,6 +226,7 @@ public sealed partial class Mind : IEngine
                 KnPressure = 0.5f, KnElectric = 0.5f, KnChem = 0.3f, KnBody = 0.3f, KnStruct = 0.6f,   // 몸에 든 기본 절차 (주컴퓨터와 끊겼을 때 · 이어져 있으면 주컴퓨터의 지식을 따른다)
                 Battery = 1, Holding = 255, Carrying = -1, CarriedBy = -1, WaitDoor = -1, OpenedDoor = -1, GoalTarget = -1, GoalCell = -1,
                 LastKPa = (float)F.Pressure(cell), HeardUpTo = _snd?.LastEvent ?? 0, LastShout = -1_000_000,
+                Mech = _net?.AddRobot(cell) ?? -1,   // ⑥ 몸은 세상에 (전지 · 상함은 망이 계산한다)
             }
         };
         Agents.Add(a);
@@ -547,6 +548,7 @@ public sealed partial class Mind : IEngine
         }
         else
         {
+            FeelMech(sim, a);   // ⑥ 몸을 느낀다 — 전지 · 상함 (판단 이관 (사))
             bool up = a.C.Damage < 1 && a.C.Battery > 0;
             if (a.C.Up != 0 && !up) Fall(sim, a);
             a.C.Up = (byte)(up ? 1 : 0);
@@ -572,12 +574,14 @@ public sealed partial class Mind : IEngine
         double h = dt / 3600.0;
         if (!a.IsPerson)
         {
-            if (c.Up == 0) return;
-            bool docked = c.Goal == GoalKind.Charge && c.Cell == c.Dock && DockWorking(c.Dock);
-            if (docked) c.Battery = (float)Math.Min(1, c.Battery + 0.4 * h);
-            else c.Battery = (float)Math.Max(0, c.Battery - (c.Speed > 0.1f || c.Goal is GoalKind.FightFire or GoalKind.Patch or GoalKind.Repair or GoalKind.Rescue ? 0.08 : 0.02) * h);
-            // 열에 상한다 (겉면 600K · 공기 450K 위)
-            if (F.HasSurface(c.Cell) && F.Tf[c.Cell] > 600 || F.Temp(c.Cell) > 450) c.Damage = (float)Math.Min(1, c.Damage + dt / 600);
+            // ⑥ 몸에 요청만: 어디 있나 · 얼마나 힘쓰나 · 충전독에 붙었나 — 전지 · 열 · 충격 · 물 · 전기 · 진공은 망이 계산한다 (판단 이관 (사))
+            if (_net != null && c.Mech >= 0 && c.Mech < _net.Robots.Count)
+            {
+                ref var rb = ref _net.Robot(c.Mech);
+                rb.Cell = c.Cell;
+                rb.Load = (byte)(c.Up != 0 && (c.Speed > 0.1f || c.Goal is GoalKind.FightFire or GoalKind.Patch or GoalKind.Repair or GoalKind.Rescue) ? 1 : 0);
+                rb.Docked = (byte)(c.Up != 0 && c.Goal == GoalKind.Charge && c.Cell == c.Dock ? 1 : 0);
+            }
             return;
         }
         ref var b = ref _life![c.Body];
@@ -616,14 +620,6 @@ public sealed partial class Mind : IEngine
         foreach (var o in Agents)
             if (o != a && o.IsPerson && o.C.Up != 0 && Dist(o.C.Cell, a.C.Cell) <= r && RoomOf(o.C.Cell) == RoomOf(a.C.Cell)) n++;
         return n;
-    }
-
-    private bool DockWorking(int cell)
-    {
-        if (_net == null) return true;
-        int fu = L.FurnitureAt[cell];
-        foreach (var d in _net.Devices) if (d.Furniture == fu) return _net.Working(d.Id);
-        return true;
     }
 
     // ───────────────────────── 칸 도우미 ─────────────────────────

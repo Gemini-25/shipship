@@ -25,6 +25,8 @@ public sealed partial class Mind
         if (a.IsPerson && c.Goal == GoalKind.Improvise && (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count)) OwnFinished(sim, a);   // 제 궁리를 다 했다
         Options(sim, a);
         _deciding = null;
+        if (!a.IsPerson && !LegsOk(a)) _opts.Clear();                                  // ⑥ 다리가 망가졌다 — 그 자리에 있는다 (판단 이관 (사))
+        else if (!a.IsPerson && !HandsOk(a)) _opts.RemoveAll(o => HandGoal(o.Goal));   // ⑥ 팔을 못 쓴다 — 손일은 고르지 않는다
         // ⑩ 판단 엔진: 계획에 묶인 로봇은 맡긴 걸음만 (그 자리의 구멍을 막는 것은 같은 일 · 배터리가 바닥나면 충전) — 제 판단으로 다른 구멍에 가지 않는다
         if (!a.IsPerson && c.AssignedArg == PlanBound && c.AssignedUntil > t)
         {

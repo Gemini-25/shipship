@@ -400,7 +400,7 @@ public sealed partial class Mind
     /// <summary>보이는 거리: 사람은 그을음 시야(많아야 30m) · 어두우면 1.5m · 로봇은 12m(열 감지).</summary>
     private double SightRadius(Agent a, int cell)
     {
-        if (!a.IsPerson) return 12;
+        if (!a.IsPerson) return 12 * MechSight(a);   // ⑥ 흐려진 센서는 가까이만 본다
         double vis = _light?.Visibility(cell) ?? 30;
         double lux = _light != null ? _light.Lux[cell] : 300;
         return lux < 2 ? Math.Min(vis, 1.5) : vis;

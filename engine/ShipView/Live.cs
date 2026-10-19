@@ -400,7 +400,20 @@ public sealed class LiveShow
         else
         {
             lines.Add("하는 일: " + mind.Thought(a.Id));
-            lines.Add($"전지 {a.C.Battery * 100:0}% · 손상 {a.C.Damage * 100:0}%");
+            var net = w.Find<Network>();
+            if (net != null && a.C.Mech >= 0 && a.C.Mech < net.Robots.Count)
+            {
+                var rb = net.Robots[a.C.Mech];
+                var hurt = new List<string>();
+                if (rb.Legs > 0.05f) hurt.Add($"다리 {rb.Legs * 100:0}{(rb.Legs >= 1 ? " (못 걷는다)" : "")}");
+                if (rb.Arms > 0.05f) hurt.Add($"팔 {rb.Arms * 100:0}{(!Network.RobotHands(rb) ? " (손을 못 쓴다)" : "")}");
+                if (rb.Eyes > 0.05f) hurt.Add($"센서 {rb.Eyes * 100:0}");
+                if (rb.Core > 0.05f) hurt.Add($"속 {rb.Core * 100:0}{(rb.Core >= 1 ? " (멈췄다)" : "")}");
+                lines.Add($"전지 {rb.Battery * 100:0}%" + (hurt.Count > 0 ? " · 상함 " + string.Join(" · ", hurt) : " · 멀쩡하다"));
+                int why = rb.Core >= 1 ? rb.CoreCause : rb.Legs >= rb.Arms && rb.Legs > 0.05f ? rb.LegsCause : rb.Arms > 0.05f ? rb.ArmsCause : rb.Eyes > 0.05f ? rb.EyesCause : 0;
+                if (why != 0) lines.Add("왜: " + w.Causes.Story(why));
+            }
+            else lines.Add($"전지 {a.C.Battery * 100:0}% · 손상 {a.C.Damage * 100:0}%");
         }
         return lines.ToArray();
     }

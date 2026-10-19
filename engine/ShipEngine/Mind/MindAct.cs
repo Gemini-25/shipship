@@ -19,10 +19,12 @@ public sealed partial class Mind
             DropCarried(sim, a, _life.Bodies[c.Carrying].Alive != 0);
         if (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count) { Activity(a, "rest"); return; }
         var st = a.Plan[c.StepIndex];
+        if (!a.IsPerson && HandStep(st) && !HandsOk(a)) { Fail(sim, a, "팔이 상해 손을 쓸 수 없다", SnagKind.NoHands); return; }   // ⑥ 몸을 느낀다 (판단 이관 (사))
         switch (st.Kind)
         {
             case StepKind.GoTo:
             {
+                if (!LegsOk(a)) { Fail(sim, a, "다리가 망가져 걸을 수 없다", SnagKind.NoLegs); return; }
                 if (st.Cell < 0)
                 {
                     st.Cell = SafeDrop(a);
@@ -674,8 +676,8 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         double g = c.Cell >= 0 && c.Cell < L.N ? F.Grav[c.Cell] : 1;
-        if (c.Kind == AgentKind.Robot) return P.Speed["robot"] * (g < FloatG ? 0.6 : 1);   // 무중력: 자석 발로 바닥을 짚어 간다
-        if (c.Kind == AgentKind.Drone) return P.Speed["drone"];
+        if (c.Kind == AgentKind.Robot) return P.Speed["robot"] * (g < FloatG ? 0.6 : 1) * MechPace(a);   // 무중력: 자석 발로 바닥을 짚어 간다 · ⑥ 상한 다리는 느리다
+        if (c.Kind == AgentKind.Drone) return P.Speed["drone"] * MechPace(a);
         ref var b = ref _life![c.Body];
         double v = c.Mode == 1 || c.Goal == GoalKind.Evacuate ? P.Speed["run"] : c.Carrying >= 0 ? P.Speed["carry"] : P.Speed["walk"];
         if (g < FloatG) v = Math.Min(v, FloatPace(c));                       // 손잡이를 잡고 밀어 떠 간다 (기어갈 바닥이 없다)

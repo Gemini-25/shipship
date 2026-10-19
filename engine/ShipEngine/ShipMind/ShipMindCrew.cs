@@ -5,7 +5,7 @@ namespace ShipEngine;
 /// <para><b>사람에게 맡기기</b>: 로봇이 하나도 없으면 (함장 방침 — 기본은 1분 기다린 뒤) 사람 하나에게 부탁한다 — 깨어 있고 · 가깝고 · 그 일 솜씨가 있는 이부터
 /// (자는 이는 30칸만큼 뒤로 · 거절한 이는 빼고). 받을지는 그 사람이 정한다 (⑧ Mind.Ask). 거절하면 15초 뒤 다른 이에게 ·
 /// 두 번째부터는 급하다고 말한다 (사람이 쓰러졌다 · 불 · 공기가 빠진다 — "로봇이 없습니다, 급합니다" · 로봇이 있되 모두 다른 일이면 "로봇이 모두 바쁩니다").</para>
-/// <para><b>자기 상태</b>: 제 방 공기 온도(빨아들이는 공기)로 안다 — 40℃ 넘으면 느려진다 (센서 읽기 세 배 드물게 · 37℃ 아래로 풀린다) · 60℃ 넘으면 멈춘다 (45℃ 아래로 식으면 다시 켠다) ·
+/// <para><b>자기 상태</b>: 제 몸(칩)을 느낀다 — 칩의 열은 세상(⑥ <see cref="Network.ChipSlow"/>)이 계산한다: 느려졌으면 센서 읽기가 세 배 드물고 · 열 보호로 꺼지면 아무것도 못 한다 (판단 이관 (사)) ·
 /// 맡기는 차례는 늘 급한 것부터 · 급한 일에는 덜 급한 일 하던 로봇도 데려온다 · 붙잡은 사건이 다섯을 넘거나 느려졌으면 앞일 그려 보기를 멈춘다. 일지에 제 상태를 적는다.</para>
 /// </summary>
 public sealed partial class ShipMind
@@ -54,30 +54,23 @@ public sealed partial class ShipMind
         else { AskDeclined++; x.Decl2 = x.Decl1; x.Decl1 = best; }
     }
 
-    /// <summary>제 몸 살피기: 제 방 공기 온도(빨아들이는 공기 — 제 칸은 제 열로 늘 뜨겁다)로 느려지거나 멈춘다 (식으면 다시 켠다) — 10초마다 · Online을 정한 뒤 부른다.</summary>
+    /// <summary>제 몸을 느낀다: 칩이 느려졌나 · 열 보호로 꺼졌나 (⑥이 계산한다 — 제 방 공기 온도) — 바뀔 때 방송 · 일지 · Online을 정하기 전에 부른다.</summary>
     private void SelfCheck(Sim sim)
     {
-        if (_net == null || _computer < 0 || sim.Tick % ReadEvery != 0) return;
-        int cell = _net.Devices[_computer].Cell, room = L.Room[cell];
-        double temp = F.Temp(cell);
-        if (room >= 0)
+        if (_net == null || _computer < 0 || _computer >= _net.ChipTrip.Length) return;
+        int cell = _net.Devices[_computer].Cell;
+        IntakeK = _net.ChipK[_computer];
+        byte stop = _net.ChipTrip[_computer], slow = _net.ChipSlow[_computer];
+        if (stop != 0 && HeatStopped == 0)
         {
-            double n = 0, nt = 0;
-            foreach (int c in L.Rooms[room].Cells) if (F.Pressure(c) > 5) { double m = F.Moles(c); n += m; nt += m * F.Temp(c); }
-            if (n > 0) temp = nt / n;
-        }
-        IntakeK = (float)temp;
-        if (HeatStopped == 0 && temp > 333)
-        {
-            HeatStopped = 1; HeatStops++;
-            int c = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 과열로 멈췄다 — 방 공기 {temp - 273:0}℃", sim.Tick, cell, _chem?.HeatCauseAt(cell) ?? 0);
+            HeatStops++;
             Say(sim, "주컴퓨터가 과열로 멈췄다 — 식으면 다시 켠다");
-            sim.Facts.Emit(sim.Tick, FactKind.ComputerDown, cell, (float)temp, c);
+            sim.Facts.Emit(sim.Tick, FactKind.ComputerDown, cell, IntakeK, _net.ChipTripCause[_computer]);
         }
-        else if (HeatStopped != 0 && temp < 318) { HeatStopped = 0; Say(sim, "식어서 다시 켰다 — 놓친 것부터 읽는다"); }
-        // 40℃ 넘으면 느려지고 · 37℃ 아래로 내려가야 풀린다 (문턱에서 깜빡이지 않게)
-        byte th = (byte)(HeatStopped == 0 && (temp > 313 || Throttled != 0 && temp > 310) ? 1 : 0);
-        if (th != Throttled) { Throttled = th; if (th != 0) { Throttles++; Say(sim, $"주컴퓨터 방이 뜨겁다 ({temp - 273:0}℃) — 느려진다"); } }
+        else if (stop == 0 && HeatStopped != 0) Say(sim, "식어서 다시 켰다 — 놓친 것부터 읽는다");
+        HeatStopped = stop;
+        if (slow != 0 && Throttled == 0) { Throttles++; Say(sim, $"주컴퓨터 방이 뜨겁다 ({IntakeK - 273:0}℃) — 느려진다"); }
+        Throttled = slow;
         _effectiveRead = Throttled != 0 ? ReadEvery * 3 : ReadEvery;
     }
 

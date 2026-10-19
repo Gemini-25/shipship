@@ -159,6 +159,27 @@ public static partial class Program
                 every = 25; count = 90;
                 break;
             }
+            case "robotfire":
+            {
+                // 판단 이관 (사) 관찰 장면 '상한 로봇': 디딤호 첫날 오전 열 시 — 화물 상자가 떨어져 로봇 하나의 팔 · 다리가 상한다 (세상이 계산한 충격 — 구조의 그 칸 충격 에너지).
+                // 상한 로봇은 무엇을 느끼고 놓나 · 곧 불이 나면 주컴퓨터는 누구에게 맡기나 (팔을 못 쓰는 로봇은 빼고) · 로봇 카드에 상한 부위와 원인 사슬
+                int robots = int.TryParse(Environment.GetEnvironmentVariable("ROBOTS"), out int rb) ? rb : 2;
+                s = ShipWorld.Crewed("Didim", 5, 4, robots);
+                while (Time.HourOfDay(s.Tick) < 10) s.Run(25);
+                var L = s.Layout; var m = s.Get<Mind>(); var st = s.Get<Structure>();
+                var hurt = m.Agents.First(a => !a.IsPerson);
+                int drop = s.Causes.Add(CauseKind.Setup, "선반에 덜 묶인 화물 상자가 떨어졌다", s.Tick, hurt.C.Cell);
+                st.ImpactJ[hurt.C.Cell] += 14000; st.DamageCause[hurt.C.Cell] = drop;   // 상자 하나 (세상이 다리 · 팔 · 속에 나눠 셈한다)
+                s.Run(Time.Minutes(3));
+                var stove = L.Furniture.First(fu => fu.Type == "Stove");
+                s.Get<Chemistry>().Ignite(stove.Cells[0], 3e6, s.Causes.Add(CauseKind.Setup, "조리대에 흘린 기름에 불이 붙었다", s.Tick, stove.Cells[0]));
+                var rc = L.Rooms[stove.Room].Cells;
+                int x0 = rc.Min(L.X) - 7, y0 = rc.Min(L.Y) - 5;
+                dots = (x0, y0, rc.Max(L.X) - x0 + 8, rc.Max(L.Y) - y0 + 6);
+                _fireRoom = stove.Room; _sleeper = -1;
+                every = 10; count = 30;
+                break;
+            }
             case "heart": HeartScene(dir); return;
             case "culture": CultureScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
@@ -176,7 +197,7 @@ public static partial class Program
                 Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
                 // 그 틱의 일 (사실 — 소리 · 깸은 뺀다)
                 var lines = new List<string>();
-                bool fire = name == "foambed", zg = name == "zerogmess", ar = name == "arrest";
+                bool fire = name is "foambed" or "robotfire", zg = name == "zerogmess", ar = name == "arrest";
                 foreach (var f in s.Facts.Since(seen))
                     if (ar) { if (f.Kind is FactKind.Arrest or FactKind.Revived or FactKind.Dosed or FactKind.Treated or FactKind.Diagnosed or FactKind.Surgery or FactKind.ComputerAlarm
                                  or FactKind.ComputerAssign or FactKind.Died or FactKind.Collapsed or FactKind.Rescue) lines.Add(s.Causes.Text(f.Cause)); }
@@ -185,10 +206,11 @@ public static partial class Program
                     else if (!fire && f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
                     else if (fire && f.Kind is FactKind.Ignition or FactKind.FireSpread or FactKind.FireOut or FactKind.Noticed or FactKind.Woke or FactKind.Warned or FactKind.Fled
                              or FactKind.Extinguished or FactKind.ComputerAlarm or FactKind.ComputerAssign or FactKind.ComputerSeal or FactKind.DoorSealed or FactKind.Hurt or FactKind.Collapsed
-                             or FactKind.Died or FactKind.Rescue or FactKind.Short or FactKind.BreakerTrip or FactKind.CableCut or FactKind.Panicked or FactKind.Treated) lines.Add(s.Causes.Text(f.Cause));
+                             or FactKind.Died or FactKind.Rescue or FactKind.Short or FactKind.BreakerTrip or FactKind.CableCut or FactKind.Panicked or FactKind.Treated or FactKind.MachineFail or FactKind.Blocked) lines.Add(s.Causes.Text(f.Cause));
                 seen = s.Facts.Total;
                 string head;
-                if (fire) head = FireCaption(s);
+                if (name == "robotfire") head = FireCaption(s) + RobotCaption(s);
+                else if (fire) head = FireCaption(s);
                 else if (zg) head = ZeroGCaption(s);
                 else if (ar) head = ArrestCaption(s);
                 else { var stc = s.Get<Structure>(); head = $"몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t"; }
@@ -230,6 +252,19 @@ public static partial class Program
 public static partial class Program
 {
     private static int _fireRoom = -1, _sleeper = -1, _zgRoom = -1, _arrestBody = -1, _arrestWho = -1;
+
+    /// <summary>로봇마다 몸 (판단 이관 (사)): 전지 · 상한 부위 · 하는 일.</summary>
+    private static string RobotCaption(Sim s)
+    {
+        var m = s.Get<Mind>(); var net = s.Get<Network>();
+        var parts = new List<string>();
+        foreach (var a in m.Agents.Where(a => !a.IsPerson && a.C.Mech >= 0))
+        {
+            var b = net.Robots[a.C.Mech];
+            parts.Add($"{m.NameOf(a.Id)} 전지 {b.Battery * 100:0} 다리 {b.Legs * 100:0} 팔 {b.Arms * 100:0} 눈 {b.Eyes * 100:0} 속 {b.Core * 100:0} · {m.Thought(a.Id)}");
+        }
+        return parts.Count > 0 ? " / " + string.Join(" / ", parts) : "";
+    }
 
     /// <summary>
     /// ⑧ 기억 · 정신 건강 관찰 장면 '멎었던 심장 뒤의 날들': 디딤호 첫날 점심 — 식당에서 한 사람의 심장이 떤다 (⑦ '식당에서 멎은 심장'과 같은 시작 — 살아나면 죽을 뻔한 일이 남는다) → 나흘 동안

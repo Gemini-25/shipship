@@ -1054,7 +1054,7 @@ public sealed partial class ShipMind : IEngine
             int best = -1, bd = int.MaxValue, bestFrom = -1;
             foreach (var a in _mind.Agents)
             {
-                if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone)) continue;
+                if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
                 int from = -1;
                 if (a.C.AssignedUntil > sim.Tick && !Root(x) && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock)) // 일상 일(⑪)은 놓고 온다
                 {
@@ -1120,7 +1120,7 @@ public sealed partial class ShipMind : IEngine
         int best = -1, bd = int.MaxValue, bestFrom = -1;
         foreach (var a in _mind.Agents)
         {
-            if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone) continue;
+            if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone || !_mind.HandsOk(a) || !_mind.LegsOk(a)) continue;
             bool mine = a.Id == x.RobotA || a.Id == x.RobotB;
             int from = -1;
             if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock))
