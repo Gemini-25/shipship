@@ -68,8 +68,8 @@ public static partial class Program
                 if (!computerOk) net.Age(net.Devices.First(d => d.Type == "MainComputer").Id, Part.Electric, 1.0);
                 s.Run(5);
                 f.AddStore(At(17, 3), f.T.sWater, 40);
-                s.Run(Work.PlanEvery * 2);
-                return (w.Jobs.Count(j => j.Kind == GoalKind.Clean), s.Get<ShipMind>().Online);
+                s.Run(ShipMind.ChoreEvery * 2);
+                return (s.Get<ShipMind>().Jobs.Count(j => j.Kind == GoalKind.Clean), s.Get<ShipMind>().Online);
             }
             var on = Puddle(true); var off = Puddle(false);
             Check("일감판은 주컴퓨터가 돌린다: 주컴퓨터가 멈추면 고인 물을 닦을 일을 올리지 않는다 (켜져 있으면 올린다)",

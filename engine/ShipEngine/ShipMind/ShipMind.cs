@@ -198,6 +198,7 @@ public sealed partial class ShipMind : IEngine
         Act(sim); t = Prof.Lap("주컴퓨터:대응", t);
         RunPlans(sim); t = Prof.Lap("주컴퓨터:계획", t);  // ⑩ 판단 엔진: 지어낸 계획을 걸음마다
         Power(sim); t = Prof.Lap("주컴퓨터:전력", t);
+        Chores(sim); t = Prof.Lap("주컴퓨터:살림", t);   // 판단 이관 (아): 일감판 · 막힌 곳 · 만드는 설비
         Supply(sim); t = Prof.Lap("주컴퓨터:배급", t);   // ⑪ 배급 · 보관함 무게
         Helm(sim); t = Prof.Lap("주컴퓨터:조타", t);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
         GravityWatch(sim);   // 인공 중력 — 꺼진 발생기를 다시 켜고 · 사라질 때 · 돌아올 때 알린다
@@ -822,10 +823,11 @@ public sealed partial class ShipMind : IEngine
                 if (j >= 0 && L.Room[j] >= 0 && L.Room[j] != room)
                     foreach (int c in L.Rooms[L.Room[j]].Cells) if (_chem.Burning[c] != 0 && _chem.FireCause[c] != 0) return _chem.FireCause[c];
         }
-        // 타는 곳이 없으면: 주컴퓨터가 아는 가장 최근의 불 (아직이거나 10분 안에 끝난) — 그 연기 · 열기가 퍼진 것
+        // 타는 곳이 없으면: 주컴퓨터가 아는 가장 최근의 불 (아직이거나 10분 안에 끝났거나 · 그 방에 연기가 아직 남은) — 그 연기 · 열기가 퍼진 것
+        // (오래 남은 연기는 문이 열릴 때 옆 방으로 넘어간다 — 그 연기도 첫 불씨에서 왔다)
         int best = 0; long since = long.MinValue;
         foreach (var x in Incidents)
-            if (x.Kind == IncidentKind.Fire && x.Cause != 0 && (x.Active != 0 || _tick - x.Ended < Time.Minutes(10)) && x.Since > since) { since = x.Since; best = x.Cause; }
+            if (x.Kind == IncidentKind.Fire && x.Cause != 0 && (x.Active != 0 || _tick - x.Ended < Time.Minutes(10) || x.Room >= 0 && RoomSoot[x.Room] > 15) && x.Since > since) { since = x.Since; best = x.Cause; }
         return best;
     }
 
@@ -1440,7 +1442,7 @@ public sealed partial class ShipMind : IEngine
         w.Bool(Online);
         w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomHCN); w.Arr(RoomHCl); w.Arr(RoomToxCell); w.Arr(RoomO2Pct); w.Arr(RoomLel); w.Arr(RoomH2); w.Arr(RoomCH4); w.Arr(RoomLelCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
-        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w);
+        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
         SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w);
@@ -1454,7 +1456,7 @@ public sealed partial class ShipMind : IEngine
         Online = r.Bool();
         r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomHCN); r.ArrInto(RoomHCl); r.ArrInto(RoomToxCell); r.ArrInto(RoomO2Pct); r.ArrInto(RoomLel); r.ArrInto(RoomH2); r.ArrInto(RoomCH4); r.ArrInto(RoomLelCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
-        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r);
+        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
         LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r);

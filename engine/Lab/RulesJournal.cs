@@ -32,6 +32,7 @@ public static partial class Program
             ch.Ignite(cut ? far : At(15, 1), 3e6, seed);
             s.Run((int)(Time.Hours(1) - s.Tick + 1));
             var fromFire = sm.Incidents.Where(x => x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Hot or IncidentKind.BadAir).ToList();
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var x in fromFire.Where(x => x.Cause == 0 || s.Causes.Root(x.Cause) != seed)) Console.WriteLine($"    첫 불씨에 안 닿는 사건: {Time.Clock(x.Since)} {x.Kind} {sm.RoomName(x.Room)} · {s.Causes.Story(x.Cause)}");
             return (sm.Journal.Count > 0 ? sm.Journal[^1].text : "", sm.Morning, sm.Journal.Count, fromFire.Count, fromFire.Count(x => x.Cause == 0 || s.Causes.Root(x.Cause) != seed));
         }
         var seen = Run(false); var blind = Run(true);
@@ -47,5 +48,26 @@ public static partial class Program
             blind.count == 1 && !blind.journal.Split('\n').Any(l => l.Contains(farName) && l.Contains("불")) && blind.journal.Split('\n').Any(l => l.Contains(farName) && l.Contains("센서가 끊겼다"))
             && blind.journal.Contains("못 보는 방: ") && (blind.journal.Contains($"{farName}(센서 선)") || blind.journal.Contains($"{farName}(전원)")) && blind.journal.Contains("무선으로만 보는 방: "),   // 그 방 불이 급전선도 태우면 전원이 먼저 (⑥ 바퀴 3)
             $"첫 줄 \"{blind.journal.Split('\n')[0]}\"");
+
+        // 오래 남은 연기: 불이 꺼지고 10분이 넘게 지나 문이 열려 연기가 옆 방(통로)으로 넘어가도 — 그 연기의 원인은 첫 불씨 (고친 결함: 원인이 비었다)
+        {
+            var s = Worlds.Full(lay, 1);
+            var ch = s.Get<Chemistry>(); var sm = s.Get<ShipMind>(); var fld = s.Get<Field>();
+            s.Run(5);
+            int seed = s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick);
+            ch.Ignite(At(15, 1), 3e6, seed);
+            s.Run((int)Time.Minutes(1));
+            for (int c = 0; c < lay.N; c++) if (ch.IsBurning(c)) ch.Douse(c, Extinguishant.Water, 500);
+            s.Run((int)Time.Minutes(12));
+            bool out_ = Enumerable.Range(0, lay.N).All(c => !ch.IsBurning(c));
+            int hall = lay.Room[At(5, 8)], door = lay.DoorAt[At(14, 6)];
+            long opened = s.Tick;
+            fld.SetDoor(door, 1);
+            s.Run((int)Time.Minutes(2));
+            var smoke = sm.Incidents.Where(x => x.Room == hall && x.Since >= opened && x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Hot or IncidentKind.BadAir).ToList();
+            Check("오래 남은 연기: 불이 꺼지고 10분 넘게 지나 문이 열려 연기가 옆 방으로 넘어가도 그 사건의 원인은 첫 불씨 (원인이 비지 않는다)",
+                out_ && smoke.Count > 0 && smoke.All(x => x.Cause != 0 && s.Causes.Root(x.Cause) == seed),
+                $"꺼짐 {out_} · 통로 사건 {smoke.Count} · " + string.Join(" / ", smoke.Select(x => $"{x.Kind} {s.Causes.Story(x.Cause)}")));
+        }
     }
 }

@@ -166,8 +166,8 @@ public static partial class Program
                 if (Debug) Console.WriteLine($"      3틱: 켜진 장치 {string.Join(",", net.Devices.Where(d => net.On[d.Id] != 0).Select(d => d.Type + ":" + d.Def.Kw))} · 수요 {net.Demanded:0.0}");
                 s.Run(27);
                 s.Run((int)(Time.Hours(1) - 20));
-                if (Debug) Console.WriteLine($"    정제기 {(broken ? "망가짐" : "멀쩡")} · 발전기 {aux}: {string.Join(" | ", wk.Blocks)} · 켜짐 {net.On[rf]} · 수요(처음) {demand:0.0} · 공급 {net.Supplied:0.0} 수요 {net.Demanded:0.0} 용량 {net.Capacity():0.0}");
-                return (string.Join(" | ", wk.Blocks), Lines(s), sm.Journal.Count > 0 ? sm.Journal[^1].text : "", net.On[rf] != 0, demand);
+                if (Debug) Console.WriteLine($"    정제기 {(broken ? "망가짐" : "멀쩡")} · 발전기 {aux}: {string.Join(" | ", sm.Blocks)} · 켜짐 {net.On[rf]} · 수요(처음) {demand:0.0} · 공급 {net.Supplied:0.0} 수요 {net.Demanded:0.0} 용량 {net.Capacity():0.0}");
+                return (string.Join(" | ", sm.Blocks), Lines(s), sm.Journal.Count > 0 ? sm.Journal[^1].text : "", net.On[rf] != 0, demand);
             }
             var br = Run(lay, true, false); var nopower = Run(lay, false, false); var first = Run(layG, false, true);
             Check("막힌 곳: 수리 꾸러미 ← 원료가 없다 ← 정제기가 망가졌다 까지 거슬러 찾아 방송 · 일지 · 멀쩡해도 발전기가 없는 배면 '꺼 두었다 (전력 여유가 없다)'",
