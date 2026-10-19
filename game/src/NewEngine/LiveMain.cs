@@ -502,11 +502,18 @@ public partial class LiveMain : Node2D
     }
 
     // ── 글꼴: 같은 프로젝트의 Pretendard · 없으면 시스템 한글 글꼴 ──
+    // 숫자는 모두 같은 너비 (tnum) — 시계 · 기압 · 온도가 바뀌어도 글줄이 흔들리지 않는다 (그래픽 결정 14)
     private void LoadFonts()
     {
-        _font = LoadFont("Pretendard-Medium.otf", 500);
-        _bold = LoadFont("Pretendard-Bold.otf", 700);
+        _font = Tabular(LoadFont("Pretendard-Medium.otf", 500));
+        _bold = Tabular(LoadFont("Pretendard-Bold.otf", 700));
         ThemeDB.FallbackFont = _font;
+    }
+
+    private static Font Tabular(Font f)
+    {
+        var ts = TextServerManager.GetPrimaryInterface();
+        return new FontVariation { BaseFont = f, OpentypeFeatures = new Godot.Collections.Dictionary { [ts.NameToTag("tnum")] = 1 } };
     }
 
     private static Font LoadFont(string file, int weight)
