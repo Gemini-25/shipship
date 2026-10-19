@@ -127,6 +127,8 @@ public enum FactKind : ushort
     Letter,            // 고향에서 편지가 왔다 (Actor: 받은 이 · Size: 2 아주 기쁜 · 1 기쁜 · 0 안부 · −1 슬픈 · −2 부고 · Other: 빛이 걸린 분)
     // ④ 열 · 진동
     Rattle,            // 볼트가 진동에 풀려 장치가 덜컹거린다 (Other: 장치 · Size: 진동 세기 MPa)
+    // ⑫ 긴 줄기
+    Ahead,             // 주컴퓨터가 항해 달력의 일을 알렸다 (Size: 며칠 앞 · 0 들었다 · −1 빠져나왔다 · Other: 0 파편 구간 · 1 태양 합)
 }
 
 public static class FactNames

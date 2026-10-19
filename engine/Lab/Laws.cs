@@ -498,6 +498,7 @@ public static partial class Program
         DepthLaws();
         HeatVibLaws();
         MapLaws();
+        LongArcLaws();
         SolverLaws();
         LineLaws();
         BodyLaws();
