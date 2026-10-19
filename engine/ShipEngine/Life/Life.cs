@@ -65,6 +65,9 @@ public struct Body
     // ⑦ (라-2) 재생 · 인공 장기 · 이식
     public float Regen;                          // 재생 젤이 남은 시간 (치료 침대에 누운 시간만 줄어든다)
     public byte Implant;                         // 1 인공 심장 · 2 인공 폐 · 4 이식한 심장 · 8 이식한 간 · 16 이식한 폐 / 숨진 이: 32 심장 · 64 간 · 128 폐를 내주었다
+    // ⑧ 수면제 (기억 · 정신 건강 (다))
+    public float Hypnotic, HypnoticTol;          // 수면제가 몸에 남은 양 (mg) · 내성 (끊으면 그만큼 잠이 얕다)
+    public long HypnoticAt;                      // 마지막 수면제 (틱)
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -190,7 +193,7 @@ public sealed partial class Life : IEngine
         {
             Cell = cell, Alive = 1, Conscious = 1, ActivityW = 90, Reserve = GlycogenMax * 0.8, Fat = Fat0, Water = 42 * 55.5, SpO2 = 0.97f,
             CoreK = BodyTemp, BloodL = 5, LastKPa = (float)F.Pressure(cell),
-            CprAt = long.MinValue / 2, ShockAt = long.MinValue / 2, EpiAt = long.MinValue / 2, OpioidAt = long.MinValue / 2,
+            CprAt = long.MinValue / 2, ShockAt = long.MinValue / 2, EpiAt = long.MinValue / 2, OpioidAt = long.MinValue / 2, HypnoticAt = long.MinValue / 2,
         });
         return Bodies.Count - 1;
     }

@@ -1,10 +1,10 @@
 namespace ShipEngine;
 
 /// <summary>⑧ 충격의 갈래 — 무엇이 그 일을 떠올리게 하나.</summary>
-public enum ShockKind : byte { None, Fire, Breach, Air, Death, Hurt }
+public enum ShockKind : byte { None, Fire, Breach, Air, Death, Hurt, NearDeath }
 
 /// <summary>⑧ 마음 사실(FactKind.Heart)의 크기.</summary>
-public enum HeartEvent : byte { None, Nightmare, Attack, Flashback, Fearful, Hardened, Depressed, Anxious, Grew }
+public enum HeartEvent : byte { None, Nightmare, Attack, Flashback, Fearful, Hardened, Depressed, Anxious, Grew, Counseled, CheckIn, Listened }
 
 /// <summary>마음의 흐름에 드는 것 (<see cref="Mind.HeartKinetics"/>의 입력 — 감정 · 욕구 · 곁사람).</summary>
 public struct HeartIn
@@ -22,7 +22,7 @@ public struct HeartIn
 public sealed partial class Mind
 {
     public const double ShockHalfDays = 3, TraumaHalfDays = 60, DepressRiseDays = 14, DepressFallDays = 14, AnxietyRiseDays = 7, AnxietyFallDays = 14;
-    public long Shocks, Nightmares, Flashbacks, PanicAttacks, Depressions, Anxieties, Hardened, Fearful, Grew;
+    public long Shocks, Nightmares, Flashbacks, PanicAttacks, Depressions, Anxieties, Hardened, Fearful, Grew, SleepPills, Counsels;
     private long _heartCursor;
     private readonly HashSet<long> _deathSeen = new();   // 사람 × 몸 — 그 죽음을 곁에서 본 충격은 한 번
     private readonly List<(int agent, int cause)> _flashQ = new();   // 이번 틱 새로 믿게 된 위험 중 외상의 그 일과 같은 갈래 (믿음을 얻은 곳에서 — 감각 · 말 · 방송)
@@ -80,7 +80,7 @@ public sealed partial class Mind
     public static string ShockText(ShockKind k) => k switch
     {
         ShockKind.Fire => "불에 갇혔던 일", ShockKind.Breach => "공기가 빠지던 일", ShockKind.Air => "숨이 막히던 일",
-        ShockKind.Death => "동료가 죽은 일", ShockKind.Hurt => "크게 다친 일", _ => "그 일",
+        ShockKind.Death => "동료가 죽은 일", ShockKind.Hurt => "크게 다친 일", ShockKind.NearDeath => "죽을 뻔했던 일", _ => "그 일",
     };
 
     /// <summary>지금 겁의 까닭: 둘레의 가장 무서운 믿음 (같은 방은 두 배) · 없으면 피하는 일의 원인.</summary>
@@ -175,14 +175,16 @@ public sealed partial class Mind
             if (b.Alive == 0) continue;
             bool support = HasSupport(a.Id);
             // 충격의 몫
-            if (c.Fear > 0.5f)
+            float peak = Math.Max(c.FearMax, c.Fear);
+            c.FearMax = 0;
+            if (peak > 0.6f)
             {
                 var (cause, kind) = FearSource(a);
-                Shock(sim, a, (c.Fear - 0.5) / 0.5 * 0.08, cause, kind, support);
+                Shock(sim, a, (peak - 0.6) / 0.4 * 0.15, cause, kind, support);   // 겁에 질린 1분 (0.9면 0.11) — 몇 분이면 충격 0.3 남짓
             }
             bool near = b.Hypoxia > 0.5f || b.Arrest != 0 || b.Conscious == 0 && (b.Burn + b.Blunt > 0.3f || b.BloodL < 4);
             if (near) Shock(sim, a, 0.1, b.Arrest != 0 ? b.ArrestCause : b.HurtCause != 0 ? b.HurtCause : FearSource(a).cause,
-                b.Arrest == 0 && b.Hypoxia > 0.5f && b.Burn + b.Blunt < 0.3f ? ShockKind.Air : ShockKind.Hurt, support);
+                b.Arrest != 0 ? ShockKind.NearDeath : b.Hypoxia > 0.5f && b.Burn + b.Blunt < 0.3f ? ShockKind.Air : ShockKind.Hurt, support);   // 심장이 멎었던 일은 '죽을 뻔했던 일'
             if (Life.FeltPain(b) > 0.7) Shock(sim, a, 0.03, b.HurtCause, ShockKind.Hurt, support);
             // 마음의 흐름
             float d0 = c.Depress, x0 = c.Anxiety;
@@ -229,7 +231,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         double load = Math.Max(c.Trauma, 0.5 * c.Shock);
         if (load < 0.05 || c.NightmareAt > 0 && sim.Tick - c.NightmareAt < Time.Hours(2)) return;
-        if (Rng.Unit(sim.Seed, Rng.Key("악몽"), sim.Tick, a.Id) >= 0.25 / 60 * load) return;
+        if (Rng.Unit(sim.Seed, Rng.Key("악몽"), sim.Tick, a.Id) >= 0.25 / 60 * load * (1 - 0.5 * Life.SleepAid(_life![c.Body]))) return;   // 수면제는 악몽을 반으로
         c.NightmareAt = sim.Tick;
         Nightmares++;
         int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 악몽에 깼다 — {ShockText(c.ShockKind)}", sim.Tick, c.Cell, c.ShockCause, 0, a.Id);
@@ -313,15 +315,94 @@ public sealed partial class Mind
         return true;
     }
 
+    // ── (다) 낫는 길 ──
+
+    /// <summary>마음이 가벼워진다 (친구와의 말 · 주컴퓨터 · 상담이 요청한다): 우울 · 외상 · 불안을 덜어 낸다.</summary>
+    public void Eased(int agent, float depress, float trauma, float anxiety)
+    {
+        if (agent < 0 || agent >= Agents.Count || !Agents[agent].IsPerson) return;
+        ref var c = ref Agents[agent].C;
+        c.Depress = Math.Max(0, c.Depress - depress); c.Trauma = Math.Max(0, c.Trauma - trauma); c.Anxiety = Math.Max(0, c.Anxiety - anxiety);
+    }
+
+    /// <summary>
+    /// 수면제가 필요한가 (주컴퓨터가 읽어 로봇을 보낸다 · 돌보는 이가 준다): 깨어 있고 잘 때가 다가오는데 (졸림 0.5 넘게 · 일하는 중이 아니다) — 잠의 질이 0.5 아래거나 이틀 안에 악몽에 깼다 ·
+    /// 스무 시간 안에 먹지 않았다 · 약품고에 있다.
+    /// </summary>
+    public bool NeedsSleepAid(long now, Agent a)
+    {
+        if (!a.IsPerson || _life == null) return false;
+        ref var c = ref a.C;
+        var b = _life[c.Body];
+        if (b.Alive == 0 || b.Conscious == 0 || b.Asleep != 0 || c.Sleepy < 0.5f || c.Goal == GoalKind.Work || now - b.HypnoticAt < Time.Hours(20)) return false;   // 잘 때가 되었다 (일하는 중에는 주지 않는다)
+        bool bad = c.SleepLoss > 0.5f || c.NightmareAt > 0 && now - c.NightmareAt < Time.Hours(48);
+        return bad && TotalOf(iHypnotic) > 0;
+    }
+
+    private static string SleepWhy(long now, in AgentCore c) => c.NightmareAt > 0 && now - c.NightmareAt < Time.Hours(48) ? "악몽에 깬다" : "잠을 설친다";
+
+    /// <summary>수면제를 준다 (10mg — 네 시간 안에 진통제를 맞았으면 솜씨 있는 이는 반만 · 서툰 이는 모르고 다 준다: 숨이 더 얕아진다).</summary>
+    private void SleepPill(Sim sim, Agent a, int vb, string who, bool skilled, int parent)
+    {
+        int va = AgentOfBody(vb);
+        if (va < 0 || !NeedsSleepAid(sim.Tick, Agents[va]) || !TakeOne(a.C.Cell, iHypnotic, sim)) return;
+        bool opioid = sim.Tick - _life!.Bodies[vb].OpioidAt < Time.Hours(4);
+        double mg = skilled && opioid ? 5 : 10;
+        string note = opioid ? skilled ? " · 진통제를 맞은 뒤라 반만" : " · 진통제를 맞은 것을 몰랐다" : "";
+        int k = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {who}에게 수면제 {mg:0}mg을 주었다 — {SleepWhy(sim.Tick, Agents[va].C)}{note}",
+            sim.Tick, a.C.Cell, parent, 0, a.Id);
+        _life.Give(sim, vb, Drug.Hypnotic, mg, k);
+        SleepPills++;
+    }
+
+    /// <summary>돌보러 왔는데 다친 데 · 아픔 · 병이 없고 잠만 설친다: 수면제만 주고 마친다 (진단하지 않는다).</summary>
+    private bool SleepOnly(Sim sim, Agent a, int vb)
+    {
+        var b = _life!.Bodies[vb];
+        int va = AgentOfBody(vb);
+        if (va < 0 || !NeedsSleepAid(sim.Tick, Agents[va]) || Life.NeedsDressing(b) || Life.FeltPain(b) >= 0.4 || Life.Ailment(b) != Ail.None || HasDrugFor(b)) return false;
+        bool skilled = !a.IsPerson || a.C.SkMedic >= 0.5f;
+        SleepPill(sim, a, vb, NameOf(va), skilled, Agents[va].C.ShockCause);   // 그 일이 잠을 앗았다
+        if (a.C.AssignedGoal == GoalKind.Treat && a.C.AssignedTarget == vb) a.C.AssignedUntil = sim.Tick;   // 맡은 일을 마쳤다
+        return true;
+    }
+
+    /// <summary>상담 계획: 그 사람 곁으로 가서 30분 이야기를 들어 준다 (그 사람은 기다린다 — 돌봄을 기다리듯).</summary>
+    private bool BuildCounsel(Agent a, Option o, List<PlanStep> plan)
+    {
+        int vb = o.Target;
+        if (vb < 0 || vb >= _life!.Bodies.Count || _life.Bodies[vb].Alive == 0 || vb == a.C.Body) return false;
+        int cell = _life.Bodies[vb].Cell;
+        plan.Add(Go(cell, 1));
+        plan.Add(Use(UseKind.Counsel, Time.Minutes(30), cell, vb));
+        return true;
+    }
+
+    /// <summary>상담을 마쳤다: 우울 −0.1 · 외상 −0.08 · 불안 −0.1 × (0.5 + 들어 준 이의 친화) — 원인 마디 '이야기를 들어 주었다' · 사실 (⑨가 정을 셈한다).</summary>
+    private void CounselDone(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        int pa = AgentOfBody(st.Target);
+        if (pa < 0 || _life![st.Target].Alive == 0) return;
+        float k = 0.5f + (a.IsPerson ? c.Agree : 0.3f);
+        Eased(pa, 0.1f * k, 0.08f * k, 0.1f * k);
+        Counsels++;
+        ref var pc = ref Agents[pa].C;
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {NameOf(pa)}의 이야기를 들어 주었다 — 한결 가벼워졌다", sim.Tick, c.Cell, c.GoalCause != 0 ? c.GoalCause : pc.ShockCause, 0, a.Id);
+        sim.Facts.Emit(sim.Tick, FactKind.Heart, c.Cell, (float)HeartEvent.Counseled, cause, a.Id, pa);
+        Agents[pa].LastThought = "이야기를 하고 나니 한결 낫다"; Agents[pa].LastThoughtTick = sim.Tick;
+        if (c.AssignedGoal == GoalKind.Counsel && c.AssignedTarget == st.Target) c.AssignedUntil = sim.Tick;   // 맡은 일을 마쳤다
+    }
+
     private void SaveHeart(StateWriter w)
     {
-        w.I64(Shocks); w.I64(Nightmares); w.I64(Flashbacks); w.I64(PanicAttacks); w.I64(Depressions); w.I64(Anxieties); w.I64(Hardened); w.I64(Fearful); w.I64(Grew);
+        w.I64(Shocks); w.I64(Nightmares); w.I64(Flashbacks); w.I64(PanicAttacks); w.I64(Depressions); w.I64(Anxieties); w.I64(Hardened); w.I64(Fearful); w.I64(Grew); w.I64(SleepPills); w.I64(Counsels);
         w.I64(_heartCursor); w.Arr(_deathSeen.OrderBy(x => x).ToArray());
     }
 
     private void LoadHeart(StateReader r)
     {
-        Shocks = r.I64(); Nightmares = r.I64(); Flashbacks = r.I64(); PanicAttacks = r.I64(); Depressions = r.I64(); Anxieties = r.I64(); Hardened = r.I64(); Fearful = r.I64(); Grew = r.I64();
+        Shocks = r.I64(); Nightmares = r.I64(); Flashbacks = r.I64(); PanicAttacks = r.I64(); Depressions = r.I64(); Anxieties = r.I64(); Hardened = r.I64(); Fearful = r.I64(); Grew = r.I64(); SleepPills = r.I64(); Counsels = r.I64();
         _heartCursor = r.I64(); _deathSeen.Clear(); foreach (long v in r.Arr<long>()) _deathSeen.Add(v);
     }
 }

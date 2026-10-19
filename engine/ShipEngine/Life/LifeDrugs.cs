@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>약 (주는 단위): 진통제 mg · 해열 진통제 mg · 항생제 시간 · 해독제 · 아드레날린 (한 번).</summary>
-public enum Drug : byte { Opioid, Apap, Abx, Antidote, Epi, Regen }
+public enum Drug : byte { Opioid, Apap, Abx, Antidote, Epi, Regen, Hypnotic }
 
 /// <summary>
 /// ⑦ 약 (깊이 바퀴 3 (나) — docs/ENGINE.md '장기 · 약 · 수술'). 한 칸 모형: 몸에 남은 양이 반감기마다 반으로 (간이 상하면 더디게) · 효과는 양 ÷ (1 + 내성).
@@ -14,7 +14,7 @@ public enum Drug : byte { Opioid, Apap, Abx, Antidote, Epi, Regen }
 /// </summary>
 public sealed partial class Life
 {
-    public const double OpioidHalfH = 3, ApapHalfH = 2.5, ApapSafeMg = 6000, AntidoteHours = 2, EpiMinutes = 4;
+    public const double OpioidHalfH = 3, ApapHalfH = 2.5, ApapSafeMg = 6000, AntidoteHours = 2, EpiMinutes = 4, HypnoticHalfH = 2.5;
     public long Doses, Overdoses, LiverInjuries, Resistances;
 
     /// <summary>약을 준다 (마음 · 시험). 원인 마디는 그 몸의 '약을 준 원인'으로 남는다 (과용 · 간 손상 · 내성균의 사슬).</summary>
@@ -31,6 +31,7 @@ public sealed partial class Life
             case Drug.Antidote: b.Antidote = (float)AntidoteHours; break;
             case Drug.Epi: b.EpiAt = sim.Tick; break;
             case Drug.Regen: b.Regen = (float)Math.Max(b.Regen, amount); break;   // ⑦ (라-2) 재생 젤 (시간)
+            case Drug.Hypnotic: b.Hypnotic += (float)amount; b.HypnoticAt = sim.Tick; break;   // ⑧ 수면제 (mg)
         }
         b.DrugCause = cause; Doses++;
         sim.Facts.Emit(sim.Tick, FactKind.Dosed, b.Cell, (float)amount, cause, actor: id, other: (int)d);
@@ -46,10 +47,19 @@ public sealed partial class Life
     public static double FeltPain(in Body b) => Math.Clamp(b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4 + AppendixPain(b) - Analgesia(b), 0, 1);
 
     /// <summary>진통제로 얕아진 숨 (피의 산소에 곱할 1 − 이 값).</summary>
-    public static double RespDepression(in Body b) => Math.Clamp((OpioidEffect(b) - 25) / 35, 0, 0.9);
+    public static double RespDepression(in Body b) => Math.Clamp((OpioidEffect(b) + 2 * HypnoticEffect(b) - 25) / 35, 0, 0.9);   // ⑧ 수면제는 진통제의 숨 얕아짐을 키운다 (함께 먹으면 위험)
 
     /// <summary>약 때문에 졸린 정도 (마음이 졸림에 더한다).</summary>
-    public static double Sedation(in Body b) => Math.Clamp(OpioidEffect(b) / 40, 0, 1);
+    public static double Sedation(in Body b) => Math.Clamp(OpioidEffect(b) / 40 + HypnoticEffect(b) / 20, 0, 1);
+
+    /// <summary>⑧ 수면제의 효과 (내성을 뺀 mg).</summary>
+    public static double HypnoticEffect(in Body b) => b.Hypnotic / (1 + b.HypnoticTol);
+
+    /// <summary>⑧ 수면제가 잠을 돕는 몫 (0~1 — 효과 10mg이면 1): 잠의 질 +0.3 × 이것 · 악몽 × (1 − 0.5 × 이것).</summary>
+    public static double SleepAid(in Body b) => Math.Min(1, HypnoticEffect(b) / 10);
+
+    /// <summary>⑧ 끊은 뒤의 얕은 잠 (내성이 0.3 넘게 남았는데 약이 빠졌다 — 0.4 × 내성까지).</summary>
+    public static double Rebound(in Body b) => b.HypnoticTol > 0.3f && b.Hypnotic < 1 ? Math.Min(0.4, 0.4 * b.HypnoticTol) : 0;
 
     /// <summary>해열 진통제가 열의 설정점을 내리는 몫.</summary>
     public static double FeverCut(in Body b) => Math.Min(0.7, b.Apap / 1000 * 0.7);
@@ -79,6 +89,9 @@ public sealed partial class Life
         else if (b.Liver > 0) b.Liver = (float)(b.Liver * Math.Exp(-dt / (7 * 86400)));
         if (b.Liver > b.LiverPeak) b.LiverPeak = b.Liver;
         if (b.Antidote > 0) b.Antidote = (float)Math.Max(0, b.Antidote - h);
+        // ⑧ 수면제: 반감기 2.5시간 · 내성은 효과 10mg를 하루 내내 받으면 3 쌓이고 사흘에 반쯤 풀린다 (매일 밤 10mg면 두 주에 1 남짓 — 같은 약에 반만 듣는다)
+        if (b.Hypnotic > 0.01f) b.Hypnotic = (float)(b.Hypnotic * Math.Exp(-0.693 * h / (HypnoticHalfH * slow))); else b.Hypnotic = 0;
+        b.HypnoticTol = (float)(b.HypnoticTol * Math.Exp(-0.693 * dt / (3 * 86400)) + HypnoticEffect(b) / 10 * 3 * dt / 86400);
     }
 
     /// <summary>아드레날린이 도는 동안 다시 뛸 몫 1.5배.</summary>

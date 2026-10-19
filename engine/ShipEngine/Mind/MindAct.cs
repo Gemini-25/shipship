@@ -203,6 +203,7 @@ public sealed partial class Mind
         if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
         Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
+        if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }
         if (use == UseKind.Cpr) Activity(a, "hard");   // 가슴 압박은 힘든 일
         bool done = t - c.StepStart >= st.Value;
         if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
@@ -230,6 +231,7 @@ public sealed partial class Mind
             case UseKind.Treat: TreatDone(sim, a, st); break;
             case UseKind.Cpr: CprDone(sim, a, st); break;
             case UseKind.Surgery: SurgeryDone(sim, a, st); break;
+            case UseKind.Counsel: CounselDone(sim, a, st); break;
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)

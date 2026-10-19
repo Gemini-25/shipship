@@ -210,5 +210,134 @@ public static partial class Program
                 H(workD) < 2 && H(bedD) > 2 && H(workO) > 3,
                 $"우울한 이 일 {H(workD):0.0}시간 · 침대 {H(bedD):0.0}시간 / 보통 사람 일 {H(workO):0.0}시간");
         }
+
+        // ── (다) 수면제: 10mg이면 그 밤 잠을 돕는 몫 1 · 두 시간 반에 반 · 진통제 20mg만으로는 숨이 얕아지지 않지만 수면제를 함께 먹으면 0.4 넘게 얕아진다 ·
+        //    매일 밤 두 주면 내성 1 남짓 (같은 약에 반만 듣는다) · 끊은 밤은 잠이 더 얕다 (되튐) ──
+        {
+            var b = new Body { Alive = 1, Hypnotic = 10 };
+            double aid0 = Life.SleepAid(b);
+            Life.DrugKinetics(ref b, Time.Hours(2.5) * Time.SecondsPerTick);
+            double aidHalf = Life.SleepAid(b);
+            var op = new Body { Alive = 1, Opioid = 20 }; var both = new Body { Alive = 1, Opioid = 20, Hypnotic = 10 };
+            double rOp = Life.RespDepression(op), rBoth = Life.RespDepression(both);
+            var n = new Body { Alive = 1 };
+            for (int d = 0; d < 14; d++) { n.Hypnotic += 10; for (int h = 0; h < 24; h++) Life.DrugKinetics(ref n, 3600); }
+            float tol = n.HypnoticTol;
+            var dosed = n; dosed.Hypnotic += 10;
+            double aidTol = Life.SleepAid(dosed);
+            for (int h = 0; h < 24; h++) Life.DrugKinetics(ref n, 3600);
+            double rebound = Life.Rebound(n);
+            Check("수면제: 10mg이면 잠을 돕는 몫 1 · 두 시간 반에 반 · 진통제 20mg만으로는 숨이 그대로 · 수면제와 함께면 0.4 넘게 얕아진다 · 매일 밤 두 주면 내성 1 남짓 (반만 듣는다) · 끊은 밤은 더 얕다",
+                aid0 >= 0.99 && aidHalf is > 0.4 and < 0.55 && rOp == 0 && rBoth > 0.4 && tol is > 0.7f and < 1.4f && aidTol < 0.6 && rebound > 0.2,
+                $"돕는 몫 {aid0:0.00} → 두 시간 반 {aidHalf:0.00} · 숨 얕아짐 진통제만 {rOp:0.00} · 함께 {rBoth:0.00} · 두 주 내성 {tol:0.00} → 돕는 몫 {aidTol:0.00} · 끊은 밤 되튐 {rebound:0.00}");
+        }
+
+        // ── (다) 친구: 우울 0.6인 이와 그를 아끼는 이(정 0.7)가 함께 쉬면 (여덟 시간 안에) — 아끼는 이가 '요즘 어때' 하고 묻고 털어놓으면 들어 준다 (속마음 · 위로) → 우울이 준다 ──
+        {
+            var lay = DxShip();
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            var s = Worlds.Full(lay, 12);
+            var m = s.Get<Mind>(); var soc = s.Get<Society>();
+            int p = m.AddPerson(s, At(14, 2)), f = m.AddPerson(s, At(16, 2));
+            s.Run(2);
+            soc.Bond[f * soc.N + p] = 0.7f; soc.Bond[p * soc.N + f] = 0.7f; soc.Known[f * soc.N + p] = soc.Known[p * soc.N + f] = 1;   // 오래 알고 지낸 사이
+            float d0 = 0.6f;
+            m[p].C.Depress = d0;
+            bool heard = false;
+            for (long k = 0; k < Time.Hours(8) && !heard; k++)
+            {
+                s.Step();
+                foreach (var ag in m.Agents) if (ag.IsPerson) { ag.C.Hunger = 0; ag.C.Thirst = 0; ag.C.Sleepy = 0; ag.C.Lonely = 0.6f; }
+                heard = soc.Sayings.Any(x => x.Topic == Topic.Troubled && x.End == TalkEnd.Comfort && x.Speaker == f && x.Listener == p);
+                if (Debug && k % Time.Hours(1) == 0) Console.WriteLine($"    {Time.Clock(s.Tick)} {m[p].C.Goal}@{m.RoomOf(m[p].C.Cell)} / {m[f].C.Goal}@{m.RoomOf(m[f].C.Cell)} 거리 {m.Dist(m[p].C.Cell, m[f].C.Cell)} 말 {string.Join(",", soc.Sayings.Select(x => $"{x.Topic}:{x.End}"))} 정 {soc.BondOf(f, p):0.00} 우울 {m[p].C.Depress:0.00}");
+            }
+            var say = soc.Sayings.LastOrDefault(x => x.Topic == Topic.Troubled);
+            Check("친구: 우울 0.6인 이와 그를 아끼는 이(정 0.7)가 함께 쉬면 (여덟 시간 안에) 아끼는 이가 '요즘 어때' 하고 묻고 털어놓으면 들어 준다 (속마음 · 위로) → 우울이 준다",
+                heard && m[p].C.Depress < d0 - 0.04f,
+                $"속마음 {(say.Line != 0 ? Time.Clock(say.Tick) + " '" + s.Causes.Text(say.Line) + "' ← '" + s.Causes.Text(s.Causes[say.Line].Parent) + "'" : "없음")} · 우울 {d0:0.00} → {m[p].C.Depress:0.00}");
+        }
+
+        // ── (다) 주컴퓨터가 먼저 살핀다 → 사람 상담: 자다가 악몽에 깨는 이 — 주컴퓨터가 그 방 스피커로 말을 걸고 ('요즘 자다가 악몽에 깬다') · 사흘째에도 남으면 '마음 돌봄' ·
+        //    로봇이 없으니(로봇은 이야기를 들어 줄 수 없다) 다정한 이에게 부탁해 — 곁에 앉아 30분 들어 준다 → 우울 · 외상이 준다 · 들은 이가 그에게 정이 든다 ──
+        {
+            var lay = DxShip();
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            var s = Worlds.Full(lay, 13);
+            var m = s.Get<Mind>(); var sm = s.Get<ShipMind>(); var soc = s.Get<Society>();
+            int p = m.AddPerson(s, At(14, 2)), kind = m.AddPerson(s, At(4, 8)), cold = m.AddPerson(s, At(18, 8));
+            m.SetPersonality(kind, 0.5f, 0.6f, 0.5f, 0.95f, 0.4f); m.SetPersonality(cold, 0.5f, 0.6f, 0.5f, 0.1f, 0.4f);
+            int fire = s.Causes.Add(CauseKind.Fire, "식당에 불이 났다 — 갇혔다", s.Tick, At(15, 2));
+            s.Run(2);
+            { ref var c = ref m[p].C; c.Depress = 0.6f; c.Trauma = 0.5f; c.ShockKind = ShockKind.Fire; c.ShockCause = fire; c.NightmareAt = s.Tick; }
+            sm.MoodTalks[p] = 2;   // 이틀 동안 말을 걸었다
+            float d0 = m[p].C.Depress, t0 = m[p].C.Trauma, b0 = soc.BondOf(p, kind);
+            long f0 = s.Facts.Total;
+            int counselor = -1;
+            long room = 0;   // 받아 들었을 때 남은 맡김 시간 — 찾아가서 30분 들어 줄 만큼 (관찰 장면: 30분이면 끊겼다)
+            for (long k = 0; k < Time.Hours(3) && m.Counsels == 0; k++)
+            {
+                s.Step();
+                foreach (var ag in m.Agents) if (ag.IsPerson) { ag.C.Hunger = 0; ag.C.Thirst = 0; ag.C.Sleepy = 0; }
+                if (m[kind].C.AssignedGoal == GoalKind.Counsel && m[kind].C.AssignedUntil > s.Tick && counselor < 0) { counselor = kind; room = m[kind].C.AssignedUntil - s.Tick; }
+                if (m[cold].C.AssignedGoal == GoalKind.Counsel && m[cold].C.AssignedUntil > s.Tick) counselor = cold;
+                if (Debug && k % 125 == 0) Console.WriteLine($"    {Time.Clock(s.Tick)} 환자 {m[p].C.Goal}@{m[p].C.Cell} · 다정 {m[kind].C.Goal}@{m[kind].C.Cell} 맡음 {m[kind].C.AssignedGoal} 까지 {m[kind].C.AssignedUntil - s.Tick} · {m.Thought(kind)}");
+            }
+            s.Run(Time.Minutes(40));   // 주컴퓨터가 상담을 받은 것을 읽는다 — 같은 이에게 다시 부탁하지 않는다 (관찰 장면: 사건이 걷히기 전에 한 번 더 부탁했다)
+            var check = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Heart && x.Size == (float)HeartEvent.CheckIn);
+            var done = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Heart && x.Size == (float)HeartEvent.Counseled);
+            Check("주컴퓨터가 먼저 살핀다 → 사람 상담: 악몽에 깨는 이에게 말을 걸고 · 사흘째면 '마음 돌봄'으로 다정한 이에게 부탁해 (로봇은 이야기를 들어 줄 수 없다) · 곁에서 30분 들어 준다 → 우울 · 외상이 준다 · 정이 든다",
+                check.Kind == FactKind.Heart && s.Causes.Text(check.Cause).Contains("악몽") && done.Kind == FactKind.Heart && done.Actor == kind && done.Other == p && counselor == kind
+                && m[p].C.Depress < d0 - 0.1f && m[p].C.Trauma < t0 - 0.08f && soc.BondOf(p, kind) > b0 + 0.05f && sm.CounselAsks == 1 && !sm.MoodTalks.ContainsKey(p) && room >= Time.Minutes(60) && m.Counsels == 1,
+                $"'{(check.Kind == FactKind.Heart ? s.Causes.Text(check.Cause) : "")}' → '{(done.Kind == FactKind.Heart ? Time.Clock(done.Tick) + " " + s.Causes.Text(done.Cause) : "상담 없음")}' · 들어 준 이 {(counselor >= 0 ? m.NameOf(counselor) : "-")} · 우울 {d0:0.00} → {m[p].C.Depress:0.00} · 외상 {t0:0.00} → {m[p].C.Trauma:0.00} · 정 {b0:0.00} → {soc.BondOf(p, kind):0.00} · 맡김 {room / (double)Time.TicksPerHour * 60:0}분 · 상담 {m.Counsels}번");
+        }
+
+        // ── (다) 로봇이 수면제를 가져간다: 악몽에 깨고 잠을 설치는 이가 잠이 올 때 — 주컴퓨터가 '잠을 못 잔다'로 로봇을 보내고 · 로봇이 약품고의 수면제 10mg을 준다 (진단은 하지 않는다) →
+        //    그 밤 잠을 돕는다 · 원인 사슬 '수면제를 주었다 — 악몽에 깬다' ← 그 일 ──
+        {
+            var lay = DxShip();
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            var s = Worlds.Full(lay, 14);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+            int p = m.AddPerson(s, At(3, 4), bed: At(3, 5));
+            int robot = m.AddRobot(s, At(22, 4), dock: At(22, 4));
+            int fire = s.Causes.Add(CauseKind.Fire, "식당에 불이 났다 — 갇혔다", s.Tick, At(15, 2));
+            s.Run(2);
+            { ref var c = ref m[p].C; c.Trauma = 0.5f; c.ShockKind = ShockKind.Fire; c.ShockCause = fire; c.NightmareAt = s.Tick; c.SleepLoss = 0.7f; c.Sleepy = 0.55f; }
+            long f0 = s.Facts.Total;
+            float aid = 0;
+            for (long k = 0; k < Time.Hours(2); k++)
+            {
+                s.Step();
+                foreach (var ag in m.Agents) if (ag.IsPerson) { ag.C.Hunger = 0; ag.C.Thirst = 0; }
+                if (life[m[p].C.Body].Asleep != 0) aid = Math.Max(aid, (float)Life.SleepAid(life[m[p].C.Body]));
+            }
+            var dose = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Dosed && x.Other == (int)Drug.Hypnotic);
+            int dx = s.Facts.Since(f0).Count(x => x.Kind == FactKind.Diagnosed);
+            Check("로봇이 수면제를 가져간다: 악몽에 깨고 잠을 설치는 이가 잠이 올 때 주컴퓨터가 로봇을 보내 약품고의 수면제 10mg을 준다 (진단은 하지 않는다) → 그 밤 잠을 돕는다 · '수면제를 주었다 — 악몽에 깬다' ← 그 일",
+                dose.Kind == FactKind.Dosed && dose.Size == 10 && s.Causes.Text(dose.Cause).Contains("악몽") && s.Causes.Text(dose.Cause).Contains("로봇") && s.Causes[dose.Cause].Parent == fire
+                && dx == 0 && aid > 0.5f && m.SleepPills == 1,
+                $"'{(dose.Kind == FactKind.Dosed ? Time.Clock(dose.Tick) + " " + s.Causes.Text(dose.Cause) + "' ← '" + s.Causes.Text(s.Causes[dose.Cause].Parent) : "수면제 없음")}' · 진단 {dx} · 자며 돕는 몫 {aid:0.00}");
+        }
+
+        // ── 보며 고친 결함 (관찰 장면 '멎었던 심장 뒤의 날들'): 일하는 중인 이에게는 수면제를 주지 않는다 (잘 때가 되어야) ·
+        //    심장이 멎었던 일은 '죽을 뻔했던 일'로 남는다 (크게 다친 일이 아니라) ──
+        {
+            var lay = DxShip();
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            var s = Worlds.Full(lay, 15);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int p = m.AddPerson(s, At(3, 4), bed: At(3, 5)), v = m.AddPerson(s, At(14, 2));
+            s.Run(2);
+            ref var c = ref m[p].C;
+            c.NightmareAt = s.Tick; c.SleepLoss = 0.7f; c.Sleepy = 0.7f;
+            c.Goal = GoalKind.Work; bool atWork = m.NeedsSleepAid(s.Tick, m[p]);
+            c.Goal = GoalKind.Idle; bool resting = m.NeedsSleepAid(s.Tick, m[p]);
+            c.Sleepy = 0.4f; bool early = m.NeedsSleepAid(s.Tick, m[p]);
+            life.StopHeart(s, m[v].C.Body, 1, "상한 심장이 갑자기 떨린다", s.Causes.Add(CauseKind.Setup, "상한 심장", s.Tick, At(14, 2)));
+            s.Run(Time.Minutes(4));
+            Check("보며 고친 결함: 일하는 중이거나 아직 잘 때가 아니면 (졸림 0.5 아래) 수면제를 주지 않는다 · 심장이 멎었던 일은 '죽을 뻔했던 일'로 남는다",
+                !atWork && resting && !early && m[v].C.ShockKind == ShockKind.NearDeath && Mind.ShockText(m[v].C.ShockKind) == "죽을 뻔했던 일" && m[v].C.Shock > 0.2f,
+                $"일하는 중 {atWork} · 쉬는 중 {resting} · 졸림 0.4 {early} / 멎은 4분: 충격 {m[v].C.Shock:0.00} · '{Mind.ShockText(m[v].C.ShockKind)}'");
+        }
     }
 }

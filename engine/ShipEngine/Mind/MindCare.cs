@@ -43,6 +43,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         int vb = st.Target;
         if (vb < 0 || vb >= _life!.Bodies.Count || _life.Bodies[vb].Alive == 0) return;
+        if (SleepOnly(sim, a, vb)) return;   // ⑧ 잠을 설치는 이에게 수면제만
         bool kit = c.Holding == iMedkit, dress = Life.NeedsDressing(_life.Bodies[vb]);
         double pain = Life.FeltPain(_life.Bodies[vb]);   // 와서 본 아픔 (덮기 전)
         bool open = _life.Bodies[vb].Dressed <= 0;          // 덮지 않은 상처였나 (고름이 보인다)
@@ -128,6 +129,7 @@ public sealed partial class Mind
             int k = sim.Causes.Add(kind, $"{me} {who}에게 해독제를 놓았다", sim.Tick, c.Cell, parent, 0, a.Id);
             _life.Give(sim, vb, Drug.Antidote, 1, k); Antidotes++;
         }
+        SleepPill(sim, a, vb, who, skilled, parent);   // ⑧ 잠을 설치면 수면제
     }
 
     // ── ⑦ 바퀴 3: 멎은 심장 — 곁에서 가슴을 누르고 · 제세동기를 가져와 친다 ──
@@ -227,7 +229,7 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         foreach (var o in Agents)
-            if (o != a && o.C.Up != 0 && o.C.AssignedGoal == GoalKind.Treat && o.C.AssignedTarget == c.Body && o.C.AssignedUntil > _nowTick)
+            if (o != a && o.C.Up != 0 && o.C.AssignedGoal is GoalKind.Treat or GoalKind.Counsel && o.C.AssignedTarget == c.Body && o.C.AssignedUntil > _nowTick)
             { Add(GoalKind.Idle, -1, here, 2.6f); return; }
     }
 
@@ -276,7 +278,8 @@ public sealed partial class Mind
         double tc = F.Temp(cell) - 273.15;
         double temp = Math.Min(1, tc < 18 ? (18 - tc) / 6 : tc > 26 ? (tc - 26) / 6 : 0);
         double body = b.Pain * 0.8 + Math.Min(0.4, Life.FeverK(b) * 0.25);
-        double q = Math.Clamp(1 - 0.5 * noise - 0.3 * light - 0.4 * temp - 0.6 * body - 0.3 * c.Stress - 0.3 * c.Anxiety - 0.2 * c.Depress, 0.15, 1);   // ⑧ 불안 · 우울은 잠을 얕게
+        double q = Math.Clamp(1 - 0.5 * noise - 0.3 * light - 0.4 * temp - 0.6 * body - 0.3 * c.Stress - 0.3 * c.Anxiety - 0.2 * c.Depress
+            + 0.3 * Life.SleepAid(b) - Life.Rebound(b), 0.15, 1);   // ⑧ 불안 · 우울은 잠을 얕게 · 수면제는 깊게 (끊으면 한동안 더 얕다)
         c.SleepLoss = (float)(c.SleepLoss + ((1 - q) - c.SleepLoss) * Math.Min(1, h * 2));
         c.SleepNoise = (float)(c.SleepNoise * Math.Exp(-h * 6));   // 10분이면 흐려진다
     }

@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest, Surgery }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest, Surgery, Counsel }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -364,7 +364,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", IncidentKind.Surgery => "수술", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", IncidentKind.Surgery => "수술", IncidentKind.Counsel => "마음 돌봄", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -527,6 +527,18 @@ public sealed partial class ShipMind : IEngine
                     if (!known) ChartAlerts++;
                 }
                 FeverWatch(sim, a.Id, b);
+                // ⑧ 마음의 표 — 말을 걸고 · 사흘째면 사람에게 상담을 부탁하고 · 잠을 못 자면 로봇이 수면제를 가져간다
+                MoodWatch(sim, a, b);
+                if (_counselWanted.Contains(a.Id))
+                {
+                    Raise(sim, IncidentKind.Counsel, r, b.Cell, 1, a.C.Body, a.C.ShockCause, $"{_mind.NameOf(a.Id)} — 이야기를 들어 줄 사람이 필요합니다");
+                    Mark(IncidentKind.Counsel, r, a.C.Body);
+                }
+                if (!wound && !exam && _mind.NeedsSleepAid(sim.Tick, a))
+                {
+                    Raise(sim, IncidentKind.Injured, r, b.Cell, 0.2f, a.C.Body, a.C.ShockCause, $"{_mind.NameOf(a.Id)} — 잠을 못 잔다 · 수면제를 가져갑니다");
+                    Mark(IncidentKind.Injured, r, a.C.Body);
+                }
             }
         // 장치 · 전기
         if (_net != null)
@@ -1019,6 +1031,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.Arrest: g = GoalKind.Cpr; target = x.Subject; drone = false; break;
             case IncidentKind.Surgery: g = GoalKind.Surgery; target = x.Subject; drone = false; break;   // ⑦ (라) 진료 기록이 속 출혈 · 맹장염   // ⑦ 하나는 누르고 하나는 제세동기를 가져온다
             case IncidentKind.Injured: g = GoalKind.Treat; target = x.Subject; drone = false; break;
+            case IncidentKind.Counsel: if (Policy.AskPeople != 0 && CounselStill(sim, x.Subject)) AskPerson(sim, ref x, GoalKind.Counsel, x.Subject); return;   // ⑧ 로봇은 이야기를 들어 줄 수 없다 — 사람에게 부탁한다 (이미 들어 주었으면 다시 부탁하지 않는다)
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
             case IncidentKind.ElectricFault when _net != null && _net.IsStuckFault(x.Subject):
                 // 차단기가 눌어붙었다 — 멀리서는 끊을 수 없다: 로봇이 배전반에서 손으로 끊는다
@@ -1414,7 +1427,7 @@ public sealed partial class ShipMind : IEngine
         w.Bool(Online);
         w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomHCN); w.Arr(RoomHCl); w.Arr(RoomToxCell); w.Arr(RoomO2Pct); w.Arr(RoomLel); w.Arr(RoomH2); w.Arr(RoomCH4); w.Arr(RoomLelCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
-        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
+        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
         SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w);
@@ -1428,7 +1441,7 @@ public sealed partial class ShipMind : IEngine
         Online = r.Bool();
         r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomHCN); r.ArrInto(RoomHCl); r.ArrInto(RoomToxCell); r.ArrInto(RoomO2Pct); r.ArrInto(RoomLel); r.ArrInto(RoomH2); r.ArrInto(RoomCH4); r.ArrInto(RoomLelCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
-        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
+        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
         LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r);

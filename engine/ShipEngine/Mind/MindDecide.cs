@@ -420,6 +420,7 @@ public sealed partial class Mind
             case GoalKind.Cpr: return BuildCpr(a, o, plan, here);
             case GoalKind.Surgery: return BuildSurgery(a, o, plan, here);
             case GoalKind.Attack or GoalKind.Withdraw: return BuildHeart(a, o, plan, here);
+            case GoalKind.Counsel: return BuildCounsel(a, o, plan);
             case GoalKind.Pilfer:
             {
                 if (o.Target < 0) return false;
@@ -877,6 +878,9 @@ public sealed partial class Mind
         // ⑦ 맡긴 돌보기: 다친 이 곁으로 (맡김 가산 +3 — 사람이면 끼니보다 앞선다)
         if (c.AssignedGoal == GoalKind.Treat && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0)
             Add(GoalKind.Treat, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.2f);
+        // ⑧ 맡긴 상담 (주컴퓨터의 '마음 돌봄' 부탁): 그 사람 곁으로
+        if (c.AssignedGoal == GoalKind.Counsel && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0)
+            Add(GoalKind.Counsel, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.2f);
         // ⑦ (라) 맡긴 수술 (주컴퓨터가 진료 기록을 읽었다)
         if (c.AssignedGoal == GoalKind.Surgery && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0)
             Add(GoalKind.Surgery, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.4f);

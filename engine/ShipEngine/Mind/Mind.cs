@@ -40,7 +40,7 @@ public sealed partial class Mind : IEngine
     public readonly int ItemCount;
     public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest, iRation, iSalvage, iCO2, iAed;
     public readonly byte iOpioid, iApap, iAbx, iAntidote, iEpi;   // ⑦ 약품고 (의료 침대)
-    public readonly byte iRegen, iArtHeart, iArtLung;             // ⑦ (라-2) 재생 젤 (의료 침대) · 인공 심장 · 인공 폐 (진단 장치)
+    public readonly byte iRegen, iArtHeart, iArtLung, iHypnotic;             // ⑦ (라-2) 재생 젤 (의료 침대) · 인공 심장 · 인공 폐 (진단 장치)
     /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
     public const byte PullFeederArg = 254;
 
@@ -77,7 +77,7 @@ public sealed partial class Mind : IEngine
         byte Item(string n) { int i = Array.IndexOf(ItemNames, n); if (i < 0) throw new InvalidDataException($"사람 표에 물건 '{n}'이 없다"); return (byte)i; }
         iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품"); iCO2 = Item("이산화탄소 소화기"); iAed = Item("제세동기");
         iOpioid = Item("진통제"); iApap = Item("해열제"); iAbx = Item("항생제"); iAntidote = Item("해독제"); iEpi = Item("아드레날린");
-        iRegen = Item("재생 젤"); iArtHeart = Item("인공 심장"); iArtLung = Item("인공 폐");
+        iRegen = Item("재생 젤"); iArtHeart = Item("인공 심장"); iArtLung = Item("인공 폐"); iHypnotic = Item("수면제");
 
         Stock = new int[L.Furniture.Count * ItemCount];
         foreach (var fu in L.Furniture)
@@ -406,7 +406,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", GoalKind.Surgery => "수술한다", GoalKind.Attack => "주저앉아 숨을 고른다", GoalKind.Withdraw => "침대에 틀어박혀 있다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", GoalKind.Surgery => "수술한다", GoalKind.Attack => "주저앉아 숨을 고른다", GoalKind.Withdraw => "침대에 틀어박혀 있다", GoalKind.Counsel => "이야기를 들어 준다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -591,6 +591,7 @@ public sealed partial class Mind : IEngine
         WearyNeeds(sim, a, h, asleep, others);   // ⑧ 고립의 피로
         if (!asleep && c.Goal != GoalKind.Exercise) c.Unfit = (float)Math.Min(1, c.Unfit + h / 16); // 깨어 있는 하루면 1
         // 감정: 두려움은 몇 분이면 가라앉는다 (침착할수록 빨리) · 긴장은 굶주림 · 졸림 · 두려움에 쌓이고 잠 · 쉼에 풀린다
+        if (c.Fear > c.FearMax) c.FearMax = c.Fear;   // ⑧ 충격은 그 1분의 가장 큰 겁으로
         c.Fear = (float)Math.Max(0, c.Fear - dt / 600 * (0.5 + c.Calm));
         c.Joy = (float)Math.Max(0, c.Joy - h / 4);
         c.Sad = (float)Math.Max(0, c.Sad - h / 48);
@@ -678,7 +679,7 @@ public sealed partial class Mind : IEngine
         _claims[k] = v;
     }
 
-    private static bool IsTask(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Investigate or GoalKind.Cpr or GoalKind.Surgery;
+    private static bool IsTask(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Investigate or GoalKind.Cpr or GoalKind.Surgery or GoalKind.Counsel;
 
     // ───────────────────────── 찍기 ─────────────────────────
 

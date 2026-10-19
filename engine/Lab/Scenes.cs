@@ -159,6 +159,7 @@ public static partial class Program
                 every = 25; count = 90;
                 break;
             }
+            case "heart": HeartScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
@@ -228,6 +229,69 @@ public static partial class Program
 public static partial class Program
 {
     private static int _fireRoom = -1, _sleeper = -1, _zgRoom = -1, _arrestBody = -1, _arrestWho = -1;
+
+    /// <summary>
+    /// ⑧ 기억 · 정신 건강 관찰 장면 '멎었던 심장 뒤의 날들': 디딤호 첫날 점심 — 식당에서 한 사람의 심장이 떤다 (⑦ '식당에서 멎은 심장'과 같은 시작 — 살아나면 죽을 뻔한 일이 남는다) → 나흘 동안
+    /// 마음의 일(악몽 · 되살아남 · 공황 발작 · 우울 · 불안 · 성격이 바뀜 · 주컴퓨터가 말을 검 · 친구의 '요즘 어때' · 상담 · 수면제)이 날 때마다 그 사람 곁을 찍는다
+    /// (불이 붙은 처음 30분은 1분마다). 그림 밑: 가장 크게 겪은 이의 충격 · 외상 · 우울 · 불안 · 그 일.
+    /// </summary>
+    private static void HeartScene(string dir)
+    {
+        int robots = int.TryParse(Environment.GetEnvironmentVariable("ROBOTS"), out int rb) ? rb : 2;
+        ulong seed = ulong.TryParse(Environment.GetEnvironmentVariable("SEED"), out ulong sd) ? sd : 8;
+        var s = ShipWorld.Crewed("Didim", seed, 6, robots);
+        while (Time.HourOfDay(s.Tick) < 12.15) s.Run(25);   // 첫날 점심
+        var L = s.Layout; var m = s.Get<Mind>(); var life = s.Get<Life>(); var soc = s.Get<Society>(); var sm = s.Get<ShipMind>();
+        // '식당에서 멎은 심장' (⑦ 관찰 장면과 같은 시작): 심장이 상해 있던 이가 밥을 먹다 심장이 떤다 — 살아나면 죽을 뻔한 일이 남는다
+        int mess = L.Rooms.FindIndex(r => r.Type == "Mess");
+        var victim = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).OrderBy(a => L.Room[a.C.Cell] == mess ? 0 : 1).First();
+        ref var vb = ref life[victim.C.Body];
+        vb.Heart = 0.6f; vb.HeartPeak = 0.6f;
+        life.StopHeart(s, victim.C.Body, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Story, "지난 사고에 상한 심장", s.Tick, vb.Cell));
+        var seat = (Cells: new[] { victim.C.Cell }, Id: 0);
+        long fireAt = s.Tick, end = s.Tick + Time.Hours(24 * 4);
+        var painter = new Painter(L);
+        var page = new System.Text.StringBuilder();
+        long seen = s.Facts.Total, lastShot = long.MinValue / 2;
+        int sayingsSeen = soc.Sayings.Count, k = 0;
+        const int MaxShots = 70;
+        string Frame(int cell, string text)
+        {
+            int x0 = Math.Max(0, L.X(cell) - 14), y0 = Math.Max(0, L.Y(cell) - 9);
+            var img = painter.Frame(s, x0, y0, 29, 19, k);
+            Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
+            var hero = m.Agents.Where(a => a.IsPerson).OrderByDescending(a => a.C.Trauma + a.C.Shock).First();
+            string state = $"{m.NameOf(hero.Id)}: 충격 {hero.C.Shock:0.00} · 외상 {hero.C.Trauma:0.00} · 우울 {hero.C.Depress:0.00} · 불안 {hero.C.Anxiety:0.00} · 신경성 {hero.C.Neuro:0.00} · {m.Thought(hero.Id)}";
+            page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(state)}<br>{System.Net.WebUtility.HtmlEncode(text)}</figcaption></figure>\n");
+            k++; lastShot = s.Tick;
+            return text;
+        }
+        var lines = new List<(int cell, string text)>();   // 다음 그림까지 모은 일
+        while (s.Tick < end && k < MaxShots)
+        {
+            s.Step();
+            foreach (var f in s.Facts.Since(seen))
+            {
+                bool heart = f.Kind == FactKind.Heart || f.Kind == FactKind.Dosed && f.Other == (int)Drug.Hypnotic || f.Kind == FactKind.Decision && f.Other == (int)GoalKind.Counsel;
+                bool fire = s.Tick - fireAt < Time.Minutes(40) && f.Kind is FactKind.Arrest or FactKind.Revived or FactKind.Panicked or FactKind.ComputerAlarm or FactKind.Collapsed or FactKind.Died or FactKind.Surgery or FactKind.Diagnosed;
+                if (heart || fire) lines.Add((f.Cell >= 0 ? f.Cell : seat.Cells[0], s.Causes.Text(f.Cause)));
+            }
+            seen = s.Facts.Total;
+            for (int i = sayingsSeen; i < soc.Sayings.Count; i++)
+                if (soc.Sayings[i].Topic == Topic.Troubled) lines.Add((soc.Sayings[i].Cell, $"{s.Causes.Text(s.Causes[soc.Sayings[i].Line].Parent)} — \"{s.Causes.Text(soc.Sayings[i].Line)}\""));
+            sayingsSeen = soc.Sayings.Count;
+            if (s.Tick == fireAt + Time.Hours(1))
+                Console.WriteLine("    한 시간 뒤: " + string.Join(" · ", m.Agents.Where(a => a.IsPerson).Select(a => $"{m.NameOf(a.Id)} 충격 {a.C.Shock:0.00} 외상 {a.C.Trauma:0.00} 겁 {a.C.Fear:0.00} 저산소 {life[a.C.Body].Hypoxia:0.00}")));
+            bool firePhase = s.Tick - fireAt < Time.Minutes(30);
+            if (lines.Count > 0 && s.Tick - lastShot >= (firePhase ? 25 : 5)) { Frame(lines[0].cell, string.Join(" / ", lines.Select(x => x.text).Distinct().Take(5))); lines.Clear(); }
+            else if (firePhase && s.Tick - lastShot >= 25) Frame(seat.Cells[0], "");
+        }
+        File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>heart</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:420px}}img{{width:420px;image-rendering:pixelated}}</style>\n{page}");
+        Console.WriteLine($"  heart: {k}장 → {dir} · {Time.Clock(s.Tick)}");
+        foreach (var a in m.Agents.Where(a => a.IsPerson))
+            Console.WriteLine($"    {m.NameOf(a.Id)}: 충격 {a.C.Shock:0.00} · 외상 {a.C.Trauma:0.00} · 우울 {a.C.Depress:0.00} · 불안 {a.C.Anxiety:0.00} · 신경성 {a.C.Neuro0:0.00}→{a.C.Neuro:0.00} · 용기 {a.C.Brave0:0.00}→{a.C.Brave:0.00} · {(life[a.C.Body].Alive != 0 ? "삶" : "죽음")}");
+        Console.WriteLine($"    악몽 {m.Nightmares} · 되살아남 {m.Flashbacks} · 발작 {m.PanicAttacks} · 겁이 많아짐 {m.Fearful} · 단단해짐 {m.Hardened} · 우울 {m.Depressions} · 불안 {m.Anxieties} · 수면제 {m.SleepPills} · 상담 {m.Counsels} · 주컴퓨터 말 {sm.CheckIns}");
+    }
 
     /// <summary>심정지 장면 그림 밑 글: 그 사람 (뜀 · 잔떨림 · 멎음 · 깨어 있나) · 산소 부족 · 뇌 · 심장 · 누른 분 · 제세동 · 진료 기록 · 주컴퓨터의 마지막 말.</summary>
     private static string ArrestCaption(Sim s)

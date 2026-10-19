@@ -73,6 +73,7 @@ public enum GoalKind : byte
     Surgery,    // ⑦ (라) 수술 — 치료 침대에서 마취하고 속 출혈을 멈추거나 맹장을 떼어 낸다 (대상: 몸)
     Attack,     // ⑧ 공황 발작 — 그 자리에 주저앉아 숨을 고른다
     Withdraw,   // ⑧ 우울 — 일하는 시간에 제 침대에 틀어박힌다
+    Counsel,    // ⑧ 상담 — 주컴퓨터의 부탁으로 마음이 힘든 이 곁에 앉아 이야기를 들어 준다 (대상: 몸)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -102,7 +103,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery, Counsel }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep
@@ -218,6 +219,8 @@ public struct AgentCore
     public long OpAnesAt;
     /// <summary>⑧ 기억 · 정신 건강 (바퀴 3 — MindHeart): 충격(갓 겪은 일) · 외상(오래 남는다) · 우울 · 불안 (0~1).</summary>
     public float Shock, Trauma, Depress, Anxiety;
+    /// <summary>이번 1분 동안 가장 컸던 겁 (충격은 공포의 세기로 잰다 — 1분마다 0으로).</summary>
+    public float FearMax;
     /// <summary>충격의 원인 마디 · 그 방 · 갈래 · 이번 일에서 가장 컸던 충격 · 가장 큰 한 몫 · 그때 · 마지막으로 위험에 맞선 때(불 끄기 · 구하기 · 막기) · 외상이 0.3을 넘었었나(1).</summary>
     public int ShockCause, ShockRoom;
     public ShockKind ShockKind;

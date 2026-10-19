@@ -10,7 +10,7 @@ public sealed class TalkTable
     public static string TopicName(Topic t) => t switch
     {
         Topic.Small => "잡담", Topic.Work => "일", Topic.Fire => "불", Topic.Breach => "구멍", Topic.Rescue => "구조", Topic.Hurt => "다침",
-        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", Topic.Peace => "화해", _ => "잡담",
+        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", Topic.Peace => "화해", Topic.Troubled => "속마음", _ => "잡담",
     };
 
     public static string EndName(TalkEnd e) => e switch
@@ -26,6 +26,7 @@ public sealed class TalkTable
         TalkEnd.Accept when t == Topic.Peace => "두 무리 사이를 풀기로 했다 · 손을 잡았다", TalkEnd.Argue when t == Topic.Peace => "두 무리 사이를 두고 맞섰다 · 골이 깊어졌다",
         TalkEnd.Agree => $"{TopicName(t)} 이야기를 나눴다", TalkEnd.Laugh => "실컷 웃었다", TalkEnd.Awkward => $"{TopicName(t)} 이야기가 어색하게 끊겼다",
         TalkEnd.Friction => "말끝마다 부딪쳤다 · 사이가 조금 틀어졌다", TalkEnd.Praise => $"{TopicName(t)} 이야기를 하다 고맙다고 했다 · 가까워졌다",
+        TalkEnd.Comfort when t == Topic.Troubled => "속마음을 털어놓았다 · 들어 주었다 · 가까워졌다",
         TalkEnd.Comfort => "슬픔을 나누며 위로했다 · 가까워졌다", TalkEnd.Apology => "그날 일을 사과했다 · 앙금이 풀렸다",
         TalkEnd.Argue => "그날 일을 두고 서로 탓했다 · 사이가 나빠졌다", TalkEnd.Spread => "누군가의 험담을 했다 · 소문이 퍼졌다",
         TalkEnd.Defend => "험담을 막아섰다", TalkEnd.Worry => "식량 · 물 걱정을 했다",
@@ -63,6 +64,9 @@ public sealed partial class Society
             int c3 = -1; float g3 = 0.3f;
             for (int x = 0; x < N; x++) if (x != a && x != b && GrudgeOf(a, x) > g3 && _mind!.RoomOf(C(x).Cell) != _mind.RoomOf(C(a).Cell)) { g3 = GrudgeOf(a, x); c3 = x; }
             if (c3 >= 0) opts.Add(new(Topic.Gossip, 1.5f * g3 * (1.2f - C(a).Agree), c3, MemoryCause(a, Topic.Blame, c3), MemoryCell(a, Topic.Blame, c3), a));
+            // ⑧ 마음이 힘든 친구에게 '요즘 어때' — 아끼는 이(정 0.5 넘게)가 먼저 묻는다 (다정할수록)
+            float low = Math.Max(C(a).Depress, Math.Max(C(a).Trauma, C(a).Anxiety));
+            if (low > 0.3f && BondOf(b, a) > 0.5f) opts.Add(new(Topic.Troubled, 5 * low * (0.5f + C(b).Agree), a, C(a).ShockCause, C(b).Cell, b));   // 가까운 이의 처진 얼굴은 먼저 눈에 띈다
         }
         // 마음을 고백한다: 짝이 없는 둘 · 끌림이 깊고 정도 쌓였다 (끌림이 클수록 · 외향일수록 먼저 꺼낸다)
         foreach (var (a, b) in new[] { (i, j), (j, i) })
@@ -252,6 +256,19 @@ public sealed partial class Society
                     Onlookers(sim, b, a, c);
                     Escalate(sim, b, a, 0.5f, line);
                 }
+                break;
+            }
+            case Topic.Troubled:
+            {
+                // a가 묻고 b가 털어놓나: b가 a를 아낄수록 · 외향일수록 — 털어놓으면 마음이 가벼워진다 (우울 −0.05 · 외상 −0.03 · 불안 −0.05)
+                if (r < 0.45f + 0.5f * Math.Max(0, BondOf(b, a)) + 0.2f * cb.Extra)
+                {
+                    end = TalkEnd.Comfort;
+                    _mind!.Eased(b, 0.05f, 0.03f, 0.05f);
+                    Warm(sim, b, a, 0.05f); Warm(sim, a, b, 0.03f);
+                    Say(sim, a, b, o, end, Pick(sim, "속마음/위로", a));
+                }
+                else { end = TalkEnd.Awkward; Say(sim, b, a, o, end, Pick(sim, "속마음/어색", b)); }
                 break;
             }
             case Topic.Death:

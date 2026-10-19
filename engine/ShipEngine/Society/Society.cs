@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>⑨ 이야깃거리 — 사람이 기억하는 일 · 대화의 주제.</summary>
-public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart, Peace }
+public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart, Peace, Troubled }
 
 /// <summary>⑨ 대화의 끝 — 어떻게 흘러갔나.</summary>
 public enum TalkEnd : byte { Agree, Laugh, Awkward, Friction, Praise, Comfort, Apology, Argue, Spread, Defend, Worry, Accept, Reject }
@@ -423,6 +423,13 @@ public sealed partial class Society : IEngine
                         Blame(sim, v, x, 0.5f, f.Cause, f.Cell);
                         foreach (int o in Near(f.Cell, v)) if (o != x) Blame(sim, o, x, 0.2f + 0.3f * Math.Max(0, BondOf(o, v)), f.Cause, f.Cell);
                     }
+                    break;
+                }
+                case FactKind.Heart when f.Size == (float)HeartEvent.Counseled && f.Actor >= 0 && f.Actor < N && f.Other >= 0 && f.Other < N:
+                {
+                    // ⑧ 이야기를 들어 주었다: 들은 이에게 정 · 믿음 (함께 기억한다)
+                    Warm(sim, f.Other, f.Actor, 0.1f); Warm(sim, f.Actor, f.Other, 0.05f); Add(TrustOf, f.Other, f.Actor, 0.05f);
+                    Remember(sim, f.Other, Topic.Troubled, f.Actor, f.Cause, 0.5f, f.Cell);
                     break;
                 }
                 case FactKind.Treated when f.Actor >= 0 && f.Other >= 0 && f.Other < N:
