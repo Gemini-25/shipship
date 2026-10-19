@@ -1,6 +1,5 @@
 # Godot
 game/.godot/
-engine/Godot/.godot/
 game/.mono/
 *.translation
 

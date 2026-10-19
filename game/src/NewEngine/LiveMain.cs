@@ -13,12 +13,13 @@ using Time = ShipEngine.Time;
 namespace ShipLive;
 
 /// <summary>
-/// 새 엔진 관전 화면 — 얇은 껍데기 (docs/ENGINE.md §새 화면 2단계).
-/// 작업 스레드: 세계를 돌리고(연출이 정한 빠르기) 그린다 (<see cref="LiveShow"/>). 메인 스레드: 다 그려진 그림을 텍스처로 올리고 글만 쓴다 —
+/// 새 엔진 판 — 처음 화면에서 '새 엔진 판'을 고르면 뜬다 (docs/ENGINE.md §새 화면 2단계). 옛 게임의 코어 · 배 · 화면은 하나도 쓰지 않는다:
+/// 세계는 engine/ShipEngine · 배는 engine/data/ships (새로 설계한 일곱 척) · 연출과 그리기는 engine/ShipView (도트 그림만 옛 것을 빌린다).
+/// 이 장면은 얇은 껍데기 — 작업 스레드: 세계를 돌리고(연출이 정한 빠르기) 그린다 (<see cref="LiveShow"/>). 메인 스레드: 다 그려진 그림을 텍스처로 올리고 글만 쓴다 —
 /// 세계가 무거운 순간(주컴퓨터가 앞날을 그려 볼 때)에도 화면은 60프레임으로 돈다.
 /// 함장의 손은 명령 줄로 작업 스레드에 넘긴다 (두 스레드가 세계를 함께 만지지 않는다).
 /// </summary>
-public partial class Main : Node2D
+public partial class LiveMain : Node2D
 {
     // ── 작업 스레드와 나누는 것 ──
     private LiveShow? _show;                                   // 작업 스레드가 만든다 (메인은 다 쓴 그림을 돌려줄 때만)
@@ -180,7 +181,7 @@ public partial class Main : Node2D
                 _tex!.Update(_image);
             }
             _show?.Recycle(img);                                  // 텍스처로 옮겼다 — 다음 장에 다시 쓴다
-            if (_shown == null || _shown.Ship != f.Ship) DisplayServer.WindowSetTitle($"우주선 관전 — {f.Ship}");
+            if (_shown == null || _shown.Ship != f.Ship) DisplayServer.WindowSetTitle($"ShipSim · 새 엔진 판 — {f.Ship}");
             _shown = f;
             _gotFrames++; _picsTotal++;
         }
@@ -241,7 +242,7 @@ public partial class Main : Node2D
         var vp = GetViewportRect().Size;
         if (_tex == null || _shown == null)
         {
-            DrawCentered("배를 띄우는 중…", vp / 2, 26, new Color(0.8f, 0.85f, 0.95f));
+            DrawCentered("새 엔진으로 배를 띄우는 중…", vp / 2, 26, new Color(0.8f, 0.85f, 0.95f));
             return;
         }
         var f = _shown;
@@ -252,7 +253,8 @@ public partial class Main : Node2D
         DrawRect(new Rect2(0, 0, vp.X, 40), new Color(0.03f, 0.04f, 0.07f, 0.82f));
         DrawRect(new Rect2(0, 38, vp.X, 2), new Color(mood, 0.9f));
         DrawCircle(new Vector2(22, 20), 7, mood);
-        DrawString(_bold, new Vector2(38, 27), f.Status, HorizontalAlignment.Left, vp.X - 260, 18, new Color(0.92f, 0.94f, 0.98f));
+        DrawString(_bold, new Vector2(38, 27), f.Status, HorizontalAlignment.Left, vp.X - 380, 18, new Color(0.92f, 0.94f, 0.98f));
+        DrawBadge(new Vector2(vp.X - 248, 20));
         if (f.Replay.Length > 0)
         {
             // 다시보기: 가장자리를 옛 필름 빛으로
@@ -378,7 +380,7 @@ public partial class Main : Node2D
             "C  사슬 (지금 장면은 어디서 시작됐나)      P  사람",
             "O  겹쳐 보기: 공기 → 열 → 연기 → 사슬 선 → 끔",
             "M  다 켬 → 음악 끔 → 소리 끔",
-            "H  도움말      Esc  나가기",
+            "H  도움말      Esc  처음 화면 (기존 판 · 새 엔진 판 고르기)",
             $"지금 이야기꾼: {_shown?.Storyteller}",
         };
         float w = 470, h = 26 + lines.Length * 26;
@@ -387,6 +389,19 @@ public partial class Main : Node2D
         DrawRect(r, new Color(0.35f, 0.45f, 0.6f, 0.8f), false, 1);
         for (int i = 0; i < lines.Length; i++)
             DrawString(_font, new Vector2(r.Position.X + 18, r.Position.Y + 30 + i * 26), lines[i], HorizontalAlignment.Left, w - 30, 16, new Color(0.85f, 0.88f, 0.95f));
+    }
+
+    public const string StartScene = "res://scenes/Start.tscn";
+
+    /// <summary>위 줄 오른쪽의 '새 엔진' 표 — 늘 보여 옛 게임과 헷갈리지 않는다 (오른쪽 끝을 at.X에 맞춘다).</summary>
+    private void DrawBadge(Vector2 at)
+    {
+        const string text = "새 엔진 판";
+        var sz = _bold.GetStringSize(text, HorizontalAlignment.Left, -1, 15);
+        var r = new Rect2(at.X - sz.X - 22, at.Y - 13, sz.X + 22, 26);
+        DrawRect(r, new Color(0.1f, 0.42f, 0.38f, 0.95f));
+        DrawRect(r, new Color(0.45f, 0.95f, 0.8f, 0.9f), false, 1.5f);
+        DrawString(_bold, new Vector2(r.Position.X + 11, at.Y + 6), text, HorizontalAlignment.Left, -1, 15, new Color(0.88f, 1f, 0.95f));
     }
 
     private bool PanelOpen => _shown != null && _shown.PanelTitle.Length > 0;
@@ -436,7 +451,7 @@ public partial class Main : Node2D
                 case Key.Bracketright: _cmds.Enqueue(s => s.Harsher(+1)); break;
                 case Key.F3: _meter = !_meter; break;
                 case Key.M: _mute = (_mute + 1) % 3; { string t = _mute switch { 0 => "소리 · 음악 켬", 1 => "음악 끔 (배 안 소리만)", _ => "소리 끔" }; _cmds.Enqueue(s => s.Notify(t)); } break;
-                case Key.Escape: GetTree().Quit(); break;
+                case Key.Escape: GetTree().ChangeSceneToFile(StartScene); break;
             }
         }
         else if (e is InputEventMouseButton mb)
@@ -483,7 +498,7 @@ public partial class Main : Node2D
         DrawString(_bold, at - new Vector2(sz.X / 2, -size / 3f), text, HorizontalAlignment.Left, -1, size, c);
     }
 
-    // ── 글꼴: 옛 게임의 Pretendard를 그대로 (저장소 안에서 돌릴 때) · 없으면 시스템 한글 글꼴 ──
+    // ── 글꼴: 같은 프로젝트의 Pretendard · 없으면 시스템 한글 글꼴 ──
     private void LoadFonts()
     {
         _font = LoadFont("Pretendard-Medium.otf", 500);
@@ -493,12 +508,8 @@ public partial class Main : Node2D
 
     private static Font LoadFont(string file, int weight)
     {
-        string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(ProjectSettings.GlobalizePath("res://"), "../../game/assets/fonts", file));
-        if (System.IO.File.Exists(path))
-        {
-            var ff = new FontFile();
-            if (ff.LoadDynamicFont(path) == Error.Ok) return ff;
-        }
+        string res = "res://assets/fonts/" + file;
+        if (ResourceLoader.Exists(res) && GD.Load<Font>(res) is Font f) return f;
         return new SystemFont
         {
             FontNames = new[] { "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Noto Sans KR", "sans-serif" },
