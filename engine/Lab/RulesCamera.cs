@@ -206,5 +206,26 @@ public static partial class Program
                 first == 1 && soon == 1 && late == 1,
                 $"첫 말다툼 뒤 {first}개 · 한 시간 뒤 {soon}개 · 조용한 일곱 시간 뒤 {late}개 (문턱 {Director.HighlightAt:0})");
         }
+
+        // ── 조용할 때 일상: 볼 만한 일이 없으면 배 가운데(빈 통로)에 쉬지 않고 사람이 있는 방을 차례로 비춘다 (함장 요청 — 새 엔진 판에서 엔진이 도는 것이 보이게) ──
+        {
+            var s = Worlds.Full(lay, 3);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            m.AddPerson(s, At(3, 2)); m.AddPerson(s, At(5, 4)); m.AddPerson(s, At(65, 3));
+            var d = new Director(s.Layout) { KeepRing = false };
+            int ticks = 0, withPeople = 0;
+            var shown = new HashSet<int>();
+            for (int i = 0; i < 3000; i++)
+            {
+                s.Step(); d.Observe(s);
+                if (d.FocusCell < 0) continue;
+                int room = s.Layout.Room[d.FocusCell];
+                ticks++;
+                if (room >= 0 && m.Agents.Any(a => a.IsPerson && a.C.Cell >= 0 && s.Layout.Room[a.C.Cell] == room)) { withPeople++; shown.Add(room); }
+            }
+            Check("조용할 때 일상: 볼 만한 일이 없으면 빈 통로에 쉬지 않고 사람이 있는 방을 비추고 · 방을 돌아가며 본다 (한 방에 15초)",
+                withPeople >= ticks * 0.85 && shown.Count >= 2 && d.DailyCuts >= 2,
+                $"사람이 있는 방을 본 틱 {withPeople}/{ticks} · 본 방 {shown.Count} · 방을 옮김 {d.DailyCuts} · 화면 {d.ScreenSeconds:0}초");
+        }
     }
 }

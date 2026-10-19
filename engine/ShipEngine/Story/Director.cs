@@ -54,7 +54,7 @@ public sealed partial class Director
 
     private long _cursor;
     private int _top = -1; private float _max;
-    private bool _resting;                      // 볼 것이 없어 배 가운데를 보고 있다 (첫 일에 바로 간다)
+    private bool _resting;                      // 볼 것이 없어 사람들의 일상(없으면 배 가운데)을 보고 있다 (첫 일에 바로 간다)
     private double _sinceSwitch;
     private double _criticalLeft;               // 아주 느리게 남은 화면 초
     private long _lastOmen = long.MinValue / 2, _lastDanger = long.MinValue / 2;
@@ -216,7 +216,12 @@ public sealed partial class Director
             if (watching && !InView(i)) { outMax = h; outTop = i; }
         }
         _top = top; _max = max;
-        if (top < 0 || max < 1) { if (FocusCell < 0) { FocusCell = L.Index(L.W / 2, L.H / 2); _resting = true; } Subject = -1; SceneRoot = 0; return; }
+        if (top < 0 || max < 1)
+        {
+            // 볼 만한 일이 없다: 막 본 장면은 적어도 HoldScreenSec 머물고 · 그다음은 사람들의 일상을 비춘다
+            if (FocusCell < 0 || _resting || ScreenSeconds - _cutAt >= HoldScreenSec) Daily(sim);
+            Subject = -1; SceneRoot = 0; return;
+        }
         float cur = _resting ? 0 : ViewScore(FocusCell);
         // 1. 사슬의 앞머리: 사슬이 새 엔진으로 번진 곳이 화면 밖이면 (결정적 순간이 아니고 · 지금 장면을 2초는 봤으면) 그리로 간다
         if (_pullCell >= 0)

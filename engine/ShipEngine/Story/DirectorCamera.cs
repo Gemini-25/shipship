@@ -7,6 +7,7 @@ namespace ShipEngine;
 /// <item>몸으로 읽는 조짐 (카메라만 쓰는 관심 — 하이라이트 문턱에는 넣지 않는다): 12초마다 사람이 선 칸의 공기(산소 분압 · 기압 · 기압이 떨어지는 빠르기 · 일산화탄소 · 열 · 곁의 불)를 읽어 — 몸이 알기 전에 그 사람에게 간다 (자는 사람은 더).</item>
 /// <item>주인공 따라가기: 장면을 고를 때 그 자리에서 가장 컸던 일의 사람을 주인공으로 — 업고 뛰거나 도망치거나 불을 끄거나 쓰러져 있으면 따라간다 (업혀 가면 업은 이를).</item>
 /// <item>두 곳 오가기: 화면 밖에 지금 장면의 반쯤 되는 일이 20초 넘게 안 보였으면 잠깐 그리로 (결정적 순간엔 자르지 않는다).</item>
+/// <item>조용할 때 일상: 볼 만한 일이 없으면 사람이 있는 방을 차례로 비춘다 (깨어 있는 이가 있는 방 · 가장 오래 안 본 방부터 · 한 방에 15초 · 다들 자면 자는 방).</item>
 /// </list>
 /// </summary>
 public sealed partial class Director
@@ -20,6 +21,13 @@ public sealed partial class Director
     /// <summary>지금 장면의 사슬 뿌리 · 주인공 (에이전트 · −1 없음).</summary>
     public int SceneRoot, Subject = -1;
     public int Pulls, CrossCuts, AirWarnings;
+    public long DailyCuts;
+    public const double DailyHoldSec = 15;                        // 조용할 때 한 방에 (화면 초)
+    private int _dailyRoom = -1;
+    private double _dailyAt, _cutAt;
+    private int[] _roomAwake = Array.Empty<int>(), _roomAll = Array.Empty<int>();
+    private double[] _roomShown = Array.Empty<double>();
+    private (int x0, int y0, int x1, int y1)[] _roomBox = Array.Empty<(int, int, int, int)>();
     public long FollowTicks;
     private int _pullCell = -1, _pullRoot, _pullActor = -1;
     private double _pullAt = double.MinValue / 2; private float _pullScore;
@@ -54,7 +62,7 @@ public sealed partial class Director
     {
         bool fresh = FocusCell < 0 || _resting || Far(cell, FocusCell);
         if (FocusCell >= 0 && !_resting && Far(cell, FocusCell)) { Switches++; _sinceSwitch = 0; }
-        FocusCell = cell; _resting = false;
+        FocusCell = cell; _resting = false; _cutAt = ScreenSeconds;
         if (!fresh && root < 0) return;
         int bestRoot = 0, bestActor = -1; float bs = 0;
         for (int k = 0; k < _recentN; k++)
@@ -66,6 +74,73 @@ public sealed partial class Director
         SceneRoot = root >= 0 ? root : bestRoot;
         Subject = actor >= 0 ? actor : bestActor;
         _subjectQuiet = t;
+    }
+
+    /// <summary>
+    /// 조용할 때 일상 (함장 요청 — 새 엔진 판에서 엔진이 도는 것이 보이게): 볼 만한 일이 없으면 빈 배 가운데에 쉬지 않고 사람이 있는 방을 차례로 비춘다 —
+    /// 깨어 있는 이가 있는 방 가운데 가장 오래 안 본 방 (처음이면 사람이 많은 방) · 한 방에 15초 (화면) · 다들 자면 자는 방 · 그 방 사람들 가운데쯤의 사람에게 · 방 넓이만큼 확대.
+    /// 쉬는 것으로 치니 (_resting) 첫 일에는 곧장 그리로 자른다.
+    /// </summary>
+    private void Daily(Sim sim)
+    {
+        _resting = true;
+        var mind = sim.Find<Mind>(); var life = sim.Find<Life>();
+        int n = L.Rooms.Count;
+        if (mind == null || life == null || n == 0) { if (FocusCell < 0) FocusCell = L.Index(L.W / 2, L.H / 2); return; }
+        if (_roomAll.Length != n)
+        {
+            _roomAwake = new int[n]; _roomAll = new int[n]; _roomShown = new double[n]; _roomBox = new (int, int, int, int)[n];
+            Array.Fill(_roomShown, double.MinValue);
+            for (int r = 0; r < n; r++)
+            {
+                int x0 = int.MaxValue, y0 = int.MaxValue, x1 = -1, y1 = -1;
+                foreach (int c in L.Rooms[r].Cells) { x0 = Math.Min(x0, L.X(c)); y0 = Math.Min(y0, L.Y(c)); x1 = Math.Max(x1, L.X(c)); y1 = Math.Max(y1, L.Y(c)); }
+                _roomBox[r] = (x0, y0, x1, y1);
+            }
+        }
+        Array.Clear(_roomAwake); Array.Clear(_roomAll);
+        bool anyAwake = false;
+        foreach (var a in mind.Agents)
+        {
+            if (!a.IsPerson || a.C.Body < 0 || a.C.Cell < 0) continue;
+            var b = life.Bodies[a.C.Body];
+            if (b.Alive == 0) continue;
+            int r = L.Room[a.C.Cell];
+            if (r < 0 || r >= n) continue;
+            _roomAll[r]++;
+            if (b.Asleep == 0) { _roomAwake[r]++; anyAwake = true; }
+        }
+        int[] count = anyAwake ? _roomAwake : _roomAll;
+        bool keep = _dailyRoom >= 0 && _dailyRoom < n && count[_dailyRoom] > 0 && ScreenSeconds - _dailyAt < DailyHoldSec;
+        if (!keep)
+        {
+            int pick = -1;
+            for (int r = 0; r < n; r++)
+            {
+                if (count[r] == 0) continue;
+                if (pick < 0 || _roomShown[r] < _roomShown[pick] || _roomShown[r] == _roomShown[pick] && count[r] > count[pick]) pick = r;
+            }
+            if (pick < 0) { if (FocusCell < 0) FocusCell = L.Index(L.W / 2, L.H / 2); _dailyRoom = -1; return; }
+            if (pick != _dailyRoom) { DailyCuts++; _dailyRoom = pick; }
+            _dailyAt = ScreenSeconds;
+        }
+        _roomShown[_dailyRoom] = ScreenSeconds;
+        // 그 방 사람들 가운데쯤에 선 사람
+        double sx = 0, sy = 0; int k = 0;
+        foreach (var a in mind.Agents)
+            if (a.IsPerson && a.C.Cell >= 0 && L.Room[a.C.Cell] == _dailyRoom) { sx += L.X(a.C.Cell); sy += L.Y(a.C.Cell); k++; }
+        if (k == 0) return;
+        sx /= k; sy /= k;
+        int best = -1; double bd = double.MaxValue;
+        foreach (var a in mind.Agents)
+        {
+            if (!a.IsPerson || a.C.Cell < 0 || L.Room[a.C.Cell] != _dailyRoom) continue;
+            double dd = (L.X(a.C.Cell) - sx) * (L.X(a.C.Cell) - sx) + (L.Y(a.C.Cell) - sy) * (L.Y(a.C.Cell) - sy);
+            if (dd < bd) { bd = dd; best = a.C.Cell; }
+        }
+        FocusCell = best;
+        var (bx0, by0, bx1, by1) = _roomBox[_dailyRoom];
+        Zoom = Math.Clamp(Math.Max(bx1 - bx0 + 1, (by1 - by0 + 1) * 2) + 6, 14, 40);
     }
 
     /// <summary>칸 c 가까이(반경 SpotRadius · 10분 안)의 일이 지금 장면의 것인가 (같은 사슬 · 같은 주인공).</summary>
