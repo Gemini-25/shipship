@@ -38,7 +38,7 @@ public sealed partial class Mind : IEngine
     public readonly string[] ItemNames;
     public readonly string[] RoleNames;
     public readonly int ItemCount;
-    public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest, iRation, iSalvage, iCO2;
+    public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest, iRation, iSalvage, iCO2, iAed;
     /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
     public const byte PullFeederArg = 254;
 
@@ -73,7 +73,7 @@ public sealed partial class Mind : IEngine
         ItemCount = ItemNames.Length;
         RoleNames = P.Roles.Keys.ToArray();
         byte Item(string n) { int i = Array.IndexOf(ItemNames, n); if (i < 0) throw new InvalidDataException($"사람 표에 물건 '{n}'이 없다"); return (byte)i; }
-        iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품"); iCO2 = Item("이산화탄소 소화기");
+        iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품"); iCO2 = Item("이산화탄소 소화기"); iAed = Item("제세동기");
 
         Stock = new int[L.Furniture.Count * ItemCount];
         foreach (var fu in L.Furniture)
@@ -400,7 +400,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -671,7 +671,7 @@ public sealed partial class Mind : IEngine
         _claims[k] = v;
     }
 
-    private static bool IsTask(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Investigate;
+    private static bool IsTask(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Investigate or GoalKind.Cpr;
 
     // ───────────────────────── 찍기 ─────────────────────────
 

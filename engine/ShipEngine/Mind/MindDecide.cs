@@ -132,7 +132,7 @@ public sealed partial class Mind
     {
         if (!_claims.TryGetValue(ClaimKey(g, target), out var v)) return 1;
         int n = v.n - (a.C.Goal == g && a.C.GoalTarget == target ? 1 : 0);
-        if (a.IsPerson && v.robot && !(a.C.Goal == g && a.C.GoalTarget == target)) return 0.1f;
+        if (a.IsPerson && v.robot && g != GoalKind.Cpr && !(a.C.Goal == g && a.C.GoalTarget == target)) return 0.1f;   // 멎은 심장은 로봇이 제세동기를 가지러 간 사이 사람이 누른다
         return n >= need ? 0.15f : 1;
     }
 
@@ -240,7 +240,7 @@ public sealed partial class Mind
                 if (s > worst) { worst = s; cell = b.Cell; why = b.Cause; }
             }
             // 이 방의 위험을 다루러 들어온 사람(불 끄기 · 구하기 · 막기)은 나가지 않는다 — 정말 위험하면 본능이 끊는다
-            bool committed = c.Goal is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && InRoom(c.GoalCell, myRoom);
+            bool committed = c.Goal is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Cpr && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && InRoom(c.GoalCell, myRoom);
             // 지나가는 중: 지금 걸음이 위험하지 않다고 믿는 다른 방으로 가고 있으면 새로 대피하지 않는다 (통로를 지날 때마다 문을 여닫지 않게)
             bool passing = a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.GoTo && a.Plan[c.StepIndex].Cell >= 0
                 && RoomOf(a.Plan[c.StepIndex].Cell) != myRoom && RoomBadness(a, RoomOf(a.Plan[c.StepIndex].Cell)) < 0.3f;
@@ -265,6 +265,14 @@ public sealed partial class Mind
                     int target = b.Cell;
                     float s = person ? b.Conf * (0.5f + c.SkFire + c.Brave) * 2.5f * caution : b.Conf * 6;
                     Add(GoalKind.FightFire, target, b.Cell, s * df * ClaimFactor(a, GoalKind.FightFire, target, 2), b.Cause);
+                    break;
+                }
+                case BeliefKind.Injured when !drone && b.Subject >= 0 && b.Subject < _life!.Bodies.Count && _life.Bodies[b.Subject].Alive != 0 && _life.Bodies[b.Subject].Arrest != 0:
+                {
+                    // ⑦ 멎은 심장: 쓰러진 이 곁에 가면 숨도 맥도 없음을 안다 — 안전한 곳이어도 가슴을 누르러 간다 (둘까지 — 하나는 제세동기를 가져온다)
+                    float bond = person && _soc != null ? Math.Max(0, _soc.BondOf(a.Id, AgentOfBody(b.Subject))) : 0;
+                    float s = person ? b.Conf * (1.5f + c.Kindness + 2 * c.SkMedic + 2 * bond) * 2.5f * (caution + bond * (1 - caution)) : b.Conf * 6.5f;
+                    Add(GoalKind.Cpr, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Cpr, b.Subject, 2), b.Cause);
                     break;
                 }
                 case BeliefKind.Injured when !drone && (b.Src is BeliefSource.Told or BeliefSource.Heard || !SafeAt(b.Cell)):
@@ -397,6 +405,7 @@ public sealed partial class Mind
             }
             case GoalKind.Cook: return BuildCook(a, o, plan);
             case GoalKind.Treat: return BuildTreat(a, o, plan, here);
+            case GoalKind.Cpr: return BuildCpr(a, o, plan, here);
             case GoalKind.Pilfer:
             {
                 if (o.Target < 0) return false;
@@ -854,6 +863,9 @@ public sealed partial class Mind
         // ⑦ 맡긴 돌보기: 다친 이 곁으로 (맡김 가산 +3 — 사람이면 끼니보다 앞선다)
         if (c.AssignedGoal == GoalKind.Treat && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0)
             Add(GoalKind.Treat, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.2f);
+        // ⑦ 맡긴 가슴 압박 (주컴퓨터가 멎은 심장을 알았다): 믿음이 없어도 간다
+        if (c.AssignedGoal == GoalKind.Cpr && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0 && _life.Bodies[c.AssignedTarget].Arrest != 0)
+            Add(GoalKind.Cpr, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.5f);
         // 거둔 것을 들고 있으면 (하던 일이 끊겼어도) 식량 창고에 넣는다
         if (c.Holding == iHarvest && _life != null && _life.Crops.Count > 0) Add(GoalKind.Harvest, 0, c.Cell, 1.0f);
         if (c.Holding == iRation) Add(GoalKind.Restock, c.AssignedGoal == GoalKind.Restock && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);

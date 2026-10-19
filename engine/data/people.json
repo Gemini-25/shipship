@@ -26,7 +26,7 @@
     "Workbench":     { "수리 꾸러미": 2, "봉합 꾸러미": 2 },
     "Shelf":         { "소화기": 1, "봉합 꾸러미": 1 },
     "OxygenMaskBox": { "산소 마스크": 6 },
-    "MedBed":        { "구급 상자": 1 },
+    "MedBed":        { "구급 상자": 1, "제세동기": 1 },
     "Refinery":      { "원료": 4 },
     "PowerPanel":    { "이산화탄소 소화기": 1 },
     "MainComputer":  { "이산화탄소 소화기": 1 }
@@ -42,7 +42,8 @@
     "수확물":      { "minutes": 0, "kg": 3 },
     "식량 상자":   { "minutes": 0, "kg": 13 },
     "떼어 낸 부품": { "minutes": 20, "kg": 3 },
-    "이산화탄소 소화기": { "co2": 155, "minutes": 0, "kg": 12 }
+    "이산화탄소 소화기": { "co2": 155, "minutes": 0, "kg": 12 },
+    "제세동기":    { "minutes": 0.2, "kg": 3 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

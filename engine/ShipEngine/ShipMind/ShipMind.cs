@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -364,7 +364,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -485,6 +485,13 @@ public sealed partial class ShipMind : IEngine
                 var b = _life.Bodies[a.C.Body];
                 int r = _mind.RoomOf(b.Cell);
                 if (r < 0 || RoomSeen[r] == 0 || b.Alive == 0 || b.Conscious != 0) continue;
+                if (b.Arrest != 0)
+                {
+                    // ⑦ 몸 감시: 심장이 멎었다 — 곁의 사람에게 가슴을 누르라고 · 로봇이 제세동기를 가져간다
+                    Raise(sim, IncidentKind.Arrest, r, b.Cell, b.Hypoxia, a.C.Body, b.ArrestCause, $"{_mind.NameOf(a.Id)} — 가슴을 누르세요 · 제세동기를 가져갑니다");
+                    Mark(IncidentKind.Arrest, r, a.C.Body);
+                    continue;
+                }
                 Raise(sim, IncidentKind.PersonDown, r, b.Cell, b.Hypoxia, a.C.Body, b.HurtCause);
                 Mark(IncidentKind.PersonDown, r, a.C.Body);
             }
@@ -846,7 +853,7 @@ public sealed partial class ShipMind : IEngine
             if (x.Active == 0) continue;
             // 경보 · 방송: 처음 2분은 10틱마다, 그 뒤로는 1분마다 — 그 방과 문으로 이어진 방
             long gap = t - x.Since < Time.Minutes(2) ? 10 : Time.Minutes(1);
-            if (Dangerous(x.Kind) && t - x.LastAlarm >= gap)
+            if (Dangerous(x.Kind) && t - x.LastAlarm >= gap || x.Kind == IncidentKind.Arrest && t - x.LastAlarm >= Time.Minutes(1))   // 심정지는 1분마다 다시 알린다
             {
                 Alarm(sim, x);
                 x.LastAlarm = t;
@@ -894,7 +901,7 @@ public sealed partial class ShipMind : IEngine
         IncidentKind.Toxic => new Belief { Kind = BeliefKind.BadAir, Cell = x.Cell, Subject = -1, Conf = Math.Clamp(x.Level / 300f, 0.5f, 1f), Cause = x.Cause },
         IncidentKind.Flammable => new Belief { Kind = BeliefKind.BadAir, Cell = x.Cell, Subject = -1, Conf = Math.Clamp(x.Level / 60f, 0.5f, 1f), Cause = x.Cause },
         IncidentKind.Hot => new Belief { Kind = BeliefKind.Hot, Cell = x.Cell, Subject = -1, Conf = 0.8f, Cause = x.Cause },
-        IncidentKind.PersonDown => new Belief { Kind = BeliefKind.Injured, Cell = x.Cell, Subject = x.Subject, Conf = 1f, Cause = x.Cause },
+        IncidentKind.PersonDown or IncidentKind.Arrest => new Belief { Kind = BeliefKind.Injured, Cell = x.Cell, Subject = x.Subject, Conf = 1f, Cause = x.Cause },
         IncidentKind.DeviceBroken => new Belief { Kind = BeliefKind.Broken, Cell = x.Cell, Subject = x.Subject, Conf = 1f, Cause = x.Cause },
         IncidentKind.ElectricFault => new Belief { Kind = BeliefKind.Spark, Cell = x.Cell, Subject = -1, Conf = 1f, Cause = x.Cause },
         IncidentKind.Strain => new Belief { Kind = BeliefKind.Strain, Cell = x.Cell, Subject = -1, Conf = Math.Clamp(x.Level, 0.6f, 1f), Cause = x.Cause },
@@ -980,6 +987,7 @@ public sealed partial class ShipMind : IEngine
                 break;
             }
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
+            case IncidentKind.Arrest: g = GoalKind.Cpr; target = x.Subject; drone = false; break;   // ⑦ 하나는 누르고 하나는 제세동기를 가져온다
             case IncidentKind.Injured: g = GoalKind.Treat; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
             case IncidentKind.ElectricFault when _net != null && _net.IsStuckFault(x.Subject):
@@ -994,7 +1002,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
             default: return;
         }
-        int need = x.Kind == IncidentKind.Fire ? 2 : 1;
+        int need = x.Kind is IncidentKind.Fire or IncidentKind.Arrest ? 2 : 1;
         bool Busy(int rb) => rb >= 0 && _mind.Agents[rb].C.Up != 0 && _mind.Agents[rb].C.AssignedUntil > sim.Tick;
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
         while (have < need)

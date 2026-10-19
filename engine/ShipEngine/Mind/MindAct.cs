@@ -203,7 +203,9 @@ public sealed partial class Mind
         if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
         Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
+        if (use == UseKind.Cpr) Activity(a, "hard");   // 가슴 압박은 힘든 일
         bool done = t - c.StepStart >= st.Value;
+        if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
         switch (use)
         {
             // 한번 누우면 다섯 시간은 잔다 · 목이 몹시 마르면 깬다 (마실 것이 없어도 30분은 눈을 붙인다)
@@ -225,6 +227,7 @@ public sealed partial class Mind
             }
             case UseKind.Pilfer when a.IsPerson: PilferDone(sim, a, st); break;
             case UseKind.Treat: TreatDone(sim, a, st); break;
+            case UseKind.Cpr: CprDone(sim, a, st); break;
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)
@@ -332,7 +335,7 @@ public sealed partial class Mind
                 if (_net.LiveAt(fires[k]))
                 {
                     int shock = sim.Causes.Add(CauseKind.Electric, $"{Ko.I(NameOf(a.Id))} 전기가 흐르는 곳의 불에 물을 뿌려 감전됐다", t, fires[k], c.GoalCause, 0, a.Id);
-                    _life.Scald(sim, c.Body, 0.15f, shock);
+                    _life.Electrocute(sim, c.Body, shock);   // ⑦ 30%는 심장이 떤다
                     break;
                 }
     }

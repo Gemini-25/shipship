@@ -42,6 +42,14 @@ public struct Body
     public float IllH;         // 그 단계에 든 지 (시간)
     public int IllCause;       // 병의 원인 마디 (옮긴 이 쪽으로 이어진다)
     public int InfectCause;    // 곪음의 원인 마디
+    // ⑦ 장기 · 심정지 (깊이 바퀴 3)
+    public float Brain, BrainPeak;   // 뇌 손상 (0.5면 깨어나지 못하고 · 1이면 죽는다) · 가장 컸던 것 (그 40%는 낫지 않는다)
+    public float Heart, HeartPeak;   // 심장 손상 · 가장 컸던 것 (그 50%는 낫지 않는다)
+    public float LungScar;           // 폐 흉터 — 폐 손상이 이 아래로 낫지 않는다
+    public byte Arrest;              // 심정지: 0 뛴다 · 1 잔떨림(제세동이 듣는다) · 2 멎음
+    public float NoFlow, LowFlow;    // 멎은 뒤 압박 없이 · 압박을 받으며 지난 분
+    public long CprAt, ShockAt;      // 마지막으로 가슴 압박을 받은 틱 · 마지막 제세동 틱
+    public int ArrestCause;          // 심정지의 원인 마디
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -351,7 +359,10 @@ public sealed partial class Life : IEngine
         double sat = hill(pO2e) * (1 - b.COHb) * (1 - Math.Min(0.9, b.LungDamage * (therapy ? 0.5 : 1)));
         b.SpO2 = (float)sat;
         double o2Got;
-        if (suit) { o2Got = Math.Min(vo2, b.SuitO2); b.SuitO2 -= (float)o2Got; if (b.SuitO2 <= 0) b.SpO2 = 0; }
+        // ⑦ 심정지: 숨도 피도 돌지 않는다 (가슴 압박을 받으면 피가 조금 돈다 — 포화도 0.3 언저리)
+        bool cpr = b.Arrest != 0 && ArrestStep(sim, id, ref b, dt);
+        if (b.Arrest != 0) { o2Got = 0; b.SpO2 = cpr ? (float)Math.Min(sat, 0.3) : 0; }
+        else if (suit) { o2Got = Math.Min(vo2, b.SuitO2); b.SuitO2 -= (float)o2Got; if (b.SuitO2 <= 0) b.SpO2 = 0; }
         else if (mask) { o2Got = Math.Min(vo2 * Math.Min(1, sat / 0.95), b.MaskO2); b.MaskO2 -= (float)o2Got; if (b.MaskO2 <= 0) b.Mask = 0; }
         else o2Got = p > 1 ? Math.Min(vo2 * Math.Min(1, sat / 0.95), F.Gas(T.gO2, c) * 0.5) : 0;
         // 숨: 포도당 + 6O₂ → 6CO₂ + 6H₂O · 지방(팔미트산) + 23O₂ → 16CO₂ + 16H₂O — 섞어 태운다 (호흡 몫 0.79 ~ 1.0)
@@ -385,8 +396,18 @@ public sealed partial class Life : IEngine
         // 산소 부족
         bool vacuum = !suit && p < 6.3;
         if (vacuum) { b.Hypoxia += (float)(dt / 30); env = EnvCause(sim, c, st, chem); harm = "진공에서 숨을 못 쉬었다"; }
+        else if (b.Arrest != 0)
+        {
+            // 피가 돌지 않는다 — 숨 쉴 공기마저 나쁘면 그 빠르기로 (옅은 공기는 폐에서 피의 산소를 오히려 빼낸다)
+            double air = sat < 0.75 ? (0.75 - sat) / 0.75 : 0;
+            b.Hypoxia += (float)(Math.Max(cpr ? CprRate : ArrestRate, air) * dt / 60);
+            env = air > 0.5 ? EnvCause(sim, c, st, chem) : b.ArrestCause; harm = air > 0.5 ? (b.COHb > 0.3 ? "일산화탄소에 중독됐다" : "산소가 모자랐다") : "심장이 멎었다";
+        }
         else if (b.SpO2 < 0.75) { b.Hypoxia += (float)((0.75 - b.SpO2) / 0.75 * dt / 60); env = EnvCause(sim, c, st, chem); harm = b.COHb > 0.3 ? "일산화탄소에 중독됐다" : "산소가 모자랐다"; }
         else b.Hypoxia = (float)Math.Max(0, b.Hypoxia - dt / 600);
+        // ⑦ 장기: 깊은 산소 부족에 뇌가 · 오래 옅은 피의 산소에 심장이 상한다
+        if (b.Hypoxia > BrainHypoxia) b.Brain = (float)Math.Min(1.2, b.Brain + BrainRate * (b.Hypoxia - BrainHypoxia) * dt / 60);
+        if (b.Arrest == 0 && b.SpO2 < 0.5f) b.Heart = (float)Math.Min(1, b.Heart + 0.02 * (0.5 - b.SpO2) * dt / 60);
         // 일산화탄소 헤모글로빈 → 평형 1−e^(−ppm/1000), 시간 상수 4시간 × (80W/대사량)
         double eq = 1 - Math.Exp(-co / 1000);
         double tau = 4 * 3600 * 80 / Math.Max(60, b.ActivityW) / (therapy ? 4 : 1); // 순수한 산소는 일산화탄소를 네 배 빨리 밀어낸다
@@ -413,7 +434,7 @@ public sealed partial class Life : IEngine
         if (soot > 2000) lung += soot / 200_000;
         if (Mold[c] > 0.3f) lung += 0.002;
         if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= hf > 15 ? "플루오린화수소를 마셨다" : hcl > 50 ? "염화수소를 마셨다" : nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
-        else b.LungDamage = (float)Math.Max(0, b.LungDamage - dt / (14 * 86400));
+        else LungHeal(ref b, dt);
 
         // ── 체온 ──
         double tsurf = F.HasSurface(c) ? F.Tf[c] : F.Ts[c];
@@ -524,7 +545,9 @@ public sealed partial class Life : IEngine
         double pain = Math.Min(1, b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4);
         b.Pain = (float)Math.Max(0, b.Pain - dt / 1800);
         if (b.Cell >= 0 && b.Cell < L.N) Decondition(ref b, F.Grav[b.Cell], dt);   // 무중력의 뼈 · 근육
-        bool down = b.Hypoxia > 0.5 || b.COHb > 0.5 || b.CN > 1 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
+        ArrestTriggers(sim, id, ref b, dt, env);   // ⑦ 심정지
+        HealOrgans(ref b, dt);
+        bool down = b.Arrest != 0 || b.Brain >= 0.5f || b.Hypoxia > 0.5 || b.COHb > 0.5 || b.CN > 1 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
         if (down && b.Conscious != 0)
         {
             b.Conscious = 0;
@@ -533,15 +556,15 @@ public sealed partial class Life : IEngine
             b.HurtCause = cause;
             sim.Facts.Emit(sim.Tick, FactKind.Collapsed, c, (float)b.Hypoxia, cause, actor: id);
         }
-        else if (!down && b.Conscious == 0 && b.Hypoxia < 0.3 && b.CN < 0.7 && b.CoreK < 312.15) b.Conscious = 1; // 열로 쓰러지면 39℃ 아래로 식어야 깬다
-        string? death = b.CN > 3 ? "시안화수소에 중독됐다" : b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다"
+        else if (!down && b.Conscious == 0 && b.Hypoxia < 0.3 && b.CN < 0.7 && b.CoreK < 312.15 && b.Arrest == 0 && b.Brain < 0.5f) b.Conscious = 1; // 열로 쓰러지면 39℃ 아래로 식어야 깬다
+        string? death = b.CN > 3 ? "시안화수소에 중독됐다" : b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다" : b.Brain >= 1 ? "뇌가 상했다"
             : b.CoreK < 301 ? "얼어 죽었다" : b.CoreK > 316 ? "열사병" : b.BloodL < 2.5 ? "피를 너무 흘렸다"
             : b.Burn > 1.2 ? "화상" : b.Blunt > 1.5 ? "크게 다쳤다" : b.LungDamage > 1.2 ? "폐가 상했다"
             : b.Infect > 2 ? "패혈증" : b.Water < 42 * 55.5 * 0.82 ? "목이 말라" : b.Reserve <= 0.01 && b.Fat <= 0.01 && b.CoreK < 306 ? "굶어서" : b.RadRecent > 9 ? "방사선" : null;
         if (death != null)
         {
             b.Alive = 0; b.Conscious = 0; b.DiedAt = sim.Tick;
-            int cause = sim.Causes.Add(CauseKind.Biology, $"죽었다 — {death}", sim.Tick, c, death == "패혈증" ? b.InfectCause : env != 0 ? env : b.HurtCause);
+            int cause = sim.Causes.Add(CauseKind.Biology, $"죽었다 — {death}", sim.Tick, c, death == "패혈증" ? b.InfectCause : b.Arrest != 0 ? b.ArrestCause : env != 0 ? env : b.HurtCause);
             b.DeathCause = cause;
             Deaths++;
             sim.Facts.Emit(sim.Tick, FactKind.Died, c, 0, cause, actor: id);

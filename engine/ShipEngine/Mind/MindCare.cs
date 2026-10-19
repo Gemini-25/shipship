@@ -57,6 +57,90 @@ public sealed partial class Mind
         if (c.AssignedGoal == GoalKind.Treat && c.AssignedTarget == vb) c.AssignedUntil = sim.Tick;   // 맡은 일을 마쳤다
     }
 
+    // ── ⑦ 바퀴 3: 멎은 심장 — 곁에서 가슴을 누르고 · 제세동기를 가져와 친다 ──
+    public long CprStarts, AedShocks;
+
+    /// <summary>그 몸에게 제세동기를 누가 이미 들고 있거나 가지러 갔나.</summary>
+    private bool AedComing(Agent me, int vb)
+    {
+        foreach (var o in Agents)
+        {
+            if (o == me || o.C.Up == 0 || o.C.Goal != GoalKind.Cpr || o.C.GoalTarget != vb) continue;
+            if (o.C.Holding == iAed) return true;
+            for (int i = o.C.StepIndex; i < o.Plan.Count; i++) if (o.Plan[i].Kind == StepKind.Take && o.Plan[i].Arg == iAed) return true;
+        }
+        return false;
+    }
+
+    /// <summary>그 몸 곁에서 누가 이미 가슴을 누르나 (또는 누르러 가나).</summary>
+    private bool Compressing(Agent me, int vb)
+    {
+        foreach (var o in Agents) if (o != me && o.C.Up != 0 && o.C.Goal == GoalKind.Cpr && o.C.GoalTarget == vb) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 가슴 압박 계획: 제세동기를 아무도 가져오지 않으면 (로봇은 늘 · 사람은 누가 이미 누를 때) 가까운 것을 들고 간다 ·
+    /// 쓰러진 곳이 안전하지 않으면 먼저 업어 낸다 · 곁에서 누른다 (다시 뛰거나 숨지거나 40분).
+    /// </summary>
+    private bool BuildCpr(Agent a, Option o, List<PlanStep> plan, int here)
+    {
+        ref var c = ref a.C;
+        int vb = o.Target;
+        if (vb < 0 || vb >= _life!.Bodies.Count || vb == c.Body) return false;
+        var body = _life.Bodies[vb];
+        if (body.Alive == 0 || body.Arrest == 0 || c.Carrying >= 0) return false;
+        if (c.Holding == 255 && !AedComing(a, vb) && (!a.IsPerson || Compressing(a, vb)))
+        {
+            int src = NearestStock(here, iAed);
+            if (src >= 0 && Dist(here, L.Furniture[src].Cells[0]) <= 80)
+            {
+                plan.Add(Go(L.Furniture[src].Cells[0], 1));
+                plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iAed });
+            }
+        }
+        if (!SafeAt(body.Cell) && c.Holding == 255 && plan.Count == 0)
+        {
+            plan.Add(Go(body.Cell, 1));
+            plan.Add(new PlanStep { Kind = StepKind.PickUp, Target = vb });
+            plan.Add(new PlanStep { Kind = StepKind.GoTo, Cell = -1, Arg = 0 });
+            plan.Add(new PlanStep { Kind = StepKind.Drop });
+        }
+        else plan.Add(Go(body.Cell, 1));
+        plan.Add(Use(UseKind.Cpr, Time.Minutes(40), body.Cell, vb));
+        CprStarts++;
+        return true;
+    }
+
+    /// <summary>가슴 압박 중 (틱마다): 곁이면 누르고 · 제세동기를 들었으면 2분마다 읽어 잔떨림이면 친다 (붙이고 읽는 데 10초).
+    /// 1 마쳤다 (다시 뛴다 · 숨졌다) · 0 이어 누른다 · −1 쓰러진 이가 멀어졌다 (다시 계획한다 — 피하지 않는다).</summary>
+    private int CprTick(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        int vb = st.Target;
+        if (vb < 0 || vb >= _life!.Bodies.Count) return 1;
+        var body = _life.Bodies[vb];
+        if (body.Alive == 0 || body.Arrest == 0) return 1;
+        if (Dist(c.Cell, body.Cell) > 1) { EndPlan(a); return -1; }
+        _life.Compress(sim, vb);
+        if (c.Holding == iAed && body.Arrest == 1 && sim.Tick - c.StepStart >= 4 && sim.Tick - body.ShockAt >= Time.Minutes(2))
+        {
+            int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 제세동기를 붙여 쳤다", sim.Tick, c.Cell, body.ArrestCause, 0, a.Id);
+            AedShocks++;
+            _life.Defibrillate(sim, vb, cause);
+        }
+        return _life.Bodies[vb].Arrest == 0 ? 1 : 0;
+    }
+
+    /// <summary>가슴 압박을 마쳤다 (다시 뛰었거나 숨졌거나 40분) — 제세동기는 그 자리에 둔다 · 솜씨가 는다.</summary>
+    private void CprDone(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        if (c.Holding == iAed) DropHeld(a);
+        if (a.IsPerson) c.SkMedic = Math.Min(1, c.SkMedic + 0.006f * Practice(c, "치료") * UseSkill(a, 1, sim.Tick));
+        if (c.AssignedGoal == GoalKind.Cpr && c.AssignedTarget == st.Target) c.AssignedUntil = sim.Tick;
+    }
+
     /// <summary>돌보러 오는 이가 있으면 그 자리에서 기다린다 (의식이 있는 다친 이).</summary>
     private void AwaitCare(Agent a, int here)
     {
@@ -89,14 +173,14 @@ public sealed partial class Mind
         if (!a.IsPerson) return 1;
         ref var b = ref _life![a.C.Body];
         double loss = Life.WeightLoss(b);
-        return (Life.Sick(b) ? 0.85 : 1) * Math.Clamp(1 - 1.5 * Math.Max(0, loss - 0.1), 0.6, 1);
+        return (Life.Sick(b) ? 0.85 : 1) * Math.Clamp(1 - 1.5 * Math.Max(0, loss - 0.1), 0.6, 1) * Life.OrganPace(b);   // ⑦ 상한 심장 · 뇌는 느리다
     }
 
     /// <summary>졸림이 차는 몫: 앓으면 1.5배 · 몸무게를 잃은 만큼 빨리 지친다.</summary>
     private double TireFactor(Agent a)
     {
         ref var b = ref _life![a.C.Body];
-        return (Life.Sick(b) ? 1.5 : 1) * (1 + 2 * Math.Max(0, Life.WeightLoss(b) - 0.1));
+        return (Life.Sick(b) ? 1.5 : 1) * (1 + 2 * Math.Max(0, Life.WeightLoss(b) - 0.1)) * (1 + 2 * b.Heart);   // ⑦ 상한 심장은 빨리 지친다
     }
 
     /// <summary>잠의 질 (자는 동안 · 30분에 걸쳐 따라간다): 소리 · 빛 · 온도 · 아픔 · 열 · 긴장.</summary>

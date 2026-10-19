@@ -84,7 +84,7 @@ public sealed partial class ShipMind
     /// <summary>급한 차례 (작을수록 급하다): 쓰러진 사람 · 불 · 공기 빠짐 · 샘 · 다친 사람 · 전기 사고 · 버팀 · 고장 · 센서 · 그 밖.</summary>
     internal static int Rank(IncidentKind k) => k switch
     {
-        IncidentKind.PersonDown => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured => 4,
+        IncidentKind.PersonDown or IncidentKind.Arrest => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured => 4,
         IncidentKind.ElectricFault => 5, IncidentKind.Strain or IncidentKind.DoorJam => 6, IncidentKind.CO or IncidentKind.Toxic => 7,
         IncidentKind.PowerLost => 5, IncidentKind.LineCut or IncidentKind.PipeHunt => 7, IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
     };
