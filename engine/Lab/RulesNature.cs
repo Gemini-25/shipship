@@ -84,6 +84,7 @@ public static partial class Program
         }
 
         NatureInsideRules();
+        NatureHandsRules();
     }
 
     private const string CrateShip = @"
@@ -182,5 +183,47 @@ public static partial class Program
                 ill.Count == 1 && why.Contains("잠복") && none == 0,
                 $"잠복한 이 {ill.Count} · \"{why}\" / 몫 0: {none}");
         }
+    }
+
+    /// <summary>⑫ 자연 사건 (다) — 세상이 계산하는 사고: 손보다 다른 부품을 상하게 함(⑥) · 일하다 다침(⑦) → 알아챘는지 · 말할지는 그 사람이 (⑧).</summary>
+    private static void NatureHandsRules()
+    {
+        Console.WriteLine("\n[⑫ 자연 사건 (다) — 손보다 상함 · 일하다 다침]");
+        var lay = Worlds.Ascii(HearShip, HearLegend);
+        (int handled, int confessed, int concealed, float blunt, string why, string hurtWhy) Run(double chance, double slip, float consc, float agree, float neuro)
+        {
+            var s = Worlds.Full(lay, 51);
+            var m = s.Get<Mind>(); var n = s.Get<Network>(); var life = s.Get<Life>();
+            n.HandledChance = chance; life.SlipChance = slip; life.ScaldChance = 0;
+            int pump = n.Devices.First(d => d.Def.Role == "pump").Id;
+            int p = m.AddPerson(s, Worlds.At(lay, 6, 4));
+            s.Run(3);
+            ref var c = ref m[p].C;
+            c.SkRepair = 1; c.Consc = consc; c.Agree = agree; c.Neuro = neuro; c.Station = -1; c.Sleepy = 0; c.Stress = 0;
+            long f0 = s.Facts.Total;
+            m.AssignJob(p, GoalKind.Maintain, pump * 4 + (int)Part.Mechanical, 0, s.Tick + Time.Hours(2));   // 일감판처럼 미리 갈기를 맡긴다
+            int done = -1;
+            for (int k = 0; k < Time.Hours(1.5) && (done < 0 || k < done + 10); k++)
+            {
+                s.Step();
+                m[p].C.Hunger = 0; m[p].C.Thirst = 0; m[p].C.Sleepy = 0;
+                if (done < 0 && s.Facts.Since(f0).Any(x => x.Kind == FactKind.Repaired && x.Actor == p)) done = k;
+            }
+            var fs = s.Facts.Since(f0).ToList();
+            var mis = fs.Where(x => x.Kind == FactKind.Mistake && x.Actor == p && x.Size == Network.HandledSize).ToList();
+            var hurt = fs.FirstOrDefault(x => x.Kind == FactKind.Hurt && x.Actor == p);
+            return (mis.Count, fs.Count(x => x.Kind == FactKind.Confessed && x.Actor == p), fs.Count(x => x.Kind == FactKind.Mistake && x.Actor == p && x.Size == 2),
+                life[m[p].C.Body].Blunt, mis.Count > 0 ? s.Causes.Story(mis[0].Cause) : "", hurt.Kind == FactKind.Hurt ? s.Causes.Story(hurt.Cause) : "");
+        }
+        var honestT = Task.Run(() => Run(10, 0, 0.95f, 0.9f, 0.1f)); var closedT = Task.Run(() => Run(10, 0, 0.6f, 0f, 1f));   // 몫 10 — 솜씨가 좋아도 반드시
+        var hurtT = Task.Run(() => Run(0, 1, 0.5f, 0.5f, 0.5f)); var calm = Run(0, 0, 0.5f, 0.5f, 0.5f);
+        var honest = honestT.Result; var closed = closedT.Result; var hurt = hurtT.Result;
+        if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    {honest.why}\n    {hurt.hurtWhy}");
+        Check("손보다 상함: 펌프를 미리 갈다 다른 부품을 상하게 했다 (세상이 솜씨 · 졸림 · 서두름으로 계산 — 사실 '실수') · 알아챈 정직한 이는 털어놓고 · 입이 무거운 이는 말하지 않는다 (그 사람의 판단)",
+            honest.handled == 1 && honest.confessed == 1 && honest.concealed == 0 && closed.handled == 1 && closed.confessed == 0 && closed.concealed == 1 && calm.handled == 0 && honest.why.Contains("상하게"),
+            $"정직한 이: 상함 {honest.handled} · 털어놓음 {honest.confessed} / 입이 무거운 이: 상함 {closed.handled} · 말하지 않음 {closed.concealed} / 몫 0: 상함 {calm.handled} · \"{honest.why}\"");
+        Check("일하다 다침: 손보다 공구가 미끄러지면 세상(⑦)이 다치게 한다 (원인: 그 손봄) · 몫 0이면 다치지 않는다",
+            hurt.blunt > 0.2f && hurt.hurtWhy.Contains("미끄러져") && calm.blunt < 0.01f,
+            $"미끄러짐: 타박 {hurt.blunt:0.00} · \"{hurt.hurtWhy}\" / 몫 0: 타박 {calm.blunt:0.00}");
     }
 }

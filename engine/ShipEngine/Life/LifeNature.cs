@@ -36,3 +36,31 @@ public sealed partial class Life
         this[b].IllH = (float)(Rng.Unit(sim.Seed, Rng.Key("출항 잠복 때"), 0, 0) * IncubateHours * 0.8);
     }
 }
+
+/// <summary>
+/// ⑫ 자연 사건 — 일하다 다침: 고치는 이의 솜씨 · 졸림 · 서두름 · 장치가 뜨거운지로 세상이 계산한다 (뜨거운 관에 덴다 · 공구가 미끄러진다).
+/// 다쳤다고 알릴지 · 돌봄을 찾을지는 그 사람이 (⑧ — 아픔을 느끼고 판단한다). 몫은 기능 확인용 첫 값.
+/// </summary>
+public sealed partial class Life
+{
+    /// <summary>솜씨 보통 · 맑은 정신 · 차분할 때 한 번 손볼 때 공구가 미끄러질 몫 · 뜨거운 장치(60℃ 넘게)에 델 몫 (세계마다 · 찍지 않는다).</summary>
+    public double SlipChance = 0.01, ScaldChance = 0.08;
+    public long WorkInjuries;
+
+    /// <summary>⑧의 요청: 사람이 장치를 손봤다 (cell — 장치 칸 · hotK — 그 칸 온도) — 다쳤으면 그 원인 마디 (아니면 0).</summary>
+    public int WorkHazard(Sim sim, int body, int cell, double hotK, float skill, float sleepy, float hasty, int actor, string name, string device, int workCause)
+    {
+        if (body < 0 || body >= Bodies.Count || this[body].Alive == 0) return 0;
+        double k = Math.Max(0.1, 1.4 - skill) * (1 + sleepy) * (1 + hasty);
+        bool hot = hotK > 333;
+        double u = Rng.Unit(sim.Seed, Rng.Key("일하다 다침"), sim.Tick, body);
+        double scald = hot ? ScaldChance * k : 0, slip = SlipChance * k;
+        if (u >= scald + slip) return 0;
+        bool burn = u < scald;
+        float size = (float)(burn ? 0.2 + 0.25 * Math.Min(1, (hotK - 333) / 60) : 0.3 + 0.2 * Rng.Unit(sim.Seed, Rng.Key("다친 크기"), sim.Tick, body));
+        int cause = sim.Causes.Add(CauseKind.Person, burn ? $"{Ko.I(name)} {Ko.Eul(device)} 손보다 뜨거운 관에 팔을 데었다" : $"{Ko.I(name)} {Ko.Eul(device)} 손보다 공구가 미끄러져 손을 다쳤다", sim.Tick, cell, workCause, 0, actor);
+        if (burn) Scald(sim, body, size, cause); else Strike(sim, body, size, 0.12f, cause);
+        WorkInjuries++;
+        return cause;
+    }
+}

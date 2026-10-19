@@ -123,6 +123,7 @@ public sealed partial class Society
                 case SocialActKind.TellLie: ToldLie(sim, act); break;
                 case SocialActKind.HearLie: HeardLie(sim, act); break;
                 case SocialActKind.AskLog: AskedLog(sim, act); break;
+                case SocialActKind.Conceal: Concealed(sim, act); break;
                 case SocialActKind.DeferMemorial when _mournDeferred.Add(act.Target):
                     MemorialsDeferred++;
                     sim.Facts.Emit(sim.Tick, FactKind.Culture, act.Cell, (int)CultureEvent.MemorialDeferred, act.Cause, act.Actor, act.Target);

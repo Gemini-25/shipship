@@ -166,7 +166,7 @@ public static partial class Program
                 foreach (var a in m.Agents.Where(a => a.IsPerson)) { a.C.Consc = honest ? 0.95f : 0.05f; a.C.Agree = honest ? 0.9f : 0.1f; a.C.Neuro = honest ? 0.1f : 0.8f; }
                 st.Plant(s, SeedKind.HiddenFault);
                 var sd = st.Seeds[^1];
-                var mf = s.Facts.Since(0).Last(x => x.Kind == FactKind.Mistake && x.Size >= 2);
+                var mf = s.Facts.Since(0).Last(x => x.Kind == FactKind.Mistake && x.Size >= Network.HandledSize);
                 int who = mf.Actor, dev = mf.Other, N = so.N;
                 var others = m.Agents.Where(a => a.IsPerson && a.Id != who).Select(a => a.Id).ToList();
                 float trust0 = others.Average(o => so.TrustOf[o * N + who]), stress0 = m[who].C.Stress;

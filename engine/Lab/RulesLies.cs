@@ -35,7 +35,7 @@ public static partial class Program
             Put(x, here[0]);
             if (witness >= 0) Put(witness, here[Math.Min(1, here.Count - 1)]);
             int c0 = s.Causes.Add(CauseKind.Person, $"{Ko.I(m.NameOf(x))} {Ko.Eul(d.Name)} 손보다 부품을 상하게 했다 — 아무에게도 말하지 않았다", s.Tick, d.Cell, 0, 0, x);
-            s.Facts.Emit(s.Tick, FactKind.Mistake, d.Cell, 2, c0, x, d.Id);
+            s.Facts.Emit(s.Tick, FactKind.Mistake, d.Cell, Network.HandledSize, c0, x, d.Id);
             s.Step();
             s.Run(Time.Minutes(5));
             // 망가지는 순간: x 곁에 듣는 이들 (sc는 곁에 있거나 멀리)

@@ -285,7 +285,7 @@ public sealed partial class Storyteller
                 var part = parts[_rng.Range(0, parts.Count)];
                 int c0 = sim.Causes.Add(CauseKind.Person, $"{Ko.I(mind.NameOf(who.Id))} {Ko.Eul(dev.Name)} 손보다 {Device.PartName(part)} 부품을 상하게 했다 — 아무에게도 말하지 않았다", sim.Tick, dev.Cell, 0, 0, who.Id);
                 net.AgeLeft(dev.Id, part, _rng.Range(2.0, 10.0) / g, c0);
-                sim.Facts.Emit(sim.Tick, FactKind.Mistake, dev.Cell, 2, c0, who.Id, dev.Id);
+                sim.Facts.Emit(sim.Tick, FactKind.Mistake, dev.Cell, Network.HandledSize, c0, who.Id, dev.Id);
                 Involve(who.Id, 1);
                 return Record(sim, kind, c0, dev.Cell, 1);
             }

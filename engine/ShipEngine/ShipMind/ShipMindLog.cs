@@ -31,7 +31,7 @@ public sealed partial class ShipMind
             switch (f.Kind)
             {
                 case FactKind.Repaired or FactKind.Salvaged or FactKind.Sabotage when device && f.Actor >= 0:
-                case FactKind.Mistake when device && f.Actor >= 0 && f.Size >= 2 && f.Size < 2.5f:   // 손보다 (상하게 한 것은 기록에 없다 — 열었다는 것만)
+                case FactKind.Mistake when device && f.Actor >= 0 && f.Size >= Network.HandledSize && f.Size < 2:   // 손보다 (상하게 한 것은 기록에 없다 — 열었다는 것만)
                     Accesses.Add(new Access { Device = f.Other, Agent = f.Actor, Tick = f.Tick });
                     break;
                 case FactKind.LogAsked when device:

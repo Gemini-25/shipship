@@ -63,6 +63,8 @@ public sealed partial class Society
     public float[] LiarMark = Array.Empty<float>();      // 거짓말이 들킨 횟수 (그 사람 말을 덜 믿는다)
     public long Confessions, SecretsKept, LiesTold, LiesExposed, LiesBelieved, LiesDoubted, LogChecks;
     public const float LieAt = 0.35f, BelieveBase = 0.53f;
+    /// <summary>사실 '실수'의 크기 — 손보다 부품이 상했다 (⑥ <see cref="Network.HandledSize"/>).</summary>
+    public const float HandledSize = Network.HandledSize;
 
     public bool Secret(int cause) => _secret.Contains(cause);
     /// <summary>사람들이 아는 손본 이 (장치 · 손본 이 · 때 — 최근).</summary>
@@ -111,6 +113,17 @@ public sealed partial class Society
             Remember(sim, o, Topic.Work, x, act.Cause, 0.4f, c.Cell);
         }
         c.Stress = Math.Max(0, c.Stress - 0.15f);           // 털어놓으니 가볍다
+    }
+
+    /// <summary>손보다 상하게 한 것을 알아챘지만 입을 다물었다 (마음의 행동) — 그 일은 그대로 그 사람만 안다 · 마음이 조금 무겁다.</summary>
+    private void Concealed(Sim sim, SocialAct act)
+    {
+        int k = HiddenOf(act.Other);
+        if (k < 0 || Hidden[k].Who != act.Actor || !Person(act.Actor)) return;
+        ref var c = ref C(act.Actor);
+        _secret.Add(act.Cause);
+        sim.Facts.Emit(sim.Tick, FactKind.Mistake, c.Cell, 2, act.Cause, act.Actor, Hidden[k].Device);
+        c.Stress = Math.Min(1, c.Stress + 0.05f);
     }
 
     /// <summary>말하지 않았다 (마음의 행동): 제 탓의 기억과 무거운 마음이 남는다 (사람들은 모른다 — 관객만 본다).</summary>

@@ -22,12 +22,37 @@ public sealed partial class Mind
         if (soc == null) return;
         _heardNow.Clear();
         foreach (var f in sim.Facts.Since(_secretCursor))
+        {
             if (f.Kind == FactKind.MachineFail && soc.Hidden.Count > 0) Realize(sim, f);
+            else if (f.Kind == FactKind.Mistake && f.Size >= Network.HandledSize && f.Size < 2) Handled(sim, f);
+        }
         _secretCursor = sim.Facts.Total;
         if (_logChecks.Count > 0) AskLogs(sim);
     }
 
     private bool PersonUp(int i) => PersonAlive(i) && Agents[i].C.Up != 0;
+
+    /// <summary>
+    /// 손보다 부품이 상했다 (⑥이 계산한 일): 알아챘나 — 솜씨 · 성실만큼 (0.25 + 0.5 × 수리 솜씨 + 0.25 × 성실) · 알아챘으면 바로 털어놓을지 (고장 뒤와 같은 정직함) · 입을 다물지.
+    /// 몰랐으면 아무 일도 없다 — 고장 난 뒤에야 제 탓인 줄 안다.
+    /// </summary>
+    private void Handled(Sim sim, in Fact f)
+    {
+        int x = f.Actor;
+        if (!PersonUp(x)) return;
+        ref var c = ref Agents[x].C;
+        if (SocRnd(sim, "알아챔", x, f.Other) >= 0.25f + 0.5f * c.SkRepair + 0.25f * c.Consc) return;   // 모른다
+        string dev = _net != null && f.Other >= 0 && f.Other < _net.Devices.Count ? _net.Devices[f.Other].Name : "장치";
+        float honest = c.Consc * (0.5f + 0.5f * c.Agree) - 0.2f * c.Neuro + 0.3f * (SocRnd(sim, "털어놓기", x, f.Other) - 0.5f);
+        if (honest > 0.35f)
+        {
+            int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(x))} 털어놓았다 — {Ko.Eul(dev)} 손보다 부품을 상하게 했다고", sim.Tick, c.Cell, f.Cause, 0, x);
+            Act(sim, new SocialAct { Kind = SocialActKind.Confess, Actor = x, Target = -1, Other = f.Cause, Arg = f.Other, Room = RoomOf(c.Cell), Cell = c.Cell, Cause = cause });
+            return;
+        }
+        int kept = sim.Causes.Add(CauseKind.Person, $"{Ko.Eun(NameOf(x))} 아무에게도 말하지 않았다", sim.Tick, c.Cell, f.Cause, 0, x);
+        Act(sim, new SocialAct { Kind = SocialActKind.Conceal, Actor = x, Target = -1, Other = f.Cause, Arg = f.Other, Room = RoomOf(c.Cell), Cell = c.Cell, Cause = kept });
+    }
 
     /// <summary>그 고장이 제 숨긴 실수 탓인 줄 안 이가 정한다: 털어놓는다 · 둘러댄다 · 말하지 않는다.</summary>
     private void Realize(Sim sim, in Fact fail)

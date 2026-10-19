@@ -471,6 +471,7 @@ public sealed partial class Mind
             byEar ? $"{Ko.I(NameOf(a.Id))} 소리가 이상한 {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다" : $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다",
             t, _net.Devices[dev].Cell, parent, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, part, cause, a.Id, dev);
+        HandsOn(sim, a, dev, (Part)part, cause);
         JobDone(a, t);
     }
 
@@ -591,8 +592,24 @@ public sealed partial class Mind
         Repaired++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, used >= 0 ? $"{Ko.I(NameOf(a.Id))} 떼어 온 헌 부품으로 {Ko.Eul(_net.Devices[dev].Name)} 고쳤다" : $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, st.Arg, cause, a.Id, dev);
+        HandsOn(sim, a, dev, (Part)st.Arg, cause);
         Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev);
         Next(a, t);
+    }
+
+    /// <summary>
+    /// ⑫ 자연 사건: 사람이 장치를 손본 뒤 — 다른 부품을 상하게 했는지(⑥) · 다쳤는지(⑦)는 세상이 그 사람의 솜씨 · 졸림 · 서두름으로 계산한다 (요청만 — 정하지 않는다).
+    /// 서두름은 그 사람의 긴장 (급한 일 · 겁). 로봇은 손이 정확하다 (뺀다).
+    /// </summary>
+    private void HandsOn(Sim sim, Agent a, int dev, Part part, int workCause)
+    {
+        if (!a.IsPerson || _net == null) return;
+        ref var c = ref a.C;
+        float hasty = Math.Clamp(c.Stress, 0, 1);
+        string name = NameOf(a.Id);
+        _net.Handled(sim, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause);
+        int cell = _net.Devices[dev].Cell;
+        _life?.WorkHazard(sim, c.Body, cell, F.Temp(cell), c.SkRepair, c.Sleepy, hasty, a.Id, name, _net.Devices[dev].Name, workCause);
     }
 
     /// <summary>에어락이 쓰이는 중인가: 문 너머 방이 에어락(바깥문이 있는 방)이고 — 그 안에서 남이 나가려고 바깥문 밸브로 비우는 중이거나 바깥문을 기다린다

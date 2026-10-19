@@ -170,8 +170,8 @@ public sealed partial class Society : IEngine
         if (_mind == null || _life == null) return;
         _talk ??= TalkTable.Load();
         Resize(_mind.Agents.Count);
+        Events(sim);     // 세상에 일어난 일 (마음은 이것을 보고 정했다 — 손보다 상한 일은 행동보다 먼저 기록돼야 한다)
         TakeActs(sim);   // 판단 이관: 마음이 이번 틱에 한 사회적 행동의 결과를 계산한다
-        Events(sim);
         if (sim.Tick % TogetherEvery == 0)
         {
             Together(sim, TogetherEvery * dt);
@@ -455,7 +455,7 @@ public sealed partial class Society : IEngine
                     }
                     break;
                 }
-                case FactKind.Mistake when f.Size >= 2 && f.Size < 2.5f && f.Actor >= 0 && f.Actor < N:
+                case FactKind.Mistake when f.Size >= HandledSize && f.Size < 2 && f.Actor >= 0 && f.Actor < N:   // 손보다 상했다 (⑥ — 그 사람만 안다 · 알아챘는지 · 말할지는 그 사람이)
                 {
                     // 곁에서 본 이 (둘까지): 그 사람이 장치를 손보는 것만 봤다 — 상하게 한 줄은 모른다
                     var saw = Near(f.Cell, f.Actor, 6);
