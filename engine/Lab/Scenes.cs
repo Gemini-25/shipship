@@ -118,6 +118,25 @@ public static partial class Program
                 every = 25; count = 48;
                 break;
             }
+            case "zerogmess":
+            {
+                // 인공 중력 관찰 장면 '중력이 꺼진 식당': 디딤호 첫날 점심 — 식당에 모여 먹는데 인공 중력 발생기의 축받이가 닳아 멎고 · 식탁의 국과 물이 쏟아진다.
+                // 사람들은 떠오르고 (처음인 이는 멀미) · 국물은 방울로 떠 설비에 들러붙고 · 주컴퓨터는 무엇을 알리고 · 로봇은 고치러 가나 · 중력이 돌아오면 사람 · 물이 바닥으로
+                int robots = int.TryParse(Environment.GetEnvironmentVariable("ROBOTS"), out int rb) ? rb : 2;
+                s = ShipWorld.Crewed("Didim", 6, 6, robots);
+                while (Time.HourOfDay(s.Tick) < 12.1) s.Run(25);   // 점심때까지
+                var L = s.Layout; var net = s.Get<Network>(); var fz = s.Get<Field>();
+                int mess = L.Rooms.FindIndex(r => r.Type == "Mess");
+                var gen = net.Devices.First(d => d.Type == "GravityGenerator");
+                net.Age(gen.Id, Part.Mechanical, 1.2, s.Causes.Add(CauseKind.Story, "인공 중력 발생기의 회전자 축받이가 닳았다", s.Tick, gen.Cell));
+                foreach (var tb in L.Furniture.Where(fu => fu.Type == "Table" && fu.Room == mess)) fz.AddStore(tb.Cells[0], fz.T.sWater, 350);   // 식탁의 국 · 물 (6L)
+                var rc = L.Rooms[mess].Cells;
+                int x0 = rc.Min(L.X) - 6, y0 = rc.Min(L.Y) - 4;
+                dots = (x0, y0, rc.Max(L.X) - x0 + 7, rc.Max(L.Y) - y0 + 5);
+                _zgRoom = mess;
+                every = 25; count = 60;
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
@@ -133,17 +152,20 @@ public static partial class Program
                 Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
                 // 그 틱의 일 (사실 — 소리 · 깸은 뺀다)
                 var lines = new List<string>();
-                bool fire = name == "foambed";
+                bool fire = name == "foambed", zg = name == "zerogmess";
                 foreach (var f in s.Facts.Since(seen))
-                    if (!fire && f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
+                    if (zg) { if (f.Kind is FactKind.Gravity or FactKind.Fell or FactKind.Vomit or FactKind.Woke or FactKind.ComputerAlarm or FactKind.ComputerAssign or FactKind.Short
+                                 or FactKind.BreakerTrip or FactKind.MachineFail or FactKind.Hurt or FactKind.Panicked) lines.Add(s.Causes.Text(f.Cause)); }
+                    else if (!fire && f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
                     else if (fire && f.Kind is FactKind.Ignition or FactKind.FireSpread or FactKind.FireOut or FactKind.Noticed or FactKind.Woke or FactKind.Warned or FactKind.Fled
                              or FactKind.Extinguished or FactKind.ComputerAlarm or FactKind.ComputerAssign or FactKind.ComputerSeal or FactKind.DoorSealed or FactKind.Hurt or FactKind.Collapsed
                              or FactKind.Died or FactKind.Rescue or FactKind.Short or FactKind.BreakerTrip or FactKind.CableCut or FactKind.Panicked or FactKind.Treated) lines.Add(s.Causes.Text(f.Cause));
                 seen = s.Facts.Total;
                 string head;
                 if (fire) head = FireCaption(s);
+                else if (zg) head = ZeroGCaption(s);
                 else { var stc = s.Get<Structure>(); head = $"몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t"; }
-                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(head)}{string.Concat(lines.Distinct().Take(fire ? 6 : 4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
+                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(head)}{string.Concat(lines.Distinct().Take(fire || zg ? 6 : 4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
             }
             else Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
             for (int i = 0; i < every; i++)
@@ -180,7 +202,23 @@ public static partial class Program
 
 public static partial class Program
 {
-    private static int _fireRoom = -1, _sleeper = -1;
+    private static int _fireRoom = -1, _sleeper = -1, _zgRoom = -1;
+
+    /// <summary>중력 장면 그림 밑 글: 식당 바닥 중력 · 떠 있는 이 · 멀미 · 떠 있는 물 · 들러붙은 물 · 발생기 · 주컴퓨터의 마지막 말.</summary>
+    private static string ZeroGCaption(Sim s)
+    {
+        var f = s.Get<Field>(); var L = s.Layout; var net = s.Get<Network>(); var m = s.Get<Mind>(); var life = s.Get<Life>();
+        var rc = L.Rooms[_zgRoom].Cells;
+        var people = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).ToList();
+        int floating = people.Count(a => a.C.Floated != 0);
+        double sick = people.Count > 0 ? people.Average(a => life[a.C.Body].Nausea) : 0;
+        var gen = net.Devices.First(d => d.Type == "GravityGenerator");
+        string gs = net.IsBroken(gen.Id, Part.Mechanical) || net.IsBroken(gen.Id, Part.Electric) ? "망가짐" : net.Working(gen.Id) ? $"돎 {net.GravField[gen.Id]:0.00}" : "꺼짐";
+        var sm = s.Find<ShipMind>();
+        string said = sm != null && sm.Log.Count > 0 ? " · 주컴퓨터: " + sm.Log[^1].text : "";
+        double puddles = rc.Sum(c => f.Stored(f.T.sWater, c)) * 0.018;
+        return $"식당 {f.Grav[rc[0]]:0.00}g · 떠 있는 이 {floating}/{people.Count} · 멀미 {sick:0.00} · 떠 있는 물 {f.Drops.Sum() * 0.018:0.0}L · 겉면 · 바닥의 물 {puddles:0.0}L · 발생기 {gs}{said}";
+    }
 
     /// <summary>불 장면 그림 밑 글: 타는 칸 · 그 방 공기 (산소 · 일산화탄소 · 시안화수소 · 염화수소 · 가장 뜨거운 곳) · 자던 사람.</summary>
     private static string FireCaption(Sim s)

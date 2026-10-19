@@ -27,7 +27,7 @@ public sealed class Painter
     private static readonly Dictionary<string, string> Look = new()
     {
         ["FoodLocker"] = "SupplyCache", ["GrowRack"] = "PlantRack", ["LargeReactorCore"] = "ReactorCore", ["LargeCoolantPump"] = "CoolantPump",
-        ["Shuttle"] = "DockClampPanel", ["Rover"] = "MaintCart", ["CargoCrate"] = "SupplyCache", ["OreBin"] = "Compactor", ["GravityGenerator"] = "AuxGenerator",
+        ["Shuttle"] = "DockClampPanel", ["Rover"] = "MaintCart", ["CargoCrate"] = "SupplyCache", ["OreBin"] = "Compactor",
     };
     private readonly FurnitureType?[] _fixType;
     private readonly (int x, int y, int w, int h)[] _fixBox;
@@ -51,6 +51,55 @@ public sealed class Painter
             int x0 = fu.Cells.Min(L.X), y0 = fu.Cells.Min(L.Y), x1 = fu.Cells.Max(L.X), y1 = fu.Cells.Max(L.Y);
             _fixBox[i] = (x0, y0, x1 - x0 + 1, y1 - y0 + 1);
         }
+    }
+
+    // ── 인공 중력 발생기 (제 그림) — 받침 위 고리 · 가운데 축 · 돌아가는 장의 빛 (세기만큼 밝고 · 망가지면 붉은 불꽃) ──
+    private const int GravRise = 8;
+
+    private static Img GravBody(int bw, int bh)
+    {
+        int w = bw * T, h = bh * T + GravRise;
+        var g = new Img(w, h);
+        g.Fill(1, 3, w - 2, h - 4, Rgba.Hex("#262b33"));            // 받침
+        g.Fill(1, 3, w - 2, 2, Rgba.Hex("#4c5562"));                 // 윗면 테
+        g.Fill(1, h - 3, w - 2, 2, Rgba.Hex("#16191e"));             // 아랫면 그늘
+        for (int x = 4; x < w - 4; x += 6) g.Fill(x, h - 6, 3, 2, Rgba.Hex("#3a414c"));   // 받침 통풍 틈
+        double cx = (w - 1) / 2.0, cy = (h - 2) / 2.0 + 1, rx = w * 0.40, ry = (h - 6) * 0.42;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                double d = Math.Sqrt(Math.Pow((x - cx) / rx, 2) + Math.Pow((y - cy) / ry, 2));
+                if (d > 0.80 && d <= 1.0) g.Set(x, y, Rgba.Hex(y < cy ? "#7b8794" : "#55606c"));   // 고리 (위쪽이 빛을 받는다)
+                else if (d > 0.70 && d <= 0.80) g.Set(x, y, Rgba.Hex("#1a1e24"));                     // 고리 안 홈
+                else if (d <= 0.28) g.Set(x, y, Rgba.Hex(d < 0.16 ? "#3c4652" : "#2c333c"));         // 가운데 축
+            }
+        foreach (var (dx, dy) in new[] { (1, 0), (-1, 0) })   // 축을 받치는 살
+            for (int k = 0; k < (int)(rx * 0.45); k++) { int x = (int)(cx + dx * (rx * 0.28 + k)); g.Set(x, (int)cy, Rgba.Hex("#46505b")); g.Set(x, (int)cy + 1, Rgba.Hex("#2f363f")); }
+        return g;
+    }
+
+    private static void GravGlow(Img img, int px, int py, int bw, int bh, float field, FixState state, int frame)
+    {
+        int w = bw * T, h = bh * T + GravRise;
+        double cx = (w - 1) / 2.0, cy = (h - 2) / 2.0 + 1, rx = w * 0.40 * 0.75, ry = (h - 6) * 0.42 * 0.75;
+        const int seg = 12;
+        for (int k = 0; k < seg; k++)   // 고리 안 홈을 도는 장의 빛 — 세기만큼 많이 · 밝게
+        {
+            double a = 2 * Math.PI * k / seg;
+            int x = px + (int)Math.Round(cx + Math.Cos(a) * rx), y = py + (int)Math.Round(cy + Math.Sin(a) * ry);
+            if (state == FixState.Broken)
+            {
+                if ((frame * 7 + k * 5) % 11 == 0) { img.Fill(x - 1, y - 1, 3, 3, Rgba.Hex("#ff5a2e"), 0.9f); img.Blend(x, y, Rgba.Hex("#ffe08a"), 1f); }   // 튀는 불꽃
+                continue;
+            }
+            int lead = (frame + k) % seg;   // 도는 빛
+            float on = state == FixState.On ? field : 0.15f * field;
+            float glow = on * (lead < 4 ? 1f - lead * 0.2f : 0.25f);
+            if (glow < 0.05f) continue;
+            img.Fill(x - 1, y - 1, 3, 2, Rgba.Hex("#3fd9ff"), Math.Min(1f, glow));
+            if (lead == 0) img.Blend(x, y - 1, Rgba.Hex("#e6fdff"), Math.Min(1f, on));
+        }
+        if (state == FixState.On && field > 0.05f) img.Fill(px + (int)cx - 2, py + (int)cy - 1, 4, 3, Rgba.Hex("#7fe9ff"), 0.35f + 0.5f * field);   // 가운데 축의 빛
     }
 
     /// <summary>방 종류 → 바닥 (옛 게임 Materials.FloorFor와 같은 갈래).</summary>
@@ -354,6 +403,16 @@ public sealed class Painter
         {
             var (bx, by, bw, bh) = _fixBox[i];
             if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1 || !Mine(L.Furniture[i].Cells[0])) continue;
+            if (L.Furniture[i].Type == "GravityGenerator")   // 제 그림 (옛 도트에 없는 설비)
+            {
+                int gdev = DeviceOf(net, i);
+                var gs = gdev < 0 ? FixState.On : net!.IsBroken(gdev, Part.Electric) || net.IsBroken(gdev, Part.Mechanical) ? FixState.Broken : net.Working(gdev) ? FixState.On : FixState.Off;
+                float field = gdev >= 0 && net!.GravField.Length > gdev ? net.GravField[gdev] : 1f;
+                int gx = Px(bx), gy = Py(by) - GravRise;
+                img.Draw(Cached(Key(5, 9001, bw, bh, 0), () => Shadowed(GravBody(bw, bh), GravRise)), gx, gy);
+                GravGlow(img, gx, gy, bw, bh, field, gs, frame);
+                continue;
+            }
             var ft = _fixType[i] ?? FurnitureType.Shelf;
             int rise = DotMachines.RiseOf(ft);
             var body = Cached(Key(5, (int)ft, bw, bh, i), () => Shadowed(DotMachines.Body(ft, bw, bh, -1, 1, 0, i), rise));
@@ -656,11 +715,19 @@ public sealed class Painter
             "식량 상자" => DotHeld.Box,
             _ => DotHeld.None,
         };
+        // 무중력: 떠 있는 사람은 바닥에서 떠올라 천천히 오르내리고 · 바닥에 옅은 그림자
+        int lift = 0;
+        if (c.Floated != 0)
+        {
+            lift = 6 + ((frame / 5 + a.Id) % 4) switch { 0 => 0, 1 => 1, 2 => 2, _ => 1 };
+            img.Fill(px + T / 2 - 6, py + T - 5, 12, 3, Rgba.Hex("#000000"), 0.28f);
+            img.Fill(px + T / 2 - 4, py + T - 6, 8, 1, Rgba.Hex("#000000"), 0.18f);
+        }
         if (lying)
         {
             // 누운 사람: 옆으로 돌린 그림 (머리가 왼쪽)
             var lie = DotPeople.Draw(l, DotFacing.S, DotPose.Stand, 0).Rotate(cw: false).ToImg();
-            img.Draw(lie, px + T / 2 - lie.W / 2, py + T / 2 - lie.H / 2);
+            img.Draw(lie, px + T / 2 - lie.W / 2, py + T / 2 - lie.H / 2 - lift);
             return;
         }
         var step = c.StepIndex < a.Plan.Count ? a.Plan[c.StepIndex].Kind : StepKind.None;
@@ -672,8 +739,9 @@ public sealed class Painter
             : step == StepKind.Use && c.Goal is GoalKind.Eat or GoalKind.Relax or GoalKind.Socialize or GoalKind.Work ? DotPose.Sit
             : DotPose.Stand;
         var face = FacingOf(L, a);
-        var dot = DotPeople.Draw(l, face, pose, moving ? (frame + a.Id) & 3 : 0).ToImg();
-        int ox = px + T / 2 - DotPeople.Cx, oy = py + T - DotPeople.Foot - 2;
+        if (c.Floated != 0 && pose is DotPose.Walk or DotPose.Sit) pose = DotPose.Stand;   // 떠서는 걷지도 앉지도 않는다 (손잡이를 잡고 민다)
+        var dot = DotPeople.Draw(l, face, pose, pose == DotPose.Walk ? (frame + a.Id) & 3 : 0).ToImg();
+        int ox = px + T / 2 - DotPeople.Cx, oy = py + T - DotPeople.Foot - 2 - lift;
         img.Draw(dot, ox, oy);
         if (c.Carrying >= 0)
         {

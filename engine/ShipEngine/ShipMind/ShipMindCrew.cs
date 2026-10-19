@@ -111,12 +111,17 @@ public sealed partial class ShipMind
 
     private readonly HashSet<int> _feverSaid = new();   // 열을 알린 몸 (열이 내리면 지운다)
 
-    /// <summary>사람 표의 체온: 37.6℃를 넘으면 한 번 "열이 있습니다 — 쉬세요" (37.2℃ 아래로 내리면 다시 알릴 수 있다).</summary>
+    /// <summary>
+    /// 사람 표의 체온: 쉬는 몸이 37.6℃를 넘으면 한 번 "열이 있습니다 — 쉬세요" (37.2℃ 아래로 내리면 다시 알릴 수 있다) ·
+    /// 힘든 일 · 운동 중이거나 운동을 마친 지 30분이 안 된 몸의 높은 체온은 열이 아니다 (몸이 데워진 것 — 병의 열은 쉬어도 내리지 않는다).
+    /// </summary>
     private void FeverWatch(Sim sim, int agent, in Body b)
     {
-        int body = _mind!.Agents[agent].C.Body;
+        ref var ac = ref _mind!.Agents[agent].C;
+        int body = ac.Body;
         double c = b.CoreK - 273.15;
-        if (c > 37.6 && b.Conscious != 0 && _feverSaid.Add(body))
+        bool exerted = b.ActivityW > 250 || ac.ExercisedAt > 0 && sim.Tick - ac.ExercisedAt < Time.Minutes(30);
+        if (c > 37.6 && b.Conscious != 0 && !exerted && _feverSaid.Add(body))
             Say(sim, $"{_mind.NameOf(agent)}님 열이 있습니다 ({c:0.0}℃) — 쉬세요{(b.Ill == 2 ? " · 옮을 수 있으니 다른 분은 가까이 가지 마세요" : b.Infect > 0 ? " · 상처를 보이세요" : "")}");
         else if (c < 37.2) _feverSaid.Remove(body);
     }

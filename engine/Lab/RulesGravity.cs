@@ -158,6 +158,7 @@ public static partial class Program
                     s.Step(); peak = Math.Max(peak, f.Drops.Sum());
                     string? shot = Environment.GetEnvironmentVariable("GRAV_SHOT");   // 그림으로 보기: GRAV_SHOT=폴더
                     if (shot != null && zeroG && k == Time.Minutes(2)) { var img = new ShipView.Painter(lay).Frame(s, 10, 0, 15, 7, k); Png.WriteRgba(Path.Combine(shot, "drops.png"), img.W, img.H, img.Px); }
+                    if (shot != null && k == 30) { var img = new ShipView.Painter(lay).Frame(s, 2, 1, 7, 6, k); Png.WriteRgba(Path.Combine(shot, zeroG ? "gen_off.png" : "gen_on.png"), img.W, img.H, img.Px); }
                 }
                 var wetBefore = Enumerable.Range(0, f.Cells).Where(i => f.Stored(w, i) > 1).ToHashSet();
                 double atSpot = f.Stored(w, spot), stuck = f.DropsStuck;

@@ -149,6 +149,26 @@ public static partial class Program
                 $"덜 성실: 누움 {lazy.inBed} · 일 {lazy.atWork} / 성실: 누움 {keen.inBed} · 일 {keen.atWork}");
         }
 
+        // ── 운동하고 난 몸의 열은 병이 아니다: 건강한 이가 힘든 운동으로 체온이 37.6℃를 넘어도 주컴퓨터는 '열이 있습니다'를 알리지 않는다 (관찰 장면 '중력이 꺼진 식당'이 드러낸 결함) ──
+        {
+            var s = Worlds.Full(lay, 9);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+            int p = m.AddPerson(s, At(14, 8));
+            m[p].C.Bed = lay.Furniture.First(f => f.Type == "Bed").Cells[0];
+            s.Run(5);
+            m[p].C.ShiftHour = ((int)Time.HourOfDay(s.Tick) + 12) % 24;   // 쉬는 시간 (운동은 근무 밖에)
+            float peak = 0;
+            for (int k = 0; k < Time.Hours(2); k++)
+            {
+                ref var c = ref m[p].C; c.Unfit = 1; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; c.Bored = 0;   // 운동하고 싶은 몸
+                s.Step();
+                peak = Math.Max(peak, (float)(life[m[p].C.Body].CoreK - 273.15));
+            }
+            string log = string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("열이")));
+            Check("운동하고 난 몸의 열은 병이 아니다: 힘든 운동으로 체온이 37.6℃를 넘어도 주컴퓨터는 '열이 있습니다'를 알리지 않는다",
+                m.Exercised > 0 && peak > 37.6 && log == "", $"운동 {m.Exercised}번 · 가장 높은 체온 {peak:0.00}℃ · 주컴퓨터: \"{log}\"");
+        }
+
         // ── 잠의 질: 잠자리 곁에서 50dB 기계 소리가 되풀이되면 잠이 얕아(깨지는 않는다) 여섯 시간 뒤 졸림이 덜 풀린다 ──
         //    (조용한 잠자리 — 주컴퓨터(서버 · 1m 58dB)가 없는 같은 배: 주컴퓨터 곁 침대는 이어지는 바탕 소음 58dB만으로 잠이 얕다 · 소리 바퀴 2)
         {
