@@ -33,7 +33,7 @@ public static partial class Program
             m.Loose.Add(new LooseItem { Item = kit, Cell = At(1, 2) });
             st.RequestDoor(door, 1); // 평소처럼 열어 둔 문
             s.Run(10);
-            int cause = s.Causes.Add(CauseKind.Story, "화물칸 외판에 파편이 박혔다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 파편이 박혔다", s.Tick);
             st.DamageCause[At(0, 2)] = cause; f.SetHole(At(0, 2), 1.0f);
             for (int k = 0; k < Time.Minutes(1); k++)
             {

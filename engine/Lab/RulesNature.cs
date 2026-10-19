@@ -147,6 +147,29 @@ public static partial class Program
                 $"상한 접점: 처음 떨어짐 {worn.tripped} · 상함 {worn.weld} · 올리자 눌어붙음 {worn.stuck} · 다음 합선 아크 {worn.arced} / 멀쩡: 눌어붙음 {ok.stuck} · 아크 {ok.arced} · \"{worn.why}\"");
         }
 
+        // ── 윗단 보호 장치의 접점: 눌어붙은 차단기 아래 아크를 20초 뒤 끊은 배전반 주 차단기도 같은 법칙으로 상할 수 있다 (보이지 않는다)
+        //    상한 주 차단기는 다음엔 끊어 주지 않는다 — 그 뒤는 '눌어붙은 차단기의 합선 (윗단 보호도 낡았다)' 시험이 본다 (로봇이 손으로 끊는다) ──
+        {
+            (long cutAt, bool mainWorn) Run(double chance)
+            {
+                var s = ShipWorld.Create("Hwasal", 13);
+                var f = s.Get<Field>(); var net = s.Get<Network>();
+                net.WeldChance = chance;
+                s.Run(Time.Minutes(2));
+                int fd = Enumerable.Range(0, net.Feeders.Count).OrderByDescending(k => net.Feeders[k].Path.Length).First();
+                var path = net.Feeders[fd].Path;
+                net.BreakerStuck[fd] = 1;                           // 아래 차단기는 이미 눌어붙어 있다
+                f.AddStore(path[path.Length / 2], f.T.sWater, 60);
+                long cutAt = -1;
+                for (int k = 0; k < Time.Minutes(1) && cutAt < 0; k++) { s.Step(); if (net.Breaker[fd] == 0) cutAt = k; }
+                return (cutAt, net.MainStuck[net.Feeders[fd].Panel] != 0);
+            }
+            var okT = Task.Run(() => Run(0)); var worn = Run(1); var ok = okT.Result;
+            Check("윗단 보호 장치의 접점: 눌어붙은 차단기 아래 아크를 끊은 배전반 주 차단기도 큰 전류에 접점이 상할 수 있다 (몫 1: 상함 · 몫 0: 멀쩡)",
+                worn.cutAt >= 0 && worn.mainWorn && ok.cutAt >= 0 && !ok.mainWorn,
+                $"몫 1: 끊음 {(worn.cutAt >= 0 ? $"{Time.ToSeconds(worn.cutAt):0}초" : "없음")} · 주 차단기 상함 {worn.mainWorn} / 몫 0: 끊음 {(ok.cutAt >= 0 ? $"{Time.ToSeconds(ok.cutAt):0}초" : "없음")} · 상함 {ok.mainWorn}");
+        }
+
         // ── 식량 상자의 감기: 사람이 식량 보관함에서 상자를 꺼내 열면 — 그 상자에 바이러스가 묻어 있었으면(시드에서) 연 이가 잠복에 든다 ──
         {
             var lay = Worlds.Ascii(CrateShip, new Dictionary<char, string> { ['e'] = "Bed", ['F'] = "Fridge", ['L'] = "FoodLocker" });

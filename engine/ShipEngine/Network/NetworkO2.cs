@@ -22,7 +22,7 @@ public sealed partial class Network
     /// <summary>조절 센서가 읽은 배 산소 분압 (kPa) — 발생기 일 몫과 산소 비율 상한이 이 값으로 정해진다.</summary>
     public double O2Reading => PpO2 * O2Gain;
 
-    /// <summary>이야기꾼의 낡은 부품 씨앗 — 조절 센서가 몇 시간에 걸쳐 0.7까지 낮게 읽게 된다.</summary>
+    /// <summary>낡은 조절 센서 (시험) — 조절 센서가 몇 시간에 걸쳐 0.7까지 낮게 읽게 된다.</summary>
     public void StartO2Drift(double hours, int cause)
     {
         O2DriftFloor = Math.Min(O2Gain, 0.7);

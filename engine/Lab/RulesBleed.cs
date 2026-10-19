@@ -75,7 +75,7 @@ public static partial class Program
             }
             var path = net.DataPath[room];
             int cut = path.Reverse().FirstOrDefault(c => Enumerable.Range(0, L2.Rooms.Count).All(r2 => r2 == room || !net.DataPath[r2].Contains(c)), -1);   // 그 방에만 쓰이는 칸
-            net.CutData(s, cut, s.Causes.Add(CauseKind.Story, "센서 선이 끊겼다", s.Tick));
+            net.CutData(s, cut, s.Causes.Add(CauseKind.Setup, "센서 선이 끊겼다", s.Tick));
             for (int k = 0; k < Time.Minutes(15) && net.AirRelease <= 0; k++) s.Step();
             if (Debug) Console.WriteLine($"    {(leak ? "새는" : "멀쩡한")} 배: {s.Tick / 25.0:0}분에 예비를 푼다 {net.AirRelease:0.000}몰/초 · 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0).Select(x => ShipMind.KindName(x.Kind)))}");
             // 푸는 만큼 새는 금 (50cm² 밸브가 63kPa에서 15.6몰/초 — 1cm² · 1kPa에 0.005몰/초)

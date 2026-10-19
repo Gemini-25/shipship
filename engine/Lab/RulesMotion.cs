@@ -103,7 +103,7 @@ public static partial class Program
                 var (s, o, m, sm) = Ship(5);
                 if (how == 1) { var net = s.Get<Network>(); foreach (var d in net.Devices) if (d.Type == "SensorArray") net.Broken[d.Id * 4 + (int)Part.Electric] = 1; }
                 if (how == 2) sm.Policy.Dodge = 0;
-                int c = s.Causes.Add(CauseKind.Story, "2kg 운석", s.Tick);
+                int c = s.Causes.Add(CauseKind.Setup, "2kg 운석", s.Tick);
                 o.AddRock(2, 3000, 0, 1, 0, 45_000, c);    // 아래(−y)에서 위로 · 배 한가운데로 · 15초 거리
                 s.Run(20);
                 return (o.RockHits, sm.DodgesTried, sm.DodgesAvoided, m.Falls, string.Join(" / ", sm.Log.TakeLast(3).Select(x => x.text)));
@@ -118,7 +118,7 @@ public static partial class Program
         {
             var (s, o, m, sm) = Ship(7);
             int c = s.Causes.Add(CauseKind.Route, "항로가 조금 틀어졌다", s.Tick);
-            s.Get<Chemistry>().Ignite(At(13, 4), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑 불씨", s.Tick));
+            s.Get<Chemistry>().Ignite(At(13, 4), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑 불씨", s.Tick));
             s.Run(Time.Minutes(1));
             o.AddPlan(new PlannedBurn { Kind = BurnKind.Correct, Due = s.Tick + Time.Minutes(1), Deadline = s.Tick + Time.Hours(3), Dv = 30, Cause = c });
             s.Run(Time.Minutes(2));
@@ -148,7 +148,7 @@ public static partial class Program
             {
                 var (s, o, m, sm) = Ship(11);
                 sm.Policy.AnswerDistress = policy;
-                int c = s.Causes.Add(CauseKind.Story, "고장 난 배", s.Tick);
+                int c = s.Causes.Add(CauseKind.Setup, "고장 난 배", s.Tick);
                 o.AddContact(s, ContactKind.Distress, 40_000, 1, 0, 30, 3000, 2, 8, c);
                 for (int k = 0; k < 6 && sm.Rescued < 2; k++) s.Run(Time.Hours(1));
                 string story = s.Facts.Since(0).Where(f => f.Kind == FactKind.Contact && f.Other == 6).Select(f => s.Causes.Story(f.Cause)).FirstOrDefault() ?? "";
@@ -165,7 +165,7 @@ public static partial class Program
         {
             var (s, o, m, sm) = Ship(11);
             sm.Policy.AnswerDistress = 1;
-            int c = s.Causes.Add(CauseKind.Story, "고장 난 배", s.Tick);
+            int c = s.Causes.Add(CauseKind.Setup, "고장 난 배", s.Tick);
             o.AddContact(s, ContactKind.Distress, 40_000, 1, 0, 30, 3000, 2, 8, c);
             var f = s.Get<Field>(); var life = s.Get<Life>();
             var lockRoom = s.Layout.Rooms[s.Layout.Room[At(24, 7)]].Cells;
@@ -190,7 +190,7 @@ public static partial class Program
         // ── 난파선(불이 났던 배): 붙어서 해치를 열면 매연(일산화탄소)이 에어락으로 들고 · 수리 꾸러미를 건진다 ──
         {
             var (s, o, m, sm) = Ship(13);
-            int c = s.Causes.Add(CauseKind.Story, "불탄 배", s.Tick);
+            int c = s.Causes.Add(CauseKind.Setup, "불탄 배", s.Tick);
             o.AddContact(s, ContactKind.Derelict, 3000, 1, 0, 2, 200, 0, 0, c, fire: 1);
             var f = s.Get<Field>();
             int lockCell = At(24, 7);
@@ -202,18 +202,19 @@ public static partial class Program
                 $"건짐 {sm.Salvaged} · 에어락 일산화탄소 {coMax:0}ppm · \"{sm.Log.LastOrDefault().text}\"");
         }
 
-        // ── 이야기꾼의 바깥 씨앗 '조난선': 항해 중에만 심는다 — 심으면 주컴퓨터가 신호를 받고 갈지 정한다 (원인 사슬: 이야기꾼 → 조난 신호 → 결정) ──
+        // ── 교통량의 조난선: 가만히 떠 있는 배(시험 — 지나는 배 없음)에는 오지 않고 · 항해 중 지나는 조난선의 신호를 받으면 주컴퓨터가 갈지 정한다 (교통 → 신호 → 결정) ──
         {
             var (s, o, m, sm) = Ship(17);
-            var st = s.Get<Storyteller>();
-            bool stayNo = st.Choose(s) != SeedKind.Distress && Enumerable.Range(0, 200).All(_ => st.Choose(s) != SeedKind.Distress);
+            s.Run(Time.Hours(2));
+            bool stayNo = o.ContactSeq == 0;
             o.TrafficOn = true;
-            bool planted = st.Plant(s, SeedKind.Distress);
+            int c0 = s.Causes.Add(CauseKind.Contact, "3명이 탄 배가 고장 나 떠돈다", s.Tick);
+            o.AddContact(s, ContactKind.Distress, 400 * 8 * 3600, 1, 0, 400, 5000, 3, 20, c0);   // 교통량이 놓는 것과 같은 모양 (8시간 거리 · 신호기)
             s.Run(3);
             string story = s.Facts.Since(0).Where(f => f.Kind == FactKind.Decision).Select(f => s.Causes.Story(f.Cause)).FirstOrDefault(t => t.Contains("조난")) ?? "";
-            Check("이야기꾼의 바깥 씨앗 '조난선': 가만히 떠 있는 배에는 심지 않고 · 항해 중 심으면 주컴퓨터가 조난 신호를 받아 갈지 정한다 (이야기꾼 → 신호 → 결정)",
-                stayNo && planted && o.Contacts.Count == 1 && story.Contains("고장 나 떠돈다") && (sm.GoingTo >= 0 || sm.Declined == 1),
-                $"떠 있는 배 200번 고르기에 조난선 없음 {stayNo} · 심음 {planted} · \"{story}\"");
+            Check("교통량의 조난선: 가만히 떠 있는 배에는 지나는 배가 없고 · 항해 중 지나는 조난선의 신호를 받으면 주컴퓨터가 갈지 정한다 (교통 → 신호 → 결정)",
+                stayNo && o.Contacts.Count == 1 && story.Contains("고장 나 떠돈다") && (sm.GoingTo >= 0 || sm.Declined == 1),
+                $"떠 있는 배 두 시간 지나는 배 {(stayNo ? "없음" : "있음")} · \"{story}\"");
         }
 
         // ── 관성: 점화 0.2g에 마른 바닥의 상자(마찰 0.3)는 그대로 · 젖은 바닥(0.1)이면 뒤로 미끄러진다 · 0.4g면 마른 바닥에서도 ──

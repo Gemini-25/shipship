@@ -166,7 +166,7 @@ public static partial class Program
                 var lay = Worlds.Ascii(Cell2, new() { ['u'] = "CoolantPump" });
                 var s = Worlds.Full(lay, 1);
                 var st = s.Get<Structure>(); var net = s.Get<Network>();
-                int cause = s.Causes.Add(CauseKind.Story, "파편 하나가 날아왔다", 0);
+                int cause = s.Causes.Add(CauseKind.Setup, "파편 하나가 날아왔다", 0);
                 st.Impact(s, Worlds.At(lay, 2, 0), 200_000, 0, 1, cause);
                 s.Run(30);
                 int pump = net.Devices.First(d => d.Type == "CoolantPump").Id;
@@ -188,7 +188,7 @@ public static partial class Program
             int left = lay.Room[Worlds.At(lay, 3, 3)], right = lay.Room[Worlds.At(lay, 15, 3)];
             s.Run(Time.Minutes(2));
             float lampBefore = light.Lamp[right];
-            int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
             s.Run(Time.Hours(1));
             int fragRight = st.FragmentOf(Worlds.At(lay, 15, 3));

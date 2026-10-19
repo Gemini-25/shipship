@@ -20,7 +20,7 @@ public static partial class Program
             int p = m.AddPerson(s, At(12, 2));
             int r = m.AddRobot(s, At(22, 4), AgentKind.Robot, At(22, 4));
             s.Run(3);
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
             long outAt = -1;
             for (int k = 0; k < Time.Minutes(15) && s.Facts.CountOf(FactKind.Extinguished) == 0; k++)
             {
@@ -43,7 +43,7 @@ public static partial class Program
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
             int p = m.AddPerson(s, At(6, 2));
             s.Run(3);
-            int seed = s.Causes.Add(CauseKind.Story, "외판 이음매가 벌어졌다", s.Tick);
+            int seed = s.Causes.Add(CauseKind.Setup, "외판 이음매가 벌어졌다", s.Tick);
             f.SetHole(At(0, 2), 0.003f);
             s.Get<Structure>().DamageCause[At(0, 2)] = seed;
             for (int k = 0; k < Time.Minutes(10); k++)

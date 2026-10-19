@@ -18,12 +18,12 @@ public static partial class Program
         s.Get<Mind>().Crew(s, 2, 0, 0);
         var st = s.Get<Structure>(); var f = s.Get<Field>();
         s.Run(Time.Minutes(1));
-        int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+        int cause = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
         for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
         int hx = 18, hy = 0;
         if (rest.Contains("hole")) { int i0 = Array.IndexOf(rest, "hole"); hx = int.Parse(rest[i0 + 1]); hy = int.Parse(rest[i0 + 2]); }
-        if (hole) st.Destroy(s, Worlds.At(lay, hx, hy), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 벽을 뚫었다", s.Tick));
-        if (rest.Contains("push")) { s.Step(); double v = double.Parse(rest[Array.IndexOf(rest, "push") + 1]); var o = st.Bodies[1]; st.Push(1, o.X, o.Y, o.Mass * v, 0, s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각을 밀었다", s.Tick)); }
+        if (hole) st.Destroy(s, Worlds.At(lay, hx, hy), s.Causes.Add(CauseKind.Setup, "파편이 오른쪽 방 벽을 뚫었다", s.Tick));
+        if (rest.Contains("push")) { s.Step(); double v = double.Parse(rest[Array.IndexOf(rest, "push") + 1]); var o = st.Bodies[1]; st.Push(1, o.X, o.Y, o.Mass * v, 0, s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 밀었다", s.Tick)); }
         var p = new Painter(lay);
         Directory.CreateDirectory("build/shots");
         void Shot(string name)

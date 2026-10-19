@@ -53,7 +53,7 @@ public static partial class Program
             {
                 s = ShipWorld.Crewed("Didim", 4, 6, 3);
                 s.Run(Time.Hours(2));
-                int seed = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
+                int seed = s.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", s.Tick);
                 s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, seed);
                 every = 6; count = 60;
                 break;
@@ -65,7 +65,7 @@ public static partial class Program
                 s = Worlds.Full(l, 2);
                 s.Get<Mind>().Crew(s, 2, 0, 0);
                 s.Run(Time.Minutes(1));
-                int seed = s.Causes.Add(CauseKind.Story, "커다란 운석이 배를 향해 온다", s.Tick);
+                int seed = s.Causes.Add(CauseKind.Setup, "커다란 운석이 배를 향해 온다", s.Tick);
                 s.Get<Structure>().Impact(s, Worlds.At(l, 10, 1), 640e6, 0, 1, seed);
                 every = 2; count = 30;
                 break;
@@ -91,9 +91,9 @@ public static partial class Program
                 s.Get<Mind>().Crew(s, 2, 0, 0);
                 s.Run(Time.Minutes(1));
                 var st = s.Get<Structure>();
-                int rock = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+                int rock = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
                 for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(l, 10, y), rock);
-                st.Destroy(s, Worlds.At(l, 20, 3), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 바깥 벽을 뚫었다", s.Tick));
+                st.Destroy(s, Worlds.At(l, 20, 3), s.Causes.Add(CauseKind.Setup, "파편이 오른쪽 방 바깥 벽을 뚫었다", s.Tick));
                 every = 1; count = 40; dots = (-14, -12, l.W + 28, l.H + 24);
                 break;
             }
@@ -110,7 +110,7 @@ public static partial class Program
                 int room = sleeper != null ? L.Room[sleeper.C.Cell] : L.Furniture.First(fu => fu.Type == "Bed").Room;
                 var bed = L.Furniture.Where(fu => fu.Type == "Bed" && fu.Room == room && (sleeper == null || !fu.Cells.Contains(sleeper.C.Cell)))
                     .OrderBy(fu => sleeper == null ? 0 : Math.Abs(L.X(fu.Cells[0]) - L.X(sleeper.C.Cell)) + Math.Abs(L.Y(fu.Cells[0]) - L.Y(sleeper.C.Cell))).First();
-                s.Get<Chemistry>().Ignite(bed.Cells[0], 3e6, s.Causes.Add(CauseKind.Story, "빈 침대 곁 충전기가 합선해 불꽃이 폼 매트리스에 튀었다", s.Tick, bed.Cells[0]));
+                s.Get<Chemistry>().Ignite(bed.Cells[0], 3e6, s.Causes.Add(CauseKind.Setup, "빈 침대 곁 충전기가 합선해 불꽃이 폼 매트리스에 튀었다", s.Tick, bed.Cells[0]));
                 var rc = L.Rooms[room].Cells;
                 int x0 = rc.Min(L.X) - 7, y0 = rc.Min(L.Y) - 5;
                 dots = (x0, y0, rc.Max(L.X) - x0 + 8, rc.Max(L.Y) - y0 + 6);
@@ -128,7 +128,7 @@ public static partial class Program
                 var L = s.Layout; var net = s.Get<Network>(); var fz = s.Get<Field>();
                 int mess = L.Rooms.FindIndex(r => r.Type == "Mess");
                 var gen = net.Devices.First(d => d.Type == "GravityGenerator");
-                net.Age(gen.Id, Part.Mechanical, 1.2, s.Causes.Add(CauseKind.Story, "인공 중력 발생기의 회전자 축받이가 닳았다", s.Tick, gen.Cell));
+                net.Age(gen.Id, Part.Mechanical, 1.2, s.Causes.Add(CauseKind.Setup, "인공 중력 발생기의 회전자 축받이가 닳았다", s.Tick, gen.Cell));
                 foreach (var tb in L.Furniture.Where(fu => fu.Type == "Table" && fu.Room == mess)) fz.AddStore(tb.Cells[0], fz.T.sWater, 350);   // 식탁의 국 · 물 (6L)
                 var rc = L.Rooms[mess].Cells;
                 int x0 = rc.Min(L.X) - 6, y0 = rc.Min(L.Y) - 4;
@@ -150,7 +150,7 @@ public static partial class Program
                 var victim = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).OrderBy(a => L.Room[a.C.Cell] == mess ? 0 : 1).First();
                 ref var vb = ref life[victim.C.Body];
                 vb.Heart = 0.6f; vb.HeartPeak = 0.6f;
-                life.StopHeart(s, victim.C.Body, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Story, "지난 사고에 상한 심장", s.Tick, vb.Cell));
+                life.StopHeart(s, victim.C.Body, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Setup, "지난 사고에 상한 심장", s.Tick, vb.Cell));
                 int room = L.Room[victim.C.Cell] >= 0 ? L.Room[victim.C.Cell] : mess;
                 var rc = L.Rooms[room].Cells;
                 int x0 = rc.Min(L.X) - 6, y0 = rc.Min(L.Y) - 4;
@@ -248,7 +248,7 @@ public static partial class Program
         var victim = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).OrderBy(a => L.Room[a.C.Cell] == mess ? 0 : 1).First();
         ref var vb = ref life[victim.C.Body];
         vb.Heart = 0.6f; vb.HeartPeak = 0.6f;
-        life.StopHeart(s, victim.C.Body, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Story, "지난 사고에 상한 심장", s.Tick, vb.Cell));
+        life.StopHeart(s, victim.C.Body, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Setup, "지난 사고에 상한 심장", s.Tick, vb.Cell));
         var seat = (Cells: new[] { victim.C.Cell }, Id: 0);
         long fireAt = s.Tick, end = s.Tick + Time.Hours(24 * 4);
         var painter = new Painter(L);
@@ -341,17 +341,17 @@ public static partial class Program
             if (!fired && s.Tick >= fireAt)
             {
                 fired = true;
-                int oil = s.Causes.Add(CauseKind.Story, "저녁을 짓던 조리대의 기름에 불이 붙었다", s.Tick, stove.Cells[0]);
+                int oil = s.Causes.Add(CauseKind.Setup, "저녁을 짓던 조리대의 기름에 불이 붙었다", s.Tick, stove.Cells[0]);
                 s.Get<Chemistry>().Ignite(stove.Cells[0], 3e6, oil);
                 var galleyShelf = L.Furniture.FirstOrDefault(fu => fu.Type == "Shelf" && fu.Room == stove.Room);   // 튄 기름이 곁의 선반에도 옮아붙었다
-                if (galleyShelf != null) s.Get<Chemistry>().Ignite(galleyShelf.Cells[0], 3e6, s.Causes.Add(CauseKind.Story, "튄 기름불이 주방 선반에 옮아붙었다", s.Tick, galleyShelf.Cells[0], oil));
+                if (galleyShelf != null) s.Get<Chemistry>().Ignite(galleyShelf.Cells[0], 3e6, s.Causes.Add(CauseKind.Setup, "튄 기름불이 주방 선반에 옮아붙었다", s.Tick, galleyShelf.Cells[0], oil));
             }
             if (!crushed && s.Tick >= crushAt)
             {
                 crushed = true;
                 var who = m.Agents.Where(a => a.IsPerson && a.Id != owl1 && a.Id != owl2 && life[a.C.Body].Alive != 0 && life[a.C.Body].Asleep == 0)
                     .OrderBy(a => L.Room[a.C.Cell] == shelf.Room ? 0 : 1).ThenBy(a => a.Id).First();
-                int why = s.Causes.Add(CauseKind.Story, $"정비실 선반이 무너졌다 — {Ko.I(m.NameOf(who.Id))} 쏟아진 부품 상자에 깔렸다", s.Tick, who.C.Cell);
+                int why = s.Causes.Add(CauseKind.Setup, $"정비실 선반이 무너졌다 — {Ko.I(m.NameOf(who.Id))} 쏟아진 부품 상자에 깔렸다", s.Tick, who.C.Cell);
                 ref var b = ref life[who.C.Body];
                 b.Blunt = 2.2f; b.HurtCause = why;
                 lines.Add((who.C.Cell, s.Causes.Text(why)));

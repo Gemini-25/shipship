@@ -22,7 +22,7 @@ public static partial class Program
             m.AddRobot(s, At(22, 4), AgentKind.Robot, At(22, 4));
             foreach (int p in new[] { p1, p2, p3, p4 }) { m[p].C.Hunger = 0; m[p].C.Sleepy = 0; m[p].C.Bored = 0; } // 다른 볼일 없이 제자리에 (쉬러 가지 않게)
             s.Run(3);
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
             for (int k = 0; k < Time.Minutes(20) && s.Facts.CountOf(FactKind.Extinguished) == 0; k++) s.Step();
             s.Run(Time.Minutes(2));
             float crisis = so.BondOf(p1, p2), control = so.BondOf(p3, p4);

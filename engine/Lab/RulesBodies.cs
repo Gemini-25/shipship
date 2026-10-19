@@ -27,9 +27,9 @@ public static partial class Program
             s.Get<Mind>().Crew(s, 2, 0, 0);
             var st = s.Get<Structure>(); var mind = s.Get<Mind>();
             s.Run(Time.Minutes(1));
-            int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
-            st.Destroy(s, Worlds.At(lay, 18, 0), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 윗벽을 뚫었다", s.Tick));
+            st.Destroy(s, Worlds.At(lay, 18, 0), s.Causes.Add(CauseKind.Setup, "파편이 오른쪽 방 윗벽을 뚫었다", s.Tick));
             int right = lay.Room[Worlds.At(lay, 15, 3)];
             var inRight = mind.Agents.Where(a => a.IsPerson && lay.Room[a.C.Cell] == right).ToList();
             s.Run(Time.Minutes(2));
@@ -70,7 +70,7 @@ public static partial class Program
                 m.Crew(s, 2, 0, 0);
                 var st = s.Get<Structure>();
                 s.Run(Time.Minutes(1));
-                int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+                int cause = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
                 for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
                 s.Run(3);
                 int p = m.Agents.First(a => a.IsPerson).Id;
@@ -84,7 +84,7 @@ public static partial class Program
                 int start = Worlds.At(layD, 16, 4);
                 m.Loose.Add(new LooseItem { Item = box, Cell = start });
                 var o = st.Bodies[1];
-                int hit = s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각을 들이받았다", s.Tick);
+                int hit = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 들이받았다", s.Tick);
                 st.Push(1, o.X, o.Y, o.Mass * 3, 0, hit);
                 s.Step();
                 s.Run(2);
@@ -104,7 +104,7 @@ public static partial class Program
                 m.Loose.Add(new LooseItem { Item = box, Cell = start });
                 var o = st.Bodies[1];
                 double j = 1.5 * o.Inertia / 2;   // 짝힘 — 분에 14바퀴
-                int spin = s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각 끝을 스치고 지나갔다", s.Tick);
+                int spin = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각 끝을 스치고 지나갔다", s.Tick);
                 st.Push(1, o.X, o.Y + 1, j, 0, spin); st.Push(1, o.X, o.Y - 1, -j, 0, spin);
                 double R(int c) { var b = st.Bodies[1]; double dx = layD.X(c) + 0.5 - b.Lx, dy = layD.Y(c) + 0.5 - b.Ly; return Math.Sqrt(dx * dx + dy * dy); }
                 double r0 = R(start);
@@ -126,9 +126,9 @@ public static partial class Program
             s.Get<Mind>().Crew(s, 2, 0, 0);
             var st = s.Get<Structure>();
             s.Run(Time.Minutes(1));
-            int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
-            st.Destroy(s, Worlds.At(lay, 20, 3), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 바깥 벽을 뚫었다", s.Tick));
+            st.Destroy(s, Worlds.At(lay, 20, 3), s.Causes.Add(CauseKind.Setup, "파편이 오른쪽 방 바깥 벽을 뚫었다", s.Tick));
             s.Run(Time.Minutes(1));
             var crash = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Crash);
             string story = crash.Kind == FactKind.Crash ? s.Causes.Story(crash.Cause) : "";
@@ -149,7 +149,7 @@ public static partial class Program
             s.Run(3);
             for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
             s.Run(3);
-            int hit = s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각을 배 쪽으로 세게 밀었다", s.Tick);
+            int hit = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 배 쪽으로 세게 밀었다", s.Tick);
             st.Push(1, st.Bodies[1].X, st.Bodies[1].Y, -st.Bodies[1].Mass * 50, 0, hit);
             s.Run(10);
             var tear = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.WallBreach && s.Causes.Story(x.Cause).Contains("찢겨 뚫렸다"));
@@ -168,7 +168,7 @@ public static partial class Program
             for (int y = 1; y <= 3; y++) st.Destroy(s, Worlds.At(lay, 34, y), 0);
             s.Run(3);
             var f1 = st.Bodies.Count > 1 ? st.Bodies[1] : default;
-            int cut = s.Causes.Add(CauseKind.Story, "조각의 통로가 끊어졌다", s.Tick);
+            int cut = s.Causes.Add(CauseKind.Setup, "조각의 통로가 끊어졌다", s.Tick);
             for (int y = 1; y <= 3; y++) st.Destroy(s, Worlds.At(lay, 46, y), cut);
             s.Run(3);
             var split2 = s.Facts.Since(0).Where(x => x.Kind == FactKind.ShipSplit).ToList();
@@ -186,7 +186,7 @@ public static partial class Program
             var st = s.Get<Structure>(); var f = s.Get<Field>();
             s.Run(2);
             int hull = Worlds.At(lay, 2, 0), gone = Worlds.At(lay, 7, 0);
-            st.Impact(s, hull, 3e7, 0, 1, s.Causes.Add(CauseKind.Story, "파편이 외판을 때렸다", s.Tick));
+            st.Impact(s, hull, 3e7, 0, 1, s.Causes.Add(CauseKind.Setup, "파편이 외판을 때렸다", s.Tick));
             st.Destroy(s, gone, 0);
             s.Run(2);
             ushort m = st.Sub[hull];
@@ -255,7 +255,7 @@ public static partial class Program
             var st = s.Get<Structure>(); var f = s.Get<Field>();
             s.Run(2);
             int wall = Worlds.At(lay, 2, 0);
-            int src = s.Causes.Add(CauseKind.Story, "이웃 배에서 떨어져 나온 철판 조각이 날아왔다", s.Tick);
+            int src = s.Causes.Add(CauseKind.Setup, "이웃 배에서 떨어져 나온 철판 조각이 날아왔다", s.Tick);
             st.Throw(s, lay.X(wall) + 0.5, lay.Y(wall) - 6, 0, 300, 20, src);
             s.Run(1);
             var breach = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.WallBreach);
@@ -275,7 +275,7 @@ public static partial class Program
             var st = s.Get<Structure>(); var f = s.Get<Field>();
             s.Run(2);
             int wall = Worlds.At(lay, 2, 0);
-            st.Throw(s, lay.X(wall) + 0.5, lay.Y(wall) - 6, 0, 12, 200, s.Causes.Add(CauseKind.Story, "떨어져 나간 판 덩어리가 천천히 다가왔다", s.Tick));
+            st.Throw(s, lay.X(wall) + 0.5, lay.Y(wall) - 6, 0, 12, 200, s.Causes.Add(CauseKind.Setup, "떨어져 나간 판 덩어리가 천천히 다가왔다", s.Tick));
             s.Run(3);
             double p = f.Pressure(Worlds.At(lay, 2, 2));
             Check("뭉툭한 덩어리: 200kg 철판 덩어리가 12m/s(14kJ — 2cm 파편이면 외판을 뚫는 에너지)로 외판에 부딪혀도 뚫지 못한다 · 방 공기는 그대로",

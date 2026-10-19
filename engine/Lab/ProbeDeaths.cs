@@ -14,10 +14,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        if (Environment.GetEnvironmentVariable("FUN_STAY") != "1") ShipWorld.Embark(s);
-        var st = s.Get<Storyteller>(); st.Enabled = true;
-        if (Environment.GetEnvironmentVariable("LEVEL") is string lv) st.Level = byte.Parse(lv);   // 평가 도구와 같은 가혹함 (Lab --judge는 4)
-        if (Environment.GetEnvironmentVariable("STYLE") is string sy) st.Style = Enum.Parse<StoryStyle>(sy);   // 재미 측정과 같은 이야기꾼 (예: Relentless)
+        if (Environment.GetEnvironmentVariable("FUN_STAY") != "1") ShipWorld.Embark(s, RouteEnv());   // ROUTE=1~8 (재미 측정과 같은 항로)
         var m = s.Get<Mind>(); var sm = s.Get<ShipMind>(); var life = s.Get<Life>();
         string Where(int c) => c < 0 ? "-" : $"({s.Layout.X(c)},{s.Layout.Y(c)}){(m.RoomOf(c) >= 0 ? s.Layout.Rooms[m.RoomOf(c)].Name : "")}";
         long cursor = 0, end = (long)(days * Time.Hours(24));
@@ -34,7 +31,7 @@ public static partial class Program
             s.Step();
             foreach (var f in s.Facts.Since(cursor))
             {
-                if (f.Kind == FactKind.StorySeed) Console.WriteLine($"  {Time.Clock(f.Tick)} 씨앗 · {s.Causes.Story(f.Cause)}");
+                if (f.Kind is FactKind.Sensed or FactKind.Letter) Console.WriteLine($"  {Time.Clock(f.Tick)} 자연 사건 · {s.Causes.Story(f.Cause)}");
                 if (f.Kind != FactKind.Died) continue;
                 Console.WriteLine($"\n✝ {Time.Clock(f.Tick)} {Where(f.Cell)} · {s.Causes.Story(f.Cause)}");
                 foreach (var x in sm.Log.Where(x => x.tick >= f.Tick - Time.Minutes(15))) Console.WriteLine($"    {Time.Clock(x.tick)} {x.text}");

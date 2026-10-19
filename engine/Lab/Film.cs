@@ -38,7 +38,7 @@ public static partial class Program
     private sealed record FilmShip(string Name, string Key, ulong Seed, string Dir, List<FilmScene> Scenes, int AllHighlights, int Crew, long Deaths);
 
     /// <summary>
-    /// 하이라이트 필름 (--film 배[:시드][,배:시드…] [날] [장면 수]): 재미 측정기처럼 이야기꾼을 켜고 돌려 하이라이트(한 소동 = 한 장면)를 찾은 뒤,
+    /// 하이라이트 필름 (--film 배[:시드][,배:시드…] [날] [장면 수]): 재미 측정기처럼 출항해 돌려 하이라이트(한 소동 = 한 장면)를 찾은 뒤,
     /// 같은 시드로 한 번 더 돌리며(결정론 — 같은 일이 그대로 일어난다) 장면마다 첫 조짐 → 큰 일이 난 순간들(그 자리) → 뒤를 그린다.
     /// → build/film/film.html (그림을 품은 한 장)
     /// </summary>
@@ -69,7 +69,7 @@ public static partial class Program
             var lay = Layout.Ship(ship, Tables.Default);
             int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
             var w = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-            var st = w.Get<Storyteller>(); st.Enabled = true; st.Style = StoryStyle.Balanced; st.Level = 4;
+            ShipWorld.Embark(w, RouteEnv());
             return w;
         }
         // 1회차: 하이라이트 · 큰 일 찾기
@@ -186,7 +186,7 @@ code{font-size:.85em}
 </style>
 
 """);
-        html.Append($"<main><header><h1>새 엔진 하이라이트 필름</h1><p>새 엔진이 배마다 {days}일 동안 저절로 만든 일 가운데 연출이 고른 장면입니다. 짜 넣은 줄거리는 없습니다 — 이야기꾼은 원인(운석 · 파편 구름 · 낡은 부품 · 외판 피로 …)만 심고, 그 뒤는 물리 · 사람 · 로봇 · 주컴퓨터가 서로 부딪혀 생깁니다. 한 소동은 한 장면으로 묶고, 첫 조짐부터 뒤처리까지 큰 일이 난 순간을 그 자리에서 그렸습니다. 같은 시드로 다시 돌려 그렸으니(결정론) 1회차와 똑같은 일이 일어납니다. 그림은 옛 게임의 도트 화가 그대로입니다.</p></header>\n");
+        html.Append($"<main><header><h1>새 엔진 하이라이트 필름</h1><p>새 엔진이 배마다 {days}일 동안 저절로 만든 일 가운데 연출이 고른 장면입니다. 짜 넣은 줄거리는 없습니다 — 일의 시작(운석 · 파편 구름 · 낡은 부품 · 외판 피로 …)은 고른 항로와 세상의 확률에서 오고, 그 뒤는 물리 · 사람 · 로봇 · 주컴퓨터가 서로 부딪혀 생깁니다. 한 소동은 한 장면으로 묶고, 첫 조짐부터 뒤처리까지 큰 일이 난 순간을 그 자리에서 그렸습니다. 같은 시드로 다시 돌려 그렸으니(결정론) 1회차와 똑같은 일이 일어납니다. 그림은 옛 게임의 도트 화가 그대로입니다.</p></header>\n");
         foreach (var sh in ships)
         {
             html.Append($"<div class=\"ship\"><h2>{E(sh.Name)}<small>사람 {sh.Crew} · 시드 {sh.Seed} · 하이라이트 {sh.AllHighlights} · 죽음 {sh.Deaths}</small></h2>\n");
@@ -209,7 +209,7 @@ code{font-size:.85em}
             }
             html.Append("</div>\n");
         }
-        html.Append($"<footer>이야기꾼 '고른' · 가혹함 4 · {days}일 · 칸 하나 = 32도트 · 만든 명령: <code>Lab --film {string.Join(",", ships.Select(x => $"{x.Key}:{x.Seed}"))} {days}</code></footer></main>\n");
+        html.Append($"<footer>항로 {RouteEnv()} · {days}일 · 칸 하나 = 32도트 · 만든 명령: <code>Lab --film {string.Join(",", ships.Select(x => $"{x.Key}:{x.Seed}"))} {days}</code></footer></main>\n");
         return html.ToString();
     }
 }

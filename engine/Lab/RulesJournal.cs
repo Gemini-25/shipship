@@ -27,8 +27,8 @@ public static partial class Program
             sm.JournalHour = 1; sm.MorningHour = 1;
             if (!cut) m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7)); // 로봇이 없으면 끊긴 선을 아무도 잇지 않는다
             s.Run(5);
-            if (cut) { int spot = Worlds.At(row, 6, 2); net.CutData(s, spot, s.Causes.Add(CauseKind.Story, "낡은 센서 선이 문턱 밑에서 끊겼다", s.Tick, spot)); }
-            int seed = s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick);
+            if (cut) { int spot = Worlds.At(row, 6, 2); net.CutData(s, spot, s.Causes.Add(CauseKind.Setup, "낡은 센서 선이 문턱 밑에서 끊겼다", s.Tick, spot)); }
+            int seed = s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick);
             ch.Ignite(cut ? far : At(15, 1), 3e6, seed);
             s.Run((int)(Time.Hours(1) - s.Tick + 1));
             var fromFire = sm.Incidents.Where(x => x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Hot or IncidentKind.BadAir).ToList();

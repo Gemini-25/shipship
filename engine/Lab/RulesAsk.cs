@@ -50,7 +50,7 @@ public static partial class Program
                 if (robot) m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7));
                 s.Run(5);
                 long t0 = s.Tick;
-                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
                 long firstAsk = -1; bool went = false;
                 for (int k = 0; k < Time.Minutes(5); k++)
                 {
@@ -84,7 +84,7 @@ public static partial class Program
             m[scared].C.Brave = 0; m[willing].C.Brave = 0.8f;
             s.Run(5);
             long t0 = s.Tick;
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
             bool willingWent = false;
             for (int k = 0; k < Time.Minutes(5); k++)
             {
@@ -110,12 +110,12 @@ public static partial class Program
             s.Run(5);
             var st = s.Get<Structure>();
             int door = lay.DoorAt[At(5, 6)];
-            st.JamDoor(s, door, s.Causes.Add(CauseKind.Story, "왼쪽 방 문이 틀어져 끼었다", s.Tick));
+            st.JamDoor(s, door, s.Causes.Add(CauseKind.Setup, "왼쪽 방 문이 틀어져 끼었다", s.Tick));
             for (int k = 0; k < Time.Minutes(1.5) && m[r].C.AssignedGoal != GoalKind.Brace; k++) s.Step();   // 로봇이 끼인 문을 맡을 때까지
             for (int k = 0; k < Time.Minutes(0.3); k++) s.Step();
             var before = m[r].C.AssignedGoal;
             long t0 = s.Tick;
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
             bool toFire = false, backToRepair = false;
             for (int k = 0; k < Time.Minutes(25); k++)
             {
@@ -143,7 +143,7 @@ public static partial class Program
             bool slow = sm.Throttled != 0 && sm.Online;
             for (int k = 0; k < Time.Minutes(1); k++) { HoldAt(338); s.Step(); }
             bool stopped = !sm.Online && sm.HeatStopped != 0;
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
             for (int k = 0; k < Time.Minutes(1); k++) { HoldAt(338); s.Step(); }
             bool blindToFire = !sm.Incidents.Any(x => x.Kind == IncidentKind.Fire);
             long cooled = s.Tick; long seenAt = -1;
@@ -166,10 +166,10 @@ public static partial class Program
                 if (many)
                 {
                     foreach (var d in net.Devices.Where(d => d.Type == "RobotDock")) net.Age(d.Id, Part.Electric, 1.0);   // 충전대 셋이 망가지고
-                    foreach (int room in new[] { left, lay.Room[At(12, 8)] }) { var path = net.DataPath[room]; net.CutData(s, path[path.Length / 2], s.Causes.Add(CauseKind.Story, "센서 선이 끊겼다", s.Tick)); } // 센서 선 둘이 끊겼다
+                    foreach (int room in new[] { left, lay.Room[At(12, 8)] }) { var path = net.DataPath[room]; net.CutData(s, path[path.Length / 2], s.Causes.Add(CauseKind.Setup, "센서 선이 끊겼다", s.Tick)); } // 센서 선 둘이 끊겼다
                 }
                 for (int k = 0; k < Time.Minutes(1); k++) { Pinned(); s.Step(); }
-                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
                 for (int k = 0; k < Time.Minutes(3); k++) { Pinned(); s.Step(); }
                 if (Debug) Console.WriteLine($"    {(many ? "고장 셋 · 끊긴 선 둘 + 불" : "불만")}: 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0).Select(x => x.Kind))} · 몰림 {sm.Overloads} · 그려 봄 {sm.Imaginations.Count} · {string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("몰렸") || t.Contains("5분 뒤")))}");
                 return (sm.Overloads, sm.Imaginations.Count);

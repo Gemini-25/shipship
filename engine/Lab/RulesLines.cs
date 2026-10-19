@@ -50,7 +50,7 @@ public static partial class Program
             return (s, net);
         }
         int Dev(Network n, string type, int nth = 0) => n.Devices.Where(d => d.Type == type).Skip(nth).First().Id;
-        int Story(Sim s, string what) => s.Causes.Add(CauseKind.Story, what, s.Tick);
+        int Story(Sim s, string what) => s.Causes.Add(CauseKind.Setup, what, s.Tick);
         // 그 가닥에만 깔린 칸 (다른 급전선 · 간선 · 가지선이 지나지 않는다)
         IEnumerable<int> Only(Network n, int[] path) => path.Where(c => n.Feeders.All(fd => fd.Path == path || Array.IndexOf(fd.Path, c) < 0) && n.Buses.All(b => b.Path == path || Array.IndexOf(b.Path, c) < 0)
             && n.DropPath.All(dp => dp == path || Array.IndexOf(dp, c) < 0));

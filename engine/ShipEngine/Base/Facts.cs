@@ -57,8 +57,6 @@ public enum FactKind : ushort
     LoadShed,          // 전력이 모자라 장치를 껐다
     BreakerReset,      // 떨어진 차단기를 다시 올렸다
     ComputerDown,      // 주컴퓨터가 멈췄다
-    // ⑫
-    StorySeed,         // 이야기꾼이 원인을 심었다
     // ⑨
     Grieved,           // 가까운 이를 잃었다 (Actor: 남은 사람 · Other: 죽은 사람)
     TrustLost,         // 주컴퓨터를 덜 믿게 됐다
@@ -145,7 +143,7 @@ public static class FactNames
         FactKind.Warned => "외쳐 알렸다", FactKind.Panicked => "공황에 빠졌다", FactKind.Fled => "몸을 피했다", FactKind.Extinguished => "불을 껐다",
         FactKind.Patched => "구멍을 막았다", FactKind.Repaired => "고쳤다", FactKind.DoorSealed => "문을 닫았다", FactKind.Woke => "잠에서 깼다",
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
-        FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
+        FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다",
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배", FactKind.Jumper => "연장선", FactKind.Salvaged => "떼어 냈다", FactKind.Aim => "인생 목표",
         FactKind.ShipSplit => "배가 갈라졌다",

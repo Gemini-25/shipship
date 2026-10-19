@@ -50,7 +50,7 @@ public static partial class Program
                 if (band) { Mutual(so, sp, h, 0.6f); Mutual(so, sp, t, 0.6f); Mutual(so, h, t, 0.6f); }
                 so.Regroup(s); s.Run(2);
                 if (Debug) Console.WriteLine($"    불 앞: 외칠 이 칸 {lay.X(m[sp].C.Cell)},{lay.Y(m[sp].C.Cell)} {m.Thought(sp)} · 들을 이 {lay.X(m[h].C.Cell)},{lay.Y(m[h].C.Cell)} {m.Thought(h)}");
-                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
                 float conf = 0;
                 for (int k = 0; k < Time.Minutes(2); k++)
                 {
@@ -162,7 +162,7 @@ public static partial class Program
             m[sp].C.SkFire = 1;
             Mutual(so, sp, h, 0.6f); Mutual(so, sp, t, 0.6f); Mutual(so, h, t, 0.6f);
             so.Regroup(s); s.Run(2);
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
             var w = s.Clone();
             string err = "";
             float heedA = 0, heedB = -1;

@@ -11,7 +11,7 @@ public static partial class Program
         Sim Make()
         {
             var s = Environment.GetEnvironmentVariable("CREW") == "1" ? ShipWorld.Crewed("Didim", 9, 6, 3) : ShipWorld.Create("Didim", 9);
-            if (Environment.GetEnvironmentVariable("STORY") == "1") { var st = s.Get<Storyteller>(); st.Enabled = true; }
+            if (Environment.GetEnvironmentVariable("STORY") == "1") ShipWorld.Embark(s, RouteEnv());   // 출항 (항로의 자연 사건)
             if (quiet) return s;
             var f = s.Get<Field>();
             var floor = Enumerable.Range(0, f.Cells).Where(i => f.L.Kind[i] == CellKind.Floor && f.L.FurnitureAt[i] >= 0).ToArray();
@@ -113,7 +113,7 @@ public static partial class Program
 
 public static partial class Program
 {
-    /// <summary>이야기꾼을 켠 배 하루: 30분마다 씨앗 · 방 산소 최저 · 고장 · 주컴퓨터 사건 · 큰 사실 (--probe-story [배] [시드] [시간]).</summary>
+    /// <summary>출항한 배 하루 (ROUTE=항로): 30분마다 자연 사건 수 · 방 산소 최저 · 고장 · 주컴퓨터 사건 · 큰 사실 (--probe-story [배] [시드] [시간]).</summary>
     internal static void ProbeStory(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-story").Skip(1).ToArray();
@@ -123,7 +123,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        var st = s.Get<Storyteller>(); st.Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>();
         long cursor = 0;
         for (long t = 0; t <= Time.Hours(hours); t++)
@@ -133,7 +133,7 @@ public static partial class Program
                 var rooms = s.Layout.Rooms.Where(r => r.Cells.Length > 0).Select(r => (r.Name, o2: r.Cells.Average(c => f.Partial(s.Tables.gO2, c)), co2: r.Cells.Average(c => f.Ppm(s.Tables.gCO2, c)), p: r.Cells.Average(c => f.Pressure(c)))).ToList();
                 var low = rooms.OrderBy(r => r.o2).First();
                 var broken = net.Devices.Where(d => Enum.GetValues<Part>().Any(p => net.IsBroken(d.Id, p))).Select(d => d.Name).ToList();
-                Console.WriteLine($"  {Time.Clock(s.Tick)} · 씨앗 {string.Join(",", st.Seeds.Select(x => Storyteller.SeedName(x.Kind)))} · 산소 최저 {low.Name} {low.o2:0.0}kPa · 평균 산소 {rooms.Average(r => r.o2):0.0} CO2 {rooms.Average(r => r.co2):0}ppm 기압 {rooms.Average(r => r.p):0} · 고장 [{string.Join(",", broken)}] · 전력 {net.Supplied:0}/{net.Demanded:0}kW · 주컴 {(sm.Online ? "켜짐" : "꺼짐")} 사건 {sm.Incidents.Count(x => x.Active != 0)}");
+                Console.WriteLine($"  {Time.Clock(s.Tick)} · 자연 {NatureCount(s)} · 산소 최저 {low.Name} {low.o2:0.0}kPa · 평균 산소 {rooms.Average(r => r.o2):0.0} CO2 {rooms.Average(r => r.co2):0}ppm 기압 {rooms.Average(r => r.p):0} · 고장 [{string.Join(",", broken)}] · 전력 {net.Supplied:0}/{net.Demanded:0}kW · 주컴 {(sm.Online ? "켜짐" : "꺼짐")} 사건 {sm.Incidents.Count(x => x.Active != 0)}");
                 if (Environment.GetEnvironmentVariable("HOLES") == "1")
                 {
                     for (int c = 0; c < f.Cells; c++)
@@ -153,14 +153,14 @@ public static partial class Program
             }
             s.Step();
             foreach (var x in s.Facts.Since(cursor))
-                if (Director.Weight(x.Kind) >= 10 || x.Kind is FactKind.StorySeed or FactKind.MachineFail or FactKind.LoadShed or FactKind.BreakerTrip)
+                if (Director.Weight(x.Kind) >= 10 || x.Kind is FactKind.Sensed or FactKind.Letter or FactKind.MachineFail or FactKind.LoadShed or FactKind.BreakerTrip)
                     Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x.Kind)}] 칸 {x.Cell} · {s.Causes.Story(x.Cause)}");
             cursor = s.Facts.Total;
         }
         foreach (var (tick, text) in sm.Log.TakeLast(30)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
     }
 
-    /// <summary>이야기꾼을 켠 배에서 로봇 하나를 틱마다 따라간다 (--probe-robot [배] [시드] [몇 시간 뒤부터] [로봇 번호] [틱 수]).</summary>
+    /// <summary>출항한 배에서 로봇 하나를 틱마다 따라간다 (--probe-robot [배] [시드] [몇 시간 뒤부터] [로봇 번호] [틱 수]).</summary>
     internal static void ProbeRobot(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-robot").Skip(1).ToArray();
@@ -172,7 +172,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var stx = s.Get<Structure>();
         s.Run((long)Time.Hours(hours));
         var robots = m.Agents.Where(a => !a.IsPerson).ToList();
@@ -236,7 +236,7 @@ public static partial class Program
                 var lay = Layout.Ship(ship, Tables.Default);
                 int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
                 var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-                var st = s.Get<Storyteller>(); st.Enabled = true;
+                ShipWorld.Embark(s, RouteEnv());
                 var m = s.Get<Mind>(); var life = s.Get<Life>();
                 var people = m.Agents.Where(a => a.IsPerson).ToList();
                 var minSat = people.ToDictionary(a => a.Id, a => 1f);
@@ -272,7 +272,7 @@ public static partial class Program
                     }
                 }
                 var d = s.Get<Life>();
-                Console.WriteLine($"■ {ship} 시드 {seed} · 사람 {people.Count} · 씨앗 {string.Join(",", st.Seeds.Select(x => Storyteller.SeedName(x.Kind)))} · 죽음 {d.Deaths}");
+                Console.WriteLine($"■ {ship} 시드 {seed} · 사람 {people.Count} · 자연 {NatureCount(s)} · 죽음 {d.Deaths}");
                 Console.WriteLine($"  사람 최저 포화 {string.Join(" ", people.Select(a => $"{m.NameOf(a.Id)}:{minSat[a.Id]:0.00}"))}");
                 Console.WriteLine($"  최고 산소 부족 {people.Max(a => maxHyp[a.Id]):0.00} · 최고 일산화탄소 {people.Max(a => maxCo[a.Id]):0.00} · 포화 0.9 아래로 간 사람 {people.Count(a => minSat[a.Id] < 0.9f)}");
                 foreach (var w in watch)
@@ -334,7 +334,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        if (Environment.GetEnvironmentVariable("STORY") == "1") s.Get<Storyteller>().Enabled = true; // 재미 측정처럼 이야기꾼을 켠다
+        if (Environment.GetEnvironmentVariable("STORY") == "1") ShipWorld.Embark(s, RouteEnv()); // 재미 측정처럼 출항한다
         var m = s.Get<Mind>();
         long followed = 0;
         var share = new Dictionary<GoalKind, long>();
@@ -383,7 +383,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
         s.Run((long)Time.Hours(hours));
         string Where(int c) => c < 0 ? "-" : $"({s.Layout.X(c)},{s.Layout.Y(c)}){(m.RoomOf(c) >= 0 ? s.Layout.Rooms[m.RoomOf(c)].Name : "")}";
@@ -421,7 +421,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var sm = s.Get<ShipMind>(); var net = s.Get<Network>();
         for (long t = 0; t < Time.Hours(hours); t++)
         {
@@ -482,7 +482,7 @@ public static partial class Program
             }
             if (rest.Contains("air") && t % Time.Minutes(10) == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 정화 {net.TraceScrubbed:0.0}몰 · 정화기 {(net.ScrubberWorking() ? "돈다" : "섰다")} · 팬 {net.HvacKw:0}kW · 배기 {string.Join(",", Enumerable.Range(0, s.Layout.Rooms.Count).Where(r => net.Exhaust[r] != 0).Select(r => s.Layout.Rooms[r].Name))}");
         }
-        foreach (var sd in s.Get<Storyteller>().Seeds) Console.WriteLine($"    씨앗 {Time.Clock(sd.Tick)} {Storyteller.SeedName(sd.Kind)} · {s.Causes.Story(sd.Cause)}");
+        foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Sensed or FactKind.Letter)) Console.WriteLine($"    자연 {Time.Clock(x.Tick)} {FactNames.Of(x.Kind)} · {s.Causes.Story(x.Cause)}");
         foreach (var (tick, text) in sm.Log.TakeLast(rest.Contains("all") ? 300 : 40)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
         if (rest.Contains("inc")) foreach (var x in sm.Incidents) Console.WriteLine($"    사건 {Time.Clock(x.Since)} {sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)} 칸 {(x.Cell >= 0 ? s.Layout.X(x.Cell) + "," + s.Layout.Y(x.Cell) : "-")} 원인 {x.Cause}/{s.Causes.Root(x.Cause)} \"{s.Causes.Story(x.Cause)}\"");
         foreach (var (tick, text) in sm.Journal) Console.WriteLine($"    일지 {Time.Clock(tick)}\n      {text.Replace("\n", "\n      ")}");
@@ -519,7 +519,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
         s.Run((long)Time.Hours(from));
         for (long t = 0; t < Time.Hours(hours); t++)
@@ -550,7 +550,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>(); var life = s.Get<Life>();
         int room = m.RoomOf(cell);
         Console.WriteLine($"  칸 {cell} ({s.Layout.X(cell)},{s.Layout.Y(cell)}) 방 {(room >= 0 ? s.Layout.Rooms[room].Name : "-")} · 설비 {string.Join(",", net.Devices.Where(d => d.Room == room).Select(d => d.Name))}");
@@ -577,7 +577,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
         var was = new Dictionary<int, bool>(); var flips = new Dictionary<int, int>(); var first = new Dictionary<int, long>();
         var last = new Dictionary<int, string>();
@@ -612,7 +612,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var life = s.Get<Life>();
         s.Run((long)Time.Hours(hours));
         int dc = s.Layout.Doors[d].Cell;
@@ -641,7 +641,7 @@ public static partial class Program
         s.Run(Time.Minutes(30));
         int cell = s.Layout.Furniture.First(fu => fu.Type == type).Cells[0];
         int room = m.RoomOf(cell);
-        ch.Ignite(cell, mj * 1e6, s.Causes.Add(CauseKind.Story, "시험 불", s.Tick, cell));
+        ch.Ignite(cell, mj * 1e6, s.Causes.Add(CauseKind.Setup, "시험 불", s.Tick, cell));
         long cursor = s.Facts.Total;
         Console.WriteLine($"  불: {(room >= 0 ? s.Layout.Rooms[room].Name : "-")} 칸 {cell}");
         for (long t = 0; t < Time.Minutes(minutes); t++)
@@ -669,7 +669,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var m = s.Get<Mind>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var net = s.Get<Network>();
         s.Run((long)Time.Hours(hours));
         string RoomOfCell(int c) => c < 0 ? "바깥" : s.Layout.Room[c] >= 0 ? s.Layout.Rooms[s.Layout.Room[c]].Name : $"칸{c}";
@@ -697,7 +697,7 @@ public static partial class Program
 
 public static partial class Program
 {
-    /// <summary>카메라 탐침: 이야기꾼을 켜고 연출이 보는 대로 돌리며 공기 조짐 · 끌림 · 엇갈림 · 주인공을 때와 곳으로 적는다. --probe-cam 배 시드 시간</summary>
+    /// <summary>카메라 탐침: 출항하고 연출이 보는 대로 돌리며 공기 조짐 · 끌림 · 엇갈림 · 주인공을 때와 곳으로 적는다. --probe-cam 배 시드 시간</summary>
     internal static void ProbeCam(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-cam").Skip(1).ToArray();
@@ -707,7 +707,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        s.Get<Storyteller>().Enabled = true;
+        ShipWorld.Embark(s, RouteEnv());
         var d = new Director(s.Layout) { KeepRing = false };
         var m = s.Get<Mind>();
         string RoomOf(int c) => c < 0 ? "바깥" : s.Layout.Room[c] >= 0 ? s.Layout.Rooms[s.Layout.Room[c]].Name : $"칸{c}";

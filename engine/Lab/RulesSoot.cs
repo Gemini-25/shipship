@@ -19,7 +19,7 @@ public static partial class Program
             var room = CommonRoom(L);
             int fire = room.Cells.First(c => L.FurnitureAt[c] >= 0);
             s.Run(5);
-            ch.Ignite(fire, 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(fire, 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
             s.Run(Time.Hours(1));
             List<int> WallsOf(RoomDef r)
             {

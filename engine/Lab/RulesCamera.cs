@@ -27,7 +27,7 @@ public static partial class Program
         {
             var s = Worlds.Full(lay, 1);
             var d = new Director(s.Layout) { KeepRing = false };
-            int r = s.Causes.Add(CauseKind.Story, "외판 한 곳이 오래 삭았다", s.Tick, A);
+            int r = s.Causes.Add(CauseKind.Corrosion, "외판 한 곳이 오래 삭았다", s.Tick, A);
             int c1 = s.Causes.Add(CauseKind.Breach, "외판이 터졌다", s.Tick, A, r);
             s.Facts.Emit(s.Tick, FactKind.WallBreach, A, 1, c1);
             for (int i = 0; i < 10; i++) d.Observe(s);
@@ -42,7 +42,7 @@ public static partial class Program
             for (int i = 0; i < 40 && reached < 0; i++) { d.Observe(s); if (d.InView(B)) reached = d.ScreenSeconds - t0; }
             var rec = d.Chains.GetValueOrDefault(r);
             Check("사슬의 앞머리: 지금 보는 사슬(외판이 터짐)이 전기로 번지면 화면 밖 그곳으로 3초 안에 간다 · 딴 뿌리의 작은 일에는 끌려가지 않는다",
-                atA && stayed && reached is >= 0 and <= Director.CaughtSec && d.Pulls >= 1 && rec?.Path == "이야기꾼 → 구조 → 망",
+                atA && stayed && reached is >= 0 and <= Director.CaughtSec && d.Pulls >= 1 && rec?.Path == "물질 → 구조 → 망",
                 $"처음 터진 곳 {atA} · 딴 일에 머묾 {stayed} · 번진 곳까지 {reached:0.0}초 · 끌림 {d.Pulls} · 사슬 '{rec?.Path}' ({rec?.Count}개 엔진)");
         }
 
@@ -51,7 +51,7 @@ public static partial class Program
             var s = Worlds.Full(lay, 7);
             var d = new Director(s.Layout) { KeepRing = false };
             int keep = s.Causes.Add(CauseKind.Fire, "왼쪽 방 상자가 그을린다", s.Tick, A);
-            int c0 = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
+            int c0 = s.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", s.Tick);
             s.Get<Outside>().AddRock(0.3, 6000, -1, 0, 0, 6000 * 60 * 2, c0);   // 오른쪽에서 왼쪽으로 · 2분 거리
             long cursor = s.Facts.Total; bool hit = false, seenAtHit = false; int hitCell = -1;
             for (int i = 0; i < Time.Minutes(4) && !hit; i++)

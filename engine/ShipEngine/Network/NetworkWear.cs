@@ -118,7 +118,7 @@ public sealed partial class Network
         }
     }
 
-    /// <summary>고장 원인 말: 기록된 까닭(이야기꾼 · 손댄 이)이 있으면 그것 · 아니면 가장 큰 몫의 까닭이 30%를 넘으면 그 까닭 · 아니면 '낡아 망가졌다'.</summary>
+    /// <summary>고장 원인 말: 기록된 까닭(만들 때 흠 · 손댄 이)이 있으면 그것 · 아니면 가장 큰 몫의 까닭이 30%를 넘으면 그 까닭 · 아니면 '낡아 망가졌다'.</summary>
     private (string text, int parent) WhyFailed(Device dev, Part p)
     {
         int k = dev.Id * 4 + (int)p, b = k * Why;
@@ -151,7 +151,7 @@ public sealed partial class Network
         _brokeCause.Remove(k);
     }
 
-    /// <summary>정비 없이 hours시간 더 돌았다 (이야기꾼 · 시험 — 지금 그 칸의 형편으로 10시간씩 닳게 한다 · 망가지면 멈춘다).</summary>
+    /// <summary>정비 없이 hours시간 더 돌았다 (시험 — 지금 그 칸의 형편으로 10시간씩 닳게 한다 · 망가지면 멈춘다).</summary>
     public void Neglect(Sim sim, int device, Part p, double hours)
     {
         int k = device * 4 + (int)p;
@@ -204,7 +204,7 @@ public sealed partial class Network
         return HeatCondCause(sim, c);
     }
 
-    /// <summary>전선 칸을 늙게 한다 (이야기꾼 '낡은 전선' · 시험) — 숨은 한계의 fraction까지.</summary>
+    /// <summary>전선 칸을 늙게 한다 (시험 · 만들 때 남은 흠) — 숨은 한계의 fraction까지.</summary>
     public void AgeCable(int cell, double fraction, int cause = 0)
     {
         if (cell < 0 || cell >= _insul.Length) return;

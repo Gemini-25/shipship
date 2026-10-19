@@ -49,7 +49,7 @@ public static partial class Program
                 var gen = net.Devices.First(d => d.Type == "GravityGenerator");
                 s.Run(Time.Minutes(1));
                 long f0 = s.Facts.Total;
-                if (breakIt) net.Age(gen.Id, Part.Mechanical, 1.2, s.Causes.Add(CauseKind.Story, "발생기 회전자 축받이가 닳았다", s.Tick));
+                if (breakIt) net.Age(gen.Id, Part.Mechanical, 1.2, s.Causes.Add(CauseKind.Setup, "발생기 회전자 축받이가 닳았다", s.Tick));
                 else net.Breaker[gen.Feeder] = 0;
                 s.Run(Time.Minutes(1));
                 var lost = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Gravity && x.Size == 0);
@@ -227,7 +227,7 @@ public static partial class Program
                 int seat = At(20, 4);
                 if (mode > 0) Array.Fill(f.Grav, 0f);
                 s.Run(3);
-                ch.Ignite(seat, 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+                ch.Ignite(seat, 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
                 double kj = 0;
                 Span<int> nb = stackalloc int[4];
                 for (int k = 0; k < Time.Minutes(15); k++)
@@ -350,7 +350,7 @@ public static partial class Program
             var s = Worlds.Full(dl, 3); var f = s.Get<Field>(); var st = s.Get<Structure>();
             s.Run(Time.Minutes(1));
             long f0 = s.Facts.Total;
-            int rock = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+            int rock = s.Causes.Add(CauseKind.Setup, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(dl, 10, y), rock);
             s.Run(Time.Minutes(1));
             float left = f.Grav[Worlds.At(dl, 3, 2)], right = f.Grav[Worlds.At(dl, 16, 2)];

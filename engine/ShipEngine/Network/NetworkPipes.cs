@@ -66,7 +66,7 @@ public sealed partial class Network
         return 0;
     }
 
-    /// <summary>관 칸을 녹슬게 한다 (이야기꾼 '녹슨 관' · 시험) — 숨은 한계의 fraction까지.</summary>
+    /// <summary>관 칸을 녹슬게 한다 (시험 · 만들 때 남은 흠) — 숨은 한계의 fraction까지.</summary>
     public void AgeRust(int cell, LineKind k, double fraction, int cause = 0)
     {
         if (cell < 0 || cell >= _rustLimit.Length || k is not (LineKind.Coolant or LineKind.Water)) return;

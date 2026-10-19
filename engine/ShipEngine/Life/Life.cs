@@ -217,7 +217,7 @@ public sealed partial class Life : IEngine
         sim.Facts.Emit(sim.Tick, FactKind.Hurt, b.Cell, blunt, cause, actor: body);
     }
 
-    /// <summary>⑫ 데었다 (이야기꾼의 씨앗 — 일하다 뜨거운 관에): 화상 · 아픔 — 원인 마디.</summary>
+    /// <summary>⑫ 데었다 (⑫ 일하다 뜨거운 관에 — 세상의 확률): 화상 · 아픔 — 원인 마디.</summary>
     public void Scald(Sim sim, int body, float burn, int cause)
     {
         if (body < 0 || body >= Bodies.Count) return;

@@ -257,7 +257,7 @@ public static partial class Program
             var n = s.Get<Network>(); var f = s.Get<Field>(); var snd = s.Get<Sound>();
             var bat = n.Devices.First(d => d.Def.Role == "battery");
             long from = snd.Logged;
-            n.CrushCell(bat, s.Causes.Add(CauseKind.Story, "파편이 배터리를 찌그러뜨렸다", s.Tick));   // 묶음 하나가 속 합선 → 안전 밸브 → 폭주 (② (라))
+            n.CrushCell(bat, s.Causes.Add(CauseKind.Setup, "파편이 배터리를 찌그러뜨렸다", s.Tick));   // 묶음 하나가 속 합선 → 안전 밸브 → 폭주 (② (라))
             s.Run(Time.Minutes(2));
             var bangs = snd.LogSince(from).Where(e => e.Kind == SoundKind.Bang && e.Cell == bat.Cell).OrderByDescending(e => e.Db).ToList();
             double bang = bangs.Count > 0 ? bangs[0].Db : 0;

@@ -71,7 +71,7 @@ public static partial class Program
             var (s, net, sm, m, wet) = Flooded(2);
             for (int k = 0; k < 40 && net.Jumpers.Count == 0; k++) s.Run(Time.Minutes(0.5));
             bool laid = net.Jumpers.Count == 1;
-            s.Get<Chemistry>().Ignite(At(8, 3), 3e6, s.Causes.Add(CauseKind.Story, "생명유지실 의자에 불씨", s.Tick));
+            s.Get<Chemistry>().Ignite(At(8, 3), 3e6, s.Causes.Add(CauseKind.Setup, "생명유지실 의자에 불씨", s.Tick));
             s.Run(Time.Minutes(3));
             var f = s.Get<Field>();
             bool cut = sm.JumpersCut >= 1 && net.Jumpers.Count == 0, darkAgain = !net.RoomPowered(left);
@@ -110,7 +110,7 @@ public static partial class Program
                 var net = s.Get<Network>(); var f = s.Get<Field>();
                 int wr = net.Devices.First(d => d.Type == "WaterRecycler").Id;
                 if (!running) net.SetOn(wr, false);
-                int c0 = s.Causes.Add(CauseKind.Story, "물 재생기 봉함이 삭았다", s.Tick);
+                int c0 = s.Causes.Add(CauseKind.Setup, "물 재생기 봉함이 삭았다", s.Tick);
                 net.AgeLeft(wr, Part.Seal, 0.01, c0);
                 s.Run(Time.Minutes(10));
                 double water = lay.Rooms[left].Cells.Sum(c => f.Stored(f.T.sWater, c));

@@ -228,7 +228,7 @@ public static partial class Program
             soc.Bond[friend * N + dead] = 0.8f;
             life[m[dead].C.Body].Blunt = 2f;
             s.Run(Time.Minutes(1));
-            s.Get<Chemistry>().Ignite(At(26, 2), 3e6, s.Causes.Add(CauseKind.Story, "휴게실 의자 곁 충전기에서 불꽃이 튀었다", s.Tick, At(26, 2)));   // 휴게실에 있던 이가 보고 외친다
+            s.Get<Chemistry>().Ignite(At(26, 2), 3e6, s.Causes.Add(CauseKind.Setup, "휴게실 의자 곁 충전기에서 불꽃이 튀었다", s.Tick, At(26, 2)));   // 휴게실에 있던 이가 보고 외친다
             for (int k = 0; k < Time.Minutes(10) && m.NotYet(s, friend) == null; k++) s.Step();   // 불을 알게 될 때까지 (모르는 위험으로는 미루지 않는다)
             long f0 = s.Facts.Total;
             string? why = m.NotYet(s, friend);

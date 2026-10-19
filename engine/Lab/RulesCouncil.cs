@@ -140,7 +140,7 @@ public static partial class Program
             long f0 = s.Facts.Total;
             m.CallCouncilNow(s);
             Run(s, m, p, 5);
-            s.Get<Chemistry>().Ignite(At(3, 1), 3e6, s.Causes.Add(CauseKind.Story, "침실 콘센트에서 불꽃이 튀었다", s.Tick));
+            s.Get<Chemistry>().Ignite(At(3, 1), 3e6, s.Causes.Add(CauseKind.Setup, "침실 콘센트에서 불꽃이 튀었다", s.Tick));
             Run(s, m, p, 20);
             bool verdict = s.Facts.Since(f0).Any(f => f.Kind == FactKind.Verdict);
             if (Debug) Console.WriteLine($"    불: 사실 {string.Join(",", s.Facts.Since(f0).Select(f => f.Kind).Distinct())}");

@@ -112,7 +112,7 @@ public static partial class Program
                 int p = m.AddPerson(s, At(12, 2));
                 m.SetPersonality(p, 0.5f, 0.5f, extra, 0.5f, neuro);
                 s.Run(3);
-                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
                 float peak = 0;
                 for (int k = 0; k < Time.Minutes(3); k++) { s.Step(); peak = Math.Max(peak, m[p].C.Fear); }
                 if (Debug) Console.WriteLine($"    신경성 {neuro} → 두려움 {peak:0.00} · {m.Thought(p)}");

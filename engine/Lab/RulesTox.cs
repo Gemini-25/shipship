@@ -176,7 +176,7 @@ public static partial class Program
             // 찌그러짐: 묶음 하나가 속 합선 → 곧 폭주 → 그 열이 이웃 묶음을 달궈 차례로 번진다 (몇 분 간격)
             {
                 var (s, net, b) = Pack();
-                net.CrushCell(b, s.Causes.Add(CauseKind.Story, "파편이 배터리를 찌그러뜨렸다", s.Tick));
+                net.CrushCell(b, s.Causes.Add(CauseKind.Setup, "파편이 배터리를 찌그러뜨렸다", s.Tick));
                 var at = new long[Network.CellGroups]; Array.Fill(at, -1);
                 for (int k = 0; k < Time.Hours(1); k++)
                 {
@@ -254,7 +254,7 @@ public static partial class Program
                 var gen = o2gens(net)[0];
                 s.Run(5);
                 net.SetO2Drift(s, 0.5, 0);   // 발생기가 쉬지 않고 돈다 (물을 갈라 수소가 나온다)
-                net.AgeLeft(gen.Id, Part.Seal, 0.001, s.Causes.Add(CauseKind.Story, "시험: 봉함이 낡았다", s.Tick));
+                net.AgeLeft(gen.Id, Part.Seal, 0.001, s.Causes.Add(CauseKind.Setup, "시험: 봉함이 낡았다", s.Tick));
                 s.Run(Time.Minutes(1));
                 string leak = net.SealLeakCause[gen.Id] != 0 ? s.Causes.Text(net.SealLeakCause[gen.Id]) : "";
                 double h2a = s.Layout.Rooms[ls].Cells.Sum(c => f.Gas(f.T.gH2, c));

@@ -99,7 +99,7 @@ public static partial class Program
         double frac = args.Contains("frac") ? double.Parse(args[Array.IndexOf(args, "frac") + 1]) : 0;   // 산소 비율 (질소를 빼서 — 낮은 기압 · 짙은 산소의 탐사 대기)
         if (frac > 0) foreach (var room in L.Rooms) foreach (int c in room.Cells) { double o = f.Gas(f.T.gO2, c), n2 = f.Gas(f.T.gN2, c), tot = f.Moles(c); double want = o / frac - (tot - n2); if (want < n2) f.RemoveGas(c, f.T.gN2, n2 - Math.Max(0, want)); }
         int start = Enumerable.Range(0, L.N).Where(c => net.Strands[c] >= 4 && L.Room[c] >= 0 && L.Furniture.All(fu => Array.IndexOf(fu.Cells, c) < 0)).OrderBy(c => c).First();
-        ch.Ignite(start, 3e6, s.Causes.Add(CauseKind.Story, "전선 묶음 곁에서 불씨", s.Tick));
+        ch.Ignite(start, 3e6, s.Causes.Add(CauseKind.Setup, "전선 묶음 곁에서 불씨", s.Tick));
         var ever = new HashSet<int>();
         for (int i = 0; i < (int)Time.Minutes(min); i++)
         {

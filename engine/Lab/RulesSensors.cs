@@ -31,9 +31,9 @@ public static partial class Program
             s.Run(5);
             setup?.Invoke(s);
             int spot = cutAt(s);
-            if (spot >= 0) net.CutData(s, spot, s.Causes.Add(CauseKind.Story, "낡은 센서 선이 바닥 밑에서 끊겼다", s.Tick, spot));
+            if (spot >= 0) net.CutData(s, spot, s.Causes.Add(CauseKind.Setup, "낡은 센서 선이 바닥 밑에서 끊겼다", s.Tick, spot));
             long lit = s.Tick;
-            ch.Ignite(fireCell, 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(fireCell, 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
             long alarm = -1; bool lost = false; byte seen = 0; int updates = 0; float last = sm.RoomKPa[room];
             for (int k = 0; k < Time.Minutes(15) && (alarm < 0 || k < Time.Minutes(3)); k++)
             {
@@ -70,7 +70,7 @@ public static partial class Program
             var s = Worlds.Full(row, 1);
             var net = s.Get<Network>();
             s.Run(5);
-            net.CutData(s, sill, s.Causes.Add(CauseKind.Story, "문턱 밑 센서 선이 끊겼다", s.Tick, sill));
+            net.CutData(s, sill, s.Causes.Add(CauseKind.Setup, "문턱 밑 센서 선이 끊겼다", s.Tick, sill));
             string Links() => string.Join("", rooms.Select(r => net.SensorLink(s.Tick, r)));
             s.Run(1); string shut = Links();
             int Door(int x) => row.Doors.First(d => d.Cell == RAt(x, 2)).Id;
@@ -100,7 +100,7 @@ public static partial class Program
             int trunk = use.Where(kv => lay.FurnitureAt[kv.Key] < 0).OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key).First().Key;
             s.Run(5);
             f.AddStore(trunk, f.T.sPoly, 40); // 바닥에 쌓인 짐 (불이 탈 것)
-            ch.Ignite(trunk, 3e6, s.Causes.Add(CauseKind.Story, "통로에 쌓아 둔 포장재에 불이 붙었다", s.Tick, trunk));
+            ch.Ignite(trunk, 3e6, s.Causes.Add(CauseKind.Setup, "통로에 쌓아 둔 포장재에 불이 붙었다", s.Tick, trunk));
             for (int k = 0; k < Time.Minutes(5) && !net.DataCutAt(trunk); k++) s.Step();
             s.Run(10);
             int blind = Enumerable.Range(0, lay.Rooms.Count).Count(r => !net.RoomLinked(r));

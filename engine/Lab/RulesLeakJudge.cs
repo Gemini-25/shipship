@@ -18,7 +18,7 @@ public static partial class Program
             var s = Worlds.Full(lay, 1);
             var f = s.Get<Field>(); var st = s.Get<Structure>(); var sm = s.Get<ShipMind>();
             s.Run(5);
-            st.DamageCause[At(0, 2)] = s.Causes.Add(CauseKind.Story, "외판에 작은 금이 갔다", s.Tick, At(0, 2));
+            st.DamageCause[At(0, 2)] = s.Causes.Add(CauseKind.Setup, "외판에 작은 금이 갔다", s.Tick, At(0, 2));
             f.SetHole(At(0, 2), 0.0015f);
             for (int k = 0; k < Time.Minutes(6) && sm.Find(IncidentKind.Leak, left) < 0; k++) s.Step();
             bool found = sm.Find(IncidentKind.Leak, left) >= 0;
@@ -43,7 +43,7 @@ public static partial class Program
             int p = m.AddPerson(s, At(4, 4));
             m.Agents[p].C.Sleepy = 0.97f;
             s.Run(5);
-            int cause = s.Causes.Add(CauseKind.Story, "왼쪽 방 외판에 금이 갔다", s.Tick, At(0, 3));
+            int cause = s.Causes.Add(CauseKind.Setup, "왼쪽 방 외판에 금이 갔다", s.Tick, At(0, 3));
             m.Announce(s, At(4, 2), 85, new Belief { Kind = BeliefKind.Leak, Cell = At(1, 3), Subject = -1, Conf = 0.9f, Cause = cause });
             int entries = 0; bool inside = true;
             for (int k = 0; k < Time.Minutes(8); k++)

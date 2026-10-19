@@ -198,12 +198,12 @@ public static partial class Program
             // 잔해 지대를 지난다 → 파편이 외판을 친다 (대부분 작아 움푹 · 가끔 구멍)
             var s = ShipWorld.Create("Didim", 3);
             var o = s.Get<Outside>(); var st = s.Get<Structure>();
-            int seed = s.Causes.Add(CauseKind.Story, "잔해 지대가 항로에 있다", s.Tick);
+            int seed = s.Causes.Add(CauseKind.Route, "잔해 지대가 항로에 있다", s.Tick);
             o.AddCloud("rubble", 400_000, 300_000, 3e-7, 1, 0, seed);
             s.Run(Time.Minutes(8));
             var hit = s.Facts.Since(0).Where(f => f.Kind == FactKind.Impact).ToList();
             string story = hit.Count > 0 ? s.Causes.Story(hit[0].Cause) : "";
-            Check("잔해 지대를 지나면 파편이 외판을 친다 · 원인 사슬이 이야기꾼의 원인까지 이어진다", o.DebrisHits > 0 && story.StartsWith("잔해 지대가 항로에 있다"),
+            Check("잔해 지대를 지나면 파편이 외판을 친다 · 원인 사슬이 항로의 원인까지 이어진다", o.DebrisHits > 0 && story.StartsWith("잔해 지대가 항로에 있다"),
                 $"맞음 {o.DebrisHits}번 · 구멍 {st.Breaches} · 예: {story}");
             // 운석 정면: 큰 것은 여러 벽을 뚫는다 · 오기 전에 '다가온다'가 먼저
             var s2 = ShipWorld.Create("Didim", 3);
@@ -357,7 +357,7 @@ public static partial class Program
             // 진공: 15초면 쓰러지고 1분 반쯤에 죽는다 · 죽음의 원인 사슬이 파편까지
             var s = World();
             var life = s.Get<Life>(); int b = life.AddBody(Worlds.At(lay, 4, 1));
-            int seed = s.Causes.Add(CauseKind.Story, "파편 하나가 날아왔다", s.Tick);
+            int seed = s.Causes.Add(CauseKind.Setup, "파편 하나가 날아왔다", s.Tick);
             s.Get<Structure>().Impact(s, hull, 4e5, 1, 0, seed);
             long downAt = -1, deadAt = -1;
             for (int i = 0; i < Time.Minutes(6) && deadAt < 0; i++)
@@ -556,6 +556,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); ArcRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); NatureRules(); CouncilRules(); JudgmentRules(); WearyRules(); SnagRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); ToxRules(); GravityRules(); OrganRules(); DxRules(); MentalRules(); CultureRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); NatureRules(); CouncilRules(); JudgmentRules(); WearyRules(); SnagRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); ToxRules(); GravityRules(); OrganRules(); DxRules(); MentalRules(); CultureRules();
     }
 }

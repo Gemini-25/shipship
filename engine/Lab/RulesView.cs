@@ -17,7 +17,7 @@ public static partial class Program
         var m = s.Get<Mind>();
         m.AddPerson(s, At(15, 2)); m.AddRobot(s, At(20, 7), AgentKind.Robot, At(20, 7));
         s.Run(10);
-        s.Get<Chemistry>().Ignite(At(3, 5), 3e6, s.Causes.Add(CauseKind.Story, "침대 불씨", s.Tick));
+        s.Get<Chemistry>().Ignite(At(3, 5), 3e6, s.Causes.Add(CauseKind.Setup, "침대 불씨", s.Tick));
         var f = s.Get<Field>();
         foreach (int c in lay.Rooms[lay.Room[At(17, 2)]].Cells) for (int g = 0; g < f.G; g++) f.RemoveGas(c, g, f.N[c * f.G + g] * 0.95);
         s.Run(20);
@@ -72,8 +72,8 @@ public static partial class Program
         int afterLag = show.Advance(dt);                              // 밀린 것은 버린다 — 다음 장에 몰아 돌리지 않는다
         twin.Run(show.Sim.Tick);
         int fire = At(3, 5);
-        show.Sim.Get<Chemistry>().Ignite(fire, 3e6, show.Sim.Causes.Add(CauseKind.Story, "침대 불씨", show.Sim.Tick));
-        twin.Get<Chemistry>().Ignite(fire, 3e6, twin.Causes.Add(CauseKind.Story, "침대 불씨", twin.Tick));
+        show.Sim.Get<Chemistry>().Ignite(fire, 3e6, show.Sim.Causes.Add(CauseKind.Setup, "침대 불씨", show.Sim.Tick));
+        twin.Get<Chemistry>().Ignite(fire, 3e6, twin.Causes.Add(CauseKind.Setup, "침대 불씨", twin.Tick));
         double slow = 1e9; bool inView = false, srcOk = true; int frames = 0;
         for (int i = 0; i < 60 * 8; i++)
         {
@@ -96,7 +96,7 @@ public static partial class Program
         var wm = walk.Sim.Get<Mind>();
         wm.AddPerson(walk.Sim, At(5, 4)); wm.AddRobot(walk.Sim, At(20, 7), AgentKind.Robot, At(20, 7));
         walk.Sim.Run(3);
-        walk.Sim.Get<Chemistry>().Ignite(At(3, 5), 3e6, walk.Sim.Causes.Add(CauseKind.Story, "침대 불씨", walk.Sim.Tick));
+        walk.Sim.Get<Chemistry>().Ignite(At(3, 5), 3e6, walk.Sim.Causes.Add(CauseKind.Setup, "침대 불씨", walk.Sim.Tick));
         walk.SpeedOverride = 2;
         int partial = 0, jumps = 0, moved = 0;
         for (int i = 0; i < 60 * 15; i++)
@@ -112,7 +112,7 @@ public static partial class Program
         }
         // 다시보기: 운석 하나가 하이라이트가 된 뒤 B — 산 세계는 멈추고, 되살린 세계에서 같은 운석이 같은 곳에 부딪힌다 → 끝나면 산 세계로
         var rs = new LiveShow(ShipWorld.Create("Didim", 3), "디딤호");
-        int rc = rs.Sim.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", rs.Sim.Tick);
+        int rc = rs.Sim.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", rs.Sim.Tick);
         rs.Sim.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 6000 * 60 * 4, rc); // 4분 거리
         for (int i = 0; i < 60 * 600 && (rs.Dir.Highlights.Count == 0 || rs.Sim.Tick < rs.Dir.Highlights[0].Last + Time.Minutes(3)); i++) rs.Advance(dt);
         var hl = rs.Dir.Highlights.FirstOrDefault();
@@ -131,21 +131,26 @@ public static partial class Program
             started && replayHits == liveHits && liveHits > 0 && replayFrames > 60 && liveStill && !rs.Replaying && rs.World == rs.Sim,
             hl == null ? "하이라이트 없음" : $"'{hl.Title}' · 다시보기 {replayFrames}장 · 충돌 산 세계 {liveHits} / 다시보기 {replayHits} · 산 세계 멈춤 {liveStill} · 돌아옴 {!rs.Replaying}");
 
-        // 판 (화면 바퀴 1): 하이라이트 목록(L) — 가장 새것이 위 · 골라 Enter면 그 장면 다시보기 / 이야기꾼(T) — 고른 성격 · 가혹함 / 일지(J) · 아침 방송 자막
+        // 판 (화면 바퀴 1): 하이라이트 목록(L) — 가장 새것이 위 · 골라 Enter면 그 장면 다시보기 / 항로(T) — 출항 전에 고르는 위험도 / 일지(J) · 아침 방송 자막
         rs.TogglePanel(PanelKind.Highlights);
         var hlRows = rs.Render(); rs.Recycle(hlRows.Img);
         bool listOk = hlRows.PanelTitle.StartsWith("볼 만했던 장면") && hlRows.PanelRows.Length == rs.Dir.Highlights.Count && hl != null && hlRows.PanelRows[0].Main.Contains(rs.Dir.Highlights[^1].Title) && hlRows.PanelPick == 0;
         bool pickReplay = rs.PanelEnter() && rs.Replaying && rs.ReplayOf == rs.Dir.Highlights[^1] && rs.Panel == PanelKind.None;
         rs.StopReplay();
-        rs.TogglePanel(PanelKind.Storyteller);
-        var st = rs.Sim.Get<Storyteller>();
-        byte lv0 = st.Level;
-        rs.PanelMove(+5); rs.PanelMove(-3);                 // 고른 이야기꾼(0)에서 → 사람의 이야기(5) → 몰아치는(2)
-        rs.PanelEnter(); rs.PanelSide(+1);
-        var stFrame = rs.Render(); rs.Recycle(stFrame.Img);
-        bool tellerOk = st.Style == StoryStyle.Relentless && st.Level == lv0 + 1 && stFrame.PanelRows.Length == 7 && stFrame.PanelRows[2].On && stFrame.PanelRows[2].Sub.Length > 0
-            && stFrame.PanelRows[6].Main.Contains($"{st.Level} {Storyteller.LevelName(st.Level)}") && stFrame.Notice.Contains("몰아치는");
-        rs.TogglePanel(PanelKind.Storyteller);
+        // 항로 판(T): 출항 전 — 기본 항로(4)에 커서 · 여덟 항로 + 지금 구간 한 줄 · 골라 Enter면 그 항로로 출발 점화를 다시 계획 / 떠난 뒤엔 바꿀 수 없다
+        var ro = new LiveShow(ShipWorld.Create("Didim", 3), "디딤호");
+        ShipWorld.Embark(ro.Sim);
+        var oo = ro.Sim.Get<Outside>();
+        ro.TogglePanel(PanelKind.Route);
+        int pick0 = ro.PanelPick;
+        ro.PanelMove(+4);                                   // 보통 길(4) → 옛 정거장 파편 지대를 지나는 길(8)
+        bool chose = ro.PanelEnter();
+        var roFrame = ro.Render(); ro.Recycle(roFrame.Img);
+        var rt8 = ro.Sim.Tables.Space.Routes[7];
+        bool routeRows = roFrame.PanelRows.Length == 9 && roFrame.PanelRows[7].On && !roFrame.PanelRows[3].On && roFrame.PanelRows[8].Main.StartsWith("출항 전");
+        for (int i = 0; i < 200 && oo.VoyageTicks == 0; i++) ro.Sim.Run((int)Time.Minutes(1));
+        bool lockedAfter = oo.VoyageTicks > 0 && !ro.ChooseRoute(2) && oo.Route == 8;
+        bool routeOk = pick0 == ShipWorld.DefaultRoute - 1 && chose && oo.Route == 8 && routeRows && roFrame.Notice.Contains(rt8.Name) && roFrame.Route.Contains(rt8.Name) && lockedAfter;
         var js = new LiveShow(Worlds.Full(lay, 3), "시험호");
         var jsm = js.Sim.Get<ShipMind>(); jsm.JournalHour = 1; jsm.MorningHour = 1; // 시험: 01시에 일지 · 방송
         js.Advance(dt);
@@ -157,9 +162,9 @@ public static partial class Program
         bool journalOk = jf.Broadcast.StartsWith("주컴퓨터 방송 — 좋은 아침입니다.") && jf.BroadcastAlpha > 0 && jp.PanelTitle == "주컴퓨터" && jp.PanelRows.Length >= 3
             && jp.PanelRows[0].Main == "배 형편" && jp.PanelRows[0].Sub.Contains("산소")
             && jp.PanelRows[1].Main.Contains("큰 일 없이 지나갔다") && jp.PanelRows[1].Sub.Contains("배: 산소") && jp.PanelRows[^1].Main == "아침 방송";
-        Check("관전 화면 판: 하이라이트 목록(가장 새것 위 · 골라 Enter면 그 장면 다시보기) · 이야기꾼 판(성격 여섯 · 한 줄 설명 · 가혹함 막대) · 일지 판 · 아침 방송 자막",
-            listOk && pickReplay && tellerOk && journalOk,
-            $"목록 {hlRows.PanelRows.Length}줄 '{(hlRows.PanelRows.Length > 0 ? hlRows.PanelRows[0].Main : "")}' · 골라 다시보기 {pickReplay} · 이야기꾼 {Storyteller.StyleName(st.Style)} 가혹함 {st.Level} · 일지 '{(jp.PanelRows.Length > 1 ? jp.PanelRows[1].Main : "")}' · 자막 '{jf.Broadcast[..Math.Min(40, jf.Broadcast.Length)]}'");
+        Check("관전 화면 판: 하이라이트 목록(가장 새것 위 · 골라 Enter면 그 장면 다시보기) · 항로 판(여덟 항로 · 출항 전에만 고름 · 지금 구간) · 일지 판 · 아침 방송 자막",
+            listOk && pickReplay && routeOk && journalOk,
+            $"목록 {hlRows.PanelRows.Length}줄 '{(hlRows.PanelRows.Length > 0 ? hlRows.PanelRows[0].Main : "")}' · 골라 다시보기 {pickReplay} · 항로 판 커서 {pick0 + 1} → {oo.Route} 고름 {chose} · {roFrame.PanelRows.Length}줄 · 떠난 뒤 잠김 {lockedAfter} · 알림 '{roFrame.Notice}' · 일지 '{(jp.PanelRows.Length > 1 ? jp.PanelRows[1].Main : "")}' · 자막 '{jf.Broadcast[..Math.Min(40, jf.Broadcast.Length)]}'");
 
         // 사람 눌러 보기: 그려진 자리를 누르면 그 사람을 고르고 카드(이름 · 생각 · 몸)를 띄우고 카메라가 따라간다 · 빈 곳을 누르면 놓는다
         var pick = new LiveShow(Worlds.Full(lay, 3), "시험호");
@@ -192,7 +197,7 @@ public static partial class Program
             var cs = new LiveShow(Worlds.Full(lay, 3), "시험호");
             var w = cs.Sim;
             int a = At(3, 2), b = At(17, 2), c = At(12, 8);
-            int r = w.Causes.Add(CauseKind.Story, "외판 한 곳이 오래 삭았다", w.Tick, a);
+            int r = w.Causes.Add(CauseKind.Setup, "외판 한 곳이 오래 삭았다", w.Tick, a);
             int c1 = w.Causes.Add(CauseKind.Breach, "외판이 터졌다", w.Tick, a, r);
             int c2 = w.Causes.Add(CauseKind.Electric, "터진 외판 너머 전선이 끊겼다", w.Tick, b, c1);
             int c3 = w.Causes.Add(CauseKind.Person, "어둠 속에서 넘어졌다", w.Tick, c, c2);
@@ -246,7 +251,7 @@ public static partial class Program
             var ms = new LiveShow(Worlds.Full(lay, 5), "시험호");
             ms.Sim.Get<Mind>().AddRobot(ms.Sim, At(20, 7), AgentKind.Robot, At(20, 7));
             ms.Sim.Run(5);
-            ms.Sim.Get<Chemistry>().Ignite(At(15, 1), 3e6, ms.Sim.Causes.Add(CauseKind.Story, "의자 밑 불씨", ms.Sim.Tick));
+            ms.Sim.Get<Chemistry>().Ignite(At(15, 1), 3e6, ms.Sim.Causes.Add(CauseKind.Setup, "의자 밑 불씨", ms.Sim.Tick));
             var cm = ms.Sim.Get<ShipMind>();
             for (int i = 0; i < Time.Minutes(2) && !cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Fire); i++) ms.Sim.Step();
             ms.Advance(dt);

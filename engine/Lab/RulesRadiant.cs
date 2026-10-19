@@ -30,7 +30,7 @@ public static partial class Program
             int open = life.AddBody(At(7, 5)), behind = life.AddBody(At(9, 3)); // 둘 다 가장 가까운 의자(d)에서 두 칸
             int wall = At(8, 3), farWall = At(0, 3); // 의자 줄을 마주한 벽 · 같은 방 반대쪽 벽 (뜨거운 공기만 닿는다)
             s.Run(3);
-            int cause = s.Causes.Add(CauseKind.Story, "의자 줄에 불이 붙었다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "의자 줄에 불이 붙었다", s.Tick);
             for (int x = 4; x <= 7; x++) ch.Ignite(At(x, 3), 3e6, cause);
             double wall0 = f.Ts[wall], far0 = f.Ts[farWall], burnCool = 0, peakQ = 0;
             for (int k = 0; k < Time.Minutes(3); k++)

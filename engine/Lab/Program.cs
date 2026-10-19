@@ -68,7 +68,7 @@ public static partial class Program
             else if (args.Contains("--director-check")) DirectorCheck(args);
             else if (args.Contains("--budget")) Budget();
             else if (args.Contains("--music")) MusicDemo(args);
-            else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함] | --live 배 시드 초 | --listen 배 시드 초 [건너뛸 시간]"); return 2; }
+            else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [항로 1~8] | --live 배 시드 초 | --listen 배 시드 초 [건너뛸 시간]"); return 2; }
         }
         catch (Exception e)
         {

@@ -106,11 +106,11 @@ public static partial class Program
             var hit = Enumerable.Range(0, 40).Select(i => life.AddBody(At(12 + i % 10, 1 + i / 10))).ToArray();
             int big = life.AddBody(At(2, 1)), small = life.AddBody(At(4, 1)), rup = life.AddBody(At(6, 1)), held = life.AddBody(At(8, 1)), ap = life.AddBody(At(2, 3));
             s.Run(5);
-            int cause = s.Causes.Add(CauseKind.Story, "짐이 무너져 몸을 쳤다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "짐이 무너져 몸을 쳤다", s.Tick);
             foreach (int id in hit) life.Strike(s, id, 0.6f, 0, cause);
             int bleeders = hit.Count(id => life[id].BleedIn > 0);
             life[big].BleedIn = 0.25f; life[small].BleedIn = 0.03f;
-            int seed = s.Causes.Add(CauseKind.Story, "맹장", s.Tick);
+            int seed = s.Causes.Add(CauseKind.Setup, "맹장", s.Tick);
             foreach (int id in new[] { rup, held, ap }) life.StartAppendicitis(s, id, seed);
             life[rup].Appendix = 0.8f; life[held].Appendix = 0.8f; life[held].Abx = 24; life[ap].Appendix = 0.5f;
             var apBody = life[ap]; Sym apSym = Life.Symptoms(apBody); double apPain = Life.FeltPain(apBody), apFever = Life.FeverK(apBody);
@@ -140,7 +140,7 @@ public static partial class Program
                 if (noOpioid) foreach (var fu in lay.Furniture) m.Stock[fu.Id * m.ItemCount + m.iOpioid] = 0;
                 s.Run(5);
                 int vb = m[p].C.Body;
-                life.Strike(s, vb, 0.2f, 0, s.Causes.Add(CauseKind.Story, "선반에 배를 부딪혔다", s.Tick));
+                life.Strike(s, vb, 0.2f, 0, s.Causes.Add(CauseKind.Setup, "선반에 배를 부딪혔다", s.Tick));
                 life[vb].BleedIn = 0.25f;
                 float painMax = 0;
                 for (long k = 0; k < Time.Hours(4); k++)
@@ -232,7 +232,7 @@ public static partial class Program
             s.Run(5);
             int vb = m[p].C.Body;
             life[vb].Heart = 0.4f; life[vb].HeartPeak = 0.8f;
-            life.StopHeart(s, vb, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Story, "지난 사고", s.Tick));
+            life.StopHeart(s, vb, 1, "상한 심장이 갑자기 떨린다 — 부정맥", s.Causes.Add(CauseKind.Setup, "지난 사고", s.Tick));
             bool carriedInArrest = false, opInArrest = false, planned = false;
             for (long k = 0; k < Time.Hours(3); k++)
             {

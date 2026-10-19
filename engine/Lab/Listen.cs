@@ -64,7 +64,7 @@ public static partial class Program
             (1.0, "같은 방에서 외침", () => snd.Emit(show.Sim, At(7, 3), 80, SoundKind.Voice, 0, who)),
             (3.0, "같은 방 강철 벽 쾅 (5kJ)", () => snd.Emit(show.Sim, At(8, 1), 92, SoundKind.Bang)),
             (5.5, "닫힌 문 너머 옆 방 쾅 (같은 세기)", () => snd.Emit(show.Sim, At(15, 1), 92, SoundKind.Bang)),
-            (8.0, "같은 방 침대에 불", () => show.Sim.Get<Chemistry>().Ignite(At(3, 5), 3e6, show.Sim.Causes.Add(CauseKind.Story, "불씨", show.Sim.Tick))),
+            (8.0, "같은 방 침대에 불", () => show.Sim.Get<Chemistry>().Ignite(At(3, 5), 3e6, show.Sim.Causes.Add(CauseKind.Setup, "불씨", show.Sim.Tick))),
             (14.0, "벽에 작은 틈 (3cm²)", () => show.Sim.Get<Field>().SetHole(At(0, 2), 0.0003f)),
             (19.0, "틈이 큰 구멍으로 (150cm²)", () => show.Sim.Get<Field>().SetHole(At(0, 2), 0.015f)),
             (24.0, "주컴퓨터 경보", () => snd.Emit(show.Sim, At(5, 2), 90, SoundKind.Alarm, 0, 9999)),
@@ -111,12 +111,12 @@ public static partial class Program
             (0.5, "닫힌 문 너머 기계실: 냉각 펌프 둘", () => { }),
             (4.0, "한 펌프가 곧 망가질 만큼 낡는다 (딱딱 · 끽끽)", () => n.AgeLeft(pump, Part.Mechanical, 3)),
             (12.0, "기계실에서 외침 (시끄러워 크게)", () => snd.Emit(sim, At(5, 4), m.VoiceDb(At(5, 4), true), SoundKind.Voice, 0, worker)),
-            (14.0, "이 방 의자에 불", () => sim.Get<Chemistry>().Ignite(At(15, 2), 3e6, sim.Causes.Add(CauseKind.Story, "불씨", sim.Tick))),
+            (14.0, "이 방 의자에 불", () => sim.Get<Chemistry>().Ignite(At(15, 2), 3e6, sim.Causes.Add(CauseKind.Setup, "불씨", sim.Tick))),
             (24.0, "통로 수소 주머니에 불꽃 — 결정적 순간 빠르기 (늦게 닿는 쾅)", () =>
             {
                 show.SpeedOverride = 0.5;
                 foreach (int c in new[] { At(20, 7), At(21, 7), At(20, 8), At(21, 8) }) f.AddGas(c, f.T.gH2, 12, f.Temp(c));
-                sim.Get<Chemistry>().Ignite(At(20, 7), 2e4, sim.Causes.Add(CauseKind.Story, "불꽃", sim.Tick));
+                sim.Get<Chemistry>().Ignite(At(20, 7), 2e4, sim.Causes.Add(CauseKind.Setup, "불꽃", sim.Tick));
             }),
             (30.0, "기계실 배터리 열폭주", () => { show.SpeedOverride = 1; f.AddSurfaceHeat(bat.Cell, (460 - f.Tf[bat.Cell]) * Field.SurfaceC); }),
         };

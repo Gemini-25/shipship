@@ -36,7 +36,7 @@ public static partial class Program
                 int prop = s.Layout.DoorAt[At(11, 2)];
                 f.SetDoor(prop, 1); s.Get<Structure>().RequestDoor(prop, 1);   // 평소처럼 열어 둔 해치
                 long t0 = s.Tick;
-                int cause = s.Causes.Add(CauseKind.Story, "파편 폭풍이 항로로 들어온다", s.Tick);
+                int cause = s.Causes.Add(CauseKind.Setup, "파편 폭풍이 항로로 들어온다", s.Tick);
                 o.AddCloud(kind, 10000 * 12 * 60 + 400_000, 400_000, 0, 1, 0, cause);   // 입자 밀도 0 — 맞는 일은 시험이 정한다
                 for (int k = 0; k < Time.Minutes(12); k++) s.Step();
                 int right = s.Layout.Room[At(25, 2)];
@@ -65,7 +65,7 @@ public static partial class Program
             foreach (int p in new[] { a, b }) { soc.TrustComputer[p] = 0.9f; m[p].C.Diligent = 0.8f; }
             int prop = s.Layout.DoorAt[At(19, 2)];
             f.SetDoor(prop, 1); s.Get<Structure>().RequestDoor(prop, 1);
-            o.ScheduleFlare(1, s.Causes.Add(CauseKind.Story, "별의 표면이 끓어오르기 시작했다", s.Tick));
+            o.ScheduleFlare(1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick));
             for (int k = 0; k < Time.Minutes(8); k++) s.Step();
             int want = -1; double low = double.MaxValue;
             for (int r = 0; r < s.Layout.Rooms.Count; r++) { double mean = s.Layout.Rooms[r].Cells.Average(c => (double)o.Dose[c]); if (mean < low) { low = mean; want = r; } }
@@ -88,7 +88,7 @@ public static partial class Program
             foreach (int p in low) { soc.TrustComputer[p] = 0.05f; m[p].C.Diligent = 0.1f; }
             foreach (int p in high) { soc.TrustComputer[p] = 0.9f; m[p].C.Diligent = 0.9f; }
             long f0 = s.Facts.Total;
-            o.AddCloud("kessler", 10000 * 10 * 60 + 400_000, 400_000, 0, 1, 0, s.Causes.Add(CauseKind.Story, "파편 폭풍이 항로로 들어온다", s.Tick));
+            o.AddCloud("kessler", 10000 * 10 * 60 + 400_000, 400_000, 0, 1, 0, s.Causes.Add(CauseKind.Setup, "파편 폭풍이 항로로 들어온다", s.Tick));
             for (int k = 0; k < Time.Minutes(2); k++) s.Step();
             var ignored = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Decision && x.Other == (int)GoalKind.Shelter && x.Size < 0).Select(x => x.Actor).ToHashSet();
             int lowIgn = low.Count(ignored.Contains), highIgn = high.Count(ignored.Contains);

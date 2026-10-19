@@ -16,8 +16,7 @@ public static partial class Program
             var lay = Layout.Ship(ship, Tables.Default);
             int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
             var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-            ShipWorld.Embark(s);
-            var st = s.Get<Storyteller>(); st.Enabled = true; st.Level = 4;
+            ShipWorld.Embark(s, RouteEnv());
             return s;
         }
         var a = Make(); var b = Make();

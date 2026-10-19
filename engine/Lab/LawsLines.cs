@@ -35,7 +35,7 @@ public static partial class Program
             var net = s.Get<Network>(); var L = s.Layout;
             s.Run(1);
             var pipeCells = Enumerable.Range(0, L.N).Where(c => (net.LineAt[c] & 0b110) != 0).ToList();
-            int cause = s.Causes.Add(CauseKind.Story, "시험: 관을 끊는다", s.Tick);
+            int cause = s.Causes.Add(CauseKind.Setup, "시험: 관을 끊는다", s.Tick);
             for (int k = 0; k < 9; k++) net.CutLines(s, pipeCells[(int)(Rng.Unit(7, Rng.Key("법칙 관 끊기"), k, 0) * pipeCells.Count)], 0b110, cause);
             bool Reach(LineKind kind, IEnumerable<int> from, int to)
             {

@@ -340,7 +340,7 @@ public sealed partial class Network : IEngine
             _cut[k] = !_stc.InMain(Devices[Feeders[k].Panel].Cell) || Feeders[k].Path.Any(c => F.Severed[c] != 0 || !_stc.InMain(c));
     }
 
-    /// <summary>부품을 낡게 한다 (이야기꾼이 '낡은 부품'이라는 원인을 심는다 · 시험) — 숨은 한계의 fraction까지.</summary>
+    /// <summary>부품을 낡게 한다 (시험 · 만들 때 남은 흠 — 원인 마디를 함께 준다) — 숨은 한계의 fraction까지.</summary>
     public void Age(int device, Part p, double fraction, int cause = 0)
     {
         int k = device * 4 + (int)p;
@@ -348,7 +348,7 @@ public sealed partial class Network : IEngine
         Wear[k] = (float)Math.Max(Wear[k], _limit[k] * fraction);
         if (cause != 0) _wearCause[k] = cause;
     }
-    /// <summary>부품을 숨은 한계까지 hoursLeft시간(보통 쓰임 기준)만 남게 낡게 한다 — 이야기꾼의 '낡은 부품'.</summary>
+    /// <summary>부품을 숨은 한계까지 hoursLeft시간(보통 쓰임 기준)만 남게 낡게 한다 — 시험의 '낡은 부품'.</summary>
     public void AgeLeft(int device, Part p, double hoursLeft, int cause = 0)
     {
         int k = device * 4 + (int)p;
@@ -604,6 +604,7 @@ public sealed partial class Network : IEngine
                 if (OverSec[k] > 20 && MainStuck[fd.Panel] == 0)
                 {
                     Trip(sim, k, cause, "윗단 보호 장치가 회로를 끊었다 — 아래 차단기는 눌어붙어 있었다");
+                    if (Rng.Unit(_seed, Rng.Key("주 차단기 접점"), sim.Tick, fd.Panel) < WeldChance) MainStuck[fd.Panel] = 1;   // 20초 아크를 끊은 접점도 상한다 — 다음엔 듣지 않는다 (보이지 않는다)
                     continue;
                 }
             }

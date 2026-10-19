@@ -38,7 +38,7 @@ public static partial class Program
                 m.Stock[locker * m.ItemCount + m.iMedkit] = 2; m.Stock[locker * m.ItemCount + m.iAbx] = 3;   // 약품고 대신 보관함
                 s.Run(5);
                 ref var b = ref life[m[p].C.Body];
-                b.Burn = 0.9f; b.HurtCause = s.Causes.Add(CauseKind.Story, "조리대에 팔을 크게 데었다", s.Tick, b.Cell);
+                b.Burn = 0.9f; b.HurtCause = s.Causes.Add(CauseKind.Setup, "조리대에 팔을 크게 데었다", s.Tick, b.Cell);
                 float burn0 = b.Burn;
                 for (int k = 0; k < Time.Hours(6); k++) { s.Step(); ref var c = ref m[p].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; }
                 var bb = life[m[p].C.Body];
@@ -75,7 +75,7 @@ public static partial class Program
             int fever = life.AddBody(At(12, 2)), septic = life.AddBody(At(14, 2)), abx = life.AddBody(At(16, 2));
             foreach (int b in new[] { fever, septic, abx }) { life[b].Burn = 0.5f; life[b].Dressed = 0; }
             life[fever].Infect = 0.6f; life[septic].Infect = 0.98f; life[abx].Infect = 0.98f;
-            int root = s.Causes.Add(CauseKind.Story, "덮지 않은 상처가 곪았다", s.Tick, life[septic].Cell);
+            int root = s.Causes.Add(CauseKind.Setup, "덮지 않은 상처가 곪았다", s.Tick, life[septic].Cell);
             life[septic].InfectCause = root;
             life.Treat(s, abx, true);
             float maxT = 0; long downAt = -1;
@@ -98,7 +98,7 @@ public static partial class Program
             int sick = life.AddBody(At(16, 2));
             var near = new[] { life.AddBody(At(15, 2)), life.AddBody(At(17, 2)), life.AddBody(At(16, 3)) };
             var far = new[] { life.AddBody(At(3, 2)), life.AddBody(At(4, 2)), life.AddBody(At(5, 3)) };
-            life.CatchCold(s, sick, s.Causes.Add(CauseKind.Story, "보급선에서 감기가 옮아 왔다", s.Tick));
+            life.CatchCold(s, sick, s.Causes.Add(CauseKind.Setup, "보급선에서 감기가 옮아 왔다", s.Tick));
             life[sick].Ill = 2; life[sick].IllH = 0;
             for (int k = 0; k < Time.Days(1); k++) { Keep(s, life); s.Step(); }
             int nearIll = near.Count(b => life[b].Ill != 0), farIll = far.Count(b => life[b].Ill != 0);
@@ -131,7 +131,7 @@ public static partial class Program
                 s.Run(5);
                 m[p].C.ShiftHour = (int)Time.HourOfDay(s.Tick);
                 m[p].C.Bed = lay.Furniture.First(f => f.Type == "Bed").Cells[0];
-                life.CatchCold(s, m[p].C.Body, s.Causes.Add(CauseKind.Story, "감기가 옮아 왔다", s.Tick));
+                life.CatchCold(s, m[p].C.Body, s.Causes.Add(CauseKind.Setup, "감기가 옮아 왔다", s.Tick));
                 life[m[p].C.Body].Ill = 2;
                 int inBed = 0, atWork = 0;
                 for (int k = 0; k < Time.Hours(3); k++)

@@ -4,7 +4,6 @@ namespace ShipEngine;
 public enum CauseKind : byte
 {
     None,
-    Story,      // 이야기꾼이 심은 것
     Wear,       // 마모 · 피로 · 낡음
     Corrosion,  // 부식
     Impact,     // 바깥 물체의 충돌

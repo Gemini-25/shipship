@@ -21,7 +21,7 @@ public static partial class Program
             int r = m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7));
             if (!computerOk) { int dev = net.Devices.First(d => d.Type == "MainComputer").Id; net.Age(dev, Part.Electric, 1.0); }
             s.Run(5);
-            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
+            ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
             for (int k = 0; k < Time.Minutes(12) && s.Facts.CountOf(FactKind.Extinguished) == 0; k++)
             {
                 s.Step();
@@ -229,7 +229,7 @@ public static partial class Program
             s.Run(5);
             int hull = At(17, 0);
             f.SetHole(hull, 2.5f); // 오른쪽 방 천장 외판이 통째로 떨어져 나갔다
-            st.DamageCause[hull] = s.Causes.Add(CauseKind.Story, "오른쪽 방 외판이 떨어져 나갔다", s.Tick, hull);
+            st.DamageCause[hull] = s.Causes.Add(CauseKind.Setup, "오른쪽 방 외판이 떨어져 나갔다", s.Tick, hull);
             var left = s.Layout.Rooms[s.Layout.Room[At(5, 2)]].Cells;
             int door = At(10, 3), doorC = At(14, 6);
             double minLeft = 999, minSpO2 = 1;
@@ -340,7 +340,7 @@ public static partial class Program
                 int x = L2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = L2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
                 return L2.In(x, y) && L2.Room[L2.Index(x, y)] == lounge;
             }));
-            s.Get<Structure>().DamageCause[hull] = s.Causes.Add(CauseKind.Story, "작은 운석이 휴게실 외판을 뚫었다", s.Tick, hull);
+            s.Get<Structure>().DamageCause[hull] = s.Causes.Add(CauseKind.Setup, "작은 운석이 휴게실 외판을 뚫었다", s.Tick, hull);
             f.SetHole(hull, 0.009f);
             long patchedAt = -1; bool outside = false; double lowest = 200;
             for (int k = 0; k < Time.Hours(8); k++)
@@ -408,7 +408,7 @@ public static partial class Program
                 int x = L2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = L2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
                 return L2.In(x, y) && L2.Room[L2.Index(x, y)] == lounge;
             }));
-            int cause = s.Causes.Add(CauseKind.Story, "파편이 휴게실 외판과 문틀을 때렸다", s.Tick, hull);
+            int cause = s.Causes.Add(CauseKind.Setup, "파편이 휴게실 외판과 문틀을 때렸다", s.Tick, hull);
             st.DamageCause[hull] = cause; st.DamageCause[L2.Doors[door].Cell] = cause;
             f.SetHole(hull, 0.004f);
             st.DoorJam[door] = 1; f.SetDoor(door, 0.3f);

@@ -5,7 +5,7 @@ namespace Lab;
 public static partial class Program
 {
     /// <summary>
-    /// --probe-facts 배 시드 시작시 끝시 [종류,…]: 재미 측정과 같은 세계(침대마다 사람 · 충전독마다 로봇 · 고른 이야기꾼 가혹함 4)를 돌려 그 사이의 큰 사실과 원인 사슬을 적는다.
+    /// --probe-facts 배 시드 시작시 끝시 [종류,…]: 재미 측정과 같은 세계(침대마다 사람 · 충전독마다 로봇 · 항로 ROUTE (기본 4))를 돌려 그 사이의 큰 사실과 원인 사슬을 적는다.
     /// </summary>
     internal static void ProbeFacts(string[] args)
     {
@@ -17,7 +17,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
-        var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = StoryStyle.Balanced; st.Level = 4;
+        ShipWorld.Embark(s, RouteEnv());
         var mind = s.Get<Mind>();
         long cursor = 0;
         while (s.Tick < Time.Hours(to))

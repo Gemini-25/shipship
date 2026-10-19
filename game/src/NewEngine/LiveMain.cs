@@ -85,7 +85,7 @@ public partial class LiveMain : Node2D
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
-            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Storyteller, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
+            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
             else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
         }
         if (_shotDir != null) { System.IO.Directory.CreateDirectory(_shotDir); _help = true; _helpLeft = 4; }
@@ -264,7 +264,7 @@ public partial class LiveMain : Node2D
         string hint = _speedAt == 0 ? "빠르기: 연출" : $"빠르기: ×{GameSecPerSec[_speedAt]:0} (손)";
         DrawString(_font, new Vector2(vp.X - 230, 27), hint + " · H 도움말", HorizontalAlignment.Right, 214, 15, new Color(0.65f, 0.7f, 0.8f));
 
-        // 함장이 이야기꾼을 바꿨다 (몇 초)
+        // 함장이 항로를 골랐다 (몇 초)
         if (f.Notice.Length > 0)
         {
             var sz = _font.GetStringSize(f.Notice, HorizontalAlignment.Left, -1, 17);
@@ -329,7 +329,7 @@ public partial class LiveMain : Node2D
         }
     }
 
-    /// <summary>판 (하이라이트 목록 · 이야기꾼 · 일지): 오른쪽에 · 고른 줄이 늘 보이게 내려 보인다.</summary>
+    /// <summary>판 (하이라이트 목록 · 항로 · 일지): 오른쪽에 · 고른 줄이 늘 보이게 내려 보인다.</summary>
     private void DrawPanel(LiveFrame f, Vector2 vp)
     {
         float w = Math.Min(640, Math.Max(380, vp.X * 0.42f)), top = 52, bottom = vp.Y - 76;
@@ -375,13 +375,13 @@ public partial class LiveMain : Node2D
             "사람 · 로봇 누르기  생각 · 몸 보기 (그를 따라간다)",
             "N  다음 배      R  같은 배 새로",
             "L  볼 만했던 장면 (골라서 다시보기)",
-            "T  이야기꾼 (성격 · 가혹함)      [ ]  가혹함",
+            "T  항로 (1~8 · 출항 전에 고르기 · 지금 구간)",
             "J  주컴퓨터 (지금 사건 · 배 형편 · 일지)",
             "C  사슬 (지금 장면은 어디서 시작됐나)      P  사람",
             "O  겹쳐 보기: 공기 → 열 → 연기 → 사슬 선 → 끔",
             "M  다 켬 → 음악 끔 → 소리 끔",
             "H  도움말      Esc  처음 화면 (기존 판 · 새 엔진 판 고르기)",
-            $"지금 이야기꾼: {_shown?.Storyteller}",
+            $"지금 항로: {_shown?.Route}",
         };
         float w = 470, h = 26 + lines.Length * 26;
         var r = new Rect2(vp.X - w - 20, vp.Y - h - 84, w, h);
@@ -441,14 +441,12 @@ public partial class LiveMain : Node2D
                 case Key.N: _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.R: _seed++; _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.H: _help = !_help; _helpLeft = 0; break;
-                case Key.T: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Storyteller)); break;
+                case Key.T: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Route)); break;
                 case Key.L: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Highlights)); break;
                 case Key.J: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Journal)); break;
                 case Key.C: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Chain)); break;
                 case Key.P: _cmds.Enqueue(s => s.TogglePanel(PanelKind.People)); break;
                 case Key.O: _cmds.Enqueue(s => s.CycleOverlay()); break;
-                case Key.Bracketleft: _cmds.Enqueue(s => s.Harsher(-1)); break;
-                case Key.Bracketright: _cmds.Enqueue(s => s.Harsher(+1)); break;
                 case Key.F3: _meter = !_meter; break;
                 case Key.M: _mute = (_mute + 1) % 3; { string t = _mute switch { 0 => "소리 · 음악 켬", 1 => "음악 끔 (배 안 소리만)", _ => "소리 끔" }; _cmds.Enqueue(s => s.Notify(t)); } break;
                 case Key.Escape: GetTree().ChangeSceneToFile(StartScene); break;

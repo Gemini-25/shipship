@@ -32,7 +32,7 @@ public static partial class Program
                 var life = s.Get<Life>();
                 var ids = Enumerable.Range(0, 10).Select(i => life.AddBody(At(12 + i, 2))).ToArray();
                 s.Run(5);
-                int root = s.Causes.Add(CauseKind.Story, "심장이 갑자기 떨린다", s.Tick);
+                int root = s.Causes.Add(CauseKind.Setup, "심장이 갑자기 떨린다", s.Tick);
                 foreach (int id in ids) life.StopHeart(s, id, 1, "잔떨림 — 심장이 멎었다", root);
                 long t0 = s.Tick; int alive10 = 0;
                 for (long k = 0; k < Time.Hours(1); k++)
@@ -74,7 +74,7 @@ public static partial class Program
                 m.Stock[locker * m.ItemCount + m.iAed] = 1; m.Stock[locker * m.ItemCount + m.iEpi] = 4;   // 약품고 대신 보관함
                 s.Run(5);
                 int vb = m[v].C.Body;
-                int root = s.Causes.Add(CauseKind.Story, "숨은 심장병", s.Tick);
+                int root = s.Causes.Add(CauseKind.Setup, "숨은 심장병", s.Tick);
                 life.StopHeart(s, vb, 1, "심장이 갑자기 떨린다 — 잔떨림", root);
                 bool pressed = false;
                 long first = -1, t0 = s.Tick;
@@ -191,7 +191,7 @@ public static partial class Program
                 var lf = w.Get<Life>();
                 var ids = Enumerable.Range(0, 40).Select(i => lf.AddBody(At(12 + i % 10, 1 + i / 10))).ToArray();
                 w.Run(5);
-                int root = w.Causes.Add(CauseKind.Story, "잔떨림", w.Tick);
+                int root = w.Causes.Add(CauseKind.Setup, "잔떨림", w.Tick);
                 foreach (int id in ids) { lf.StopHeart(w, id, 1, "잔떨림", root); if (epi) lf.Give(w, id, Drug.Epi, 1, root); }
                 for (long k = 0; k < Time.Minutes(2); k++) { w.Step(); foreach (int id in ids) lf.Compress(w, id); }
                 foreach (int id in ids) lf.Defibrillate(w, id, root);
@@ -217,7 +217,7 @@ public static partial class Program
                 int locker = lay.Furniture.First(f => f.Type == "SuitLocker").Id;
                 foreach (var (it, n) in new[] { (m.iMedkit, 2), (m.iOpioid, 3), (m.iApap, 3), (m.iAbx, 4) }) m.Stock[locker * m.ItemCount + it] = n;
                 s.Run(5);
-                int hurt = s.Causes.Add(CauseKind.Story, "조리대 불에 데었다", s.Tick);
+                int hurt = s.Causes.Add(CauseKind.Setup, "조리대 불에 데었다", s.Tick);
                 foreach (int p in new[] { pa, pb }.Where(p => p >= 0))
                 {
                     ref var b = ref life[m[p].C.Body];

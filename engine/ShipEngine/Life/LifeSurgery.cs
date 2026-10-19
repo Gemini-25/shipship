@@ -6,7 +6,7 @@ public enum Op : byte { None, Bleed, Appendix, Explore, ArtHeart, ArtLung, TxHea
 /// <summary>
 /// ⑦ 숨은 병 둘 · 수술 (깊이 바퀴 3 (라-1) — docs/ENGINE.md '장기 · 약 · 수술').
 /// <para><b>속 출혈</b>: 한 번에 0.3 넘는 큰 타박으로 타박이 0.5를 넘으면 열에 넷 — 0.1 ~ 0.3 L/시 · 0.05 아래면 저절로 멎고 (한 시간 반 반감) · 그 위면 수술로만 멎는다.</para>
-/// <para><b>맹장염</b> (이야기꾼의 몸 씨앗): 하루에 1로 차오르고 (항생제를 먹는 동안은 절반) · 배가 아프고 (0.3 + 0.4 × 맹장) · 열 (+1℃ × 맹장) — 1이면 터져 배 안이 곪는다 (곪음 +0.8).</para>
+/// <para><b>맹장염</b> (몸의 확률 · 시험): 하루에 1로 차오르고 (항생제를 먹는 동안은 절반) · 배가 아프고 (0.3 + 0.4 × 맹장) · 열 (+1℃ × 맹장) — 1이면 터져 배 안이 곪는다 (곪음 +0.8).</para>
 /// <para><b>수술</b> (마음이 요청): 잘되면 고치고 · 못 되면 합병증 (반은 출혈 −0.8L · 반은 감염 +0.4 — 소독기가 있으면 반) · 꿰매어 덮은 수술 상처가 남는다.</para>
 /// </summary>
 public sealed partial class Life
@@ -65,7 +65,7 @@ public sealed partial class Life
         b.HurtCause = sim.Causes.Add(CauseKind.Biology, "크게 부딪혀 배 속에서 피가 난다 — 겉으로는 멍뿐", sim.Tick, b.Cell, cause);
     }
 
-    /// <summary>맹장염이 시작된다 (이야기꾼의 몸 씨앗 · 시험) — 떼어 낸 이는 걸리지 않는다.</summary>
+    /// <summary>맹장염이 시작된다 (시험) — 떼어 낸 이는 걸리지 않는다.</summary>
     public void StartAppendicitis(Sim sim, int id, int cause)
     {
         if (id < 0 || id >= Bodies.Count) return;

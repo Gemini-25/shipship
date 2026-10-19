@@ -49,7 +49,7 @@ public static partial class Program
                 {
                     int spot = At(2, 2);
                     f.AddStore(spot, f.T.sPoly, 60);
-                    ch.Ignite(spot, 3e6, s.Causes.Add(CauseKind.Story, "기계실 바닥의 기름걸레에 불씨", s.Tick));
+                    ch.Ignite(spot, 3e6, s.Causes.Add(CauseKind.Setup, "기계실 바닥의 기름걸레에 불씨", s.Tick));
                     s.Run((int)Time.Minutes(6));
                 }
                 net.Neglect(s, scrub, Part.Filter, 900);
@@ -80,7 +80,7 @@ public static partial class Program
             var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
             int comp = Dev(net, "MainComputer");
             int cell = net.Devices[comp].Cell;
-            ch.HeatCause[cell] = s.Causes.Add(CauseKind.Story, "주컴퓨터 곁 배기구를 짐 상자가 막았다", s.Tick);
+            ch.HeatCause[cell] = s.Causes.Add(CauseKind.Setup, "주컴퓨터 곁 배기구를 짐 상자가 막았다", s.Tick);
             f.Ts[cell] = 350;
             net.Neglect(s, comp, Part.Electric, 3000);
             string story = FailStory(s, comp, (int)Part.Electric);
@@ -95,7 +95,7 @@ public static partial class Program
             int lounge = lay.Room[At(13, 2)];
             var fd = net.Feeders[net.RoomFeeder[lounge]];
             int cell = fd.Path.Last(c => lay.Room[c] == lounge && c != net.Vent[lounge]);
-            ch.HeatCause[cell] = s.Causes.Add(CauseKind.Story, "휴게실 바닥 밑을 지나는 온수관 단열재가 벗겨졌다", s.Tick);
+            ch.HeatCause[cell] = s.Causes.Add(CauseKind.Setup, "휴게실 바닥 밑을 지나는 온수관 단열재가 벗겨졌다", s.Tick);
             net.AgeCable(cell, 0.9995);
             long tripAt = -1;
             for (int k = 0; k < (int)Time.Hours(2) && tripAt < 0; k++) { f.Tf[cell] = 400; s.Step(); if (net.Breaker[fd.Id] == 0) tripAt = s.Tick; }
