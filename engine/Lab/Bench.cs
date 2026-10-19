@@ -85,6 +85,7 @@ public static partial class Program
         var make = Stopwatch.StartNew();
         var s = ShipWorld.Crewed(ship, 3, people, robots);
         Console.WriteLine($"  만들기 {make.Elapsed.TotalMilliseconds:0}ms (처음 — 표 읽기 · JIT 함께)");
+        Console.WriteLine($"  도면 {s.Layout.W}×{s.Layout.H} = {s.Layout.N}칸 · 바깥 아닌 칸 {Enumerable.Range(0, s.Layout.N).Count(c => s.Layout.Kind[c] != CellKind.Outside)} · 구역 {s.Get<Field>().Regions.Count}");
         if (args.Contains("--make"))   // 배 만들기 단계별 (두 번째부터 — 시험이 배를 만들 때 드는 값)
         {
             for (int k = 0; k < 3; k++)

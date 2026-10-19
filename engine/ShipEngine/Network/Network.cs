@@ -1019,8 +1019,8 @@ public sealed partial class Network : IEngine
         {
             for (int g = 0; g < G; g++) F.N[v * G + g] += pool[g] / vents.Count;
             F.U[v] += poolU / vents.Count;
+            F.MarkCellDirty(v);   // 통풍구가 있는 구역만 다시 고른다 (예전: 매 틱 모든 구역 — 덕트와 상관없는 방까지)
         }
-        F.MarkDirtyAll();
     }
 
     /// <summary>마모 (25틱마다): 가동 시간 × 열 × 습기 × 부하 → 숨은 한계를 넘으면 고장.</summary>
