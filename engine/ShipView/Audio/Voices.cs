@@ -24,7 +24,8 @@ public readonly record struct Acoustic(float F1, float Eta, float Hard, float Ab
     };
 }
 
-/// <summary>소리 하나 (한 번 울리는 것 · 이어 도는 것). 섞개가 거름 · 크기 · 좌우 · 울림을 덧씌운다.</summary>
+/// <summary>소리 하나 (한 번 울리는 것 · 이어 도는 것). 섞개가 거름 · 크기 · 좌우 · 울림을 덧씌운다.
+/// 기준 (소리 단계 S2): 크기 1(Gain)로 만들면 가장 센 0.1초의 RMS가 0.25 언저리 — 소리끼리 dB대로 들리게 (`Lab --voices`로 잰다).</summary>
 public abstract class Voice
 {
     public float Gain = 1, Cutoff = 16000, Pan, Send = 0.25f;
@@ -79,7 +80,7 @@ public sealed class Hit : Voice
             _boomPhase += (55 - 18 * t) / Dsp.Rate;
             s += _boomAmp * MathF.Sin((float)(_boomPhase * Dsp.Tau)) * MathF.Exp(-t * 2.5f);
         }
-        return s;
+        return s * 0.54f;
     }
 }
 
@@ -129,7 +130,7 @@ public sealed class Creak : Voice
         if (_i >= _next) { pulse = 1f; _next = _i + _period * (1 + 0.35f * _n.White()); }
         _i++;
         float s = _res[0].Run(pulse) * 1.0f + _res[1].Run(pulse) * 0.6f + _res[2].Run(pulse) * 0.35f;
-        return 3f * env * s;
+        return 150f * env * s;   // 좁은 띠(Q 25)는 맥박 하나로 조금만 운다 — 예전 3배는 거의 들리지 않았다 (−46dB)
     }
 }
 
@@ -156,7 +157,7 @@ public sealed class Jet : Voice
         }
         if (_level <= 0 && _curLevel < 1e-4f) { Done = true; return 0; }
         float w = _n.White();
-        return _curLevel * (_band.Run(w) * 1.6f + _band2.Run(w) * 0.6f);
+        return _curLevel * (_band.Run(w) * 1.6f + _band2.Run(w) * 0.6f) * 0.68f * MathF.Pow(1000f / _curHz, 0.31f);   // 띠가 높을수록 넓다 — 같은 크기로
     }
 }
 
@@ -179,7 +180,7 @@ public sealed class Fire : Voice
         float flicker = 0.6f + 0.4f * _flick.Low(_n.White() * 3f, 6f);
         float roar = _dc.High(_roar.Low(_n.Brown(), 90 + 60 * size), 30) * flicker * 2.2f; // 갈색 잡음의 아주 느린 떠돎(30Hz 아래 — 들리지 않고 꼭대기만 먹는다)은 덜어 낸다
         float pop = _n.Chance(0.0004f * Dsp.K * size * size) ? _n.White() * 4f : 0;
-        return Math.Min(1f, size / 3f) * (roar + _pop.Run(pop) * 0.8f);
+        return Math.Min(1f, size / 3f) * (roar + _pop.Run(pop) * 0.8f) * 2.2f;
     }
 }
 
@@ -238,7 +239,7 @@ public sealed class Machine : Voice
                  + _rumble.Low(_n.White(), 180) * 1.2f * k * k;                     // 거친 우르릉 (4단계 — 띠가 넓어진다)
         }
         _i++;
-        return _cur * (0.5f * hum + air + whine + worn);
+        return _cur * (0.5f * hum + air + whine + worn) * 0.57f;
     }
 }
 
@@ -276,7 +277,7 @@ public sealed class Shout : Voice
         float glottal = ph < 0.4f ? MathF.Sin(ph / 0.4f * MathF.PI) : 0;
         float src = glottal + (_scream ? 0.35f : 0.06f) * _n.White();
         float env = MathF.Pow(MathF.Sin(MathF.PI * ts), 0.6f);
-        return env * (_a.Run(src) * 1.0f + _b.Run(src) * 0.7f + _c.Run(src) * 0.35f) * (_scream ? 1.6f : 6f); // 다른 소리와 같은 크기로 (좁은 모음 띠가 많이 먹는다)
+        return env * (_a.Run(src) * 1.0f + _b.Run(src) * 0.7f + _c.Run(src) * 0.35f) * (_scream ? 1.45f : 1.5f); // 다른 소리와 같은 크기로 (좁은 모음 띠가 많이 먹는다)
     }
 }
 
@@ -300,7 +301,7 @@ public sealed class Step : Voice
         float t = _i++ / (float)Dsp.Rate;
         float thud = MathF.Sin(t * Dsp.Tau * (110f - 300f * t)) * MathF.Exp(-t * 45f);
         float scuff = _n.White() * MathF.Exp(-t * 90f) * (0.2f + 0.3f * _hard);
-        return 0.8f * (thud + scuff) + _ring1.Next() + _ring2.Next();
+        return (0.8f * (thud + scuff) + _ring1.Next() + _ring2.Next()) * 1.2f;
     }
 }
 
@@ -322,7 +323,7 @@ public sealed class Door : Voice
         float hp = _lp - _prev; _prev = _lp;
         float env = t < 0.32f ? MathF.Sin(MathF.PI * t / 0.32f) : 0f;
         float thunk = t > 0.3f ? MathF.Sin((t - 0.3f) * Dsp.Tau * 70f) * MathF.Exp(-(t - 0.3f) * 30f) : 0f;
-        return 0.9f * env * (_lp * 0.6f + hp * 1.2f) + 0.5f * thunk;
+        return (0.9f * env * (_lp * 0.6f + hp * 1.2f) + 0.5f * thunk) * 1.7f;
     }
 }
 
@@ -343,7 +344,7 @@ public sealed class Alarm : Voice
             float f = 620f + 280f * (0.5f + 0.5f * MathF.Sin(t * Dsp.Tau * 1.5f));
             _ph += f / Dsp.Rate;
             float x = MathF.Sin((float)(_ph * Dsp.Tau)) + 0.3f * MathF.Sin((float)(_ph * Dsp.Tau * 3));
-            return 0.6f * x * MathF.Min(1f, t / 0.05f) * MathF.Min(1f, (len - t) / 0.15f);
+            return 0.34f * x * MathF.Min(1f, t / 0.05f) * MathF.Min(1f, (len - t) / 0.15f);
         }
         float v = 0;
         for (int k = 0; k < 3; k++)
@@ -352,7 +353,7 @@ public sealed class Alarm : Voice
             if (tk < 0f) continue;
             v += MathF.Sin(tk * Dsp.Tau * 523f) * MathF.Exp(-tk * 9f) + 0.4f * MathF.Sin(tk * Dsp.Tau * 1046f) * MathF.Exp(-tk * 14f);
         }
-        return 0.6f * MathF.Min(1f, t / 0.004f) * v;
+        return 0.46f * MathF.Min(1f, t / 0.004f) * v;
     }
 }
 
@@ -372,7 +373,7 @@ public sealed class Grind : Voice
         float ph = (float)(_ph - Math.Floor(_ph));
         float saw = _lp.Low(2 * ph - 1, 2500);
         float clunk = _n.Chance(0.0006f * Dsp.K) ? 3f : 0;
-        return MathF.Sin(MathF.PI * t / 0.7f) * (0.5f * saw + 0.3f * _n.White() * MathF.Abs(saw)) + clunk * MathF.Exp(-t);
+        return (MathF.Sin(MathF.PI * t / 0.7f) * (0.5f * saw + 0.3f * _n.White() * MathF.Abs(saw)) + clunk * MathF.Exp(-t)) * 0.87f;
     }
 }
 
@@ -388,7 +389,7 @@ public sealed class RoomTone : Voice
     {
         _cur += (_level - _cur) * 0.0003f * Dsp.K;
         float p = _n.Pink();
-        return _cur * (_lp.Low(p, 380) * 1.3f + 0.25f * _lp2.Low(_n.White(), 2200));
+        return _cur * (_lp.Low(p, 380) * 1.3f + 0.25f * _lp2.Low(_n.White(), 2200)) * 0.42f;
     }
 }
 

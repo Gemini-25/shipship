@@ -213,8 +213,9 @@ public sealed partial class Mind
                 }
             }
             bool asleep = b.Asleep != 0 && b.Conscious != 0;
-            if (asleep) { Nightmare(sim, a); continue; }
+            if (asleep) { Nightmare(sim, a); if (b.Asleep != 0) SleepTalkRoll(sim, a); continue; }
             if (c.Up == 0) continue;
+            HumRoll(sim, a);   // 소리 단계 S2: 기분 좋은 이의 흥얼거림
             // 그 방에 들어섰다 (여섯 시간에 한 번)
             if (c.Trauma > 0.3f && c.ShockRoom >= 0 && RoomOf(c.Cell) == c.ShockRoom && (c.RoomFlashAt == 0 || t - c.RoomFlashAt > Time.Hours(6)))
             {

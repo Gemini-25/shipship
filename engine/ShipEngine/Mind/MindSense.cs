@@ -181,25 +181,27 @@ public sealed partial class Mind
         // 귀 — 잠들어도 듣는다 · 바탕 소음이 가린 만큼 작게 (시끄러운 기계실에서는 문 너머 비명을 못 듣는다)
         if (_snd != null)
         {
-            float loudest = 0, mask = 0, ambient = 0;
+            float loudest = 0, mask = 0, ambient = 0, rouse = -99;   // rouse: 문턱을 가장 크게 넘은 몫 (경보 · 비명은 문턱이 낮다)
             Heard loudH = default; loudH.Actor = -1;
             bool any = false;
             foreach (var h in _snd.At(cell))
             {
                 if (h.Event <= c.HeardUpTo) continue;
                 if (!any) { ambient = _snd.Ambient(cell); mask = Math.Max(0, ambient - Sound.MaskFrom); any = true; }
-                if (h.Actor == a.Id) { Hear(sim, a, h); continue; }
+                if (h.Actor == a.Id || person && h.Actor == Sound.BodyActor(c.Body)) { Hear(sim, a, h); continue; }   // 제 목소리 · 제 몸의 소리 (코골이 · 기침)
                 var heard = h;
                 heard.Db = h.Db - mask;
                 if (heard.Db < HearFloor) { Masked++; continue; }
                 Hear(sim, a, heard);
-                if (h.Db > loudest) { loudest = h.Db; loudH = h; }
+                if (h.Db > loudest) loudest = h.Db;
+                if (asleep && h.Db - WakeDb(a, h.Kind) > rouse) { rouse = h.Db - WakeDb(a, h.Kind); loudH = h; }
             }
             if (_shoutAfter is Belief say) { _shoutAfter = null; Shout(sim, a, say); }
             c.HeardUpTo = _snd.LastEvent;
             if (asleep) c.SleepNoise = Math.Max(c.SleepNoise, Math.Max(loudest, _snd.Ambient(cell)));   // ⑦ 잠의 질 — 이어지는 바탕 소음도 잠자리 소리다
-            // 깨우는 소리: 귀에 60dB 넘게 · 이어지는 바탕 소음보다 10dB 넘게 솟아야 (시끄러운 잠자리에서는 익숙해진 소음 위로 — NFPA 72 잠자리 경보는 바탕 소음 + 15dB)
-            if (asleep && loudest >= 60 && loudest >= ambient + 10) WokenBy(sim, a, loudH);
+            // 깨우는 소리: 귀에 잠의 깊이만큼의 문턱(얕은 잠 50 ~ 깊은 잠 65dB · 경보 · 비명은 8dB 낮게) 넘게 · 이어지는 바탕 소음보다 10dB 넘게 솟아야
+            // (시끄러운 잠자리에서는 익숙해진 소음 위로 — NFPA 72 잠자리 경보는 바탕 소음 + 15dB · 소리 단계 S2: 예전엔 60dB 하나)
+            if (asleep && rouse >= 0 && loudH.Db >= ambient + 10) WokenBy(sim, a, loudH);
         }
 
         if (person && asleep)
@@ -555,10 +557,11 @@ public sealed partial class Mind
     /// 실제: 화성-500 · 남극 월동대의 갈등은 큰일보다 소음 · 잠 · 일 분담 같은 작은 마찰이 쌓여 생겼다.</summary>
     private void WokenBy(Sim sim, Agent a, in Heard h)
     {
-        int by = h.Actor, ev = h.Event;
-        bool annoying = h.Kind == SoundKind.Voice && by >= 0 && by < Agents.Count && by != a.Id && Agents[by].IsPerson && !_said.Exists(x => x.ev == ev);
+        int by = h.Actor >= 0 ? h.Actor : AgentOfBody(Sound.BodyOf(h.Actor)), ev = h.Event;
+        bool annoying = h.Kind is SoundKind.Voice or SoundKind.Laugh or SoundKind.Snore && by >= 0 && by < Agents.Count && by != a.Id && Agents[by].IsPerson && !_said.Exists(x => x.ev == ev);   // 말소리 · 웃음 · 코 고는 소리 (소리 단계 S2)
         if (!annoying || _life![a.C.Body].Asleep == 0) { Wake(sim, a, "소리에 깼다"); return; }
-        int cause = sim.Causes.Add(CauseKind.Person, $"{NameOf(by)}의 말소리에 {Ko.I(NameOf(a.Id))} 깼다", sim.Tick, a.C.Cell, h.Cause, 0, by);
+        string what = h.Kind switch { SoundKind.Laugh => "웃음소리", SoundKind.Snore => "코 고는 소리", _ => "말소리" };
+        int cause = sim.Causes.Add(CauseKind.Person, $"{NameOf(by)}의 {what}에 {Ko.I(NameOf(a.Id))} 깼다", sim.Tick, a.C.Cell, h.Cause, 0, by);
         Wake(sim, a, "소리에 깼다", cause, by);
     }
 

@@ -14,6 +14,16 @@ public enum SoundKind : byte
     Step,       // 발소리
     Thud,       // 쿵 (넘어짐 · 떨어짐)
     Creak,      // 끼익 (압력을 버티는 문 · 벽)
+    // ── 생활 소리 (소리 단계 S2 — 판단 엔진이 정한 행동 · 몸이 낸다) ──
+    Clink,      // 딸그락 (식기 · 컵 · 냄비)
+    Tool,       // 공구 (렌치 딸깍딸깍 · 드라이버)
+    Weld,       // 용접 · 봉합 (지지직)
+    Hammer,     // 망치 (탕탕)
+    Snore,      // 코골이 (몸 — ⑦)
+    SleepTalk,  // 잠꼬대
+    Cough,      // 기침 (몸 — ⑦)
+    Laugh,      // 웃음
+    Hum,        // 흥얼거림
 }
 
 /// <summary>낸 소리 하나 (보기용 기록).</summary>
@@ -56,6 +66,12 @@ public struct Drone
 /// </summary>
 public sealed class Sound : IEngine
 {
+    /// <summary>몸이 낸 소리(코골이 · 기침 — ⑦ 생명은 사람 번호를 모른다)의 '낸 이' 자리: 몸 번호를 −1000 아래로 적는다 (마음이 제 몸 소리를 가려낸다 ·
+    /// −2는 주컴퓨터 — 처음엔 −2부터 적어 0번 몸이 주컴퓨터 경보를 제 몸 소리로 여겼다 · 규칙 시험 '일산화탄소 경보').</summary>
+    public const int BodyBase = -1000;
+    public static int BodyActor(int body) => BodyBase - body;
+    public static int BodyOf(int actor) => actor <= BodyBase ? BodyBase - actor : -1;
+
     public string Name => "소리";
     public Phase Phase => Phase.Field;
     public int Every => 1;
@@ -133,6 +149,11 @@ public sealed class Sound : IEngine
         for (long i = Math.Max(from, Logged - LogSize); i < Logged; i++) yield return _log[i % LogSize];
     }
 
+    private float[] _best = Array.Empty<float>();
+    private int[] _bestStamp = Array.Empty<int>();
+    private int _bestNow;
+    private readonly PriorityQueue<int, float> _pq = new();
+
     /// <summary>칸 cell에서 크기 db(1m에서의 dB)의 소리가 난다 (source: 들은 이가 아는 소리의 자리 — 없으면 cell).</summary>
     public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1, int source = -1)
     {
@@ -142,14 +163,17 @@ public sealed class Sound : IEngine
         _log[Logged % LogSize] = new Emission { Tick = sim.Tick, Kind = kind, Cell = cell, Source = src, Db = db, Actor = actor, Cause = cause };
         Logged++;
         if (Thin(cell) <= 0) return ev; // 진공: 아무도 못 듣는다
-        var best = new Dictionary<int, float> { [cell] = db };
-        var pq = new PriorityQueue<int, float>();
+        // 다익스트라 (칸마다 가장 큰 크기 — 다시 쓰는 배열: 생활 소리로 낸 소리가 많아져 사전을 새로 만들지 않는다 · 결과는 같다)
+        if (_best.Length != L.N) { _best = new float[L.N]; _bestStamp = new int[L.N]; }
+        int stamp = ++_bestNow;
+        var pq = _pq; pq.Clear();
+        _best[cell] = db; _bestStamp[cell] = stamp;
         pq.Enqueue(cell, -db);
         Span<int> nb = stackalloc int[4];
         while (pq.TryDequeue(out int c, out float negLevel))
         {
             float lv = -negLevel;
-            if (best.TryGetValue(c, out float b) && b > lv + 1e-4f) continue;
+            if (_bestStamp[c] == stamp && _best[c] > lv + 1e-4f) continue;
             Add(sim, c, new Heard { Event = ev, Kind = kind, Source = src, Db = lv, Cause = cause, Tick = sim.Tick, Actor = actor });
             L.Neighbors(c, nb);
             foreach (int j in nb)
@@ -158,8 +182,8 @@ public sealed class Sound : IEngine
                 float loss = StepLoss(c, j, cell);
                 float next = lv - loss;
                 if (next < Floor) continue;
-                if (best.TryGetValue(j, out float old) && old >= next) continue;
-                best[j] = next;
+                if (_bestStamp[j] == stamp && _best[j] >= next) continue;
+                _best[j] = next; _bestStamp[j] = stamp;
                 pq.Enqueue(j, -next);
             }
         }

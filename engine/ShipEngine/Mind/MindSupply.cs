@@ -68,6 +68,7 @@ public sealed partial class Mind
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (c.Holding != iFrame) { Fail(sim, a, "외장 틀이 없다", SnagKind.NoItem, c.Cell, iFrame); return; }
         Activity(a, "hard");
+        WorkNoise(sim, a, (t - c.StepStart) % 6 < 3 ? SoundKind.Hammer : SoundKind.Weld, 84);   // 다시 짓기: 망치 · 용접
         double minutes = a.IsPerson ? P.Items["외장 틀"].Minutes * (1.6 - c.SkRepair) : 60;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         int fu = _net.Devices[dev].Furniture;

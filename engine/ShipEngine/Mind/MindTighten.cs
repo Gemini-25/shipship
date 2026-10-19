@@ -13,6 +13,7 @@ public sealed partial class Mind
         if (_net == null || dev < 0 || dev >= _net.Loose.Length || _net.Loose[dev] < 1) { JobDone(a, t); return; }   // 와 보니 이미 조였다
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
+        WorkNoise(sim, a, SoundKind.Tool, 72);   // 볼트 조이기: 렌치
         if (t - c.StepStart < Time.Minutes(a.IsPerson ? TightenPersonMin : TightenRobotMin)) return;
         int parent = _net.LooseCause[dev];
         _net.Tighten(dev);

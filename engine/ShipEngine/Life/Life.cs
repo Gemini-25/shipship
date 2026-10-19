@@ -256,6 +256,7 @@ public sealed partial class Life : IEngine
             StepBody(sim, b, ref body, dt, st, outside, chem);
         }
         if (st != null) Array.Clear(st.ImpactJ);
+        BodyNoise(sim, dt);   // 소리 단계 S2: 코골이 · 기침
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
         if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }

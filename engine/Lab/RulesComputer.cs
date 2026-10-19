@@ -51,6 +51,7 @@ public static partial class Program
             for (int k = 0; k < Time.Minutes(20); k++)
             {
                 s.Step(); cohb = Math.Max(cohb, life[m[sleeper].C.Body].COHb);
+                if (Debug) foreach (var hh in s.Get<Sound>().At(m[sleeper].C.Cell)) if (hh.Kind == SoundKind.Alarm && hh.Tick == s.Tick - 1) Console.WriteLine($"    {k} 경보 귀에 {hh.Db:0}dB · 문턱 {m.WakeDb(m[sleeper], SoundKind.Alarm):0} · 바탕 {s.Get<Sound>().Ambient(m[sleeper].C.Cell):0}");
                 if (Debug && k % 20 == 0) Console.WriteLine($"    {k} 잠든 이 칸 {m[sleeper].C.Cell} {m.Thought(sleeper)} 자는 중 {life[m[sleeper].C.Body].Asleep} · 믿음 {string.Join(",", m[sleeper].Beliefs.Select(b => $"{b.Kind}@{b.Cell}:{b.Conf:0.0}/{b.Src}"))} · 회피 {string.Join(",", m[sleeper].Avoid.Select(v => v.Goal + ":" + v.Target))}");
             }
             var cm = s.Get<ShipMind>();

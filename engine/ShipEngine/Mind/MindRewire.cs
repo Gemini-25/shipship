@@ -51,6 +51,7 @@ public sealed partial class Mind
         if (_net == null || _net.Broken[donor * 4 + st.Arg] != 0 || _net.Broken[st.Cell * 4 + st.Arg] == 0) { EndPlan(a); return; }   // 이미 떼었거나 고칠 것이 고쳐졌다
         if (Dist(c.Cell, _net.Devices[donor].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
+        WorkNoise(sim, a, SoundKind.Tool, 70);   // 떼어 내기: 렌치
         if (t - c.StepStart < Time.Minutes(a.IsPerson ? 10 : 5)) return;
         float worn = _net.TakePart(donor, (Part)st.Arg);
         if (c.Holding != 255) DropHeld(a);
@@ -88,6 +89,7 @@ public sealed partial class Mind
         int at = st.Arg == 0 ? _net.Vent[donor] : _net.Vent[room];
         if (Dist(c.Cell, at) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
+        WorkNoise(sim, a, SoundKind.Tool, 58);   // 연장선 잇기: 드라이버
         double minutes = st.Arg == 0 ? 1 : a.IsPerson ? 2 * (1.6 - c.SkRepair) : 1.5;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         if (st.Arg == 1)

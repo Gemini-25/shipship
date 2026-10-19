@@ -221,6 +221,12 @@ public sealed partial class Mind
             case UseKind.Work: done |= !InWindow(Time.HourOfDay(t), c.ShiftHour, 8); break;
         }
         if (use == UseKind.Cook) CookStep(sim, a, st, done);
+        if (a.IsPerson && t > c.StepStart)   // 소리 단계 S2: 식기 · 컵 · 냄비
+        {
+            if (use == UseKind.Eat) WorkNoise(sim, a, SoundKind.Clink, 50, 3);
+            else if (use == UseKind.Drink && t == c.StepStart + 1) WorkNoise(sim, a, SoundKind.Clink, 45, 1);
+            else if (use == UseKind.Cook) WorkNoise(sim, a, SoundKind.Clink, 58, 4);
+        }
         if (!done) return;
         switch (use)
         {
@@ -366,6 +372,7 @@ public sealed partial class Mind
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (a.IsPerson && c.Holding != iPatch) { Fail(sim, a, "봉합 꾸러미가 없다", SnagKind.NoItem, c.Cell, iPatch); return; }
         Activity(a, "hard");
+        WorkNoise(sim, a, SoundKind.Weld, 78);   // 봉합: 판을 대고 지진다 (지지직)
         var kit = P.Items["봉합 꾸러미"];
         double minutes = a.IsPerson ? kit.Minutes * (1.5 - c.SkSeal) : kit.Minutes;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
@@ -399,6 +406,7 @@ public sealed partial class Mind
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
         Activity(a, "hard");
+        WorkNoise(sim, a, SoundKind.Hammer, 85);   // 덧대 받치기 · 틀 바로잡기: 망치
         // 끼인 문: 틀을 비틀어 바로잡는다 (떨어져 나간 문을 다시 끼우는 것은 오래 걸린다)
         double minutes = (a.IsPerson ? 4 * (1.5 - c.SkRepair) : 3) * (jam && F.DoorOpen[door] > 0.5f ? 2.5 : 1);
         if (t - c.StepStart < Time.Minutes(minutes)) return;
@@ -437,6 +445,7 @@ public sealed partial class Mind
         if (Dist(c.Cell, L.Furniture[bench].Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (!P.Recipes.TryGetValue(ItemNames[item], out var r)) { JobDone(a, t); return; }
         Activity(a, "work");
+        WorkNoise(sim, a, (t - c.StepStart) % 4 < 2 ? SoundKind.Hammer : SoundKind.Tool, 80);   // 작업대: 망치 · 공구
         double minutes = a.IsPerson ? r.Minutes * (1.5 - c.SkRepair) : r.Minutes;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         foreach (var (need, n) in r.Needs)
@@ -465,6 +474,7 @@ public sealed partial class Mind
         byte spare = SpareOf(part);
         if (a.IsPerson && c.Holding != spare) { Fail(sim, a, $"{Ko.I(ItemNames[spare])} 없다", SnagKind.NoItem, c.Cell, spare); return; }
         Activity(a, "work");
+        { var (nk, ndb) = FixNoise(part); WorkNoise(sim, a, nk, ndb - 4); }   // 미리 갈기: 고치기보다 조금 조용히 (멈추지 않은 장치를 연다)
         double minutes = a.IsPerson ? P.Items[ItemNames[spare]].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         if (a.IsPerson) UseHeld(sim, a);
@@ -597,6 +607,7 @@ public sealed partial class Mind
         if (Smashed(dev)) { Fail(sim, a, "부서진 틀부터 다시 지어야 한다"); return; }   // ⑪ 부품만 끼우면 부서진 그대로다
         if (!HasPart(a, st.Arg)) { Fail(sim, a, a.IsPerson ? $"{Ko.I(ItemNames[SpareOf(st.Arg)])} 없다" : "부품이 없다"); return; }
         Activity(a, "work");
+        { var (nk, ndb) = FixNoise(st.Arg); WorkNoise(sim, a, nk, ndb); }
         double minutes = a.IsPerson ? P.Items[ItemNames[SpareOf(st.Arg)]].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         float used = c.Holding == iSalvage ? c.HoldCharge : -1;   // ⑥ 떼어 온 헌 부품 (수명을 쓴 몫)
@@ -712,6 +723,14 @@ public sealed partial class Mind
         c.Speed = (float)v;
         Activity(a, c.Mode == 1 || c.Goal == GoalKind.Evacuate ? "run" : c.Carrying >= 0 ? "hard" : "walk");
         c.MoveBudget = (float)Math.Min(c.MoveBudget + v * dt, 8);
+        int walked = a.PathIdx, from = c.Cell;
+        WalkCells(sim, a, t);
+        if (c.Cell != from && a.PathIdx > walked) StepNoise(sim, a);   // 소리 단계 S2: 걸은 틱에 발소리 (③이 퍼뜨린다 — 자는 이의 잠자리까지)
+    }
+
+    private void WalkCells(Sim sim, Agent a, long t)
+    {
+        ref var c = ref a.C;
         while (c.MoveBudget >= 1 && a.PathIdx < a.Path.Count)
         {
             int n = a.Path[a.PathIdx];

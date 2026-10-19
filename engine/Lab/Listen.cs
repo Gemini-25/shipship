@@ -13,6 +13,7 @@ public static partial class Program
         var rest = args.SkipWhile(a => a != "--listen").Skip(1).ToArray();
         if (rest.Length > 0 && rest[0] == "demo") { ListenDemo(); return; }
         if (rest.Length > 0 && rest[0] == "hear") { ListenHear(); return; }
+        if (rest.Length > 0 && rest[0] == "life") { ListenLife(); return; }
         string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double screenSec = rest.Length > 2 ? double.Parse(rest[2]) : 60;
@@ -141,5 +142,110 @@ public static partial class Program
         }
         Mixer.WriteWav("build/sound/hear.wav", all);
         Console.WriteLine($"build/sound/hear.wav · 40초 · 꼭대기 {all.Max(MathF.Abs):0.00} · 일하던 이: {m.Thought(worker)} · 믿음 {string.Join(", ", m[worker].Beliefs.Where(b => b.Conf > 0.2f).Select(b => Mind.BeliefName(b.Kind)))}");
+    }
+
+    /// <summary>
+    /// 생활 소리 견본 (--listen life — 소리 단계 S2): 시험 배 왼쪽 방에 귀를 두고 차례로 — 컵 · 식기 · 냄비 · 렌치 · 용접 · 망치 · 코골이(가볍게 · 심하게) · 잠꼬대 ·
+    /// 기침 · 웃음(둘) · 흥얼거림 · 닫힌 문 너머 옆 방의 망치(먹먹하게). → build/sound/life.wav
+    /// </summary>
+    private static void ListenLife()
+    {
+        var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        var show = new LiveShow(Worlds.Full(lay, 3), "시험호");
+        var sim = show.Sim;
+        var m = sim.Get<Mind>();
+        int a = m.AddPerson(sim, At(3, 4)), b = m.AddPerson(sim, At(7, 4));
+        const double dt = 1.0 / 60;
+        show.Advance(dt);
+        show.Ears.ForceEar = At(5, 3);
+        show.SpeedOverride = 1;
+        var snd = sim.Get<Sound>();
+        int bodyA = m[a].C.Body;
+        void E(int x, int y, float db, SoundKind k, int actor = -1) => snd.Emit(sim, At(x, y), db, k, 0, actor);
+        var cues = new (double t, string what, Action act)[]
+        {
+            (0.5, "컵 (45dB)", () => E(6, 3, 45, SoundKind.Clink, a)),
+            (1.8, "식기 (50dB)", () => E(6, 4, 50, SoundKind.Clink, a)),
+            (3.2, "냄비 (58dB)", () => E(7, 2, 58, SoundKind.Clink, b)),
+            (5.0, "렌치 (72dB · 3m)", () => E(8, 3, 72, SoundKind.Tool, b)),
+            (7.0, "드라이버 (58dB)", () => E(7, 3, 58, SoundKind.Tool, b)),
+            (8.8, "용접 (78dB)", () => E(8, 4, 78, SoundKind.Weld, b)),
+            (11.0, "망치 (85dB)", () => E(8, 2, 85, SoundKind.Hammer, b)),
+            (13.5, "코골이 가볍게 (46dB)", () => E(3, 4, 46, SoundKind.Snore, Sound.BodyActor(bodyA))),
+            (16.0, "코골이 심하게 (60dB)", () => E(3, 4, 60, SoundKind.Snore, Sound.BodyActor(bodyA))),
+            (18.5, "잠꼬대 (50dB)", () => E(3, 4, 50, SoundKind.SleepTalk, a)),
+            (20.5, "기침 (62dB)", () => E(7, 4, 62, SoundKind.Cough, Sound.BodyActor(m[b].C.Body))),
+            (22.5, "웃음 둘 (65 · 63dB)", () => { E(6, 4, 65, SoundKind.Laugh, a); E(7, 4, 63, SoundKind.Laugh, b); }),
+            (25.0, "흥얼거림 (48dB)", () => E(6, 3, 48, SoundKind.Hum, b)),
+            (28.5, "닫힌 문 너머 옆 방의 망치 (85dB)", () => E(15, 2, 85, SoundKind.Hammer)),
+        };
+        var mix = new Mixer { MusicGain = 0 };
+        int per = (int)(Dsp.Rate * dt), frames = (int)(31 / dt);
+        var all = new float[frames * per * 2];
+        int next = 0;
+        for (int f = 0; f < frames; f++)
+        {
+            double t = f * dt;
+            while (next < cues.Length && t >= cues[next].t) { Console.WriteLine($"  {cues[next].t,5:0.0}초 · {cues[next].what}"); cues[next].act(); next++; }
+            show.Advance(dt);
+            mix.Take(show.Ears);
+            mix.Render(all.AsSpan(f * per * 2, per * 2), per);
+        }
+        Mixer.WriteWav("build/sound/life.wav", all);
+        Console.WriteLine($"build/sound/life.wav · 31초 · 꼭대기 {all.Max(MathF.Abs):0.00}");
+    }
+
+    /// <summary>소리마다 크기 (--voices): 같은 크기(Gain 1)로 만들었을 때 가장 센 0.1초의 RMS · 꼭대기 · 길이 — 소리끼리 기준을 맞춘다 (목표: 가장 센 0.1초 RMS 0.25).</summary>
+    internal static (double rms, double peak, double sec) VoiceLevel(Voice v, double maxSec = 4)
+    {
+        int n = (int)(Dsp.Rate * maxSec), win = Dsp.Rate / 10;
+        var x = new float[n]; int len = n;
+        for (int i = 0; i < n; i++) { if (v.Done) { len = i; break; } x[i] = v.Next(); }
+        double best = 0, peak = 0;
+        for (int s = 0; s + win <= Math.Max(len, win); s += win / 2)
+        {
+            double e = 0; for (int i = s; i < Math.Min(n, s + win); i++) e += (double)x[i] * x[i];
+            best = Math.Max(best, Math.Sqrt(e / win));
+        }
+        for (int i = 0; i < len; i++) peak = Math.Max(peak, Math.Abs(x[i]));
+        return (best, peak, len / (double)Dsp.Rate);
+    }
+
+    internal static IEnumerable<(string name, Func<Voice> make)> AllVoices() => new (string, Func<Voice>)[]
+    {
+        ("쾅 강철 5kJ", () => new Hit(Acoustic.Of("steel"), 5, 1)), ("쩍", () => new Crack(Acoustic.Of("steel"), 2)), ("끼익", () => new Creak(Acoustic.Of("steel"), 0.5f, 3)),
+        ("외침", () => new Shout(140, false, 4)), ("비명", () => new Shout(140, true, 5)), ("발소리", () => new Step(Acoustic.Of("steel"), 6)), ("문", () => new Door(7)),
+        ("경보 띵띵띵", () => new Alarm(false)), ("사이렌", () => new Alarm(true)), ("끽끽", () => new Grind(8)),
+        ("컵", () => new Clink(9, 0.8f)), ("식기", () => new Clink(10)), ("냄비", () => new Clink(11, 1.6f)), ("렌치", () => new Ratchet(12)), ("드라이버", () => new Ratchet(13, 1.3f)),
+        ("용접", () => new Weld(14)), ("망치", () => new Hammer(15)), ("코골이", () => new Snore(16, 0.5f)), ("잠꼬대", () => new Mumble(140, 17)),
+        ("기침", () => new CoughVoice(140, 18)), ("웃음", () => new LaughVoice(140, 19)), ("흥얼", () => new HumVoice(140, 20)), ("낮은 울림", () => new Boom(0.5f)),
+    };
+
+    private static void VoiceLevels()
+    {
+        foreach (var (name, make) in AllVoices())
+        {
+            var (rms, peak, sec) = VoiceLevel(make());
+            Console.WriteLine($"  {name,-10} 센 0.1초 RMS {rms:0.000} ({20 * Math.Log10(rms + 1e-9):0.0}dB) · 꼭대기 {peak:0.00} · {sec:0.00}초");
+        }
+        foreach (var (name, loop) in LoopVoices())
+        {
+            for (int i = 0; i < Dsp.Rate * 3; i++) loop.Next();   // 따라 오를 때까지
+            var (rms, peak, _) = VoiceLevel(loop, 1);
+            Console.WriteLine($"  {name,-10} (이어 도는) RMS {rms:0.000} ({20 * Math.Log10(rms + 1e-9):0.0}dB) · 꼭대기 {peak:0.00}");
+        }
+    }
+
+    internal static IEnumerable<(string name, Voice v)> LoopVoices()
+    {
+        var room = new RoomTone(1); room.Set(1);
+        var jet = new Jet(2); jet.Set(1000, 1);
+        var jet2 = new Jet(3); jet2.Set(6000, 1);
+        var fire = new Fire(4); fire.Set(250);
+        var pump = new Machine("pump", 5); pump.Set(1, 0);
+        var hvac = new Machine("hvac", 6); hvac.Set(1, 0);
+        var breath = new Breath(7); breath.Set(0.3f, 0.35f);
+        return new (string, Voice)[] { ("방 공기 A=1", room), ("쉬익 1kHz", jet), ("쉬익 6kHz", jet2), ("불 250kW", fire), ("펌프", pump), ("공조", hvac), ("우주복 숨", breath) };
     }
 }

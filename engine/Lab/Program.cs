@@ -57,6 +57,7 @@ public static partial class Program
             else if (args.Contains("--shot")) Shot(args);
             else if (args.Contains("--film")) Film(args);
             else if (args.Contains("--live")) Live(args);
+            else if (args.Contains("--voices")) VoiceLevels();
             else if (args.Contains("--listen")) Listen(args);
             else if (args.Contains("--ledger")) LedgerRun(args);
             else if (args.Contains("--shipgen")) ShipGen(args);

@@ -41,7 +41,7 @@ public sealed class Acoustics
 {
     public const float CellM = 1f, Height = 2.5f, Audible = 22f; // 이보다 작으면 (dB) 내지 않는다
     /// <summary>화면 소리의 크기 (함장 결정 17 — 넓은 폭): 귀에서 RefDb가 0dB · 1dB마다 Slope dB (평소는 작게 · 폭발은 크게 — 마지막 누름이 넘침만 막는다).</summary>
-    public const float RefDb = 92, Slope = 0.75f;
+    public const float RefDb = 80, Slope = 0.65f;
     /// <summary>연출의 과장 (함장 결정 2 — 소리 출력에서만): 귀에서 이보다 큰 쾅엔 낮은 울림을 더한다 (dB).</summary>
     public const float BoomFrom = 98;
     /// <summary>확인용: 이번에 더한 과장의 수 (시험).</summary>
@@ -204,8 +204,8 @@ public sealed class Acoustics
         Jets(frame, ear, halfW, suit, w.Tick);
         Fires(frame, w, ear, halfW, suit);
         Machines(frame, w, ear, halfW, suit);
-        if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB — 0.3배로 눌러 기계 소리와 겹치지 않게)
-            frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = 0.05f * Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db(Math.Clamp(ambient - 35, -10, 30) * 0.3f), Gain = 1, Cutoff = suit ? 900 : 16000 });
+        if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB)
+            frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db((Math.Max(30, ambient) - 6 - RefDb) * Slope), Gain = 1, Cutoff = suit ? 900 : 16000 }); // 엔진의 바탕 소음을 다른 소리와 같은 잣대로 (가까운 기계는 따로 울려 6dB 덜어)
         if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 16000 });
         Out.Enqueue(frame);
         while (Out.Count > 30 && Out.TryDequeue(out _)) { } // 아무도 안 들으면 쌓지 않는다
@@ -235,8 +235,25 @@ public sealed class Acoustics
             }
             case SoundKind.Machine: return new Grind(seed) { Send = 0.25f };
             case SoundKind.Thud: return new Hit(Acoustic.Of("polymer"), 0.5f, seed);
+            // ── 생활 소리 (소리 단계 S2) ──
+            case SoundKind.Clink: return new Clink(seed, e.Db >= 55 ? 1.6f : e.Db < 47 ? 0.8f : 1f);   // 냄비 · 식기 · 컵
+            case SoundKind.Tool: return new Ratchet(seed, e.Db < 62 ? 1.3f : 1f);                        // 렌치 · 작은 드라이버
+            case SoundKind.Weld: return new Weld(seed);
+            case SoundKind.Hammer: return new Hammer(seed);
+            case SoundKind.Snore: return new Snore(seed, Math.Clamp((e.Db - 44) / 16, 0, 1));
+            case SoundKind.SleepTalk: return new Mumble(F0Of(w, e.Actor), seed);
+            case SoundKind.Cough: return new CoughVoice(F0Of(w, e.Actor), seed);
+            case SoundKind.Laugh: return new LaughVoice(F0Of(w, e.Actor), seed);
+            case SoundKind.Hum: return new HumVoice(F0Of(w, e.Actor), seed);
             default: return null;
         }
+    }
+
+    /// <summary>사람마다 목소리 높이 (95 ~ 235Hz — 몸의 소리는 그 몸의 사람으로).</summary>
+    private static float F0Of(Sim w, int actor)
+    {
+        if (actor <= Sound.BodyBase) actor = w.Find<Mind>()?.AgentOfBody(Sound.BodyOf(actor)) ?? -1;
+        return actor < 0 ? 140 : 95 + (uint)(actor * 2654435761u) % 140;
     }
 
     // ── 새는 틈: 분출 속도 · 틈 크기 → 띠 · 세기 ──
@@ -314,7 +331,7 @@ public sealed class Acoustics
 
     /// <summary>
     /// 소리 한 자리 → 귀에서의 크기 · 자르는 높이 · 좌우. 들리지 않으면 false.
-    /// 크기: 1m에서의 dB − 20·log 거리 − 길에서 준 것 → 화면 소리로 (92dB가 0dB · 0.75배 — 넓은 폭: 말소리는 작게 · 폭발은 크게 · 귀의 크기 감각도 로그다).
+    /// 크기: 1m에서의 dB − 20·log 거리 − 길에서 준 것 → 화면 소리로 (귀 80dB가 크기 1 · 1dB마다 0.65dB — 넓은 폭: 2m 말소리 −29dBFS · 폭발은 마지막 누름까지 · 귀의 크기 감각도 로그다).
     /// </summary>
     public bool Hear(int src, float db, int ear, float halfW, bool suit, out float lp, out float gain, out float cutoff, out float pan, int structAt = -1)
     {

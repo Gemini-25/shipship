@@ -350,7 +350,7 @@ public static partial class Program
                 var m = s.Get<Mind>(); var soc = s.Get<Society>(); var snd = s.Get<Sound>(); var life = s.Get<Life>();
                 int sleeper = m.AddPerson(s, At(16, 5)), talker = m.AddPerson(s, At(14, 3));
                 m.SetPersonality(sleeper, 0.5f, 0.5f, 0.4f, 0.5f, 0.7f);   // 예민한 편
-                life[m[sleeper].C.Body].Asleep = 1; m[sleeper].C.Sleepy = 1;
+                life[m[sleeper].C.Body].Asleep = 1; m[sleeper].C.Sleepy = 0.2f;   // 아침 가까운 얕은 잠 (깊은 잠은 72dB 넘어야 깬다 — 소리 단계 S2)
                 s.Run(5);
                 life[m[sleeper].C.Body].Asleep = 1;
                 int said = s.Causes.Add(CauseKind.Person, "한밤에 큰 소리로 떠들었다", s.Tick, At(14, 3), 0, 0, talker);

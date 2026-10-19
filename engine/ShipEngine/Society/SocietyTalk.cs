@@ -282,7 +282,13 @@ public sealed partial class Society
         Sayings.Add(new Saying { Tick = sim.Tick, Speaker = speaker, Listener = listener, Topic = o.T, End = end, Line = said, Cell = C(speaker).Cell });
         if (Sayings.Count > 128) Sayings.RemoveAt(0);
         sim.Facts.Emit(sim.Tick, FactKind.Talk, C(speaker).Cell, (float)end, summary, speaker, listener);
-        sim.Find<Sound>()?.Emit(sim, C(speaker).Cell, end is TalkEnd.Argue or TalkEnd.Friction ? 72 : 60, SoundKind.Voice, said, speaker);   // 누구 목소리인지 (자던 이가 깨면 ⑧이 안다)
+        var snd = sim.Find<Sound>();
+        snd?.Emit(sim, C(speaker).Cell, end is TalkEnd.Argue or TalkEnd.Friction ? 72 : 60, SoundKind.Voice, said, speaker);   // 누구 목소리인지 (자던 이가 깨면 ⑧이 안다)
+        if (end == TalkEnd.Laugh && snd != null)   // 소리 단계 S2: 둘이 함께 웃는다 (웃음소리 65dB — 1m · 크게 웃는 소리)
+        {
+            snd.Emit(sim, C(speaker).Cell, 65, SoundKind.Laugh, said, speaker);
+            if (listener >= 0 && listener < N) snd.Emit(sim, C(listener).Cell, 63, SoundKind.Laugh, said, listener);
+        }
         return said;
     }
 
