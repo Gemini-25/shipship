@@ -63,6 +63,45 @@ public static partial class Program
                 $"폐 손상 {life[b].LungDamage:0.00} · 아픔 {life[b].Pain:0.00}");
         }
 
+        // ── (다) 산소와 불: 몰분율 · 한계 산소 지수(LOI) · 기압 ──
+        {
+            var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);
+            int bed = Worlds.At(lay, 8, 3);
+            // 대기를 바꾼다: 기압 kpa · 산소 몰분율 x (나머지는 질소 — 다른 기체는 그대로)
+            void Atmos(Field f, double kpa, double x)
+            {
+                for (int c = 0; c < lay.N; c++)
+                {
+                    double n = f.Moles(c); if (n < 1e-9) continue;
+                    double want = n * kpa / f.Pressure(c), t = f.Temp(c);
+                    double other = n - f.Gas(f.T.gO2, c) - f.Gas(f.T.gN2, c);
+                    f.RemoveGas(c, f.T.gO2, f.Gas(f.T.gO2, c)); f.RemoveGas(c, f.T.gN2, f.Gas(f.T.gN2, c));
+                    f.AddGas(c, f.T.gO2, want * x, t); f.AddGas(c, f.T.gN2, Math.Max(0, want * (1 - x) - other), t);
+                }
+            }
+            // 고분자 100몰(1.4kg)에 불을 붙여 몇 분 — 탄 몫 · 아직 타나
+            // holdK: 불을 붙이지 않고 겉면을 그 온도로 달궈 둔다 (붙나) · keepK: 붙인 불의 겉면이 둘레(뜨거운 방)에서 받아 그 아래로 식지 않는다
+            (double burned, bool alive) Fire(double kpa, double x, double minutes, double holdK = 0, double keepK = 0)
+            {
+                var s = Worlds.WithChem(lay, 1, (f, c) => { Atmos(f, kpa, x); f.AddStore(bed, f.T.sPoly, 100); if (holdK <= 0) c.Ignite(bed, 3e6, 0); });
+                var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+                for (int k = 0; k < Time.Minutes(minutes); k++) { if (holdK > 0 && ch.BurningCount == 0) f.Tf[bed] = holdK; if (keepK > 0) f.Tf[bed] = Math.Max(f.Tf[bed], keepK); s.Step(); }
+                return (1 - f.Stored(f.T.sPoly, bed) / 100, ch.BurningCount > 0);
+            }
+            var air = Fire(101.3, 0.21, 3); var thin = Fire(50, 0.21, 3); var vac = Fire(5, 0.21, 1);
+            Check("같은 산소 몰분율이면 기압이 낮아도 탄다 (NASA 시험 — 50kPa · 21%도 1기압과 비슷하게) · 5kPa에서는 불꽃이 서지 못한다",
+                thin.burned > 0.6 * air.burned && !vac.alive && vac.burned < 0.05 * air.burned,
+                $"3분에 탄 몫: 1기압 {air.burned:P0} · 50kPa {thin.burned:P0} / 5kPa: {(vac.alive ? "탄다" : "꺼짐")} · {vac.burned:P1}");
+            var rich = Fire(56.5, 0.34, 2); var air2 = Fire(101.3, 0.21, 2);
+            var apollo = Fire(34, 1.0, 2, holdK: 570); var airHot = Fire(101.3, 0.21, 2, holdK: 570);
+            Check("산소가 짙으면 더 세게 탄다 (탐사 대기 56.5kPa · 34% — 2분에 1.5배 넘게) · 발화 온도가 낮아진다 (아폴로 1호 — 100% 산소 34kPa면 297℃ 겉면에 붙고 · 공기에서는 안 붙는다)",
+                rich.burned > 1.5 * air2.burned && apollo.alive && !airHot.alive,
+                $"2분에 탄 몫: 34% {rich.burned:P0} · 21% {air2.burned:P0} / 297℃ 겉면: 100% 산소 {(apollo.alive ? "붙음" : "안 붙음")} · 공기 {(airHot.alive ? "붙음" : "안 붙음")}");
+            var cold = Fire(101.3, 0.12, 5); var hot = Fire(101.3, 0.12, 5, keepK: 750); var low = Fire(101.3, 0.08, 2, keepK: 750);
+            Check("한계 산소 지수 (고분자 17.4%): 산소 12%면 차가운 방의 작은 불은 스스로 꺼지지만 · 둘레가 뜨거워(477℃) 한계가 낮아지면 5분 넘게 타고 · 8%는 뜨거워도 꺼진다 (바닥 — 뜨거운 방의 불꽃 한계)",
+                !cold.alive && hot.alive && !low.alive, $"12% 차가운 방: {(cold.alive ? "탄다" : "꺼짐")} ({cold.burned:P0}) · 12% 뜨거운 둘레: {(hot.alive ? "탄다" : "꺼짐")} ({hot.burned:P0}) · 8% 뜨거운 둘레: {(low.alive ? "탄다" : "꺼짐")}");
+        }
+
         // ── (나) 냄새 · 증상 · 센서 ──
         var mlay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
         int MAt(int x, int y) => Worlds.At(mlay, x, y);

@@ -99,6 +99,29 @@ public sealed partial class Mind
             }
     }
 
+    /// <summary>달아나는 까닭의 원인: 곁(8칸)에 믿는 위험(불 · 연기 · 나쁜 공기 · 공기 빠짐 · 구멍 · 샘) 가운데 가장 확신하는 것 → 없으면 그 방의 불 · 달궈진 곳
+    /// (닫고 간 문 · 공황 같은 뒤따르는 일이 이 사슬에 잇는다).</summary>
+    private int DangerCause(Agent a, int cell)
+    {
+        float best = 0; int cause = 0;
+        foreach (var b in a.Beliefs)
+            if (b.Kind is BeliefKind.Fire or BeliefKind.Smoke or BeliefKind.BadAir or BeliefKind.Vacuum or BeliefKind.Breach or BeliefKind.Leak
+                && b.Cause != 0 && b.Conf > best && Dist(b.Cell, cell) <= 8) { best = b.Conf; cause = b.Cause; }
+        return cause != 0 ? cause : GasSource(cell);
+    }
+
+    private int[] _rfCause = Array.Empty<int>();
+    private long[] _rfTick = Array.Empty<long>();
+    /// <summary>그 칸 방의 불(없으면 달궈진 곳)의 원인 — 방마다 틱에 한 번만 센다 (연기를 보는 칸마다 방을 훑지 않게 · 셈한 값일 뿐 저장하지 않는다).</summary>
+    private int RoomFireCause(int cell, long tick)
+    {
+        int room = RoomOf(cell);
+        if (room < 0) return GasSource(cell);
+        if (_rfTick.Length != L.Rooms.Count) { _rfCause = new int[L.Rooms.Count]; _rfTick = Enumerable.Repeat(-1L, L.Rooms.Count).ToArray(); }
+        if (_rfTick[room] != tick) { _rfTick[room] = tick; _rfCause[room] = GasSource(cell); }
+        return _rfCause[room];
+    }
+
     /// <summary>독한 기체의 근원: 그 방에서 타는 곳 → 없으면 달궈진 곳의 원인.</summary>
     private int GasSource(int cell)
     {
@@ -380,7 +403,7 @@ public sealed partial class Mind
         bool burning = _chem != null && _chem.Burning[x] != 0;
         if (d > radius && !(burning && d <= (_light?.Visibility(x) ?? 30))) return;
         if (burning) Learn(a, t, BeliefKind.Fire, x, -1, 1, BeliefSource.Saw, _chem!.FireCause[x]);
-        if (_light != null && _light.Visibility(x) < 8) Learn(a, t, BeliefKind.Smoke, x, -1, 0.9f, BeliefSource.Saw);
+        if (_light != null && _light.Visibility(x) < 8) Learn(a, t, BeliefKind.Smoke, x, -1, 0.9f, BeliefSource.Saw, RoomFireCause(x, t));   // 연기의 근원 — 그 방의 불
         if (F.Stored(T.sWater, x) > 100) Learn(a, t, BeliefKind.Water, x, -1, 0.9f, BeliefSource.Saw);
         if (F.Hole[x] > 0 && L.Kind[x] == CellKind.Floor) Learn(a, t, BeliefKind.Breach, x, -1, 1, BeliefSource.Saw, _st?.DamageCause[x] ?? 0, F.Hole[x]); // ④ 바닥 · 천장 판이 뚫린 칸 (폭발 압력)
         if (_sparks.Contains(x)) Learn(a, t, BeliefKind.Spark, x, -1, 1, BeliefSource.Saw);
@@ -610,7 +633,7 @@ public sealed partial class Mind
         if (air && a.IsPerson && !HeatBad(c.Cell) && !SmokeBad(a, c.Cell) && F.Pressure(c.Cell) >= 25
             && (target < 0 || !SafeAt(target) && F.Partial(T.gO2, target) - F.Partial(T.gO2, c.Cell) < 3)) { Conserve(sim, a); return; }
         bool first = c.Mode != 1;
-        c.Mode = 1; c.Goal = GoalKind.Flee; c.GoalSince = sim.Tick; c.GoalTarget = -1; c.GoalCell = target;
+        c.Mode = 1; c.Goal = GoalKind.Flee; c.GoalSince = sim.Tick; c.GoalTarget = -1; c.GoalCell = target; c.GoalCause = DangerCause(a, c.Cell);
         a.Plan.Clear(); a.Path.Clear(); c.StepIndex = 0;
         if (target >= 0) a.Plan.Add(new PlanStep { Kind = StepKind.GoTo, Cell = target });
         // 숨 쉴 공기가 멀거나 없다: 가까운 산소 마스크함부터 들른다 (좋은 공기가 30칸 넘게 · 마스크함이 20칸 안)

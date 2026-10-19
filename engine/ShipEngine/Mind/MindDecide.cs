@@ -222,7 +222,7 @@ public sealed partial class Mind
         {
             // 내 방이 위험하다고 믿으면 나간다 (문은 닫고) — 압력이 다 빠지기 전, 문이 아직 열릴 때
             int myRoom = RoomOf(here);
-            float worst = 0; int cell = -1;
+            float worst = 0; int cell = -1, why = 0;
             foreach (var b in a.Beliefs)
             {
                 if (b.Conf < 0.35f || myRoom < 0 || !InRoom(b.Cell, myRoom)) continue;
@@ -236,14 +236,14 @@ public sealed partial class Mind
                     BeliefKind.BadAir => (b.Src == BeliefSource.Screen ? 7 : 3) * b.Conf, // 주컴퓨터 경보는 믿는다
                     _ => 0,
                 };
-                if (s > worst) { worst = s; cell = b.Cell; }
+                if (s > worst) { worst = s; cell = b.Cell; why = b.Cause; }
             }
             // 이 방의 위험을 다루러 들어온 사람(불 끄기 · 구하기 · 막기)은 나가지 않는다 — 정말 위험하면 본능이 끊는다
             bool committed = c.Goal is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && InRoom(c.GoalCell, myRoom);
             // 지나가는 중: 지금 걸음이 위험하지 않다고 믿는 다른 방으로 가고 있으면 새로 대피하지 않는다 (통로를 지날 때마다 문을 여닫지 않게)
             bool passing = a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.GoTo && a.Plan[c.StepIndex].Cell >= 0
                 && RoomOf(a.Plan[c.StepIndex].Cell) != myRoom && RoomBadness(a, RoomOf(a.Plan[c.StepIndex].Cell)) < 0.3f;
-            if (worst > 0 && !committed && !passing) Add(GoalKind.Evacuate, myRoom, cell, worst);
+            if (worst > 0 && !committed && !passing) Add(GoalKind.Evacuate, myRoom, cell, worst, why != 0 ? why : GasSource(cell));   // 나가는 까닭(그 위험의 원인)에 잇는다 — 닫고 간 문 · 함께 넘긴 기억
             // ⑨ 따라 나간다: 짝 · 이끄는 이 · 같은 무리가 이 방에서 빠져나가면 위험을 몰라도 함께 나간다
             bool followedLately = c.FollowedAt > 0 && sim.Tick - c.FollowedAt < Time.Minutes(10);  // 방금 따라 나섰다 (큰 방에서 되풀이해 따라 나서지 않게)
             if (!committed && !passing && !followedLately && c.Goal != GoalKind.Evacuate && FollowOut(a, myRoom, out int danger) is float follow && follow > worst)

@@ -320,6 +320,19 @@ public sealed partial class Society : IEngine
         return false;
     }
 
+    /// <summary>불에서 비롯한 일인가: 사슬에 불 마디가 있거나 · 사슬의 어느 마디가 어느 칸 불의 원인이다
+    /// (불씨가 이야기 마디로 시작한 불은 사슬에 불 마디가 없다 — 꺼진 뒤 연기 때문에 닫은 문을 '구멍' 이야기로 기억해 "쉬익 소리…"를 말하던 결함).</summary>
+    private static bool FromFire(Sim sim, int cause)
+    {
+        var ch = sim.Find<Chemistry>();
+        foreach (int id in sim.Causes.Chain(cause))
+        {
+            if (sim.Causes[id].Kind == CauseKind.Fire) return true;
+            if (ch != null && id != 0 && Array.IndexOf(ch.FireCause, id) >= 0) return true;
+        }
+        return false;
+    }
+
     /// <summary>원인 사슬에서 사람의 행동을 찾는다 (뿌리 쪽부터) — 탓할 사람. 숨긴 일(숨긴 실수 · 몰래 한 짓 · 거짓말)은 남이 모르니 건너뛴다.</summary>
     public int Culprit(Sim sim, int cause, int except)
     {
@@ -387,7 +400,7 @@ public sealed partial class Society : IEngine
                     // 함께 위기를 넘겼다: 그 방에 함께 있던 사람끼리 가까워지고 · 서로를 더 믿는다 · 함께 기억한다
                     var here = Near(f.Cell);
                     // 불 끄기 · 불이 타는 동안 닫은 문은 '불' 이야기 · 아니면 '구멍' (막기 · 공기 때문에 닫은 문)
-                    Topic t = f.Kind == FactKind.Extinguished || ChainHas(sim, f.Cause, CauseKind.Fire) || (sim.Find<Chemistry>()?.BurningCount ?? 0) > 0 ? Topic.Fire : Topic.Breach;
+                    Topic t = f.Kind == FactKind.Extinguished || FromFire(sim, f.Cause) || (sim.Find<Chemistry>()?.BurningCount ?? 0) > 0 ? Topic.Fire : Topic.Breach;
                     int hero = f.Actor >= 0 && f.Actor < N && mind.Agents[f.Actor].IsPerson ? f.Actor : -1;
                     foreach (int i in here)
                     {

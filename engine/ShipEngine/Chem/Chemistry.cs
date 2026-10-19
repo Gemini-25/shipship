@@ -23,7 +23,10 @@ public sealed class Chemistry : IEngine
     /// <summary>불 붙은 칸 하나가 산소가 넉넉할 때 내는 열 (W) — 가구 하나가 활활 타는 정도.</summary>
     public const double CellHrr = 250_000;
     public const double SustainK = 500;
-    public const double MinO2kPa = 9;
+    /// <summary>② (다) 이 기압(kPa) 아래면 불꽃이 서지 못한다 (열을 너무 빨리 잃는다).</summary>
+    public const double QuenchKPa = 8;
+    /// <summary>빠르기 몫의 잣대 (몰분율): 한계를 이만큼 넘으면 1 — 옛 분압 모형이 불 칸(뜨거워 기압 약 110kPa)에서 보이던 기울기(1kPa에 1/12)와 같게 맞췄다.</summary>
+    public const double LoiSpan = 0.109;
 
     private readonly Field F;
     private readonly Tables T;
@@ -137,15 +140,15 @@ public sealed class Chemistry : IEngine
             GasFire(sim, i, dt, nb);
             Quench(i);
             Pyro(sim, i, dt);
-            if (!HasFuel(i)) { if (Burning[i] != 0) Out(sim, i); continue; }
-            double tf = F.Tf[i], pO2 = F.Partial(T.gO2, i);
+            if (!HasFuel(i)) { if (Burning[i] != 0) { HandOff(sim, i, nb); Out(sim, i); } continue; }
+            double tf = F.Tf[i], x = O2Frac(i), pf = PressureFactor(i);
             if (Burning[i] == 0)
             {
-                // 발화: 겉면이 그 연료의 발화 온도를 넘었고 산소가 있다
+                // 발화: 겉면이 그 연료의 발화 온도(산소가 짙을수록 낮다)를 넘었고 · 산소가 그 온도의 한계 산소 지수보다 짙다
                 foreach (var fu in _fuels)
                 {
                     if (F.Stored(fu.store, i) < 1e-3) continue;
-                    if (tf >= fu.full.Def.MinK && pO2 >= MinO2kPa)
+                    if (tf >= IgniteK(fu.full.Def.MinK, x) && Vigor(fu.full.Def.Loi, x, tf, pf) > 0)
                     {
                         Light(sim, i, nb);
                         break;
@@ -153,8 +156,8 @@ public sealed class Chemistry : IEngine
                 }
                 if (Burning[i] == 0) continue;
             }
-            if ((tf < SustainK || pO2 < MinO2kPa * 0.6) && !FrontAlive(i)) { Out(sim, i); continue; }
-            Burn(sim, i, dt, pO2, nb);
+            if ((tf < SustainK || !Flames(i, x, tf, pf)) && !FrontAlive(i)) { Out(sim, i); continue; }
+            Burn(sim, i, dt, x, pf, nb);
             if (Burning[i] != 0) burning++;
         }
         BurningCount = burning;
@@ -167,6 +170,30 @@ public sealed class Chemistry : IEngine
     private bool HasFuel(int i)
     {
         foreach (var fu in _fuels) if (F.Stored(fu.store, i) > 1e-3) return true;
+        return false;
+    }
+
+    // ── ② 사고 화학 (다): 산소와 불 — 몰분율 · 한계 산소 지수(LOI) · 기압 (docs/ENGINE.md) ──
+
+    /// <summary>그 칸 공기의 산소 몰분율.</summary>
+    public double O2Frac(int i) { double p = F.Pressure(i); return p > 1 ? F.Partial(T.gO2, i) / p : 0; }
+
+    /// <summary>기압 몫: 8kPa 아래 0 (불꽃이 못 선다) · 60kPa 넘으면 1 — 같은 몰분율이면 낮은 기압에서도 거의 같이 탄다 (NASA 시험).</summary>
+    public double PressureFactor(int i) => Math.Sqrt(Math.Clamp((F.Pressure(i) - QuenchKPa) / 52, 0, 1));
+
+    /// <summary>겉면 온도 t(K)에서의 한계 산소 지수 — 1K에 0.018%p씩 낮아진다 (Fenimore · 큰 불은 낮은 산소에서도 탄다) · 많아야 절반까지 (뜨거운 방의 불꽃 한계 8~12%).</summary>
+    public static double LoiAt(double loi, double t) => Math.Max(loi * 0.5, loi - 0.00018 * (t - 298));
+
+    /// <summary>탈 것 하나의 빠르기 몫 (1기압 공기의 뜨거운 고분자 ≈ 1.1 · 많아야 2.5) — 산소가 그 한계를 넘는 만큼.</summary>
+    public static double Vigor(double loi, double x, double t, double pf) => pf * Math.Clamp((x - LoiAt(loi, t)) / LoiSpan, 0, 2.5);
+
+    /// <summary>산소가 짙을수록 낮아지는 발화 온도 (100% 산소면 150K 낮다 — 아폴로 1호).</summary>
+    public static double IgniteK(double minK, double x) => minK - 150 * Math.Clamp((x - 0.21) / 0.79, 0, 1);
+
+    /// <summary>그 칸에 아직 불꽃이 설 탈 것이 있나 (모두 한계 산소 지수 아래면 스스로 꺼진다).</summary>
+    private bool Flames(int i, double x, double tf, double pf)
+    {
+        foreach (var fu in _fuels) if (F.Stored(fu.store, i) > 1e-3 && Vigor(fu.full.Def.Loi, x, tf, pf) > 0) return true;
         return false;
     }
 
@@ -195,12 +222,11 @@ public sealed class Chemistry : IEngine
     }
 
     /// <summary>한 칸이 dt초 동안 탄다.</summary>
-    private void Burn(Sim sim, int i, double dt, double pO2, Span<int> nb)
+    private void Burn(Sim sim, int i, double dt, double x, double pf, Span<int> nb)
     {
-        double g = Math.Clamp((pO2 - MinO2kPa) / 12.0, 0, 1.5);
-        double tg = F.Temp(i);
-        // 산소가 모자랄수록 그을며 탄다 (불완전 연소) — 늘 조금은 그을음
-        double incomplete = Math.Clamp(1 - (pO2 - MinO2kPa) / 8.0, 0, 1) * 0.7 + 0.05;
+        double gMax = 0;
+        // 산소가 모자랄수록 그을며 탄다 (불완전 연소) — 늘 조금은 그을음 (몰분율 15.5%부터 · 8.2%면 다 — 옛 분압 모형이 불 칸(약 110kPa)에서 보이던 것과 같게)
+        double incomplete = Math.Clamp(1 - (x - 0.082) / 0.073, 0, 1) * 0.7 + 0.05;
         double heat = 0;
         double o2Budget = F.Gas(T.gO2, i) * 0.5; // 한 틱에 그 칸 산소의 절반까지
         foreach (var fu in _fuels)
@@ -209,6 +235,9 @@ public sealed class Chemistry : IEngine
             if (fuel < 1e-6 || F.Tf[i] < fu.full.Def.MinK * 0.8) continue; // 겉면이 식은 연료는 타지 않는다
             double kg = fuel * T.Substances[T.Stores[fu.store].Index].MolarMass;
             double ff = Math.Min(1, kg / fu.kgFull) * 0.8 + 0.2 * Math.Min(1, kg * 10 / fu.kgFull);
+            double g = Vigor(fu.full.Def.Loi, x, F.Tf[i], pf);   // 탈 것마다 제 한계 산소 지수로 (공기 중 피복은 고분자의 0.7배)
+            if (g <= 0) continue;
+            gMax = Math.Max(gMax, g);
             double dhFull = -fu.full.DH298; // J/반응몰
             double ext = CellHrr * fu.full.Def.Rate * g * ff / dhFull * dt; // 반응 몰
             if (ext <= 0) continue;
@@ -227,7 +256,7 @@ public sealed class Chemistry : IEngine
         //   ② 이웃 겉면 · 벽으로 불꽃 복사 εσF(T불꽃⁴−Tn⁴) (보는 각 F=0.3 — 1m 곁 가구가 받는 15~20kW/m² · 많아야 35% · 벽은 고체로 — 불 곁의 벽이 달아오른다)
         //   ③ 나머지: 기체 80% · 바닥 20%
         double left = heat;
-        double tFlame = 750 + 550 * Math.Min(1, g);
+        double tFlame = 750 + 550 * Math.Min(1, gMax);
         double own = Math.Clamp((tFlame - F.Tf[i]) * Field.SurfaceC, 0, heat * 0.4);
         F.AddSurfaceHeat(i, own); left -= own;
         F.L.Neighbors(i, nb);
@@ -265,7 +294,7 @@ public sealed class Chemistry : IEngine
     /// </summary>
     private double CreepFront(Sim sim, int i, double dt, ref double o2Budget, Span<int> nb)
     {
-        if (Insul(i) < 1e-3) return 0;
+        if (Insul(i) < 1e-3) { HandOff(sim, i, nb); return 0; }
         double v0 = FrontSpeed(i);
         // 앞머리가 칸 길이(1m)를 지나는 동안 피복을 고르게 먹는다 (남은 것이 적어도 가닥 하나 몫의 빠르기 — 꼬리가 길게 끌리지 않게 ·
         // 다 타기 전에 앞머리가 옆 칸에 닿는다: 불꽃 길이만큼 — 0.8) · 피복은 PVC와 가소제(고분자) — 둘 다 같은 앞머리에서
@@ -286,23 +315,37 @@ public sealed class Chemistry : IEngine
             Creep[j] += (float)(v * dt);
             if (Creep[j] < 1) continue;
             Creep[j] = 0;
-            if (F.Partial(T.gO2, j) < MinO2kPa) continue;
+            if (PressureFactor(j) <= 0 || O2Frac(j) < LoiAt(_burnPvc.Def.Loi, F.Tf[j])) continue;
             Creeps++;
             Light(sim, j, nb);   // 앞머리가 닿았다 — 피복 위의 불꽃 (그 칸 바닥까지 달굴 것은 없다 · 산소가 옅으면 다음 틱에 꺼진다)
         }
         return heat;
     }
 
-    /// <summary>이어진 피복 위 앞머리의 빠르기 (m/s): 산소 비율 25% 아래 0 · 33%에서 CreepMps · 많아야 1.5배.</summary>
-    private double FrontSpeed(int i)
+    /// <summary>
+    /// 칸의 피복이 다 탔다 — 1m가 다 탔으면 앞머리는 이미 그 칸 끝에 닿아 있다: 그쪽으로 기던 이웃(쌓인 거리가 있는 칸)에 불이 붙는다 ·
+    /// 그 이웃이 불꽃을 세울 수 있을 때만 (닫힌 문 · 옅은 산소는 막는다). 짙은 산소에서 칸이 앞머리보다 빨리 타 버려 기던 거리가 사라지던 빈틈.
+    /// </summary>
+    private void HandOff(Sim sim, int i, Span<int> nb)
     {
-        double kpa = F.Pressure(i);
-        double x = kpa > 1 ? F.Partial(T.gO2, i) / kpa : 0;
-        return CreepMps * Math.Clamp((x - 0.25) / 0.08, 0, 1.5);
+        if (FuelLink[i] == 0) return;
+        for (int d = 0; d < 4; d++)
+        {
+            if ((FuelLink[i] & (1 << d)) == 0) continue;
+            int j = d switch { 0 => i - F.L.W, 1 => i + 1, 2 => i + F.L.W, _ => i - 1 };
+            if (j < 0 || j >= Cells || Burning[j] != 0 || Creep[j] <= 0 || Insul(j) < 1e-3 || F.RegionOf.Length <= j || F.RegionOf[j] < 0) continue;
+            Creep[j] = 0;
+            if (PressureFactor(j) <= 0 || O2Frac(j) < LoiAt(_burnPvc.Def.Loi, F.Tf[j])) continue;
+            Creeps++;
+            Light(sim, j, nb);
+        }
     }
 
+    /// <summary>이어진 피복 위 앞머리의 빠르기 (m/s): 산소 몰분율이 피복의 한계 산소 지수(25%) 아래 0 · 33%에서 CreepMps · 많아야 1.5배 (기압 몫을 곱한다).</summary>
+    private double FrontSpeed(int i) => CreepMps * PressureFactor(i) * Math.Clamp((O2Frac(i) - _burnPvc.Def.Loi) / 0.08, 0, 1.5);
+
     /// <summary>이어진 피복 위 불꽃 앞머리가 살아 있나 — 그 칸 바닥이 식어도 피복 위 불꽃은 탄다 (산소가 짙을 때).</summary>
-    private bool FrontAlive(int i) => FuelLink[i] != 0 && Insul(i) > 1e-3 && F.Partial(T.gO2, i) >= MinO2kPa && FrontSpeed(i) > 0;
+    private bool FrontAlive(int i) => FuelLink[i] != 0 && Insul(i) > 1e-3 && FrontSpeed(i) > 0;
 
     /// <summary>칸의 피복 (PVC + 가소제 몫 고분자 — 몰).</summary>
     private double Insul(int i) => F.Stored(T.sPvc, i) + F.Stored(T.sPoly, i);

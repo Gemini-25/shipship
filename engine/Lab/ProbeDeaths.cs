@@ -17,6 +17,7 @@ public static partial class Program
         if (Environment.GetEnvironmentVariable("FUN_STAY") != "1") ShipWorld.Embark(s);
         var st = s.Get<Storyteller>(); st.Enabled = true;
         if (Environment.GetEnvironmentVariable("LEVEL") is string lv) st.Level = byte.Parse(lv);   // 평가 도구와 같은 가혹함 (Lab --judge는 4)
+        if (Environment.GetEnvironmentVariable("STYLE") is string sy) st.Style = Enum.Parse<StoryStyle>(sy);   // 재미 측정과 같은 이야기꾼 (예: Relentless)
         var m = s.Get<Mind>(); var sm = s.Get<ShipMind>(); var life = s.Get<Life>();
         string Where(int c) => c < 0 ? "-" : $"({s.Layout.X(c)},{s.Layout.Y(c)}){(m.RoomOf(c) >= 0 ? s.Layout.Rooms[m.RoomOf(c)].Name : "")}";
         long cursor = 0, end = (long)(days * Time.Hours(24));

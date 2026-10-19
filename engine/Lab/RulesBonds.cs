@@ -29,6 +29,10 @@ public static partial class Program
             // 멀리 있던 둘도 피해 온 사람이 문을 닫는 것을 봤다면 그 불을 기억할 수 있다 — 무게는 함께 넘긴 둘이 더 크다
             float W(int p) => so.Memories.Where(x => x.Owner == p && x.Topic == Topic.Fire).Select(x => x.Weight).DefaultIfEmpty(0).Max();
             bool remembered = W(p1) > 0 && W(p2) > 0 && W(p1) >= W(p3);
+            if (Debug) foreach (var x in so.Memories.Where(x => x.Owner == p1 || x.Owner == p2)) Console.WriteLine($"    기억 {m.NameOf(x.Owner)} {x.Topic} {x.Weight:0.00}");
+            int breach = so.Memories.Count(x => (x.Owner == p1 || x.Owner == p2) && x.Topic == Topic.Breach);
+            Check("불만 난 장면: 불이 꺼진 뒤 연기 때문에 닫은 문도 '불'의 기억이다 (구멍이 없었는데 '구멍' 이야기를 하지 않는다)",
+                breach == 0 && W(p1) > 0, $"구멍 기억 {breach} · 불 기억 {W(p1):0.00}");
             Check("관계: 함께 불을 넘긴 둘은 가까워지고 서로를 더 믿는다 · 그 일을 둘 다 기억한다 (멀리 있던 둘은 그대로)",
                 s.Facts.CountOf(FactKind.Extinguished) > 0 && crisis > control + 0.04f && so.TrustIn(p1, p2) > 0.52f && remembered,
                 $"정 함께 넘긴 둘 {crisis:0.00} · 멀리 있던 둘 {control:0.00} · 믿음 {so.TrustIn(p1, p2):0.00} · 기억 {remembered}");

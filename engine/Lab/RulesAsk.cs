@@ -60,6 +60,7 @@ public static partial class Program
                     if (c.Goal == GoalKind.FightFire) went = true;
                 }
                 if (Debug) Console.WriteLine($"    로봇 {robot} · 방침 {policy}: 부탁 {sm.Asked} 받음 {sm.AskAccepted} · {m.Thought(p)} · {Lines(s, t0)}");
+                if (Debug) foreach (var fx in s.Facts.Since(0).Where(x => x.Kind is FactKind.Ignition or FactKind.FireSpread)) Console.WriteLine($"      {Time.Clock(fx.Tick)} {fx.Kind} ({lay.X(fx.Cell)},{lay.Y(fx.Cell)}) 방 {lay.Room[fx.Cell]} · {s.Causes.Story(fx.Cause)}");
                 return (sm.Asked, sm.AskAccepted, firstAsk, went, Lines(s, t0));
             }
             var none = Run(false, 1); var withRobot = Run(true, 1);
@@ -158,17 +159,18 @@ public static partial class Program
             (long overloads, int imagined) Run(bool many)
             {
                 var s = Worlds.Full(lay, 8);
-                var m = s.Get<Mind>(); var ch = s.Get<Chemistry>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
-                m.AddPerson(s, At(18, 4));
-                s.Run(5);
+                var m = s.Get<Mind>(); var ch = s.Get<Chemistry>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>(); var life = s.Get<Life>();
+                int hurt = m.AddPerson(s, At(18, 4));
+                void Pinned() => life[m[hurt].C.Body].Pain = 1;   // 다리를 다쳐 불 방에서 못 나가는 사람 (아픔 1 — 쓰러져 있다): '사람이 있는 불 방'
+                Pinned(); s.Run(5);
                 if (many)
                 {
                     foreach (var d in net.Devices.Where(d => d.Type == "RobotDock")) net.Age(d.Id, Part.Electric, 1.0);   // 충전대 셋이 망가지고
                     foreach (int room in new[] { left, lay.Room[At(12, 8)] }) { var path = net.DataPath[room]; net.CutData(s, path[path.Length / 2], s.Causes.Add(CauseKind.Story, "센서 선이 끊겼다", s.Tick)); } // 센서 선 둘이 끊겼다
                 }
-                for (int k = 0; k < Time.Minutes(1); k++) s.Step();
+                for (int k = 0; k < Time.Minutes(1); k++) { Pinned(); s.Step(); }
                 ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "빈 방 의자 밑에서 불씨가 튀었다", s.Tick));
-                for (int k = 0; k < Time.Minutes(3); k++) s.Step();
+                for (int k = 0; k < Time.Minutes(3); k++) { Pinned(); s.Step(); }
                 if (Debug) Console.WriteLine($"    {(many ? "고장 셋 · 끊긴 선 둘 + 불" : "불만")}: 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0).Select(x => x.Kind))} · 몰림 {sm.Overloads} · 그려 봄 {sm.Imaginations.Count} · {string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("몰렸") || t.Contains("5분 뒤")))}");
                 return (sm.Overloads, sm.Imaginations.Count);
             }

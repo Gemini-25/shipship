@@ -33,6 +33,8 @@ public sealed class ReactionDef
     public ReactionKind Kind;
     public Dictionary<string, double> In = new(), Out = new();
     public double MinK, Rate = 1;
+    /// <summary>② 사고 화학 (다): 탈 것의 한계 산소 지수 — 25℃에서 불꽃이 스스로 서는 가장 옅은 산소 몰분율 (0 = 없음).</summary>
+    public double Loi;
     public string[] Need = Array.Empty<string>();
 }
 

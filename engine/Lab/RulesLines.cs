@@ -189,7 +189,7 @@ public static partial class Program
 
         // ── (다) 피복을 타고 번지는 불: 산소가 짙은 낮은 기압 대기(탐사 대기 34%)에서는 전선 칸 하나의 불이 전선 길을 따라 옆 방까지 · 보통 공기(21%)에서는 그 칸에서 꺼진다 ──
         {
-            (int cells, int rooms, string story, int cut) Burn(double frac, bool open = true)
+            (int cells, int rooms, string story, int cut) Burn(double frac, bool open = true, double ignJ = 3e6)
             {
                 var (s, net) = World();
                 var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
@@ -200,7 +200,7 @@ public static partial class Program
                 bool Bare(int c) { Span<int> nb = stackalloc int[4]; lay.Neighbors(c, nb); foreach (int j in nb) if (j >= 0 && lay.Furniture.Any(fu => Array.IndexOf(fu.Cells, j) >= 0)) return false; return lay.Furniture.All(fu => Array.IndexOf(fu.Cells, c) < 0); }
                 int start = net.Feeders[net.RoomFeeder[room4]].Path.Last(c => lay.Room[c] == room3 && Bare(c));   // 휴게실 문 앞 전선
                 int seed = Story(s, "생명유지실 문 앞 바닥 밑 전선에 불씨");
-                ch.Ignite(start, 3e6, seed);
+                ch.Ignite(start, ignJ, seed);
                 var ever = new HashSet<int>();
                 var st = s.Get<Structure>();
                 int door = lay.DoorAt[At(26, 2)];
@@ -218,11 +218,13 @@ public static partial class Program
                 return (ever.Count, ever.Select(c => _lineRoomOf(lay, c)).Where(r => r >= 0).Distinct().Count(), far >= 0 ? s.Causes.Story(ch.FireCause[far] != 0 ? ch.FireCause[far] : s.Facts.Since(0).Where(x => x.Kind is FactKind.FireSpread && x.Cell == far).Select(x => x.Cause).FirstOrDefault()) : "",
                     Enumerable.Range(0, lay.N).Count(c => net.LineCutAt(c, LineKind.Power)));
             }
-            var thick = Burn(0.34); var shut = Burn(0.34, open: false); var air = Burn(0.21);
+            var thick = Burn(0.34); var shut = Burn(0.34, open: false); var air = Burn(0.21); var hot = Burn(0.34, ignJ: 9e6);
             if (Debug) Console.WriteLine($"    {thick.story}");
             Check("(다) 피복을 타고 번지는 불: 산소 34%의 낮은 기압 대기에서는 전선 칸 하나의 불꽃이 전선 묶음을 따라 기어 열린 문 너머 옆 방까지 번지고 그 길의 전선이 끊긴다 · 닫힌 문(관통부)에서는 멈춘다 · 보통 공기(21%)에서는 그 칸에서 꺼진다 (잘 안 타는 피복)",
                 thick.cells >= 8 && thick.rooms >= 2 && thick.story.Contains("불씨") && thick.cut >= 5 && shut.rooms == 1 && air.cells <= 2,
                 $"34% 열린 문: 탄 칸 {thick.cells} · 방 {thick.rooms} · 끊긴 전선 칸 {thick.cut} / 닫힌 문: 방 {shut.rooms} / 21%: 탄 칸 {air.cells} · \"{thick.story}\"");
+            Check("(다) 센 불씨(9MJ): 불씨 칸의 피복이 앞머리보다 빨리 다 타도 앞머리는 이어 간다 (다 탄 칸이면 앞머리는 이미 그 끝에 있다) — 열린 문 너머 옆 방까지",
+                hot.rooms >= 2, $"센 불씨: 탄 칸 {hot.cells} · 방 {hot.rooms}");
         }
 
         // ── (라) 녹슨 물관: 젖은 바닥의 관은 스무 배 빨리 녹슬고 · 바늘구멍이 나면 주컴퓨터가 밸브를 잠가 가며 방을 좁히고 로봇이 관을 따라 찾아 죈다 ──

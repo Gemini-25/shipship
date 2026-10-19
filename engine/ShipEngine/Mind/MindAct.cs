@@ -734,7 +734,7 @@ public sealed partial class Mind
         c.OpenedDoor = -1;
         if (c.CloseHard != 0)
         {
-            int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 문을 닫았다", sim.Tick, dc, 0, 0, a.Id);
+            int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 문을 닫았다", sim.Tick, dc, c.GoalCause, 0, a.Id);   // 달아나던 까닭에 잇는다
             sim.Facts.Emit(sim.Tick, FactKind.DoorSealed, dc, 0, cause, a.Id, d);
         }
     }
