@@ -49,7 +49,7 @@ public sealed partial class Life
         ref var b = ref this[id];
         if (b.Alive == 0 || b.Arrest != 1) return false;
         b.ShockAt = sim.Tick; Shocks++;
-        double p = ShockBase * Math.Exp(-b.NoFlow / 6.0 - b.LowFlow / 20.0);
+        double p = Math.Min(0.95, ShockBase * Math.Exp(-b.NoFlow / 6.0 - b.LowFlow / 20.0) * EpiBoost(sim, b));
         if (Rng.Unit(sim.Seed, Rng.Key("제세동"), sim.Tick, id) >= p) { ShockMisses++; return false; }
         Revive(sim, id, ref b, 1, "제세동기로 멎은 심장이 다시 뛴다", cause);
         return true;
@@ -80,7 +80,7 @@ public sealed partial class Life
         double min = dt / 60;
         if (cpr) b.LowFlow += (float)min; else b.NoFlow += (float)min;
         if (b.Arrest == 1 && b.NoFlow + 0.4 * b.LowFlow >= FibMinutes) b.Arrest = 2;   // 잔떨림이 지쳐 멎는다
-        else if (b.Arrest == 2 && cpr && Rng.Unit(sim.Seed, Rng.Key("압박 소생"), sim.Tick, id) < AsystoleRevive * min)
+        else if (b.Arrest == 2 && cpr && Rng.Unit(sim.Seed, Rng.Key("압박 소생"), sim.Tick, id) < AsystoleRevive * EpiBoost(sim, b) * min)
             Revive(sim, id, ref b, 2, "가슴 압박 끝에 심장이 다시 뛴다", 0);
         return cpr;
     }

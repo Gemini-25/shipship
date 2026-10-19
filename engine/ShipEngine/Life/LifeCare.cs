@@ -17,7 +17,7 @@ public sealed partial class Life
     public long Infections, Sepses, Treated, Colds;
 
     /// <summary>마음의 요청: 돌본다 — kit면 구급 상자 (붕대 · 화상 덮개 · 항생제), 아니면 맨손.</summary>
-    public void Treat(Sim sim, int body, bool kit)
+    public void Treat(Sim sim, int body, bool kit, int abxDays = 3, int cause = 0)
     {
         if (body < 0 || body >= Bodies.Count) return;
         ref var b = ref this[body];
@@ -25,12 +25,27 @@ public sealed partial class Life
         b.Bleed = 0;
         b.Pain = Math.Max(0, b.Pain - (kit ? 0.4f : 0.15f));
         b.Dressed = (float)Math.Max(b.Dressed, kit ? DressHours : BareDressHours);
-        if (kit && (b.Infect > 0 || b.Burn > 0.5f)) b.Abx = (float)AbxHours;
+        if (kit && abxDays > 0 && NeedsAbx(b)) Give(sim, body, Drug.Abx, 24.0 * abxDays, cause);
         Treated++;
     }
 
-    /// <summary>돌봄이 필요한 몸인가: 덮지 않은 큰 상처 · 흐르는 피 · 항생제 없이 곪은 상처.</summary>
-    public static bool NeedsCare(in Body b) => b.Alive != 0 && (b.Dressed <= 0 && (b.Burn > 0.25f || b.Blunt > 0.4f || b.Bleed > 0.05f) || b.Infect > 0.2f && b.Abx <= 0);
+    /// <summary>항생제가 드는 몸 (곪았거나 크게 데었고 · 먹는 중이 아니다).</summary>
+    public static bool NeedsAbx(in Body b) => (b.Infect > 0 || b.Burn > 0.5f) && b.Abx <= 0;
+
+    /// <summary>돌봄이 필요한 몸인가: 덮지 않은 큰 상처 · 흐르는 피 · 항생제 없이 곪은 상처 · 약이 드는 몸 (⑦ 시안화수소 중독 · 진통제가 빠진 큰 아픔 — 금단도).</summary>
+    public static bool NeedsCare(in Body b) => NeedsWoundCare(b) || NeedsAntidote(b) || NeedsPainkiller(b);
+
+    /// <summary>상처를 돌봐야 하나: 덮지 않은 큰 상처 · 흐르는 피 · 항생제 없이 곪은 상처.</summary>
+    public static bool NeedsWoundCare(in Body b) => b.Alive != 0 && (NeedsDressing(b) || b.Infect > 0.2f && b.Abx <= 0);
+
+    /// <summary>덮어야 할 상처 (구급 상자가 드는 일): 덮지 않은 큰 화상 · 타박 · 흐르는 피.</summary>
+    public static bool NeedsDressing(in Body b) => b.Dressed <= 0 && (b.Burn > 0.25f || b.Blunt > 0.4f || b.Bleed > 0.05f);
+
+    /// <summary>해독제가 드는 몸 (시안화수소 중독 · 맞지 않았다).</summary>
+    public static bool NeedsAntidote(in Body b) => b.Alive != 0 && b.CN > 0.5f && b.Antidote <= 0;
+
+    /// <summary>진통제가 드는 몸 (큰 아픔 · 진통제가 거의 빠졌다 — 금단도).</summary>
+    public static bool NeedsPainkiller(in Body b) => b.Alive != 0 && FeltPain(b) > 0.6 && b.Opioid < 2;
 
     /// <summary>옮는 병을 앓기 시작한다 (이야기꾼의 씨앗 · 시험) — 잠복부터.</summary>
     public void CatchCold(Sim sim, int body, int cause)
@@ -50,11 +65,31 @@ public sealed partial class Life
     /// <summary>앓는 중인가 (옮기는 병 — 앓음 단계).</summary>
     public static bool Sick(in Body b) => b.Ill == 2;
 
+    /// <summary>
+    /// ⑦ 항생제 한 걸음 (순수 — 시험이 바로 돌린다): 먹은 시간이 쌓이고 · 곪음을 이틀에 1씩 걷는다 (내성균이면 0.4배) ·
+    /// 다 먹지 않고(48시간 못 미쳐) 끊었는데 곪음이 남았으면 내성균이 된다 (그때 참).
+    /// </summary>
+    public static bool AbxKinetics(ref Body b, double dt)
+    {
+        if (b.Abx <= 0) return false;
+        b.AbxCourse += (float)(dt / 3600);
+        b.Abx = (float)Math.Max(0, b.Abx - dt / 3600);
+        if (b.Infect > 0) b.Infect = (float)Math.Max(0, b.Infect - dt / (2 * 86400.0) * (b.Resist != 0 ? 0.4 : 1));
+        if (b.Abx > 0 || b.Infect <= 0.05f || b.AbxCourse >= 48 || b.Resist != 0) return false;
+        b.Resist = 1;
+        return true;
+    }
+
     private void Care(Sim sim, int id, ref Body b, double dt)
     {
         double h = dt / 3600;
         if (b.Dressed > 0) b.Dressed = (float)Math.Max(0, b.Dressed - h);
-        if (b.Abx > 0) b.Abx = (float)Math.Max(0, b.Abx - h);
+        bool onAbx = b.Abx > 0;
+        if (AbxKinetics(ref b, dt))
+        {
+            Resistances++;
+            b.InfectCause = sim.Causes.Add(CauseKind.Biology, "항생제를 다 먹지 못해 곪음에 내성균이 남았다", sim.Tick, b.Cell, b.DrugCause != 0 ? b.DrugCause : b.InfectCause, b.InfectCause);
+        }
         // 곪음
         double wound = b.Burn * 0.5 + b.Blunt * 0.2;
         if (b.Infect <= 0)
@@ -73,8 +108,7 @@ public sealed partial class Life
         else
         {
             bool wasSeptic = b.Infect > 1;
-            if (b.Abx > 0) b.Infect = (float)Math.Max(0, b.Infect - dt / (2 * 86400.0));
-            else b.Infect += (float)(dt / (3 * 86400.0) * (0.5 + b.Burn + 0.5 * b.Blunt) * (OnTherapy(sim, b.Cell) ? 0.5 : 1));
+            if (!onAbx) b.Infect += (float)(dt / (3 * 86400.0) * (0.5 + b.Burn + 0.5 * b.Blunt) * (OnTherapy(sim, b.Cell) ? 0.5 : 1));
             if (!wasSeptic && b.Infect > 1) Sepses++;
         }
         // 옮는 병의 단계

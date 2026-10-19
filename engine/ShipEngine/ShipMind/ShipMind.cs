@@ -503,7 +503,7 @@ public sealed partial class ShipMind : IEngine
                 var b = _life.Bodies[a.C.Body];
                 int r = _mind.RoomOf(b.Cell);
                 if (r < 0 || RoomSeen[r] == 0 || b.Alive == 0) continue;
-                if (Life.NeedsCare(b)) { Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect)), a.C.Body, b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : b.HurtCause); Mark(IncidentKind.Injured, r, a.C.Body); }
+                if (Life.NeedsWoundCare(b) || _mind.HasDrugFor(b)) { Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect)), a.C.Body, b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : b.HurtCause); Mark(IncidentKind.Injured, r, a.C.Body); }
                 FeverWatch(sim, a.Id, b);
             }
         // 장치 · 전기

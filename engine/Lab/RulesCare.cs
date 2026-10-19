@@ -35,7 +35,7 @@ public static partial class Program
                 int p = m.AddPerson(s, At(3, 4));
                 if (robot) m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7));
                 int locker = lay.Furniture.First(f => f.Type == "SuitLocker").Id;
-                m.Stock[locker * m.ItemCount + m.iMedkit] = 2;
+                m.Stock[locker * m.ItemCount + m.iMedkit] = 2; m.Stock[locker * m.ItemCount + m.iAbx] = 3;   // 약품고 대신 보관함
                 s.Run(5);
                 ref var b = ref life[m[p].C.Body];
                 b.Burn = 0.9f; b.HurtCause = s.Causes.Add(CauseKind.Story, "조리대에 팔을 크게 데었다", s.Tick, b.Cell);

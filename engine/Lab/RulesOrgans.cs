@@ -71,27 +71,184 @@ public static partial class Program
                 int f = friend ? m.AddPerson(s, At(18, 3)) : -1;
                 if (robot) m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7));
                 int locker = lay.Furniture.First(fu => fu.Type == "SuitLocker").Id;
-                m.Stock[locker * m.ItemCount + m.iAed] = 1;
+                m.Stock[locker * m.ItemCount + m.iAed] = 1; m.Stock[locker * m.ItemCount + m.iEpi] = 4;   // 약품고 대신 보관함
                 s.Run(5);
                 int vb = m[v].C.Body;
                 int root = s.Causes.Add(CauseKind.Story, "숨은 심장병", s.Tick);
                 life.StopHeart(s, vb, 1, "심장이 갑자기 떨린다 — 잔떨림", root);
                 bool pressed = false;
+                long first = -1, t0 = s.Tick;
                 for (long k = 0; k < Time.Hours(1); k++)
                 {
                     s.Step();
+                    if (first < 0 && life.Shocks > 0) first = (s.Tick - t0) * 3600 / Time.TicksPerHour;
                     foreach (var a in m.Agents) if (a.IsPerson) { a.C.Hunger = 0; a.C.Thirst = 0; a.C.Sleepy = 0; }
                     if (f >= 0 && m[f].C.Goal == GoalKind.Cpr && s.Tick - life[vb].CprAt <= 1) pressed = true;
                 }
                 bool shocked = s.Facts.Since(0).Any(x => x.Kind == FactKind.Revived && x.Size == 1);
                 string log = string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("심정지")).Take(2));
-                if (Debug) Console.WriteLine($"    동료 {friend} 로봇 {robot}: 삶 {life[vb].Alive} · 의식 {life[vb].Conscious} · 멎음 {life[vb].Arrest} · 뇌 {life[vb].Brain:0.00} · 누름 {pressed} · 제세동 {shocked} · {log} · 동료 목표 {(f >= 0 ? m[f].C.Goal : GoalKind.Idle)}");
+                if (Debug) Console.WriteLine($"    동료 {friend} 로봇 {robot}: 삶 {life[vb].Alive} · 의식 {life[vb].Conscious} · 멎음 {life[vb].Arrest} · 뇌 {life[vb].Brain:0.00} · 누름 {pressed} · 제세동 {shocked} · {log} · 동료 목표 {(f >= 0 ? m[f].C.Goal : GoalKind.Idle)} · 제세동 {life.Shocks}번 (빗나감 {life.ShockMisses}) · 첫 제세동 {first / 60.0:0.0}분");
                 return (life[vb].Alive != 0, life[vb].Conscious != 0, pressed, shocked, log);
             }
             var both = Run(true, true); var alone = Run(false, false);
             Check("함께 살린다: 심장이 떨린 이 — 곁의 동료가 다가가 가슴을 누르고 · 주컴퓨터가 '심정지'를 알려 로봇이 제세동기를 가져와 쳐서 산다 / 혼자면 죽는다",
                 both.alive && both.awake && both.pressed && both.shocked && both.log.Contains("심정지") && !alone.alive,
                 $"함께: 삶 {both.alive} · 깨어남 {both.awake} · 동료가 누름 {both.pressed} · 제세동 {both.shocked} · '{both.log}' / 혼자: 삶 {alone.alive}");
+        }
+
+        // ── 약 (나): 진통제 — 크게 덴 이(화상 0.9)에게 10mg이면 아픔이 크게 줄고 · 내성 2인 이에게 같은 10mg은 반도 안 듣고 ·
+        //    처음 맞는 이에게 70mg은 숨이 얕아져 쓰러지지만 · 내성 2인 이에게 70mg은 견딘다 ──
+        {
+            var s = Worlds.Full(lay, 11);
+            var life = s.Get<Life>();
+            int naive = life.AddBody(At(12, 1)), tol = life.AddBody(At(14, 1)), od = life.AddBody(At(16, 1)), odTol = life.AddBody(At(18, 1)), ctl = life.AddBody(At(20, 1));
+            int cause = s.Causes.Add(CauseKind.Person, "의무관이 진통제를 놓았다", s.Tick);
+            foreach (int id in new[] { naive, tol, od, odTol, ctl }) life[id].Burn = 0.9f;
+            life[tol].OpioidTol = 2; life[odTol].OpioidTol = 2;
+            s.Run(5);
+            life.Give(s, naive, Drug.Opioid, 10, cause); life.Give(s, tol, Drug.Opioid, 10, cause);
+            life.Give(s, od, Drug.Opioid, 70, cause); life.Give(s, odTol, Drug.Opioid, 70, cause);
+            bool odDown = false, odTolDown = false;
+            for (long k = 0; k < Time.Minutes(30); k++) { s.Step(); Keep(s, life); odDown |= life[od].Conscious == 0; odTolDown |= life[odTol].Conscious == 0; }
+            double pn = Life.FeltPain(life[naive]), pt = Life.FeltPain(life[tol]), pc = Life.FeltPain(life[ctl]);
+            Check("약 — 진통제 용량 · 과용 · 내성: 크게 덴 이에게 10mg은 아픔을 크게 덜고 · 내성 2인 이에게 같은 10mg은 반도 안 듣고 · 처음 맞는 이에게 70mg은 숨이 얕아져 쓰러지고 · 내성 2인 이는 70mg을 견딘다",
+                pc - pn > 0.3 && pc - pt < 0.5 * (pc - pn) && odDown && !odTolDown,
+                $"아픔: 안 맞음 {pc:0.00} · 10mg {pn:0.00} · 내성 2에 10mg {pt:0.00} / 70mg 처음 쓰러짐 {odDown} (피의 산소 {life[od].SpO2:0.00}) · 내성 2 쓰러짐 {odTolDown}");
+        }
+
+        // ── 약 (나): 사흘 동안 네 시간마다 10mg — 내성이 1 넘게 쌓이고 · 끊은 뒤 하루면 다친 데 없이도 금단으로 아프다 ──
+        {
+            var b = new Body { Alive = 1 };
+            for (int d = 0; d < 18; d++) { b.Opioid += 10; for (int m = 0; m < 240; m++) Life.DrugKinetics(ref b, 60); }
+            float tolAfter = b.OpioidTol, dep = b.OpioidDep;
+            for (int m = 0; m < 24 * 60; m++) Life.DrugKinetics(ref b, 60);
+            Check("약 — 쓸수록 내성 · 끊으면 금단: 사흘 동안 네 시간마다 10mg이면 내성이 1 넘게 쌓이고 · 끊은 뒤 하루면 다친 데 없이도 금단으로 아프다 (0.2 넘게)",
+                tolAfter > 1 && dep > 0.3 && Life.FeltPain(b) > 0.2,
+                $"내성 {tolAfter:0.00} · 의존 {dep:0.00} · 끊고 하루 뒤 아픔 {Life.FeltPain(b):0.00}");
+        }
+
+        // ── 약 (나): 해열제 — 곪아 열이 나는 이에게 1g이면 한 시간 반 뒤 체온이 내리고 · 열다섯 시간 동안 시간마다 1g(15g)이면 간이 상하고 · 여섯 시간마다 1g(하루 4g) 이틀은 간이 멀쩡하다 ──
+        {
+            var s = Worlds.Full(lay, 13);
+            var life = s.Get<Life>();
+            int fe = life.AddBody(At(12, 1)), fc = life.AddBody(At(14, 1));
+            int cause = s.Causes.Add(CauseKind.Person, "해열제를 먹였다", s.Tick);
+            foreach (int id in new[] { fe, fc }) { life[id].Infect = 0.6f; }
+            for (long k = 0; k < Time.Hours(3); k++) { s.Step(); Keep(s, life); }
+            life.Give(s, fe, Drug.Apap, 1000, cause);
+            for (long k = 0; k < Time.Hours(1.5); k++) { s.Step(); Keep(s, life); }
+            double dT = life[fc].CoreK - life[fe].CoreK;
+            var over = new Body { Alive = 1 }; var safe = new Body { Alive = 1 };
+            for (int h = 0; h < 48; h++)
+            {
+                if (h < 15) { over.Apap += 1000; over.ApapDay += 1000; }
+                if (h % 6 == 0) { safe.Apap += 1000; safe.ApapDay += 1000; }
+                for (int m = 0; m < 60; m++) { Life.DrugKinetics(ref over, 60); Life.DrugKinetics(ref safe, 60); }
+            }
+            Check("약 — 해열제 · 간: 곪아 열이 나는 이에게 1g이면 한 시간 반 뒤 0.4℃ 넘게 내리고 · 시간마다 1g씩 15g이면 간이 크게 상하고(0.5 넘게) · 여섯 시간마다 1g(하루 4g) 이틀은 간이 멀쩡하다",
+                dT > 0.4 && over.LiverPeak > 0.5 && safe.LiverPeak < 0.02f,
+                $"열 내림 {dT:0.00}℃ · 15g 간 가장 {over.LiverPeak:0.00} · 하루 4g 간 {safe.LiverPeak:0.000}");
+        }
+
+        // ── 약 (나): 항생제 내성균 — 곪음 0.8에 사흘 한 벌이면 걷히고 · 하루치만 먹고 끊으면 곪음이 남아 내성균이 되고 · 내성균이면 같은 한 벌로도 다 걷히지 않는다 /
+        //    배 안에서: 열두 시간치만 먹인 이는 내성균이 되고 원인 사슬에 '약이 모자랐다'가 남는다 ──
+        {
+            Body Course(float hours, byte resist)
+            {
+                var b = new Body { Alive = 1, Infect = 0.8f, Resist = resist, Abx = hours };
+                for (int m = 0; m < 72 * 60; m++) Life.AbxKinetics(ref b, 60);
+                return b;
+            }
+            var full = Course(72, 0); var part = Course(24, 0); var res = Course(72, 1);
+            var s = Worlds.Full(lay, 14);
+            var life = s.Get<Life>();
+            int pb = life.AddBody(At(12, 1));
+            life[pb].Infect = 0.5f; life[pb].Dressed = 1000;
+            s.Run(5);
+            int cause = s.Causes.Add(CauseKind.Person, "약품고에 항생제가 모자라 열두 시간치만 먹였다", s.Tick);
+            life.Give(s, pb, Drug.Abx, 12, cause);
+            for (long k = 0; k < Time.Hours(12.5); k++) { s.Step(); Keep(s, life); }
+            string why = s.Causes.Text(life[pb].InfectCause), root = s.Causes.Text(s.Causes[life[pb].InfectCause].Parent);
+            Check("약 — 항생제 내성균: 곪음 0.8에 사흘 한 벌이면 걷히고 · 하루치만 먹고 끊으면 곪음이 남아 내성균이 되고 · 내성균이면 같은 한 벌로도 다 걷히지 않는다 / 배 안에서 열두 시간치만 먹인 이는 내성균 (원인: 모자랐다)",
+                full.Infect < 0.01f && part.Resist == 1 && part.Infect > 0.05f && res.Infect > 0.05f && life[pb].Resist == 1 && why.Contains("내성균") && root.Contains("모자라"),
+                $"한 벌: {full.Infect:0.00} / 하루치: {part.Infect:0.00} · 내성균 {part.Resist} / 내성균에 한 벌: {res.Infect:0.00} / 배 안: 내성균 {life[pb].Resist} 곪음 {life[pb].Infect:0.00} · '{why}' ← '{root}'");
+        }
+
+        // ── 약 (나): 해독제 · 아드레날린 — 시안화수소 1.5에 쓰러진 이는 해독제를 맞으면 20분에 0.3 아래 · 안 맞으면 1 넘게 남는다 /
+        //    잔떨림 마흔 몸에 누르며 2분에 제세동기 한 번 — 아드레날린을 맞은 쪽이 더 많이 살아난다 ──
+        {
+            var s = Worlds.Full(lay, 15);
+            var life = s.Get<Life>();
+            int ad = life.AddBody(At(12, 1)), nd = life.AddBody(At(14, 1));
+            int cause = s.Causes.Add(CauseKind.Person, "해독제를 놓았다", s.Tick);
+            life[ad].CN = 1.5f; life[nd].CN = 1.5f;
+            s.Run(5);
+            life.Give(s, ad, Drug.Antidote, 1, cause);
+            for (long k = 0; k < Time.Minutes(20); k++) { s.Step(); Keep(s, life); }
+            int Revived(bool epi)
+            {
+                var w = Worlds.Full(lay, 16);
+                var lf = w.Get<Life>();
+                var ids = Enumerable.Range(0, 40).Select(i => lf.AddBody(At(12 + i % 10, 1 + i / 10))).ToArray();
+                w.Run(5);
+                int root = w.Causes.Add(CauseKind.Story, "잔떨림", w.Tick);
+                foreach (int id in ids) { lf.StopHeart(w, id, 1, "잔떨림", root); if (epi) lf.Give(w, id, Drug.Epi, 1, root); }
+                for (long k = 0; k < Time.Minutes(2); k++) { w.Step(); foreach (int id in ids) lf.Compress(w, id); }
+                foreach (int id in ids) lf.Defibrillate(w, id, root);
+                return ids.Count(id => lf[id].Arrest == 0);
+            }
+            int withEpi = Revived(true), noEpi = Revived(false);
+            Check("약 — 해독제 · 아드레날린: 시안화수소 1.5에 해독제를 맞으면 20분에 0.3 아래 · 안 맞으면 1 넘게 남는다 / 잔떨림 마흔에 제세동기 한 번 — 아드레날린을 맞은 쪽이 더 살아난다",
+                life[ad].CN < 0.3f && life[nd].CN > 1 && withEpi > noEpi + 4,
+                $"해독제 {life[ad].CN:0.00} · 없이 {life[nd].CN:0.00} / 다시 뜀: 아드레날린 {withEpi}/40 · 없이 {noEpi}/40");
+        }
+
+        // ── 약품고 — 돌보는 이의 약: 크게 데고 곪아 열이 나는 이 둘 (하나는 내성 2 · 하나는 한 시간 전에 진통제를 맞았다) · 약품고에 항생제 넷 ·
+        //    로봇은 내성만큼 늘려 30mg · 한 시간 전에 맞은 이에게는 주지 않고 · 해열제 1g · 항생제는 먼저 돌본 이에게 사흘 치 · 다음 이에게는 남은 하루치만 (원인: 모자랐다) /
+        //    서툰 사람(솜씨 0.1)은 내성을 모르고 10mg (열에 둘은 두 배) ──
+        {
+            (List<(int body, Drug d, float amt, string why)> doses, int abxLeft, int a, int b) Run(bool robot)
+            {
+                var s = Worlds.Full(lay, 17);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+                sm.Policy.AskPeople = 0;
+                int pa = m.AddPerson(s, At(3, 4)), pb = robot ? m.AddPerson(s, At(5, 4)) : -1;
+                int carer = robot ? m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7)) : m.AddPerson(s, At(6, 4));
+                int locker = lay.Furniture.First(f => f.Type == "SuitLocker").Id;
+                foreach (var (it, n) in new[] { (m.iMedkit, 2), (m.iOpioid, 3), (m.iApap, 3), (m.iAbx, 4) }) m.Stock[locker * m.ItemCount + it] = n;
+                s.Run(5);
+                int hurt = s.Causes.Add(CauseKind.Story, "조리대 불에 데었다", s.Tick);
+                foreach (int p in new[] { pa, pb }.Where(p => p >= 0))
+                {
+                    ref var b = ref life[m[p].C.Body];
+                    b.Burn = 0.75f; b.Pain = 0.3f; b.Infect = 0.5f; b.HurtCause = hurt;
+                }
+                { ref var b = ref life[m[pa].C.Body]; b.OpioidTol = 2; b.OpioidDep = 1; b.Opioid = 7; }   // 늘 맞던 이 (약이 떨어지면 금단으로 쓰러진다)
+                if (pb >= 0) { ref var b = ref life[m[pb].C.Body]; b.Opioid = 1.5f; b.OpioidAt = s.Tick - Time.Hours(1); }
+                if (!robot)
+                {
+                    ref var cc = ref m[carer].C; cc.SkMedic = 0.1f;
+                    m.Assign(s, carer, GoalKind.Treat, m[pa].C.Body, new Belief { Kind = BeliefKind.Injured, Cell = life[m[pa].C.Body].Cell, Subject = m[pa].C.Body, Conf = 1 }, s.Tick + Time.Minutes(30));
+                }
+                long t0 = s.Tick;
+                for (long k = 0; k < Time.Hours(1); k++)
+                {
+                    s.Step();
+                    foreach (var ag in m.Agents) if (ag.IsPerson) { ag.C.Hunger = 0; ag.C.Thirst = 0; ag.C.Sleepy = 0; }
+                }
+                var doses = s.Facts.Since(0).Where(f => f.Kind == FactKind.Dosed && f.Tick > t0).Select(f => (f.Actor, (Drug)f.Other, f.Size, s.Causes.Text(f.Cause))).ToList();
+                if (Debug) foreach (var d in doses) Console.WriteLine($"    {(robot ? "로봇" : "서툰 이")}: 몸 {d.Item1} · {d.Item2} {d.Item3} · {d.Item4}");
+                if (Debug) Console.WriteLine($"    {(robot ? "로봇" : "서툰 이")} 일지: {string.Join(" / ", sm.Log.Select(l => l.text).Take(6))} · 돌봄 {m.Treats} · 돌보는 이 목표 {m[carer].C.Goal}");
+                return (doses, m.Stock[locker * m.ItemCount + m.iAbx], m[pa].C.Body, pb >= 0 ? m[pb].C.Body : -1);
+            }
+            var r = Run(true); var u = Run(false);
+            float Mg(List<(int body, Drug d, float amt, string why)> ds, int b, Drug d) => ds.Where(x => x.body == b && x.d == d).Sum(x => x.amt);
+            var abx = r.doses.Where(x => x.d == Drug.Abx).OrderByDescending(x => x.amt).ToList();
+            Check("약품고 — 돌보는 이의 약: 로봇은 내성 2인 이에게 30mg · 한 시간 전에 맞은 이에게는 주지 않고 · 둘 다 해열제 1g · 항생제 넷은 사흘 치 + 남은 하루치 (원인: 모자랐다) / 서툰 사람은 내성을 모르고 10mg (열에 둘은 20mg)",
+                Mg(r.doses, r.a, Drug.Opioid) == 30 && Mg(r.doses, r.b, Drug.Opioid) == 0 && Mg(r.doses, r.a, Drug.Apap) == 1000 && Mg(r.doses, r.b, Drug.Apap) == 1000
+                && abx.Count == 2 && abx[0].amt == 72 && abx[1].amt == 24 && abx[1].why.Contains("모자라") && r.abxLeft == 0
+                && Mg(u.doses, u.a, Drug.Opioid) is 10 or 20,
+                $"로봇: 진통제 {Mg(r.doses, r.a, Drug.Opioid)} · {Mg(r.doses, r.b, Drug.Opioid)}mg · 해열제 {Mg(r.doses, r.a, Drug.Apap)} · {Mg(r.doses, r.b, Drug.Apap)} · 항생제 {string.Join("+", abx.Select(x => x.amt))}시간 '{(abx.Count > 1 ? abx[1].why : "")}' · 남은 항생제 {r.abxLeft} / 서툰 이: 진통제 {Mg(u.doses, u.a, Drug.Opioid)}mg");
         }
 
         // ── 장기가 남는다: 뇌 0.4 · 심장 0.4 · 폐 0.9로 상한 몸이 60일 동안 낫으면 — 뇌는 0.16 · 심장은 0.2 · 폐는 흉터 0.25 위로 남는다 ──

@@ -118,6 +118,7 @@ public enum FactKind : ushort
     // ⑦ 바퀴 3 — 장기 · 약 · 수술
     Arrest,            // 심장이 멎었다 (Actor: 몸 번호 · Size: 1 잔떨림 · 2 멎음)
     Revived,           // 멎은 심장이 다시 뛴다 (Actor: 몸 번호 · Size: 1 제세동 · 2 가슴 압박)
+    Dosed,             // 약을 줬다 (Actor: 몸 번호 · Size: 양 · Other: 약 — Drug)
 }
 
 public static class FactNames
@@ -142,7 +143,7 @@ public static class FactNames
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
-        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", _ => "",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", _ => "",
     };
 }
 

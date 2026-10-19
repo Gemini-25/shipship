@@ -19,7 +19,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         int vb = o.Target;
         if (vb < 0 || vb >= _life!.Bodies.Count || _life.Bodies[vb].Alive == 0 || vb == c.Body) return false;
-        if (c.Holding != iMedkit && c.Holding == 255)
+        if (c.Holding != iMedkit && c.Holding == 255 && Life.NeedsDressing(_life.Bodies[vb]))   // 약만 드는 몸에는 구급 상자를 쓰지 않는다
         {
             int src = NearestStock(here, iMedkit);
             if (src >= 0)
@@ -43,18 +43,81 @@ public sealed partial class Mind
         ref var c = ref a.C;
         int vb = st.Target;
         if (vb < 0 || vb >= _life!.Bodies.Count || _life.Bodies[vb].Alive == 0) return;
-        bool kit = c.Holding == iMedkit;
-        _life.Treat(sim, vb, kit);
-        if (kit) UseHeld(sim, a); else TreatsBare++;
+        bool kit = c.Holding == iMedkit, dress = Life.NeedsDressing(_life.Bodies[vb]);
+        double pain = Life.FeltPain(_life.Bodies[vb]);   // 와서 본 아픔 (덮기 전)
+        _life.Treat(sim, vb, kit, abxDays: 0);
+        if (kit && dress) UseHeld(sim, a); else if (dress) TreatsBare++;
         Treats++;
         if (a.IsPerson) c.SkMedic = Math.Min(1, c.SkMedic + 0.004f * Practice(c, "치료") * UseSkill(a, 1, sim.Tick));
         int va = AgentOfBody(vb);
         string who = va >= 0 ? NameOf(va) : "다친 이";
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot,
-            kit ? $"{Ko.I(NameOf(a.Id))} {Ko.Eul(who)} 돌봤다 — 붕대 · 화상 덮개{(_life.Bodies[vb].Abx > 0 ? " · 항생제" : "")}" : $"{Ko.I(NameOf(a.Id))} 맨손으로 {Ko.Eul(who)} 돌봤다 — 구급 상자가 없었다",
+            !dress ? $"{Ko.I(NameOf(a.Id))} {Ko.Eul(who)} 살폈다" : kit ? $"{Ko.I(NameOf(a.Id))} {Ko.Eul(who)} 돌봤다 — 붕대 · 화상 덮개" : $"{Ko.I(NameOf(a.Id))} 맨손으로 {Ko.Eul(who)} 돌봤다 — 구급 상자가 없었다",
             sim.Tick, c.Cell, _life.Bodies[vb].HurtCause, 0, a.Id);
         sim.Facts.Emit(sim.Tick, FactKind.Treated, c.Cell, kit ? 1 : 0, cause, a.Id, va);
+        Dispense(sim, a, vb, who, pain, cause);
         if (c.AssignedGoal == GoalKind.Treat && c.AssignedTarget == vb) c.AssignedUntil = sim.Tick;   // 맡은 일을 마쳤다
+    }
+
+    // ── ⑦ 바퀴 3 (나): 약 — 돌보는 이가 약품고(의료 침대)의 약을 준다 ──
+    public long PainDoses, DoubleDoses, MissedHours, FeverDoses, OverDay, AbxCourses, AbxShort, Antidotes, EpiDoses;
+
+    /// <summary>그 몸에 줄 약이 약품고에 있나 (주컴퓨터가 '다친 사람'을 알릴지 — 없는 약 때문에 되풀이해 부르지 않는다).</summary>
+    public bool HasDrugFor(in Body b) => Life.NeedsAntidote(b) && TotalOf(iAntidote) > 0 || Life.NeedsPainkiller(b) && TotalOf(iOpioid) > 0;
+
+    /// <summary>
+    /// 돌보며 약을 준다 (약품고 — 가장 가까운 의료 침대에서). 솜씨 0.5 넘는 이 · 로봇은 셈을 하고 · 서툰 이는 실수한다:
+    /// 아픔 0.4 넘으면 진통제 — 10mg × (1 + 내성) · 4시간 안에 준 적이 있으면 주지 않는다 / 서툰 이는 늘 10mg · 열에 둘은 두 배 · 4시간을 세지 않는다.
+    /// 열 1℃ 넘으면 해열제 1g — 하루 4g까지 / 서툰 이는 세지 않는다. 곪았거나 크게 데면 항생제 사흘 한 벌 — 약품고에 모자라면 있는 만큼 (내성균의 씨앗).
+    /// 시안화수소 중독이면 해독제. 약마다 원인 마디 (돌봄 아래) — 과용 · 간 · 내성균의 사슬이 여기서 시작한다.
+    /// </summary>
+    private void Dispense(Sim sim, Agent a, int vb, string who, double pain, int parent)
+    {
+        ref var c = ref a.C;
+        var b = _life!.Bodies[vb];
+        bool skilled = !a.IsPerson || c.SkMedic >= 0.5f;
+        var kind = a.IsPerson ? CauseKind.Person : CauseKind.Robot;
+        string me = Ko.I(NameOf(a.Id));
+        // 진통제
+        bool recent = sim.Tick - b.OpioidAt < Time.Hours(4);
+        if (pain > 0.4 && (!skilled || !recent) && TakeOne(c.Cell, iOpioid, sim))
+        {
+            double mg = skilled ? Math.Round(10 * (1 + b.OpioidTol)) : 10;
+            bool twice = !skilled && Rng.Unit(sim.Seed, Rng.Key("진통제 두 배"), sim.Tick, a.Id) < 0.2;
+            if (twice) { mg *= 2; DoubleDoses++; }
+            if (!skilled && recent) MissedHours++;
+            string note = twice ? " — 서툴러 두 배를 놓았다" : !skilled && recent ? " — 네 시간 안에 놓은 것을 몰랐다" : skilled && b.OpioidTol > 0.3f ? " — 내성만큼 늘렸다" : "";
+            int k = sim.Causes.Add(kind, $"{me} {who}에게 진통제 {mg:0}mg을 놓았다{note}", sim.Tick, c.Cell, parent, 0, a.Id);
+            _life.Give(sim, vb, Drug.Opioid, mg, k); PainDoses++;
+        }
+        // 해열제
+        b = _life.Bodies[vb];
+        bool over = b.ApapDay + 1000 > 4000;
+        if (Life.FeverK(b) * (1 - Life.FeverCut(b)) > 1 && (!skilled || !over) && TakeOne(c.Cell, iApap, sim))
+        {
+            if (over) OverDay++;
+            int k = sim.Causes.Add(kind, $"{me} {who}에게 해열제 1g을 먹였다{(over ? " — 하루 양을 세지 않았다" : "")}", sim.Tick, c.Cell, parent, 0, a.Id);
+            _life.Give(sim, vb, Drug.Apap, 1000, k); FeverDoses++;
+        }
+        // 항생제 — 사흘 한 벌 (하루 한 알)
+        if (Life.NeedsAbx(_life.Bodies[vb]))
+        {
+            int pills = 0;
+            while (pills < 3 && TakeOne(c.Cell, iAbx, sim)) pills++;
+            if (pills < 3) AbxShort++;
+            if (pills > 0)
+            {
+                int k = sim.Causes.Add(kind, pills < 3 ? $"약품고에 항생제가 모자라 {me} {who}에게 {pills}일치만 먹였다" : $"{me} {who}에게 항생제 사흘 치를 먹였다",
+                    sim.Tick, c.Cell, parent, 0, a.Id);
+                _life.Give(sim, vb, Drug.Abx, 24.0 * pills, k); AbxCourses++;
+            }
+        }
+        // 해독제
+        if (Life.NeedsAntidote(_life.Bodies[vb]) && TakeOne(c.Cell, iAntidote, sim))
+        {
+            int k = sim.Causes.Add(kind, $"{me} {who}에게 해독제를 놓았다", sim.Tick, c.Cell, parent, 0, a.Id);
+            _life.Give(sim, vb, Drug.Antidote, 1, k); Antidotes++;
+        }
     }
 
     // ── ⑦ 바퀴 3: 멎은 심장 — 곁에서 가슴을 누르고 · 제세동기를 가져와 친다 ──
@@ -123,6 +186,14 @@ public sealed partial class Mind
         if (body.Alive == 0 || body.Arrest == 0) return 1;
         if (Dist(c.Cell, body.Cell) > 1) { EndPlan(a); return -1; }
         _life.Compress(sim, vb);
+        // ⑦ (나) 아드레날린 — 제세동기 가방에 든 것 (약품고에서) · 치기 앞서 · 4분마다 · 로봇 · 솜씨 0.5 넘는 이
+        if (c.Holding == iAed && (!a.IsPerson || c.SkMedic >= 0.5f) && sim.Tick - c.StepStart >= 4
+            && sim.Tick - body.EpiAt >= Time.Minutes(Life.EpiMinutes) && TakeOne(c.Cell, iEpi, sim))
+        {
+            int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 아드레날린을 놓았다", sim.Tick, c.Cell, body.ArrestCause, 0, a.Id);
+            _life.Give(sim, vb, Drug.Epi, 1, cause); EpiDoses++;
+        }
+        body = _life.Bodies[vb];
         if (c.Holding == iAed && body.Arrest == 1 && sim.Tick - c.StepStart >= 4 && sim.Tick - body.ShockAt >= Time.Minutes(2))
         {
             int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 제세동기를 붙여 쳤다", sim.Tick, c.Cell, body.ArrestCause, 0, a.Id);
