@@ -367,7 +367,8 @@ public sealed class LiveShow
         var a = mind.Agents[Selected];
         var lines = new List<string>();
         string role = a.IsPerson && a.C.Role < mind.RoleNames.Length ? " · " + mind.RoleNames[a.C.Role] : "";
-        lines.Add(mind.NameOf(a.Id) + role);
+        string nick = w.Find<Society>()?.NickOf(a.Id) is string nk ? $" '{nk}'" : "";   // ⑨ 배에서 부르는 별명
+        lines.Add(mind.NameOf(a.Id) + nick + role);
         if (a.IsPerson && life != null && a.C.Body >= 0)
         {
             var b = life.Bodies[a.C.Body];
@@ -708,6 +709,7 @@ public sealed class LiveShow
             {
                 var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>(); var so = w.Find<Society>();
                 if (mind == null || life == null) break;
+                if (so != null && so.CultureLine(w) is string culture) rows.Add(new PanelRow("이 배의 관습", culture, false));   // ⑨ 함께 먹는 때 · 금기 · 배의 규칙
                 foreach (int id in PeopleOrder())
                 {
                     var a = mind.Agents[id]; var b = life.Bodies[a.C.Body];
@@ -733,7 +735,7 @@ public sealed class LiveShow
                         if (trust >= 0) near.Add($"가장 믿는 이 {mind.NameOf(trust)}"); if (grudge >= 0) near.Add($"앙금 {mind.NameOf(grudge)}");
                     }
                     string pondered = b.Alive != 0 ? mind.RecentThought(id, w.Tick, Time.Hours(1)) : "";
-                    rows.Add(new PanelRow($"{mind.NameOf(id)} — {state}",
+                    rows.Add(new PanelRow($"{mind.NameOf(id)}{(so?.NickOf(id) is string nk ? $" '{nk}'" : "")} — {state}",
                         $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger));
                 }
                 break;

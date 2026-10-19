@@ -118,7 +118,7 @@ public sealed partial class Mind
         if (_net == null || d < 0 || _net.On[d] == 0) return;
         bool urgent = interrupted && (c.Up == 0 || c.Mode != 0 || c.Goal is GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Investigate or GoalKind.GetSuit or GoalKind.Down);
         float p = interrupted ? (0.35f + 0.4f * (1 - c.Consc)) * (urgent ? 1.3f : 0.6f) : 0.02f * (1.4f - c.Consc) * (0.6f + c.Sleepy + 0.5f * c.Stress);
-        p = Math.Min(0.9f, p * (1 - c.Careful) * (1 - 0.5f * c.LessonFire));   // 실수에서 배운 조심 · 불을 겪어 본 경계
+        p = Math.Min(0.9f, p * (1 - c.Careful) * (1 - 0.5f * c.LessonFire) * (StoveRule ? 0.5f : 1));   // 실수에서 배운 조심 · 불을 겪어 본 경계 · ⑨ 배의 규칙
         if (Rng.Unit(sim.Seed, Rng.Key("깜빡"), a.Id, sim.Tick) >= p) { _net.SetOn(d, false); return; }
         string why = c.Up == 0 ? "쓰러졌다" : urgent ? "급한 소리에 달려 나갔다" : interrupted ? "다른 일에 정신이 팔렸다" : c.Sleepy > 0.6f ? "졸려서 깜빡했다" : "깜빡했다";
         var dev = _net.Devices[d];

@@ -38,9 +38,12 @@ public sealed partial class Mind
     public bool Penanced(int agent, long now) => agent >= 0 && agent < _penance.Length && _penance[agent] > now;
     public bool Confined(int agent, long now) => agent >= 0 && agent < _confine.Length && _confine[agent] > now;
 
-    /// <summary>식당: 배식기 · 냉장고가 있는 방 (없으면 가장 넓은 방).</summary>
+    /// <summary>식당: 식당으로 지은 방 → 배식기가 있는 방 → 먹을 것이 있는 방 (없으면 가장 넓은 방).
+    /// 먹을 것의 첫 설비로만 고르던 때는 디딤호에서 냉장고가 먼저인 주방이 뽑혀 회의 · 추모가 주방에서 열렸다 — 첫날 불이 난 주방을 위험하다고 믿는 이들이 오지 않았다.</summary>
     public int MessRoom()
     {
+        for (int r = 0; r < L.Rooms.Count; r++) if (L.Rooms[r].Type == "Mess") return r;
+        foreach (var fu in L.Furniture) if (fu.Type == "MealDispenser" && fu.Room >= 0) return fu.Room;
         foreach (int fu in _food) { int r = RoomOf(L.Furniture[fu].Cells[0]); if (r >= 0) return r; }
         int best = -1, bn = 0;
         for (int r = 0; r < L.Rooms.Count; r++) if (L.Rooms[r].Cells.Length > bn) { bn = L.Rooms[r].Cells.Length; best = r; }

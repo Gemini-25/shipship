@@ -181,9 +181,10 @@ public sealed partial class Mind
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
             float sick = _life != null && c.Body >= 0 ? _life[c.Body].Nausea : 0;   // 우주 멀미: 속이 울렁거려 덜 먹는다
-            if ((c.Hunger > 0.55f + 0.3f * sick + 0.25f * c.Depress || kinMeal >= 0 && sick < 0.3f && c.Depress < 0.3f) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
+            bool feast = c.Hunger > 0.3f && sick < 0.3f && MealTime(hour);   // ⑨ 함께 먹는 때가 배의 관습이 됐다
+            if ((c.Hunger > 0.55f + 0.3f * sick + 0.25f * c.Depress || kinMeal >= 0 && sick < 0.3f && c.Depress < 0.3f || feast) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
             {
-                float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0) + (kinMeal >= 0 ? 0.6f : 0);
+                float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0) + (kinMeal >= 0 ? 0.6f : 0) + (feast ? 0.8f : 0);
                 Add(GoalKind.Eat, -1, -1, eat);
                 // ⑧ 밥을 짓는다: 요리를 좋아하는 이 · 꺼진 조리대가 있고 같은 방에 먹을 것이 있으면 (먹기보다 조금 앞서게)
                 if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
@@ -399,7 +400,9 @@ public sealed partial class Mind
                     plan.Add(Use(UseKind.Sleep, Time.Hours(10)));
                     return true;
                 }
-                int bed = c.Bed >= 0 && !Taken(a, c.Bed) ? c.Bed : NearestFree(a, _beds);
+                bool shunned = c.Bed >= 0 && BedTaboo(c.Bed);   // ⑨ 숨진 이와 함께 쓰던 침대 — 다른 빈 침대가 없으면 그래도 눕는다
+                int bed = c.Bed >= 0 && !Taken(a, c.Bed) && !shunned ? c.Bed : NearestFree(a, _beds);
+                if (shunned) { if (bed >= 0) BedsShunned++; else if (!Taken(a, c.Bed)) bed = c.Bed; }
                 int airy = ZeroGSleepSpot(c, bed >= 0 ? bed : here);   // 무중력에서 날숨에 깬 적이 있으면 통풍구 앞에 침낭을 묶고 잔다
                 if (airy >= 0) { plan.Add(Go(airy)); plan.Add(Use(UseKind.Sleep, Time.Hours(10))); return true; }
                 if (bed >= 0) plan.Add(Go(bed));
@@ -410,6 +413,7 @@ public sealed partial class Mind
             {
                 int src = MealSource(a, here);   // ⑨ 가까운 이와 같은 자리 · 벌어진 무리 사람이 먹는 자리는 피한다
                 if (src < 0) return false;
+                if (a.IsPerson && a.C.Hunger <= 0.55f && MealTime(Time.HourOfDay(_nowTick))) CustomEats++;   // ⑨ 배가 덜 고파도 관습의 식사에 간다
                 int cell = L.Furniture[src].Cells[0];
                 plan.Add(Go(cell, 1));
                 plan.Add(Use(UseKind.Eat, Time.Minutes(10), cell, src));
@@ -848,7 +852,7 @@ public sealed partial class Mind
         foreach (int fu in furn)
         {
             int cell = L.Furniture[fu].Cells[0];
-            if (Taken(a, cell)) continue;
+            if (Taken(a, cell) || BedTaboo(cell)) continue;   // ⑨ 숨진 이의 침대에는 눕지 않는다
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell && o.C.Goal is GoalKind.Relax or GoalKind.Socialize or GoalKind.Sleep) { used = true; break; }
             if (used) continue;
@@ -934,7 +938,7 @@ public sealed partial class Mind
             foreach (var o in Agents) if (o != a && o.C.Cell == cell) { used = true; break; }
             if (used) continue;
             double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 - Manhattan(a.C.Cell, cell) * 0.1
-                       - Dread(a.Id, L.Furniture[fu].Room) * 30; // 꺼리는 방은 사람이 모여 있어도 덜 간다
+                       - Shun(a.Id, L.Furniture[fu].Room) * 30; // 꺼리는 방 · 금기의 방은 사람이 모여 있어도 덜 간다
             if (s > bs) { bs = s; best = cell; }
         }
         return best;

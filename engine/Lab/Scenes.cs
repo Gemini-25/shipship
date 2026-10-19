@@ -160,6 +160,7 @@ public static partial class Program
                 break;
             }
             case "heart": HeartScene(dir); return;
+            case "culture": CultureScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
@@ -291,6 +292,102 @@ public static partial class Program
         foreach (var a in m.Agents.Where(a => a.IsPerson))
             Console.WriteLine($"    {m.NameOf(a.Id)}: 충격 {a.C.Shock:0.00} · 외상 {a.C.Trauma:0.00} · 우울 {a.C.Depress:0.00} · 불안 {a.C.Anxiety:0.00} · 신경성 {a.C.Neuro0:0.00}→{a.C.Neuro:0.00} · 용기 {a.C.Brave0:0.00}→{a.C.Brave:0.00} · {(life[a.C.Body].Alive != 0 ? "삶" : "죽음")}");
         Console.WriteLine($"    악몽 {m.Nightmares} · 되살아남 {m.Flashbacks} · 발작 {m.PanicAttacks} · 겁이 많아짐 {m.Fearful} · 단단해짐 {m.Hardened} · 우울 {m.Depressions} · 불안 {m.Anxieties} · 수면제 {m.SleepPills} · 상담 {m.Counsels} · 주컴퓨터 말 {sm.CheckIns}");
+    }
+
+    /// <summary>
+    /// ⑨ 문화 · 관습 관찰 장면 '디딤호의 엿새': 여섯이 엿새를 지낸다 — 첫날 저녁 주방 조리대에 불이 붙고 (위기 → 넘기면 축하) ·
+    /// 셋째 날 아침 정비실 선반이 무너져 한 사람이 깔려 숨진다 (숨진 이의 침대 · 추모) · 늦게 자는 둘에겐 묵은 앙금이 있다 (밤 말다툼 → 깬 이들 → 배의 규칙).
+    /// 함께 먹는 때는 저절로 — 엿새 사이 관습이 서는지 · 별명이 붙는지 · 금기가 생기는지를 본다 (줄거리가 아니다: 심은 것은 불 · 사고 · 앙금뿐).
+    /// </summary>
+    private static void CultureScene(string dir)
+    {
+        int robots = int.TryParse(Environment.GetEnvironmentVariable("ROBOTS"), out int rb) ? rb : 2;
+        ulong seed = ulong.TryParse(Environment.GetEnvironmentVariable("SEED"), out ulong sd) ? sd : 8;
+        int days = int.TryParse(Environment.GetEnvironmentVariable("DAYS"), out int dd) ? dd : 6;
+        var s = ShipWorld.Crewed("Didim", seed, 6, robots);
+        s.Run(25);
+        var L = s.Layout; var m = s.Get<Mind>(); var life = s.Get<Life>(); var soc = s.Get<Society>(); var sm = s.Get<ShipMind>();
+        var people = m.Agents.Where(a => a.IsPerson).Select(a => a.Id).ToList();
+        // 늦게 자는 둘 — 지난 항해에서 남은 앙금
+        int owl1 = people[0], owl2 = people[1], N = soc.N;
+        m[owl1].C.Chrono = 3; m[owl2].C.Chrono = 3.5f;
+        soc.Grudge[owl1 * N + owl2] = 0.4f; soc.Grudge[owl2 * N + owl1] = 0.35f;
+        var stove = L.Furniture.First(fu => fu.Type == "Stove");
+        var shelf = L.Furniture.First(fu => fu.Type == "Shelf" && fu.Room >= 0 && L.Rooms[fu.Room].Type == "Workshop");
+        long fireAt = Time.Hours(18) + Time.Minutes(10), crushAt = Time.Hours(24 * 2 + 10) + Time.Minutes(30), end = Time.Hours(24 * days);
+        bool fired = false, crushed = false;
+        var painter = new Painter(L);
+        var page = new System.Text.StringBuilder();
+        long seen = s.Facts.Total, lastShot = long.MinValue / 2;
+        int sayingsSeen = soc.Sayings.Count, k = 0;
+        var meetCauses = new HashSet<int>();
+        bool probe = Environment.GetEnvironmentVariable("PROBE") == "1";
+        var eatMax = new int[24];
+        const int MaxShots = 80;
+        void Frame(int cell, string text)
+        {
+            int x0 = Math.Max(0, L.X(cell) - 14), y0 = Math.Max(0, L.Y(cell) - 9);
+            var img = painter.Frame(s, x0, y0, 29, 19, k);
+            Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
+            string nicks = string.Join(" · ", people.Where(p => soc.NickOf(p) != null).Select(p => $"{m.NameOf(p)} '{soc.NickOf(p)}'"));
+            string state = $"이 배의 관습: {soc.CultureLine(s) ?? "아직 없다"}{(nicks.Length > 0 ? " / 별명: " + nicks : "")}";
+            page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(state)}<br>{System.Net.WebUtility.HtmlEncode(text)}</figcaption></figure>\n");
+            k++; lastShot = s.Tick;
+        }
+        var lines = new List<(int cell, string text)>();
+        while (s.Tick < end && k < MaxShots)
+        {
+            s.Step();
+            if (!fired && s.Tick >= fireAt)
+            {
+                fired = true;
+                int oil = s.Causes.Add(CauseKind.Story, "저녁을 짓던 조리대의 기름에 불이 붙었다", s.Tick, stove.Cells[0]);
+                s.Get<Chemistry>().Ignite(stove.Cells[0], 3e6, oil);
+                var galleyShelf = L.Furniture.FirstOrDefault(fu => fu.Type == "Shelf" && fu.Room == stove.Room);   // 튄 기름이 곁의 선반에도 옮아붙었다
+                if (galleyShelf != null) s.Get<Chemistry>().Ignite(galleyShelf.Cells[0], 3e6, s.Causes.Add(CauseKind.Story, "튄 기름불이 주방 선반에 옮아붙었다", s.Tick, galleyShelf.Cells[0], oil));
+            }
+            if (!crushed && s.Tick >= crushAt)
+            {
+                crushed = true;
+                var who = m.Agents.Where(a => a.IsPerson && a.Id != owl1 && a.Id != owl2 && life[a.C.Body].Alive != 0 && life[a.C.Body].Asleep == 0)
+                    .OrderBy(a => L.Room[a.C.Cell] == shelf.Room ? 0 : 1).ThenBy(a => a.Id).First();
+                int why = s.Causes.Add(CauseKind.Story, $"정비실 선반이 무너졌다 — {Ko.I(m.NameOf(who.Id))} 쏟아진 부품 상자에 깔렸다", s.Tick, who.C.Cell);
+                ref var b = ref life[who.C.Body];
+                b.Blunt = 2.2f; b.HurtCause = why;
+                lines.Add((who.C.Cell, s.Causes.Text(why)));
+            }
+            foreach (var f in s.Facts.Since(seen))
+            {
+                if (f.Kind == FactKind.Meeting && (int)f.Size is (int)CouncilKind.Memorial or (int)CouncilKind.Celebration or (int)CouncilKind.Rule) meetCauses.Add(f.Cause);
+                bool show = f.Kind is FactKind.Culture or FactKind.Ignition or FactKind.Extinguished or FactKind.Died or FactKind.Grieved
+                    || f.Kind == FactKind.Meeting && (int)f.Size is (int)CouncilKind.Memorial or (int)CouncilKind.Celebration or (int)CouncilKind.Rule or -1
+                    || f.Kind == FactKind.Woke && f.Cause != 0 && f.Other >= 0;
+                if (show) lines.Add((f.Cell >= 0 ? f.Cell : stove.Cells[0], s.Causes.Text(f.Cause)));
+            }
+            seen = s.Facts.Total;
+            for (int i = sayingsSeen; i < soc.Sayings.Count; i++)
+                if (meetCauses.Contains(s.Causes[soc.Sayings[i].Line].Parent)) lines.Add((soc.Sayings[i].Cell, s.Causes.Text(soc.Sayings[i].Line)));
+            sayingsSeen = soc.Sayings.Count;
+            if (probe && s.Tick % Time.Minutes(1) == 0)
+            {
+                int mr = m.MessRoom(), eat = m.Agents.Count(a => a.IsPerson && a.C.Goal == GoalKind.Eat && m.RoomOf(a.C.Cell) == mr && a.C.StepIndex < a.Plan.Count && a.Plan[a.C.StepIndex].Kind == StepKind.Use);
+                int hr = (int)Time.HourOfDay(s.Tick);
+                if (eat > eatMax[hr]) eatMax[hr] = eat;
+                if (s.Tick % Time.TicksPerDay == 0) { Console.WriteLine($"    {Time.Clock(s.Tick - 1)} 식당({L.Rooms[mr].Name})에서 함께 먹은 가장 많은 수 (시마다): {string.Join(" ", eatMax.Select((n, h) => n > 0 ? $"{h}시:{n}" : "").Where(x => x.Length > 0))}"); Array.Clear(eatMax); }
+                if (soc.Meeting.Kind != CouncilKind.None && s.Tick % Time.Minutes(3) == 0)
+                    Console.WriteLine($"    {Time.Clock(s.Tick)} 모임({soc.Meeting.Kind} · {L.Rooms[soc.Meeting.Room].Name}): " + string.Join(" · ", m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).Select(a => $"{m.NameOf(a.Id)} {a.C.Goal}@{(m.RoomOf(a.C.Cell) >= 0 ? L.Rooms[m.RoomOf(a.C.Cell)].Name : "-")}{(life[a.C.Body].Asleep != 0 ? "(잠)" : "")}")));
+                if (Time.HourOfDay(s.Tick) is >= 22 or < 3 && s.Tick % Time.Minutes(30) == 0)
+                    Console.WriteLine($"    {Time.Clock(s.Tick)} 밤: " + string.Join(" · ", new[] { owl1, owl2 }.Select(o => $"{m.NameOf(o)} {m[o].C.Goal}@{(m.RoomOf(m[o].C.Cell) >= 0 ? L.Rooms[m.RoomOf(m[o].C.Cell)].Name : "-")}")) + " / 자는 이: " + string.Join(" · ", m.Agents.Where(a => a.IsPerson && life[a.C.Body].Asleep != 0).Select(a => $"{m.NameOf(a.Id)}@{L.Rooms[m.RoomOf(a.C.Cell)].Name}")));
+            }
+            if (lines.Count > 0 && s.Tick - lastShot >= 5 && (lines.Count >= 4 || s.Tick - lastShot >= Time.Minutes(2))) { Frame(lines[0].cell, string.Join(" / ", lines.Select(x => x.text).Distinct().Take(5))); lines.Clear(); }
+        }
+        File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>culture</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:420px}}img{{width:420px;image-rendering:pixelated}}</style>\n{page}");
+        Console.WriteLine($"  culture: {k}장 → {dir} · {Time.Clock(s.Tick)}");
+        Console.WriteLine($"    관습 {soc.Customs} ({(soc.MealCustom >= 0 ? soc.MealCustom + "시" : "없음")}) · 함께 먹은 몫 {soc.CustomMealsShared} · 관습으로 간 번 {m.CustomEats} · 금기 {soc.Taboos}(풀림 {soc.TaboosLifted}) · 침대 {soc.BedTaboos} · 비켜 간 침대 {m.BedsShunned}"
+            + $" · 별명 {soc.Nicknames} · 추모 {soc.Memorials} · 축하 {soc.Celebrations} · 모임 {soc.Gatherings}(못 열림 {soc.GatheringsFailed}) · 규칙 {soc.RulesMade}(부결 {soc.RulesRejected}) · 어김 {soc.RuleBreaks} · 삼킨 말 {soc.QuietKept} · 밤 깸 {soc.NightWakes}");
+        Console.WriteLine($"    이 배의 관습: {soc.CultureLine(s) ?? "없음"} · 별명: {string.Join(" · ", people.Where(p => soc.NickOf(p) != null).Select(p => $"{m.NameOf(p)} '{soc.NickOf(p)}'"))}");
+        foreach (var a in m.Agents.Where(a => a.IsPerson))
+            Console.WriteLine($"    {m.NameOf(a.Id)}: {(life[a.C.Body].Alive != 0 ? "삶" : "죽음")} · 슬픔 {soc.GriefOf(a.Id):0.00} · 기쁨 {a.C.Joy:0.00} · 피로 {a.C.Weary:0.00}");
     }
 
     /// <summary>심정지 장면 그림 밑 글: 그 사람 (뜀 · 잔떨림 · 멎음 · 깨어 있나) · 산소 부족 · 뇌 · 심장 · 누른 분 · 제세동 · 진료 기록 · 주컴퓨터의 마지막 말.</summary>

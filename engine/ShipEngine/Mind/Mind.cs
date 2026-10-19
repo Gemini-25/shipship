@@ -699,7 +699,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w);
+        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w);
     }
 
     public void Load(StateReader r)
@@ -721,6 +721,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r);
+        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r);
     }
 }

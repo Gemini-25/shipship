@@ -18,7 +18,7 @@ public sealed partial class Mind
         return room < 0 || agent < 0 || (long)agent * nr + room >= _dread.Length ? 0 : _dread[agent * nr + room];
     }
 
-    private float DreadAt(Agent a, int cell) => cell < 0 ? 0 : Dread(a.Id, RoomOf(cell));
+    private float DreadAt(Agent a, int cell) => cell < 0 ? 0 : Shun(a.Id, RoomOf(cell));   // 제 꺼림 · 배의 금기 (⑨)
 
     /// <summary>1분마다: 겁 · 아픔이 그 방에 새겨지고 · 흐려지고 · 별일 없이 머물면 풀린다.</summary>
     private void Places(Sim sim)
