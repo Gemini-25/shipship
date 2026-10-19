@@ -38,7 +38,13 @@ public static class ShipWorld
         return s;
     }
 
-    public static Sim Create(string shipKey, ulong seed) => Create(Layout.Ship(shipKey, Tables.Default), seed);
+    /// <summary>설계한 배 (도면 표): 새 배 + 만들 때 남은 작은 흠 (⑫ — 시드에서 · 시험의 글자 도면 배는 흠 없이 깨끗하다).</summary>
+    public static Sim Create(string shipKey, ulong seed)
+    {
+        var s = Create(Layout.Ship(shipKey, Tables.Default), seed);
+        s.Get<Structure>().BuildFlaws(s);
+        return s;
+    }
 
     /// <summary>
     /// 항해에 나선다 (관전 · 재미 측정): 붉은 사막(1.52AU)으로 가는 호만 전이 — minutes 뒤 출발 점화 (주컴퓨터가 방송하고 한다) · 다른 배가 지나간다.
@@ -54,6 +60,7 @@ public static class ShipWorld
         string rn = o.Rt != null ? $" · 항로 {o.Route} '{o.Rt.Name}'" : "";
         int c = s.Causes.Add(CauseKind.Route, $"{Ko.Euro(to.Name)} 가는 항해 ({to.Au:0.##}AU{rn})", s.Tick);
         o.PlanVoyage(s, to.Au, to.Name, minutes, c);
+        s.Find<Life>()?.Boarding(s);   // ⑫ 고향에서 옮은 감기가 잠복한 채 탄 이 (시드에서)
     }
 
     /// <summary>사람 · 로봇 · 드론을 태운 배 (사람은 침대마다 · 로봇은 충전독마다 · 많아야 그 수).</summary>

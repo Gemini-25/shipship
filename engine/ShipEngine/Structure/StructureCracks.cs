@@ -102,7 +102,30 @@ public sealed partial class Structure
         return k / Math.Max(1e-6, Toughness(m, F.Ts[c]));
     }
 
-    /// <summary>금을 심는다 (파편의 흠 · 과부하 · 이야기꾼의 숨은 금 · 부식 구멍) — 이미 더 크면 그대로.</summary>
+    /// <summary>만들 때의 흠: 외판 칸이 흠을 지닐 몫 · 흠 반길이의 가운데 값 (m) — 기능 확인용 첫 값 (맨 끝에 다듬는다).</summary>
+    public const double FlawChance = 0.03, FlawMedian = 0.0008;
+
+    /// <summary>
+    /// ⑫ 자연 사건 — 만들 때의 흠 (설계한 배를 만들 때 한 번 · <see cref="ShipWorld.Create(string, ulong)"/>): 외판 칸마다 검사(비파괴 검사 — 1mm 안팎은 놓친다)로 못 찾은 작은 흠이 남을 수 있다.
+    /// 어느 칸에 얼마나는 시드에서 (로그 정규 · 0.2~4mm — 판 두께의 반을 넘지 않아 새지 않는다). 그 흠은 응력 주기마다 파리스 법칙으로 자란다 (위 <see cref="HalfCycle"/>). 흠을 지닌 칸 수를 돌려준다.
+    /// </summary>
+    public int BuildFlaws(Sim sim)
+    {
+        int cause = 0, n = 0;
+        ulong key = Rng.Key("만들 때의 흠"), size = Rng.Key("흠의 크기");
+        for (int c = 0; c < L.N; c++)
+        {
+            if (!L.Hull[c] || L.Kind[c] != CellKind.Wall || Rng.Unit(sim.Seed, key, c, 0) >= FlawChance) continue;
+            double u1 = Math.Max(1e-12, Rng.Unit(sim.Seed, size, c, 1)), u2 = Rng.Unit(sim.Seed, size, c, 2);
+            double z = Math.Sqrt(-2 * Math.Log(u1)) * Math.Cos(2 * Math.PI * u2);
+            if (cause == 0) cause = sim.Causes.Add(CauseKind.Wear, "배를 만들 때 외판에 검사로 못 찾는 작은 흠이 남았다", sim.Tick);
+            SeedCrack(c, Math.Clamp(FlawMedian * Math.Exp(0.8 * z), 0.0002, 0.004), cause);
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>금을 심는다 (파편의 흠 · 과부하 · 만들 때의 흠 · 부식 구멍) — 이미 더 크면 그대로.</summary>
     public void SeedCrack(int c, double a, int cause) => SeedCrack(null, c, a, cause);
 
     /// <summary>금을 심는다 — 세계를 주면 판을 뚫은 금은 곧장 새기 시작한다 ('금 사이로 공기가 샌다').</summary>

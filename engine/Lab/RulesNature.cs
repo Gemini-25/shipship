@@ -82,5 +82,105 @@ public static partial class Program
                 seeing.beforeStorm == 1 && blind.beforeStorm == 0 && blind.after == 1 && blind.flareStarted,
                 $"센서 돎: 폭풍 전 대피 {seeing.beforeStorm} / 고장: 폭풍 전 {blind.beforeStorm} · 폭풍 뒤 {blind.after}");
         }
+
+        NatureInsideRules();
+    }
+
+    private const string CrateShip = @"
+############
+#e...F..L..#
+#..........#
+############";
+
+    /// <summary>⑫ 자연 사건 (나) — 배 안의 일은 세상 법칙에서: 만들 때의 흠 · 차단기 접점 · 식량 상자의 감기 · 출항 때 잠복.</summary>
+    private static void NatureInsideRules()
+    {
+        Console.WriteLine("\n[⑫ 자연 사건 (나) — 배 안]");
+
+        // ── 만들 때의 흠: 설계한 배의 외판 몇 칸에 검사로 못 찾는 작은 흠 (0.2~4mm — 새지 않는다 · 같은 시드는 같은 흠) · 응력 주기마다 파리스 법칙으로 자란다 ──
+        {
+            var a = ShipWorld.Create("hwasal", 31); var b = ShipWorld.Create("hwasal", 31); var other = ShipWorld.Create("hwasal", 32);
+            var st = a.Get<Structure>();
+            var flaws = Enumerable.Range(0, a.Layout.N).Where(c => st.Crack[c] > 0).ToList();
+            bool same = flaws.SequenceEqual(Enumerable.Range(0, a.Layout.N).Where(c => b.Get<Structure>().Crack[c] > 0)) && flaws.All(c => st.Crack[c] == b.Get<Structure>().Crack[c]);
+            bool differs = !flaws.SequenceEqual(Enumerable.Range(0, a.Layout.N).Where(c => other.Get<Structure>().Crack[c] > 0));
+            bool small = flaws.All(c => a.Layout.Hull[c] && st.Crack[c] <= 0.004f && a.Get<Field>().Hole[c] <= 0);
+            int big = flaws.OrderByDescending(c => st.Crack[c]).FirstOrDefault(-1);
+            float a0 = big >= 0 ? st.Crack[big] : 0;
+            if (big >= 0) st.LoadCycle(a, big, 200, 3000);
+            float a1 = big >= 0 ? st.Crack[big] : 0;
+            string why = big >= 0 ? a.Causes.Story(st.CrackCause[big]) : "";
+            Check("만들 때의 흠: 설계한 배의 외판 몇 칸에 검사로 못 찾는 작은 흠 (새지 않는다 · 같은 시드는 같은 흠 · 다른 시드는 다른 흠) · 응력 주기마다 자란다",
+                flaws.Count > 0 && same && differs && small && a1 > a0 && why.Contains("흠"),
+                $"흠 {flaws.Count}칸 · 같은 시드 같음 {same} · 다른 시드 다름 {differs} · 가장 큰 흠 {a0 * 1000:0.0}mm → 200MPa 3000번 뒤 {a1 * 1000:0.0}mm · \"{why}\"");
+        }
+
+        // ── 차단기 접점: 합선 전류를 끊는 아크가 접점을 녹이면(보이지 않는다) 다시 올리는 순간 눌어붙어 다음 합선에 떨어지지 않는다 — 아크가 계속된다 ──
+        {
+            var lay = Worlds.Ascii(NetShip, NetLegend);
+            int left = lay.Room[Worlds.At(lay, 4, 2)];
+            (bool tripped, bool weld, bool stuck, bool arced, string why) Run(double chance)
+            {
+                var s = Worlds.Full(lay, 41);
+                var net = s.Get<Network>(); var f = s.Get<Field>();
+                net.WeldChance = chance;
+                s.Run(3);
+                int fd = net.RoomFeeder[left], wet = net.Feeders[fd].Path[1];
+                f.AddStore(wet, f.T.sWater, 60);
+                s.Run(10);
+                bool tripped = net.Breaker[fd] == 0, weld = net.BreakerWeld[fd] != 0;
+                f.TakeStore(wet, f.T.sWater, f.Stored(f.T.sWater, wet));
+                s.Run(3);
+                net.ResetBreaker(fd);
+                bool stuck = net.BreakerStuck[fd] != 0;
+                f.AddStore(wet, f.T.sWater, 60);
+                bool arced = false;
+                for (int k = 0; k < 6; k++) { s.Step(); arced |= net.IsStuckFault(fd); }
+                return (tripped, weld, stuck, arced, weld ? s.Causes.Story(net.BreakerWeld[fd]) : "");
+            }
+            var okT = Task.Run(() => Run(0)); var worn = Run(1); var ok = okT.Result;
+            Check("차단기 접점: 합선 전류를 끊다 접점이 녹으면 다시 올리는 순간 눌어붙는다 — 다음 합선에 떨어지지 않고 아크가 계속된다 · 멀쩡한 접점은 다시 떨어진다",
+                worn.tripped && worn.weld && worn.stuck && worn.arced && ok.tripped && !ok.weld && !ok.stuck && !ok.arced && worn.why.Contains("접점"),
+                $"상한 접점: 처음 떨어짐 {worn.tripped} · 상함 {worn.weld} · 올리자 눌어붙음 {worn.stuck} · 다음 합선 아크 {worn.arced} / 멀쩡: 눌어붙음 {ok.stuck} · 아크 {ok.arced} · \"{worn.why}\"");
+        }
+
+        // ── 식량 상자의 감기: 사람이 식량 보관함에서 상자를 꺼내 열면 — 그 상자에 바이러스가 묻어 있었으면(시드에서) 연 이가 잠복에 든다 ──
+        {
+            var lay = Worlds.Ascii(CrateShip, new Dictionary<char, string> { ['e'] = "Bed", ['F'] = "Fridge", ['L'] = "FoodLocker" });
+            (bool ill, long opened, string why) Run(double chance)
+            {
+                var s = Worlds.Full(lay, 42);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>();
+                life.CrateColdChance = chance;
+                int p = m.AddPerson(s, Worlds.At(lay, 3, 2));
+                s.Run(5);
+                var fridge = lay.Furniture.First(fu => fu.Type == "Fridge"); var locker = lay.Furniture.First(fu => fu.Type == "FoodLocker");
+                foreach (int c in fridge.Cells) f.TakeStore(c, s.Tables.sFood, f.Stored(s.Tables.sFood, c));
+                m[p].C.Sleepy = 0;
+                m.AssignJob(p, GoalKind.Restock, fridge.Id, locker.Id, s.Tick + Time.Hours(2));   // 일감판처럼 나르기를 맡긴다 (사람은 일하는 시간에만 받는다 — 시험은 자정)
+                for (int k = 0; k < Time.Hours(1) && life.CratesOpened == 0; k++) s.Step();
+                ref var body = ref life[m[p].C.Body];
+                return (body.Ill != 0, life.CratesOpened, body.Ill != 0 ? s.Causes.Story(body.IllCause) : "");
+            }
+            var cleanT = Task.Run(() => Run(0)); var dirty = Run(1); var clean = cleanT.Result;
+            Check("식량 상자의 감기: 사람이 식량 상자를 꺼내 열면 — 묻어 있던 바이러스가 연 이에게 옮아 잠복에 든다 (원인: 그 상자) · 깨끗한 상자는 아무 일 없다",
+                dirty.opened > 0 && dirty.ill && dirty.why.Contains("식량 상자") && clean.opened > 0 && !clean.ill,
+                $"묻은 상자: 연 상자 {dirty.opened} · 잠복 {dirty.ill} · \"{dirty.why}\" / 깨끗한 상자: 연 상자 {clean.opened} · 잠복 {clean.ill}");
+        }
+
+        // ── 출항 때 잠복: 고향에서 옮은 감기를 잠복한 채 탄 이 (시드에서) — 항해에 나설 때 한 번 ──
+        {
+            var s = ShipWorld.Crewed("hwasal", 43, 3);
+            var life = s.Get<Life>();
+            life.BoardColdChance = 1;
+            ShipWorld.Embark(s);
+            var ill = Enumerable.Range(0, life.Bodies.Count).Where(i => life[i].Ill == 1).ToList();
+            string why = ill.Count > 0 ? s.Causes.Story(life[ill[0]].IllCause) : "";
+            var s2 = ShipWorld.Crewed("hwasal", 43, 3); s2.Get<Life>().BoardColdChance = 0; ShipWorld.Embark(s2);
+            int none = Enumerable.Range(0, s2.Get<Life>().Bodies.Count).Count(i => s2.Get<Life>()[i].Ill != 0);
+            Check("출항 때 잠복: 항해에 나설 때 고향에서 옮은 감기를 잠복한 채 탄 이가 있을 수 있다 (시드에서 · 한 사람)",
+                ill.Count == 1 && why.Contains("잠복") && none == 0,
+                $"잠복한 이 {ill.Count} · \"{why}\" / 몫 0: {none}");
+        }
     }
 }

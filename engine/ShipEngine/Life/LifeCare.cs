@@ -47,7 +47,7 @@ public sealed partial class Life
     /// <summary>진통제가 드는 몸 (큰 아픔 · 진통제가 거의 빠졌다 — 금단도).</summary>
     public static bool NeedsPainkiller(in Body b) => b.Alive != 0 && FeltPain(b) > 0.6 && b.Opioid < 2;
 
-    /// <summary>옮는 병을 앓기 시작한다 (이야기꾼의 씨앗 · 시험) — 잠복부터.</summary>
+    /// <summary>옮는 병을 앓기 시작한다 (식량 상자 · 출항 때 잠복 · 넘어온 이 · 시험) — 잠복부터.</summary>
     public void CatchCold(Sim sim, int body, int cause)
     {
         if (body < 0 || body >= Bodies.Count) return;

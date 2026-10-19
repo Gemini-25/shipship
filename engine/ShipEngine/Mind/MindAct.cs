@@ -549,6 +549,7 @@ public sealed partial class Mind
         foreach (int x in fu.Cells) { got += F.TakeStore(x, T.sFood, RationMol - got); if (got >= RationMol) break; }
         if (got <= 1e-6) { JobDone(a, t); return; }
         if (st.Target < LockerLogged.Length) LockerLogged[st.Target] += got;   // 나르기는 기록이 남는다 (주컴퓨터의 무게 센서가 견준다)
+        if (a.IsPerson) _life?.OpenedCrate(sim, c.Body, c.Cell, a.Id, NameOf(a.Id));   // ⑦ 상자에 묻어 온 것은 세상이 계산한다 (⑫ 자연 사건)
         if (c.Holding != 255) DropHeld(a);
         c.Holding = iRation; c.HoldCharge = (float)got;
         Next(a, t);
