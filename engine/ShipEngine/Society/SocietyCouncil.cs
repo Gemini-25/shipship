@@ -60,11 +60,9 @@ public sealed partial class Society
         if (Meeting.Kind != CouncilKind.None) { MeetingStep(sim); return; }
         if (sim.Tick % Time.TicksPerHour != 0) return;
         HungerWatch(sim);
-        if (sim.Tick - _lastCrisis < Time.Minutes(30)) return;   // 위기 뒤 30분은 미룬다
-        double hour = Time.HourOfDay(sim.Tick);
-        if (hour < 8 || hour > 21) return;
-        if (hour <= 20 && TryMemorial(sim) || TryCelebrate(sim, hour)) return;   // ⑨ 문화: 추모 · 축하 (회의와 따로 — 하루 한 번 제한이 없다 · 축하는 저녁)
-        if (sim.Tick - _lastCouncil < Time.Hours(20) || hour > 20) return;   // 회의는 하루 한 번까지
+        // 언제 모일지는 부르는 사람이 정한다 (시계 규칙이 아니다 — Open이 그 사람의 판단 NotYet을 묻는다: 깨어 있나 · 제가 아직 수습 중인가 · 겁이 가셨나 · 아는 위험이 남았나 · 동료가 아직 수습 중인가 · 다들 자나)
+        if (TryMemorial(sim) || TryCelebrate(sim)) return;   // ⑨ 문화: 추모 · 축하 (회의와 따로 — 하루 한 번 제한이 없다)
+        if (sim.Tick - _lastCouncil < Time.Hours(20)) return;   // 회의는 하루 한 번까지
         if (People().Count < 3) return;
         if (!TryTrial(sim) && !TryRation(sim) && !TryManual(sim) && !TryRule(sim)) TryElection(sim);
     }
@@ -103,9 +101,10 @@ public sealed partial class Society
         foreach (var m in Memories)
             if (m.Owner == accuser && m.About == best && m.Topic is Topic.Blame or Topic.Fight or Topic.Gossip or Topic.Hurt or Topic.Death && m.Tick > rt) { rt = m.Tick; root = m.Cause; }
         int caller = Rep >= 0 && Alive(Rep) && Rep != best ? Rep : accuser;
+        if (!Open(sim, CouncilKind.Trial, best, caller, accuser,
+            $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — {Ko.I(_mind.NameOf(accuser))} {Ko.Eul(_mind.NameOf(best))} 고발했다 (모두의 원망 {bs:0.0})", root)) return false;
         _triedAt[best] = sim.Tick;
-        return Open(sim, CouncilKind.Trial, best, caller, accuser,
-            $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — {Ko.I(_mind.NameOf(accuser))} {Ko.Eul(_mind.NameOf(best))} 고발했다 (모두의 원망 {bs:0.0})", root);
+        return true;
     }
 
     private bool TryRation(Sim sim)
@@ -115,8 +114,9 @@ public sealed partial class Society
         var people = People();
         int hungriest = people.OrderByDescending(i => C(i).Hunger).ThenBy(i => i).First();
         int caller = Rep >= 0 && Alive(Rep) ? Rep : hungriest;
+        if (!Open(sim, CouncilKind.Ration, -1, caller, -1, $"{Ko.I(_mind.NameOf(caller))} 회의를 열었다 — 배고픈 지 이틀째, 배급을 이대로 따를 수 없다", _mind.RationCause)) return false;
         _hungrySince = NoHunger;
-        return Open(sim, CouncilKind.Ration, -1, caller, -1, $"{Ko.I(_mind.NameOf(caller))} 회의를 열었다 — 배고픈 지 이틀째, 배급을 이대로 따를 수 없다", _mind.RationCause);
+        return true;
     }
 
     private bool TryElection(Sim sim, bool force = false)
@@ -129,13 +129,56 @@ public sealed partial class Society
         return Open(sim, CouncilKind.Election, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — {why}", 0);
     }
 
+    private static bool CrisisWork(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Evacuate or GoalKind.Cpr or GoalKind.Treat
+        or GoalKind.Surgery or GoalKind.Brace or GoalKind.GetSuit or GoalKind.Shelter or GoalKind.Flee or GoalKind.Panic or GoalKind.Rewire or GoalKind.Improvise;
+
+    private static string DangerName(BeliefKind k) => k switch
+    {
+        BeliefKind.Fire => "불", BeliefKind.Smoke => "연기", BeliefKind.Breach => "구멍", BeliefKind.Vacuum => "공기가 빠진 방", BeliefKind.Injured => "쓰러진 사람", _ => "이상한 공기",
+    };
+
+    /// <summary>
+    /// 그 사람이 보기에 아직 모일 때가 아닌가 (까닭 — 아니면 null). 엔진이 정하지 않는다 — 부르는 사람의 판단이다:
+    /// 자고 있다 · 제가 아직 위기의 일을 한다 · 겁이 가시지 않았다 · 제가 아는 위험(두 시간 안에 확인한 불 · 연기 · 구멍 · 공기가 빠진 방 · 쓰러진 사람 · 이상한 공기)이 남았다 ·
+    /// 동료(사람 · 로봇)가 아직 불 끄기 · 구하기 · 막기 · 돌보기 같은 수습을 한다 (배 안의 일은 외침 · 방송으로 다 안다) · 다들 자고 있다 (깬 이가 반이 안 된다).
+    /// 모임 중에는 (meeting) 자는 이를 세지 않는다 — 부른 이가 일이 난 것을 알면 모임을 미룬다.
+    /// </summary>
+    public string? NotYet(Sim sim, int who, bool meeting = false)
+    {
+        if (!Alive(who)) return "숨졌다";
+        if (!Awake(who)) return "자고 있다";
+        ref var c = ref C(who);
+        if (CrisisWork(c.Goal)) return $"제가 아직 {Mind.GoalName(c.Goal)}";
+        if (c.Fear > 0.3f) return "아직 겁이 가시지 않았다";
+        foreach (var b in _mind!.Agents[who].Beliefs)
+        {
+            if (b.Conf < 0.3f || sim.Tick - b.Seen > Time.Hours(2)) continue;
+            if (b.Kind is BeliefKind.Fire or BeliefKind.Smoke or BeliefKind.Vacuum or BeliefKind.Injured
+                || b.Kind == BeliefKind.Breach && b.Cell >= 0 && L.Kind[b.Cell] != CellKind.Door || b.Kind == BeliefKind.BadAir && b.Conf >= 0.5f)
+                return $"아직 {Ko.I(DangerName(b.Kind))} 있다고 여긴다";
+        }
+        foreach (var a in _mind.Agents)
+            if (a.Id != who && a.C.Up != 0 && CrisisWork(a.C.Goal) && (!a.IsPerson || Alive(a.Id))) return $"{Ko.I(_mind.NameOf(a.Id))} 아직 {Mind.GoalName(a.C.Goal)}";
+        if (!meeting)
+        {
+            int alive = 0, awake = 0;
+            for (int i = 0; i < N; i++) if (Alive(i)) { alive++; if (Awake(i)) awake++; }
+            if (awake * 2 < alive || awake < 2) return "다들 자고 있다";
+        }
+        return null;
+    }
+
     private static bool IsGathering(CouncilKind k) => k is CouncilKind.Memorial or CouncilKind.Celebration;
     private static string MeetName(CouncilKind k) => k == CouncilKind.Memorial ? "추모 모임" : k == CouncilKind.Celebration ? "축하 자리" : "회의";
+
+    /// <summary>방금 부르지 않은 까닭 (부르려던 이 · 까닭) — 추모는 이것을 원인 마디로 한 번 남긴다.</summary>
+    private (int who, string why) _notYet;
 
     private bool Open(Sim sim, CouncilKind kind, int subject, int caller, int accuser, string text, int parent, int arg = 0)
     {
         int room = _mind!.MessRoom();
         if (room < 0) return false;
+        if (NotYet(sim, caller) is string notYet) { _notYet = (caller, notYet); return false; }   // 부르는 사람이 아직 때가 아니라고 여긴다
         int cell = RoomMiddle(room);
         int cause = sim.Causes.Add(CauseKind.Society, text, sim.Tick, C(caller).Cell, parent, 0, caller);
         var who = new byte[N];
@@ -178,7 +221,13 @@ public sealed partial class Society
     private void MeetingStep(Sim sim)
     {
         var m = Meeting;
-        if (_lastCrisis > m.Called) { Close(sim, -2, $"{Ko.I(MeetName(m.Kind))} 흩어졌다 — 배에 일이 났다"); return; }
+        // 일이 나면 부른 이가 보고 미룬다 (엔진이 흩지 않는다 — 부른 이가 일을 알아야 한다 · 부른 이가 자리를 떴으면 남은 이 가운데 그 일을 아는 이가)
+        if (_lastCrisis > m.Called)
+        {
+            int judge = Alive(m.Caller) ? m.Caller : -1;
+            string? why = judge >= 0 ? NotYet(sim, judge, meeting: true) : "부른 이가 없다";
+            if (why != null) { Close(sim, -2, $"{Ko.I(judge >= 0 ? _mind!.NameOf(judge) : "모인 이들")} {Ko.Eul(MeetName(m.Kind))} 미뤘다 — {why}"); return; }
+        }
         if (sim.Tick < m.OpenAt) return;
         if (m.Phase == 0)
         {

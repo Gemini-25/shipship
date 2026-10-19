@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>⑨ 문화의 일 (사실 '관습'의 Size).</summary>
-public enum CultureEvent : byte { None, Custom, CustomLost, Taboo, TabooLifted, BedTaboo, Nickname, Memorial, Celebration, Rule, RuleRejected, RuleBroken }
+public enum CultureEvent : byte { None, Custom, CustomLost, Taboo, TabooLifted, BedTaboo, Nickname, Memorial, Celebration, Rule, RuleRejected, RuleBroken, MemorialDeferred }
 
 /// <summary>별명 — 기리는 넷 · 놀리는 하나.</summary>
 public enum Nickname : byte { None, Rescuer, FireChief, Patcher, Handy, Forgetful }
@@ -24,7 +24,8 @@ public sealed partial class Society
     public int MealCustom = -1;
     /// <summary>배의 규칙: 조용한 밤 · 조리대.</summary>
     public bool QuietRule, StoveRule;
-    public long Customs, CustomsLost, CustomMealsShared, Taboos, TaboosLifted, BedTaboos, Nicknames, Memorials, Celebrations, RulesMade, RulesRejected, RuleBreaks, QuietKept, Gatherings, GatheringsFailed;
+    public long Customs, CustomsLost, CustomMealsShared, Taboos, TaboosLifted, BedTaboos, Nicknames, Memorials, Celebrations, RulesMade, RulesRejected, RuleBreaks, QuietKept, Gatherings, GatheringsFailed, MemorialsDeferred;
+    private readonly HashSet<int> _mournDeferred = new();   // 수습 때문에 추모를 미룬다고 이미 남긴 숨진 이
     /// <summary>사람마다 별명 · 처음 부른 이.</summary>
     public byte[] Nick = Array.Empty<byte>();
     public int[] NickBy = Array.Empty<int>();
@@ -164,12 +165,43 @@ public sealed partial class Society
     private void Deed(Sim sim, int a, Nickname kind, int cause, int cell)
     {
         int k = a * 6 + (int)kind;
-        _deeds[k]++; _deedCause[k] = cause;
-        if (Nick[a] != 0 || _deeds[k] < DeedsFor[(int)kind] || !Alive(a)) return;
-        // 가장 외향인 동료가 그렇게 부르기 시작한다
-        int by = -1; float be = -1;
-        foreach (int j in People()) if (j != a && C(j).Extra > be) { be = C(j).Extra; by = j; }
-        if (by < 0) return;
+        _deeds[k]++; _deedCause[k] = cause;   // 별명은 여기서 붙지 않는다 — 그 일을 아는 동료가 이야기하다 부르기 시작한다 (NickInTalk)
+    }
+
+    /// <summary>그 사람이 x의 그 일을 아나: 함께 겪었거나 들어서 기억한다 (x에 대한 기억) · 함께 지내 잘 안다 (아는 정도 0.3 넘게) ·
+    /// 고친 일 · 켜 둔 조리대는 배 사람이 다 안다 (일감판 · 주컴퓨터가 끈 조리대).</summary>
+    private bool KnowsDeeds(int by, int x, Nickname kind)
+    {
+        if (kind is Nickname.Handy or Nickname.Forgetful || KnownOf(by, x) > 0.3f) return true;
+        foreach (var m in Memories) if (m.Owner == by && m.About == x && m.Topic is Topic.Rescue or Topic.Fire or Topic.Breach) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 이야기를 나눈 둘 — 한쪽이 별명이 붙을 만큼 일을 쌓았고 · 다른 쪽이 그 일을 알면 그렇게 부르기 시작한다 (말한 이의 판단):
+    /// 기리는 별명은 그를 아끼거나 (정 0.2 넘게) 외향인 이 (0.5 넘게)가 · 놀리는 별명은 덜 다정한 이 (친화 0.6 아래)가 꺼낸다.
+    /// </summary>
+    private void NickInTalk(Sim sim, int i, int j)
+    {
+        CultureArrays();
+        foreach (var (x, by) in new[] { (i, j), (j, i) })
+        {
+            if (Nick[x] != 0 || !Alive(x) || !Awake(by)) continue;
+            for (int kind = 1; kind <= 5; kind++)
+            {
+                if (_deeds[x * 6 + kind] < DeedsFor[kind] || !KnowsDeeds(by, x, (Nickname)kind)) continue;
+                ref var cb = ref C(by);
+                bool tease = kind == (int)Nickname.Forgetful;
+                if (tease ? cb.Agree >= 0.6f : BondOf(by, x) <= 0.2f && cb.Extra <= 0.5f) continue;
+                Coin(sim, x, by, (Nickname)kind);
+                return;
+            }
+        }
+    }
+
+    private void Coin(Sim sim, int a, int by, Nickname kind)
+    {
+        int k = a * 6 + (int)kind;
         Nick[a] = (byte)kind; NickBy[a] = by; Nicknames++;
         string nick = NickText(kind);
         string why = kind switch
@@ -177,7 +209,7 @@ public sealed partial class Society
             Nickname.Rescuer => $"사람을 {_deeds[k]}번 구해 냈다", Nickname.FireChief => $"불을 {_deeds[k]}번 껐다", Nickname.Patcher => $"구멍을 {_deeds[k]}번 막았다",
             Nickname.Handy => $"고장 난 것을 {_deeds[k]}번 고쳤다", _ => $"조리대를 {_deeds[k]}번 켜 둔 채 떠났다",
         };
-        int c = Culture(sim, CultureEvent.Nickname, $"{Ko.I(_mind!.NameOf(by))} {Ko.Eul(_mind.NameOf(a))} '{nick}'{(Ko.HasFinal(nick) ? "이라" : "라")} 부르기 시작했다 — {why}", C(a).Cell, cause, a, (int)kind);
+        int c = Culture(sim, CultureEvent.Nickname, $"{Ko.I(_mind!.NameOf(by))} {Ko.Eul(_mind.NameOf(a))} '{nick}'{(Ko.HasFinal(nick) ? "이라" : "라")} 부르기 시작했다 — {why}", C(a).Cell, _deedCause[k], a, (int)kind);
         ref var ca = ref C(a);
         if (kind == Nickname.Forgetful)
         {
@@ -290,33 +322,50 @@ public sealed partial class Society
 
     // ───────────────────────── 추모 · 축하 (모임) ─────────────────────────
 
-    /// <summary>숨진 지 여섯 시간이 지난 이를 기린다 — 그와 가장 가까웠던 이가 (없으면 대표 · 가장 외향인 이) 식당으로 부른다. 사흘이 지나면 그만둔다.</summary>
+    /// <summary>
+    /// 숨진 이를 기린다 — 부르는 사람이 정한다: 깨어 있는 이 가운데 그와 가장 가까웠던 이 (정 0.2 넘게 — 없으면 대표 · 가장 외향인 이)가
+    /// 하루는 지나야 한다고 여기고 (여섯 시간) · 제 판단으로 아직 때가 아니면 (수습 중 · 아는 위험 · 겁 · 다들 잔다) 미룬다 —
+    /// 수습 때문에 미룬 것은 한 번 '추모를 미뤘다'로 남긴다. 사흘이 지나면 그만둔다.
+    /// </summary>
     private bool TryMemorial(Sim sim)
     {
         for (int k = 0; k < _mourn.Count; k++)
         {
             var (dead, at, cause) = _mourn[k];
+            if (sim.Tick - at > Time.Days(3)) { _mourn.RemoveAt(k); _mournDeferred.Remove(dead); k--; continue; }
             if (sim.Tick - at < Time.Hours(MournAfterHours) && !_cultureNow) continue;
-            _mourn.RemoveAt(k); k--;
-            if (sim.Tick - at > Time.Days(3)) continue;
-            var people = People();
+            var people = People().Where(Awake).ToList();
             if (people.Count < 2) continue;
             int caller = -1; float bb = 0.2f;
             foreach (int j in people) if (BondOf(j, dead) > bb) { bb = BondOf(j, dead); caller = j; }
-            if (caller < 0) caller = Rep >= 0 && Alive(Rep) ? Rep : people.OrderByDescending(j => C(j).Extra).ThenBy(j => j).First();
-            if (Open(sim, CouncilKind.Memorial, dead, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 사람들을 식당으로 불렀다 — {Ko.Eul(_mind.NameOf(dead))} 기리자", cause)) return true;
+            if (caller < 0) caller = Rep >= 0 && people.Contains(Rep) ? Rep : people.OrderByDescending(j => C(j).Extra).ThenBy(j => j).First();
+            _notYet = default;
+            if (Open(sim, CouncilKind.Memorial, dead, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 사람들을 식당으로 불렀다 — {Ko.Eul(_mind.NameOf(dead))} 기리자", cause))
+            {
+                _mourn.RemoveAt(k); _mournDeferred.Remove(dead);
+                return true;
+            }
+            if (_notYet.why != null && !_notYet.why.Contains("자고") && _mournDeferred.Add(dead))
+            {
+                MemorialsDeferred++;
+                Culture(sim, CultureEvent.MemorialDeferred, $"{Ko.I(_mind!.NameOf(caller))} {_mind.NameOf(dead)}의 추모를 미뤘다 — {_notYet.why}", C(caller).Cell, cause, caller, dead);
+            }
         }
         return false;
     }
 
-    /// <summary>위기를 넘기고 여섯 시간 — 모두 살아 있으면 (반가운 소식이면 바로) 저녁에 가장 외향인 이가 모은다. 하루 한 번 · 이틀이 지나면 그만둔다.</summary>
-    private bool TryCelebrate(Sim sim, double hour)
+    /// <summary>
+    /// 위기를 넘기고 (여섯 시간 — 모두 무사한지 보고) · 반가운 소식이면 바로 — 가장 외향인 깬 이가 정한다:
+    /// 제 판단으로 아직 때가 아니거나 (수습 · 위험 · 겁 · 다들 잔다) · 깬 이의 반 넘게 아직 일하는 중이면 기다린다. 하루 한 번 · 이틀이 지나면 그만둔다.
+    /// </summary>
+    private bool TryCelebrate(Sim sim)
     {
         if (_feastFrom < 0 || _feastWeight < 2) return false;
         if (sim.Tick - _feastFrom > Time.Hours(48)) { _feastFrom = -1; return false; }
-        if (!_cultureNow && (_feastNews == 0 && sim.Tick - _lastCrisis < Time.Hours(FeastAfterHours) || hour < 17 || hour > 21 || sim.Tick - _feastLast < Time.Hours(20))) return false;
-        var people = People();
+        if (!_cultureNow && (_feastNews == 0 && sim.Tick - _lastCrisis < Time.Hours(FeastAfterHours) || sim.Tick - _feastLast < Time.Hours(20))) return false;
+        var people = People().Where(Awake).ToList();
         if (people.Count < 2) return false;
+        if (people.Count(j => C(j).Goal == GoalKind.Work) * 2 > people.Count) return false;   // 아직 다들 일한다 — 일을 마친 저녁 · 쉬는 때에
         int caller = people.OrderByDescending(j => C(j).Extra).ThenBy(j => j).First();
         string why = _feastNews != 0 ? "반가운 소식이다 — 한잔하자" : "모두 무사했다 — 한잔하자";
         int hero = _feastHero;
@@ -329,10 +378,11 @@ public sealed partial class Society
     {
         string x = _mind!.NameOf(dead);
         if (DebtOf(a, dead) > 0.2f) return $"{Ko.I(x)} 나를 살렸다 — 갚을 길이 없다";
-        int k = (int)(Rng.Unit(sim.Seed, Rng.Key("추모"), Meeting.Cause, dead) * 3) + _spoke;   // 앞사람과 다른 말 (한 모임에서 차례로 돈다)
+        int k = (int)(Rng.Unit(sim.Seed, Rng.Key("추모"), Meeting.Cause, dead) * 5) + _spoke;   // 앞사람과 다른 말 (한 모임에서 차례로 돈다)
         if (GrudgeOf(a, dead) > GrudgeAt) return "서운한 것도 있었지만 — 이제 다 내려놓는다";
         if (BondOf(a, dead) > FriendAt)
-            return (k % 3) switch { 0 => $"{Ko.Eun(x)} 늘 먼저 웃던 사람이었다", 1 => "같이 늦게까지 이야기하던 밤이 생각난다", _ => "아직도 식당에서 그 목소리가 들리는 것 같다" };
+            return (k % 5) switch { 0 => $"{Ko.Eun(x)} 늘 먼저 웃던 사람이었다", 1 => "같이 늦게까지 이야기하던 밤이 생각난다", 2 => "아직도 식당에서 그 목소리가 들리는 것 같다",
+                3 => $"{x}에게 못 한 말이 많다", _ => "그 자리가 빈 식탁이 아직 낯설다" };
         string? nick = NickOf(dead);
         if (nick != null && k % 2 == 0) return $"우리 {Ko.Eul(nick)} 잊지 않겠다";
         return (k % 3) switch { 0 => "좋은 동료였다", 1 => $"{x}의 몫까지 해내겠다", _ => "잊지 않겠다" };
@@ -394,15 +444,15 @@ public sealed partial class Society
         if (!QuietRule && _wakeLog.Count >= 3 && sim.Tick - _askQuiet > Time.Days(RuleWindowDays))
         {
             int caller = people.OrderByDescending(j => _wakeLog.Count(x => x.woken == j)).ThenBy(j => j).First();
-            _askQuiet = sim.Tick;
-            return Open(sim, CouncilKind.Rule, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 밤마다 말소리에 잠을 깬다, 규칙을 정하자", _wakeLog[^1].cause, 1);
+            if (Open(sim, CouncilKind.Rule, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 밤마다 말소리에 잠을 깬다, 규칙을 정하자", _wakeLog[^1].cause, 1)) { _askQuiet = sim.Tick; return true; }
         }
         if (!StoveRule && _stoveLog.Count >= 2 && sim.Tick - _askStove > Time.Days(RuleWindowDays))
         {
             bool Forgot(int j) => _stoveLog.Exists(x => x.who == j);
             int caller = Rep >= 0 && Alive(Rep) && !Forgot(Rep) ? Rep : people.OrderBy(j => Forgot(j) ? 1 : 0).ThenByDescending(j => C(j).Consc).ThenBy(j => j).First();   // 켜 둔 적 없는 성실한 이가 꺼낸다
+            if (!Open(sim, CouncilKind.Rule, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 조리대를 켜 둔 채 떠나는 일이 잦다, 규칙을 정하자", _stoveLog[^1].cause, 2)) return false;
             _askStove = sim.Tick;
-            return Open(sim, CouncilKind.Rule, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 조리대를 켜 둔 채 떠나는 일이 잦다, 규칙을 정하자", _stoveLog[^1].cause, 2);
+            return true;
         }
         return false;
     }
@@ -462,12 +512,12 @@ public sealed partial class Society
     }
 
     private bool _cultureNow;
-    /// <summary>시험용: 지금 추모 · 축하를 찾는다 (여섯 시간 · 저녁 · 하루 한 번을 기다리지 않는다).</summary>
+    /// <summary>시험용: 지금 추모 · 축하를 찾는다 (여섯 시간 · 하루 한 번을 기다리지 않는다 — 부르는 사람의 판단은 그대로 거친다).</summary>
     public void CultureNow(Sim sim)
     {
         if (Meeting.Kind != CouncilKind.None) return;
         _cultureNow = true;
-        try { if (!TryMemorial(sim)) TryCelebrate(sim, Time.HourOfDay(sim.Tick)); }
+        try { if (!TryMemorial(sim)) TryCelebrate(sim); }
         finally { _cultureNow = false; }
     }
     /// <summary>시험용: 지난 며칠 그 시각에 함께 먹었다고 친다 (오늘은 빼고).</summary>
@@ -483,7 +533,7 @@ public sealed partial class Society
     {
         w.I32(MealCustom); w.Byte((byte)(QuietRule ? 1 : 0)); w.Byte((byte)(StoveRule ? 1 : 0));
         w.I64(Customs); w.I64(CustomsLost); w.I64(CustomMealsShared); w.I64(Taboos); w.I64(TaboosLifted); w.I64(BedTaboos); w.I64(Nicknames); w.I64(Memorials); w.I64(Celebrations);
-        w.I64(RulesMade); w.I64(RulesRejected); w.I64(RuleBreaks); w.I64(QuietKept); w.I64(Gatherings); w.I64(GatheringsFailed);
+        w.I64(RulesMade); w.I64(RulesRejected); w.I64(RuleBreaks); w.I64(QuietKept); w.I64(Gatherings); w.I64(GatheringsFailed); w.I64(MemorialsDeferred); w.Arr(_mournDeferred.OrderBy(x => x).ToArray());
         w.Arr(Nick); w.Arr(NickBy); w.Arr(_mealSeen); w.I64(_mealDay); w.Arr(_roomTaboo); w.Arr(_deeds); w.Arr(_deedCause); w.Arr(_feastDay);
         w.I32(_mourn.Count); foreach (var (d, t, c) in _mourn) { w.I32(d); w.I64(t); w.I32(c); }
         w.I64(_feastFrom); w.I64(_feastLast); w.I32(_feastCause); w.I32(_feastHero); w.I32(_feastWeight); w.Byte(_feastNews);
@@ -496,7 +546,7 @@ public sealed partial class Society
     {
         MealCustom = r.I32(); QuietRule = r.Byte() != 0; StoveRule = r.Byte() != 0;
         Customs = r.I64(); CustomsLost = r.I64(); CustomMealsShared = r.I64(); Taboos = r.I64(); TaboosLifted = r.I64(); BedTaboos = r.I64(); Nicknames = r.I64(); Memorials = r.I64(); Celebrations = r.I64();
-        RulesMade = r.I64(); RulesRejected = r.I64(); RuleBreaks = r.I64(); QuietKept = r.I64(); Gatherings = r.I64(); GatheringsFailed = r.I64();
+        RulesMade = r.I64(); RulesRejected = r.I64(); RuleBreaks = r.I64(); QuietKept = r.I64(); Gatherings = r.I64(); GatheringsFailed = r.I64(); MemorialsDeferred = r.I64(); _mournDeferred.Clear(); foreach (int x in r.Arr<int>()) _mournDeferred.Add(x);
         Nick = r.Arr<byte>(); NickBy = r.Arr<int>(); _mealSeen = r.Arr<byte>(); _mealDay = r.I64(); _roomTaboo = r.Arr<byte>(); _deeds = r.Arr<int>(); _deedCause = r.Arr<int>(); _feastDay = r.Arr<long>();
         _mourn.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { int d = r.I32(); long t = r.I64(); int c = r.I32(); _mourn.Add((d, t, c)); }
         _feastFrom = r.I64(); _feastLast = r.I64(); _feastCause = r.I32(); _feastHero = r.I32(); _feastWeight = r.I32(); _feastNews = r.Byte();

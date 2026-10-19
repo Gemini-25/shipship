@@ -228,7 +228,7 @@ public sealed partial class Society : IEngine
                 if (i < j && Awake(i) && Awake(j) && sim.Tick - LastTalk[i * N + j] >= TalkRest)
                 {
                     float p = 0.03f * (0.5f + Math.Max(a.C.Extra, b.C.Extra)) * (a.C.Goal == GoalKind.Socialize || b.C.Goal == GoalKind.Socialize ? 1.6f : 1) * (0.4f + KnownOf(i, j));
-                    if (Rnd(sim, "말 걸기", i, j) < p && !KeepsQuiet(sim, i, j)) Talk(sim, i, j);   // ⑨ 조용한 밤의 규칙
+                    if (Rnd(sim, "말 걸기", i, j) < p && !KeepsQuiet(sim, i, j)) { Talk(sim, i, j); NickInTalk(sim, i, j); }   // ⑨ 조용한 밤의 규칙 · 이야기하다 별명이 붙는다
                 }
                 // 원한이 깊은 둘이 마주쳤다 — 화가 난 쪽이 먼저 덤빌 수 있다
                 if (GrudgeOf(i, j) > 0.5f && C(i).Anger > 0.5f) Escalate(sim, i, j, 0.2f, 0);

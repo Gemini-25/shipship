@@ -148,13 +148,15 @@ public static partial class Program
                 $"'{(f.Kind == FactKind.Culture ? s.Causes.Text(f.Cause) : "-")}' · 졸린 이가 간 자리 {(bedGoal >= 0 ? $"({lay.X(bedGoal)},{lay.Y(bedGoal)})" : "-")} (숨진 이의 침대 (3,1))");
         }
 
-        // ── 별명: 불을 세 번 끈 이 — 가장 외향인 동료가 '불끄기 반장'이라 부르기 시작한다 (← 마지막으로 끈 불) · 모두 그를 조금 더 믿고 · 그는 기쁘다 /
-        //    조리대를 두 번 켜 둔 채 떠난 이는 '깜빡이' — 슬픔이 오르고 · 예민하면 부른 이를 조금 원망한다 ──
+        // ── 별명은 승무원이 붙인다: 불을 세 번 끈 이 — 그 불을 함께 겪은 동료가 이야기하다 '불끄기 반장'이라 부르기 시작한다 (← 마지막으로 끈 불) ·
+        //    모두 그를 조금 더 믿고 · 그는 기쁘다 / 조리대를 두 번 켜 둔 채 떠난 이는 덜 다정한 동료가 '깜빡이'라 놀린다 — 예민한 그는 부른 이를 조금 원망한다 /
+        //    아무도 말을 나누지 않으면 별명은 붙지 않는다 (일을 세는 것만으로는 붙지 않는다) ──
         {
             var (s, m, soc, p) = World(4, 7);
-            int hero = p[0], loud = p[1], slip = p[2];
-            m.SetPersonality(loud, 0.5f, 0.6f, 0.95f, 0.5f, 0.4f);
+            int hero = p[0], slip = p[2];
+            m.SetPersonality(p[1], 0.5f, 0.6f, 0.95f, 0.3f, 0.4f);   // 외향 · 덜 다정
             m.SetPersonality(slip, 0.5f, 0.6f, 0.6f, 0.5f, 0.85f);
+            foreach (int a in p) foreach (int b in p) if (a != b) soc.Known[a * soc.N + b] = 0.5f;   // 오래 함께 지낸 사이 — 말을 자주 건다
             float trust0 = soc.TrustIn(p[3], hero);
             int fire = 0;
             for (int i = 0; i < 3; i++)
@@ -169,13 +171,16 @@ public static partial class Program
                 s.Facts.Emit(s.Tick, FactKind.Mistake, At(14, 2), 0.1f, c, slip, 0);
                 s.Run(30);
             }
+            long beforeTalk = soc.Nicknames, talks0 = soc.Talks;
+            for (int k = 0; k < Time.Hours(3) && soc.Nicknames < 2; k++) { s.Step(); Keep(s, m, p); }
             var nicks = s.Facts.Since(0).Where(f => f.Kind == FactKind.Culture && (int)f.Size == (int)CultureEvent.Nickname).ToList();
             var hf = nicks.FirstOrDefault(f => f.Actor == hero); var sf = nicks.FirstOrDefault(f => f.Actor == slip);
             string ht = hf.Kind == FactKind.Culture ? s.Causes.Text(hf.Cause) : "-", st = sf.Kind == FactKind.Culture ? s.Causes.Text(sf.Cause) : "-";
-            Check("별명: 불을 세 번 끈 이를 가장 외향인 동료가 '불끄기 반장'이라 부른다 (← 마지막 불) · 모두 그를 조금 더 믿는다 / 조리대를 두 번 켜 둔 채 떠난 이는 '깜빡이' — 예민한 그는 부른 이를 조금 원망한다",
-                soc.NickOf(hero) == "불끄기 반장" && soc.NickBy[hero] == loud && ht.StartsWith(m.NameOf(loud)) && ht.Contains("'불끄기 반장'이라") && s.Causes[hf.Cause].Parent == fire
-                && soc.TrustIn(p[3], hero) >= trust0 + 0.05f - 1e-4 && soc.NickOf(slip) == "깜빡이" && st.Contains("'깜빡이'라") && soc.GrudgeOf(slip, loud) >= 0.05f - 1e-4 && soc.Nicknames == 2,
-                $"'{ht}' ← '{(hf.Kind == FactKind.Culture ? s.Causes.Text(s.Causes[hf.Cause].Parent) : "-")}' · 믿음 {trust0:0.00} → {soc.TrustIn(p[3], hero):0.00} / '{st}' · 원망 {soc.GrudgeOf(slip, loud):0.00}");
+            int hb = hero < soc.NickBy.Length ? soc.NickBy[hero] : -1, sb = slip < soc.NickBy.Length ? soc.NickBy[slip] : -1;
+            Check("별명은 승무원이 붙인다: 불을 세 번 끈 이를 그 불을 함께 겪은 동료가 이야기하다 '불끄기 반장'이라 부른다 (← 마지막 불) · 모두 그를 조금 더 믿는다 / 조리대를 두 번 켜 둔 이를 덜 다정한 동료가 '깜빡이'라 놀린다 — 예민한 그는 조금 원망한다 / 말을 나누기 전에는 붙지 않는다",
+                beforeTalk == 0 && soc.NickOf(hero) == "불끄기 반장" && hb >= 0 && hb != hero && ht.Contains("'불끄기 반장'이라") && s.Causes[hf.Cause].Parent == fire
+                && soc.TrustIn(p[3], hero) >= trust0 + 0.05f - 1e-4 && soc.NickOf(slip) == "깜빡이" && sb >= 0 && m[sb].C.Agree < 0.6f && st.Contains("'깜빡이'라") && soc.GrudgeOf(slip, sb) >= 0.05f - 1e-4 && soc.Nicknames == 2 && soc.Talks > talks0,
+                $"이야기 전 별명 {beforeTalk} · '{ht}' ← '{(hf.Kind == FactKind.Culture ? s.Causes.Text(s.Causes[hf.Cause].Parent) : "-")}' · 믿음 {trust0:0.00} → {soc.TrustIn(p[3], hero):0.00} / '{st}' · 원망 {(sb >= 0 ? soc.GrudgeOf(slip, sb) : 0):0.00} · 이야기 {soc.Talks - talks0}");
         }
 
         // ── 추모: 다섯 가운데 하나가 숨지면 — 그와 가장 가까웠던 이가 식당으로 부르고 · 모인 이마다 한 마디 ('늘 먼저 웃던 사람이었다…') ·
@@ -190,6 +195,7 @@ public static partial class Program
             life[m[dead].C.Body].Blunt = 2f;
             s.Run(Time.Minutes(2));
             var alive = p.Take(4).ToList();
+            for (int k = 0; k < Time.Hours(1) && soc.NotYet(s, friend) != null; k++) { s.Step(); Keep(s, m, alive); }   // 마음이 가라앉을 때까지 (부르는 이의 판단)
             float grief0 = soc.GriefOf(friend), shock0 = m[friend].C.Shock;
             float bond0 = soc.BondOf(p[1], p[2]);
             long f0 = s.Facts.Total;
@@ -207,6 +213,43 @@ public static partial class Program
                 f.Kind == FactKind.Culture && open.Actor == friend && gathered >= 3 && varied && lines.Any(l => l.Contains("웃던") || l.Contains("밤이 생각난다") || l.Contains("목소리가"))
                 && soc.GriefOf(friend) <= grief0 * 0.55f && m[friend].C.Shock <= Math.Max(0, shock0 - 0.05f) + 1e-3 && soc.BondOf(p[1], p[2]) >= bond0 + 0.03f - 1e-4 && soc.Memorials == 1,
                 $"'{(f.Kind == FactKind.Culture ? s.Causes.Text(f.Cause) : "-")}' · 부른 이 {(open.Actor >= 0 ? m.NameOf(open.Actor) : "-")} · 모임 {gathered}/4 · 기린 말 {string.Join(" /", said)} · 슬픔 {grief0:0.00} → {soc.GriefOf(friend):0.00} · 충격 {shock0:0.00} → {m[friend].C.Shock:0.00} · 정 {bond0:0.00} → {soc.BondOf(p[1], p[2]):0.00}");
+        }
+
+        // ── 추모는 부르는 사람이 정한다: 동료가 숨진 직후 휴게실 의자에 불이 붙었다 (휴게실에 있던 이가 보고 외친다) — 가장 가까웠던 이는 불이 타고 · 동료가 끄러 간 동안에는
+        //    '추모를 미뤘다 — 아직 불이 있다고 여긴다'를 남기고 기다리고 · 불이 꺼지고 모두 손을 놓은 뒤에야 식당으로 부른다
+        //    (함장이 물은 것: 사고 수습이 다 안 끝났는데 추모하지 않나 — 엔진의 시계가 아니라 승무원의 판단으로) ──
+        {
+            var (s, m, soc, p) = World(4, 12);
+            var life = s.Get<Life>();
+            p.Add(m.AddPerson(s, At(24, 1))); m.SetPersonality(p[4], 0.5f, 0.6f, 0.6f, 0.5f, 0.4f);   // 휴게실에서 쉬던 이
+            (p[3], p[4]) = (p[4], p[3]);
+            s.Run(2);
+            int dead = p[4], friend = p[0], N = soc.N;
+            soc.Bond[friend * N + dead] = 0.8f;
+            life[m[dead].C.Body].Blunt = 2f;
+            s.Run(Time.Minutes(1));
+            s.Get<Chemistry>().Ignite(At(26, 2), 3e6, s.Causes.Add(CauseKind.Story, "휴게실 의자 곁 충전기에서 불꽃이 튀었다", s.Tick, At(26, 2)));   // 휴게실에 있던 이가 보고 외친다
+            for (int k = 0; k < Time.Minutes(10) && soc.NotYet(s, friend) == null; k++) s.Step();   // 불을 알게 될 때까지 (모르는 위험으로는 미루지 않는다)
+            long f0 = s.Facts.Total;
+            string? why = soc.NotYet(s, friend);
+            soc.CultureNow(s);
+            bool early = s.Facts.Since(f0).Any(x => x.Kind == FactKind.Meeting);
+            long settled = -1;
+            for (int k = 0; k < Time.Minutes(90) && settled < 0; k++)
+            {
+                s.Step();
+                foreach (int a in p.Take(4)) { ref var c = ref m[a].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; }
+                if (k % 25 == 0) { if (soc.NotYet(s, friend) == null) settled = s.Tick; else soc.CultureNow(s); }
+                if (Debug && k % Time.Minutes(10) == 0) Console.WriteLine($"    {Time.Clock(s.Tick)} {m.NameOf(friend)}: {soc.NotYet(s, friend) ?? "때가 됐다"} · 타는 칸 {s.Get<Chemistry>().BurningCount}");
+            }
+            bool openedWhileBusy = s.Facts.Since(f0).Any(x => x.Kind == FactKind.Meeting && x.Tick < settled);
+            var deferred = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Culture && (int)x.Size == (int)CultureEvent.MemorialDeferred);
+            soc.CultureNow(s);
+            var open = s.Facts.Since(f0).LastOrDefault(x => x.Kind == FactKind.Meeting);
+            Check("추모는 부르는 사람이 정한다: 동료가 숨진 직후 불이 붙으면 — 가장 가까웠던 이는 불을 안 뒤로 불이 타고 동료가 끄는 동안 '추모를 미뤘다'를 남기고 기다리고 · 불이 꺼지고 모두 손을 놓은 뒤에야 부른다",
+                why != null && !early && !openedWhileBusy && settled > 0 && deferred.Kind == FactKind.Culture && deferred.Actor == friend && soc.MemorialsDeferred == 1
+                && open.Kind == FactKind.Meeting && (int)open.Size == (int)CouncilKind.Memorial && open.Actor == friend,
+                $"불을 안 {m.NameOf(friend)}: '{why}' · '{(deferred.Kind == FactKind.Culture ? s.Causes.Text(deferred.Cause) : "-")}' · 때가 됐다고 여김 {(settled > 0 ? Time.Clock(settled) : "안 됨")} · 그 뒤 '{(open.Kind == FactKind.Meeting ? s.Causes.Text(open.Cause) : "-")}'");
         }
 
         // ── 축하: 불이 번졌다가 (위기) 꺼지고 모두 살았으면 — 가장 외향인 이가 '모두 무사했다 — 한잔하자' · 불을 끈 이에게 한잔 · 기쁨 +0.3 · 피로가 풀린다 /

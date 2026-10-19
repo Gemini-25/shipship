@@ -123,7 +123,7 @@ public enum FactKind : ushort
     Surgery,           // 수술했다 (Actor: 집도한 이 · Other: 받은 사람 · Size: 1 잘됨 · 0 합병증 · 열어 보기)
     Heart,             // ⑧ 마음 (Actor: 그 사람 · Size: HeartEvent — 1 악몽 · 2 공황 발작 · 3 되살아남 · 4 겁이 많아짐 · 5 단단해짐 · 6 우울 · 7 불안 · 8 외상 뒤 성장 · Other: 함께한 이)
     // ⑨ 바퀴 3 — 문화 · 관습
-    Culture,           // 관습 (Size: CultureEvent — 1 관습 · 2 관습이 사라짐 · 3 금기 · 4 금기가 풀림 · 5 침대 금기 · 6 별명 · 7 추모 · 8 축하 · 9 규칙 · 10 부결 · 11 규칙을 어김 · Actor: 그 사람 · Other: 방 · 시 · 별명 · 규칙)
+    Culture,           // 관습 (Size: CultureEvent — 1 관습 · 2 관습이 사라짐 · 3 금기 · 4 금기가 풀림 · 5 침대 금기 · 6 별명 · 7 추모 · 8 축하 · 9 규칙 · 10 부결 · 11 규칙을 어김 · 12 추모를 미룸 · Actor: 그 사람 · Other: 방 · 시 · 별명 · 규칙)
 }
 
 public static class FactNames
