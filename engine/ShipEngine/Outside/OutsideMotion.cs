@@ -95,12 +95,27 @@ public sealed partial class Outside
     }
 
     /// <summary>
+    /// 면을 바꾸는 호만 전이 (⑫ 항로의 기울기): 출발에 황도면에서 inclDeg만큼 기울이고 도착에 되돌린다 — 두 점화에 묶어
+    /// Δv = √(v₁² + v₂² − 2v₁v₂·cos Δi) (원 궤도 빠르기 ↔ 전이 궤도 근일점 · 원일점 빠르기). 0°면 <see cref="HohmannDv(double, double)"/>와 같다.
+    /// </summary>
+    public static (double dv1, double dv2) HohmannDv(double r1Au, double r2Au, double inclDeg)
+    {
+        var (h1, h2) = HohmannDv(r1Au, r2Au);
+        if (inclDeg <= 0) return (h1, h2);
+        double r1 = r1Au * Au, r2 = r2Au * Au, ci = Math.Cos(inclDeg * Math.PI / 180);
+        double vc1 = Math.Sqrt(SunMu / r1), vc2 = Math.Sqrt(SunMu / r2);
+        double vt1 = Math.Sqrt(SunMu * 2 * r2 / (r1 * (r1 + r2))), vt2 = Math.Sqrt(SunMu * 2 * r1 / (r2 * (r1 + r2)));   // 전이 궤도의 출발 · 도착 빠르기
+        double Comb(double a, double b) => Math.Sqrt(Math.Max(0, a * a + b * b - 2 * a * b * ci));
+        return (Comb(vc1, vt1), Comb(vt2, vc2));
+    }
+
+    /// <summary>
     /// 항해를 계획한다: 출발 점화(호만 Δv₁)를 minutes 뒤에 · 늦어도 6시간 안. 출발 점화가 끝나면 전이 궤도에 오르고 —
     /// 중간 고침 둘(몇 m/s) · 도착 점화(Δv₂)가 정해진다. 점화는 주컴퓨터가 한다.
     /// </summary>
     public void PlanVoyage(Sim sim, double toAu, string name, double minutes, int cause)
     {
-        var (dv1, _) = HohmannDv(Distance, toAu);
+        var (dv1, _) = HohmannDv(Distance, toAu, Rt?.Incline ?? 0);
         PendingTo = toAu; PendingName = name; VoyagePlanned = 1; ArrivalDone = 0; Missed = 0; ArriveExtraDv = 0;
         Plan.RemoveAll(p => p.Kind is BurnKind.Depart or BurnKind.Correct or BurnKind.Arrive or BurnKind.Capture);
         long due = sim.Tick + Time.Minutes(minutes);
@@ -160,7 +175,7 @@ public sealed partial class Outside
         {
             // 전이 궤도에 올랐다 — 고침 둘 · 도착이 정해진다
             double to = PendingTo; PendingTo = double.NaN; VoyageName = PendingName;
-            var (_, dv2) = HohmannDv(Distance, to);
+            var (_, dv2) = HohmannDv(Distance, to, Rt?.Incline ?? 0);
             StartVoyage(sim, to);
             int c = sim.Causes.Add(CauseKind.Route, $"{Ko.Euro(VoyageName)} 가는 전이 궤도에 올랐다 — {VoyageDays(VoyageFrom, to):0}일", sim.Tick, -1, BurnCause);
             foreach (double at in new[] { 0.15, 0.6 })
@@ -245,28 +260,61 @@ public sealed partial class Outside
         }
     }
 
-    /// <summary>항로의 위험 구간: 그 거리를 지나는 동안 구름 · 운석이 더 자주 온다 (안에 있을 때만 난수를 쓴다).</summary>
+    /// <summary>
+    /// ⑫ 자연 사건 — 항로의 구간: 그 거리를 지나는 동안 구름 · 운석이 구간 빈도 × 항로 배율로 온다 (안에 있을 때만 난수를 쓴다) ·
+    /// 항해 중 구간 밖은 깊은 우주의 바탕 빈도 × 항로 배율. 항로를 고르지 않은 배(시험 — 가만히 떠 있다)는 구간 그대로 · 바탕 없음 · 그 항로만의 구간 없음.
+    /// </summary>
     private void ZoneStep(Sim sim)
     {
         if (Planet != null) return;
+        var rt = Rt;
+        bool inZone = false;
         foreach (var z in T.Space.Zones)
         {
             if (Distance < z.From || Distance > z.To) continue;
-            if (!T.Space.Debris.TryGetValue(z.Debris, out var d)) continue;
-            if (z.CloudsPerDay > 0 && _route.Unit() < z.CloudsPerDay / Time.TicksPerDay)
-            {
-                double minutes = _route.Range(20, 60), radius = _route.Range(200_000, 600_000), ang = _route.Range(0, 2 * Math.PI);
-                double density = z.Debris == "dust" ? 2e-6 : 2e-7;
-                int c = sim.Causes.Add(CauseKind.Route, $"{z.Name}의 {Ko.I(d.Name)} 항로로 들어온다", sim.Tick);
-                AddCloud(z.Debris, d.Speed * minutes * 60 + radius, radius, density, Math.Cos(ang), Math.Sin(ang), c);
-            }
-            if (z.RocksPerDay > 0 && _route.Unit() < z.RocksPerDay / Time.TicksPerDay)
-            {
-                double mass = 0.05 * Math.Pow(10, _route.Range(0.0, 1.6)), speed = _route.Range(3000, 9000), minutes = _route.Range(10, 40), ang = _route.Range(0, 2 * Math.PI);
-                int c = sim.Causes.Add(CauseKind.Route, $"{z.Name}의 {mass:0.##}kg 바위", sim.Tick);
-                AddRock(mass, speed, Math.Cos(ang), Math.Sin(ang), _route.Range(0, 120), speed * minutes * 60, c);
-            }
+            if (z.Only && (rt == null || !rt.Extra.Contains(z.Name))) continue;
+            inZone = true;
+            Debris(sim, z.Name, z.Debris, z.CloudsPerDay * (rt?.Zones ?? 1), z.RocksPerDay * (rt?.Zones ?? 1));
         }
+        if (!inZone && rt != null && VoyageTicks > 0)
+            Debris(sim, "깊은 우주", T.Space.Deep.Debris, T.Space.Deep.CloudsPerDay * rt.Deep, T.Space.Deep.RocksPerDay * rt.Deep);
+    }
+
+    /// <summary>파편 구름 · 바위가 하루 평균 그만큼 저절로 (포아송 — 크기는 거듭제곱 분포 · 다가오는 거리는 10~60분 앞).</summary>
+    private void Debris(Sim sim, string where, string kind, double cloudsPerDay, double rocksPerDay)
+    {
+        if (!T.Space.Debris.TryGetValue(kind, out var d)) return;
+        if (cloudsPerDay > 0 && _route.Unit() < cloudsPerDay / Time.TicksPerDay)
+        {
+            double minutes = _route.Range(20, 60), radius = _route.Range(200_000, 600_000), ang = _route.Range(0, 2 * Math.PI);
+            double density = kind == "dust" ? 2e-6 : kind == "kessler" ? 6e-8 : 2e-7;
+            int c = sim.Causes.Add(CauseKind.Route, $"{where}의 {Ko.I(d.Name)} 항로로 들어온다", sim.Tick);
+            AddCloud(kind, d.Speed * minutes * 60 + radius, radius, density, Math.Cos(ang), Math.Sin(ang), c);
+        }
+        if (rocksPerDay > 0 && _route.Unit() < rocksPerDay / Time.TicksPerDay)
+        {
+            double mass = 0.05 * Math.Pow(10, _route.Range(0.0, 1.6)), speed = _route.Range(3000, 9000), minutes = _route.Range(10, 40), ang = _route.Range(0, 2 * Math.PI);
+            int c = sim.Causes.Add(CauseKind.Route, $"{where}의 {mass:0.##}kg 바위", sim.Tick);
+            AddRock(mass, speed, Math.Cos(ang), Math.Sin(ang), _route.Range(0, 120), speed * minutes * 60, c);
+        }
+    }
+
+    /// <summary>지금 지나는 구간 (별계 지도 — 아는 것 · 항로만의 구간은 그 항로일 때) · 없으면 null.</summary>
+    public ZoneDef? ZoneAt(double au)
+    {
+        var rt = Rt;
+        foreach (var z in T.Space.Zones)
+            if (au >= z.From && au <= z.To && (!z.Only || rt != null && rt.Extra.Contains(z.Name))) return z;
+        return null;
+    }
+
+    /// <summary>앞으로 hours 시간 안에 드는 구간 (지금 거리에서 전이 궤도를 따라 — 지도로 아는 것).</summary>
+    public ZoneDef? ZoneAhead(long now, double hours)
+    {
+        if (VoyageTicks <= 0) return null;
+        double f = (now - VoyageStart + Time.Hours(hours)) / (double)VoyageTicks;
+        var z = ZoneAt(TransferDistance(VoyageFrom, VoyageTo, f));
+        return z != null && z != ZoneAt(Distance) ? z : null;
     }
 
     /// <summary>(ux, uy)로 날아오는 것이 off(m)만큼 비껴 지나면 처음 닿을 칸 (-1: 안 닿는다) — 주컴퓨터가 '맞을까'를 셈한다 (세계를 바꾸지 않는다).</summary>

@@ -88,7 +88,7 @@ public sealed partial class Mind
                         else if (f.Other is (int)BurnKind.Depart or (int)BurnKind.Correct) c.Joy = Math.Min(1, c.Joy + 0.1f);   // 나아간다
                     }
                     break;
-                case FactKind.Contact or FactKind.Flare or FactKind.DebrisNear:
+                case FactKind.Contact or FactKind.Flare or FactKind.Sensed:   // 배가 안 것 (센서 · 교신) — 모르는 것에는 설레지 않는다
                     foreach (var a in Agents)
                         if (a.IsPerson && (Aim)a.C.Aim == Aim.Know && AliveAwake(a)) { a.C.Joy = Math.Min(1, a.C.Joy + 0.08f); a.C.Bored = Math.Max(0, a.C.Bored - 0.2f); }
                     break;

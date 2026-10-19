@@ -85,6 +85,7 @@ public sealed partial class ShipMind : IEngine
     private readonly Tables T;
     private Mind? _mind;
     private Network? _net;
+    private Sensors? _sense;   // ⑥ 감지 — 바깥에서 아는 것은 센서가 잡은 것만
     private Structure? _st;
     private Life? _life;
     private Chemistry? _chem;
@@ -164,7 +165,7 @@ public sealed partial class ShipMind : IEngine
 
     private void Bind(Sim sim)
     {
-        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _out ??= sim.Find<Outside>(); _st ??= sim.Find<Structure>(); _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>();
+        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _sense ??= sim.Find<Sensors>(); _out ??= sim.Find<Outside>(); _st ??= sim.Find<Structure>(); _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>();
         if (_net != null && Shed.Length != _net.Devices.Count) Shed = new byte[_net.Devices.Count];
         if (_net != null && BreakerResetAt.Length != _net.Feeders.Count) BreakerResetAt = Enumerable.Repeat(long.MinValue / 2, _net.Feeders.Count).ToArray();
         if (_computer == -2) _computer = _net?.Devices.FirstOrDefault(d => d.Type == "MainComputer")?.Id ?? -1;
@@ -1405,6 +1406,16 @@ public sealed partial class ShipMind : IEngine
     }
 
     /// <summary>아침 방송 — 지난 일지 한 줄 + 오늘의 배 (산소 · 식량 · 물 · 못 보는 방).</summary>
+    /// <summary>⑫ 오늘의 항로 (별계 지도로 아는 구간 — 지금 지나는 곳 · 하루 안에 드는 곳).</summary>
+    private string RouteLine(Sim sim)
+    {
+        if (_out == null || _out.VoyageTicks <= 0 || _out.Planet != null) return "";
+        var now = _out.ZoneAt(_out.Distance);
+        if (now != null) return $"지금 {Ko.Eul(now.Name)} 지나고 있습니다 — 파편에 대비합니다";
+        var ahead = _out.ZoneAhead(sim.Tick, 24);
+        return ahead != null ? $"오늘 {Ko.Euro(ahead.Name)} 듭니다" : "";
+    }
+
     private void MorningBroadcast(Sim sim)
     {
         var parts = new List<string> { "좋은 아침입니다." };
@@ -1412,6 +1423,8 @@ public sealed partial class ShipMind : IEngine
         parts.Add($"오늘 배: {ShipLine(sim, false)}.");
         string blind = BlindLine();
         if (blind.Length > 0) parts.Add(blind + ".");
+        string route = RouteLine(sim);
+        if (route.Length > 0) parts.Add(route + ".");
         Morning = string.Join(" ", parts);
         Say(sim, "아침 방송: " + Morning);
         sim.Facts.Emit(sim.Tick, FactKind.ComputerBroadcast, _computer >= 0 && _net != null ? _net.Devices[_computer].Cell : -1);

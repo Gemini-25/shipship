@@ -72,7 +72,7 @@ public sealed partial class Director
     {
         FactKind.Died => 100, FactKind.Collapsed => 40, FactKind.Rescue => 35, FactKind.Panicked => 30, FactKind.WallBreach => 30,
         FactKind.DoorBlown => 25, FactKind.Ignition => 20, FactKind.FireSpread => 8, FactKind.Extinguished => 25, FactKind.Patched => 20,
-        FactKind.Repaired => 10, FactKind.ComputerSeal => 18, FactKind.ComputerAlarm => 10, FactKind.DebrisNear => 15, FactKind.Impact => 12,
+        FactKind.Repaired => 10, FactKind.ComputerSeal => 18, FactKind.ComputerAlarm => 10, FactKind.DebrisNear => 15, FactKind.Sensed => 8, FactKind.Impact => 12,
         FactKind.StorySeed => 6, FactKind.Hurt => 12, FactKind.Fled => 10, FactKind.DoorSealed => 6, FactKind.Warned => 5, FactKind.Noticed => 4,
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8, FactKind.Gravity => 20, FactKind.Vomit => 6, FactKind.Arrest => 40, FactKind.Revived => 35, FactKind.Heart => 12, FactKind.Culture => 10,
@@ -102,7 +102,7 @@ public sealed partial class Director
     public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Confessed or FactKind.Lie or FactKind.LieExposed or FactKind.Meeting or FactKind.Verdict or FactKind.Elected or FactKind.Mutiny or FactKind.ManualChanged;
 
     private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.Arrest or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked or FactKind.Fight or FactKind.ShipSplit or FactKind.Crash;
-    private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned or FactKind.Blamed;
+    private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.Sensed or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned or FactKind.Blamed;
     private static bool Omen(in Fact f) => Omen(f.Kind) || f.Kind == FactKind.Talk && (TalkEnd)(int)f.Size is TalkEnd.Argue or TalkEnd.Spread;
 
     // ───────────────────────── 한 틱 ─────────────────────────

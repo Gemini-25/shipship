@@ -52,9 +52,13 @@ public sealed class BodyDef { public string Name = "", Planet = ""; public doubl
 public sealed class SystemDef { public string Name = "", Star = "yellow"; public double Gcr; public List<BodyDef> Bodies = new(); }
 
 /// <summary>⑤ 배의 운동 상수 (space.json ship).</summary>
-public sealed class ShipMotionDef { public double TonsPerCell = 1, EngineKN = 2300, Isp = 900, RcsG = 0.02, RcsIsp = 300, PropellantRatio = 1, RadarKm = 100, RadarMrad = 0.5; }
+public sealed class ShipMotionDef { public double TonsPerCell = 1, EngineKN = 2300, Isp = 900, RcsG = 0.02, RcsIsp = 300, PropellantRatio = 1, RadarKm = 100, RadarMrad = 0.5, CloudKm = 6000, BeaconKm = 1_000_000; }
 /// <summary>⑤ 항로의 위험 구간: from~to AU · 파편 종류 · 하루 평균 구름 · 운석.</summary>
-public sealed class ZoneDef { public string Name = "", Debris = "rubble"; public double From, To, CloudsPerDay, RocksPerDay; }
+public sealed class ZoneDef { public string Name = "", Debris = "rubble"; public double From, To, CloudsPerDay, RocksPerDay; public bool Only; }
+/// <summary>⑫ 항로 하나 (1~8 — 함장이 출항 때 고른다): 황도면 기울기(° — 면 바꾸기 Δv) · 구간 파편 배율 · 깊은 우주 바탕 배율 · 교통량 배율 · 더 지나는 구간(Only 구간의 이름).</summary>
+public sealed class RouteDef { public string Name = "", Line = ""; public double Incline, Zones = 1, Deep = 1, Traffic = 1; public List<string> Extra = new(); }
+/// <summary>⑫ 깊은 우주의 바탕 빈도 (구간 밖 · 항해 중에만 · 항로의 Deep 배율을 곱한다).</summary>
+public sealed class DeepDef { public string Debris = "rubble"; public double CloudsPerDay, RocksPerDay; }
 /// <summary>⑤ 다른 배가 지나가는 빈도.</summary>
 public sealed class TrafficDef { public double PerDay = 0.25, NearAu = 0.04, Boost = 4; }
 
@@ -62,6 +66,8 @@ public sealed class SpaceTable
 {
     public ShipMotionDef Ship = new();
     public List<ZoneDef> Zones = new();
+    public List<RouteDef> Routes = new();
+    public DeepDef Deep = new();
     public TrafficDef Traffic = new();
     public SystemDef System = new();
     public Dictionary<string, StarDef> Stars = new();

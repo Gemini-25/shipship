@@ -9,6 +9,7 @@ public struct Cloud
     public int Cause;
     public long Hits;
     public byte Warned;  // 10분 앞 '다가온다'를 알렸다
+    public int Id;
 }
 
 /// <summary>떠다니는 물체 하나 (운석 · 큰 파편 · 떨어져 나간 조각).</summary>
@@ -32,7 +33,8 @@ public struct Rock
 /// 칸마다 선량률이 된다 (⑦ 생명이 읽는다 — 대피실이 '저절로' 의미를 가진다).
 /// 행성에 내리면 ③ 장의 바깥 경계가 그 행성 대기(압력 · 성분 · 온도 · 낮밤 · 바람)가 된다.
 /// </para>
-/// 이야기꾼은 원인만 심는다: <see cref="AddCloud"/> · <see cref="AddRock"/> · <see cref="ScheduleFlare"/>. 어디에 맞을지는 엔진이 정한다.
+/// 파편 · 운석 · 다른 배는 항로(⑫ — 함장이 출항 때 고른 1~8)의 구간 빈도로 저절로 온다 · 시험은 <see cref="AddCloud"/> · <see cref="AddRock"/> · <see cref="ScheduleFlare"/>로 놓는다. 어디에 맞을지는 엔진이 정한다.
+/// 무엇이 다가오는지 배가 아는 것은 ⑥ 망의 감지 법칙(센서)이 잡은 것만이다.
 /// </summary>
 public sealed partial class Outside : IEngine
 {
@@ -61,6 +63,7 @@ public sealed partial class Outside : IEngine
     public long NextFlare = -1, FlareWarnAt = -1, FlareStart = -1, FlareEnd = -1;
     public int FlareCause;
     public double DoseOut;               // 바깥 방사선 (mGy/시)
+    public double CalmDose;              // 폭발이 없을 때의 바깥 방사선 (선량계가 '평소'로 아는 값)
     public List<Cloud> Clouds = new();
     public List<Rock> Rocks = new();
     public long DebrisHits, RockHits, NearMisses, Flares;
@@ -82,7 +85,7 @@ public sealed partial class Outside : IEngine
 
     public StarDef StarDef => T.Space.Stars[Star];
 
-    // ───────────────────────── 이야기꾼 · 시험이 심는 원인 ─────────────────────────
+    // ───────────────────────── 시험이 놓는 원인 (항로의 구간도 이것으로) ─────────────────────────
 
     /// <summary>파편 구름을 놓는다: 방향 (dirX, dirY)에서 다가온다 · 앞 거리(m) · 반지름 · 밀도(개/m³).</summary>
     /// <summary>파편 구름 갈래의 이름 · 가장 무거운 입자 (위에서 읽는다 — 대피할지 정할 때).</summary>
@@ -94,7 +97,7 @@ public sealed partial class Outside : IEngine
         var d = T.Space.Debris[kind];
         double len = Math.Sqrt(dirX * dirX + dirY * dirY);
         dirX /= len; dirY /= len;
-        Clouds.Add(new Cloud { X = -dirX * ahead, Y = -dirY * ahead, Vx = dirX * d.Speed, Vy = dirY * d.Speed, Radius = radius, Density = density, Kind = Array.IndexOf(_debrisKeys, kind), Cause = cause });
+        Clouds.Add(new Cloud { X = -dirX * ahead, Y = -dirY * ahead, Vx = dirX * d.Speed, Vy = dirY * d.Speed, Radius = radius, Density = density, Kind = Array.IndexOf(_debrisKeys, kind), Cause = cause, Id = ++CloudSeq });
     }
 
     /// <summary>운석 · 큰 파편 하나: 질량(kg) · 속도(m/s) · 오는 방향 · 배 가운데에서 비낀 거리(m) · 지금 거리(m).</summary>
@@ -131,8 +134,7 @@ public sealed partial class Outside : IEngine
         return a * (1 - e * Math.Cos(ecc));
     }
 
-    /// <summary>별 폭발을 앞당긴다 (지금부터 minutes 뒤 조짐).</summary>
-    /// <summary>이야기꾼의 별 폭발: minutes 뒤 조짐 · scale은 세기 배율 (가혹함 — 이 폭발이 끝나면 1로).</summary>
+    /// <summary>별 폭발을 놓는다 (시험): minutes 뒤 조짐 · scale은 세기 배율 (이 폭발이 끝나면 1로).</summary>
     public void ScheduleFlare(double minutes, int cause, double scale = 1) { FlareWarnAt = -1; FlareStart = -1; FlareScale = scale; ScheduleAt(Time.Minutes(minutes + StarDef.WarnMin), cause); }
     public double FlareScale = 1;
 
@@ -224,6 +226,7 @@ public sealed partial class Outside : IEngine
         // 별 입자는 거리의 제곱에 반비례 (1AU 값) · 은하 우주선은 거리와 상관없다
         double near = 1 / Math.Max(0.05, Distance * Distance);
         double dose = star.BaseDose * near + T.Space.System.Gcr;
+        double calm = dose;
         if (FlareStart >= 0)
         {
             if (sim.Tick < FlareEnd)
@@ -238,8 +241,9 @@ public sealed partial class Outside : IEngine
             var p = T.Space.Planets[Planet];
             double column = p.KPa * 1000 / (9.81 * Math.Max(0.05, p.G)); // 대기 기둥 kg/m²
             dose *= Math.Exp(-column / 1000);
+            calm *= Math.Exp(-column / 1000);
         }
-        DoseOut = dose;
+        DoseOut = dose; CalmDose = calm;
     }
 
     private void CloudsStep(Sim sim, double dt)
@@ -402,7 +406,7 @@ public sealed partial class Outside : IEngine
     public void Save(StateWriter w)
     {
         w.Str(Star); w.F64(Distance); w.F64(VoyageFrom); w.F64(VoyageTo); w.I64(VoyageStart); w.I64(VoyageTicks); w.F64(SunAngle); w.F64(SunDrift); w.Str(Planet); w.I64(PlanetSince); w.Bool(Storm); w.I64(StormUntil);
-        w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut); w.F64(FlareScale);
+        w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut); w.F64(CalmDose); w.F64(FlareScale);
         w.List(Clouds); w.List(Rocks);
         w.I64(DebrisHits); w.I64(RockHits); w.I64(NearMisses); w.I64(Flares);
         SaveMotion(w); SaveContacts(w);
@@ -413,7 +417,7 @@ public sealed partial class Outside : IEngine
     public void Load(StateReader r)
     {
         Star = r.Str()!; Distance = r.F64(); VoyageFrom = r.F64(); VoyageTo = r.F64(); VoyageStart = r.I64(); VoyageTicks = r.I64(); SunAngle = r.F64(); SunDrift = r.F64(); Planet = r.Str(); PlanetSince = r.I64(); Storm = r.Bool(); StormUntil = r.I64();
-        NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64(); FlareScale = r.F64();
+        NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64(); CalmDose = r.F64(); FlareScale = r.F64();
         Clouds = r.List<Cloud>(); Rocks = r.List<Rock>();
         DebrisHits = r.I64(); RockHits = r.I64(); NearMisses = r.I64(); Flares = r.I64();
         LoadMotion(r); LoadContacts(r);

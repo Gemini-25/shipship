@@ -187,9 +187,8 @@ public sealed partial class ShipMind
         {
             var r = o.Rocks[k];
             if (r.Mass <= 0) continue;
+            if (_sense == null || !_sense.Tracked(TrackKind.Rock, r.Id)) continue;                      // ⑥ 레이더가 잡은 것만 (레이더 방정식 R ∝ σ^¼ — 감지 법칙)
             double R = Math.Sqrt(r.X * r.X + r.Y * r.Y);
-            double rad = Math.Cbrt(3 * r.Mass / (4 * Math.PI * 3000)), sigma = Math.PI * rad * rad;    // 돌덩이 3000kg/m³ · 단면 πr²
-            if (R > M.RadarKm * 1000 * Math.Pow(sigma, 0.25)) continue;                                 // 레이더 방정식: R ∝ σ^¼ (1m²를 RadarKm에서)
             double v2 = r.Vx * r.Vx + r.Vy * r.Vy;
             if (v2 < 1) continue;
             double tc = -(r.X * r.Vx + r.Y * r.Vy) / v2;
@@ -205,7 +204,7 @@ public sealed partial class ShipMind
             if (first)
             {
                 _rocksKnown.Add(r.Id); if (_rocksKnown.Count > 64) _rocksKnown.RemoveAt(0); RocksSeen++;
-                seen = sim.Causes.Add(CauseKind.Computer, $"레이더가 {r.Mass:0.##}kg 운석을 잡았다 — {tc:0}초 뒤 · {R / 1000:0.#}km", t, -1, r.Cause);
+                seen = sim.Causes.Add(CauseKind.Computer, $"레이더가 {r.Mass:0.##}kg 운석을 잡았다 — {tc:0}초 뒤 · {R / 1000:0.#}km", t, -1, _sense.CauseOf(TrackKind.Rock, r.Id));
                 sim.Facts.Emit(t, FactKind.Noticed, -1, (float)tc, seen, -2);
             }
             if (_dodgeRock == r.Id) continue;
@@ -255,13 +254,11 @@ public sealed partial class ShipMind
     private void ContactsWatch(Sim sim)
     {
         var o = _out!; long t = sim.Tick;
-        double radar = RadarOn() ? T.Space.Ship.RadarKm * 1000 * Math.Pow(400, 0.25) : 0;   // 배 한 척 단면 약 400m²
         for (int k = 0; k < o.Contacts.Count; k++)
         {
             var c = o.Contacts[k];
             if (c.State == ContactState.Gone) continue;
-            bool knows = c.Beacon != 0 && c.Range < 1e9 || c.Range < radar;
-            if (!knows) continue;
+            if (_sense == null || !_sense.Tracked(TrackKind.Contact, c.Id)) continue;   // ⑥ 신호 · 레이더로 잡은 배만
             string name = o.ContactName(c);
             if (!_contactsKnown.Contains(c.Id))
             {

@@ -10,11 +10,27 @@
 //     레이더: 단면 1m²를 radarKm에서 잡는다 (R ∝ σ^¼) · 방향 오차 radarMrad
 //   zones: 항로의 위험 구간 — 별에서 from~to AU를 지나는 동안 그 파편 구름 · 운석이 하루 평균 몇 번 온다
 //   traffic: 다른 배 — 하루 평균 · 천체 궤도 곁(nearAu 안)이면 boost배
+//   ship.cloudKm: 센서 배열이 넓게 퍼진 파편 구름을 잡는 거리 · beaconKm: 신호기를 켠 배를 교신으로 아는 거리
+//   ⑫ 자연 사건 (docs/ENGINE.md ⑫): routes — 항로 1~8 (함장이 출항 때 고른다 · 위험도 = 항로만)
+//     incline: 황도면에서 기울인 각(°) — 출발 · 도착 점화에 면 바꾸기 Δv가 더 든다 · zones: 구간 파편 배율 · deep: 깊은 우주 바탕 배율 · traffic: 지나는 배 배율 · extra: 이 항로만 지나는 구간(only)
+//     deep: 구간 밖 깊은 우주의 바탕 빈도 (항해 중에만) — 값은 기능 확인용 첫 값 · 정밀한 조절은 엔진 개편을 다 마친 뒤 맨 끝에 (함장 결정)
 {
-  "ship": { "tonsPerCell": 1.0, "engineKN": 2300, "isp": 900, "rcsG": 0.02, "rcsIsp": 300, "propellantRatio": 1.0, "radarKm": 100, "radarMrad": 0.5 },
+  "ship": { "tonsPerCell": 1.0, "engineKN": 2300, "isp": 900, "rcsG": 0.02, "rcsIsp": 300, "propellantRatio": 1.0, "radarKm": 100, "radarMrad": 0.5, "cloudKm": 6000, "beaconKm": 1000000 },
   "zones": [
     { "name": "작은 바위 띠",   "from": 1.12, "to": 1.30, "debris": "rubble", "cloudsPerDay": 0.5, "rocksPerDay": 3 },
-    { "name": "혜성 먼지 꼬리", "from": 0.80, "to": 0.88, "debris": "dust",   "cloudsPerDay": 1.2, "rocksPerDay": 0.5 }
+    { "name": "혜성 먼지 꼬리", "from": 0.80, "to": 0.88, "debris": "dust",   "cloudsPerDay": 1.2, "rocksPerDay": 0.5 },
+    { "name": "옛 정거장 파편 지대", "from": 1.02, "to": 1.07, "debris": "kessler", "cloudsPerDay": 0.8, "rocksPerDay": 2, "only": true }
+  ],
+  "deep": { "debris": "rubble", "cloudsPerDay": 0.05, "rocksPerDay": 0.25 },
+  "routes": [
+    { "name": "높은 고요 길",   "incline": 2.0, "zones": 0.1,  "deep": 0.3, "traffic": 0.2, "line": "황도면을 크게 벗어난다 — 파편이 거의 없고 지나는 배도 드물다 · 추진제가 많이 든다" },
+    { "name": "높은 길",        "incline": 1.5, "zones": 0.2,  "deep": 0.5, "traffic": 0.4, "line": "황도면 위로 비껴 간다 — 고요하지만 외롭다" },
+    { "name": "비낀 길",        "incline": 1.0, "zones": 0.35, "deep": 0.7, "traffic": 0.6, "line": "띠의 가장자리를 비껴 간다" },
+    { "name": "보통 길",        "incline": 0.6, "zones": 0.6,  "deep": 1.0, "traffic": 1.0, "line": "다들 가는 길 — 이따금 파편을 만난다" },
+    { "name": "낮은 길",        "incline": 0.3, "zones": 1.0,  "deep": 1.2, "traffic": 1.3, "line": "황도면 가까이 — 바위 띠를 그대로 지난다" },
+    { "name": "띠 가장자리",    "incline": 0,   "zones": 1.5,  "deep": 1.5, "traffic": 1.6, "line": "추진제를 아끼는 길 — 파편이 잦고 지나는 배도 잦다" },
+    { "name": "띠 한가운데",    "incline": 0,   "zones": 2.2,  "deep": 2.0, "traffic": 2.0, "line": "바위 띠 한가운데를 지난다 — 거칠다" },
+    { "name": "옛 정거장 곁 길", "incline": 0,  "zones": 3.0,  "deep": 2.5, "traffic": 2.5, "extra": ["옛 정거장 파편 지대"], "line": "부서진 옛 정거장의 파편 지대까지 지난다 — 가장 거칠다" }
   ],
   "traffic": { "perDay": 0.25, "nearAu": 0.04, "boost": 4 },
   "system": {

@@ -32,14 +32,17 @@ public sealed partial class Outside
     public const double DockRange = 300, DockSpeed = 3;   // 이만큼 가까이 · 이만큼 느리면 붙는다 (m · m/s)
 
     public bool TrafficOn;
+    /// <summary>⑫ 함장이 출항 때 고른 항로 (1~8 · 0이면 고르지 않았다 — 시험의 가만히 떠 있는 배).</summary>
+    public int Route;
+    public RouteDef? Rt => Route >= 1 && Route <= T.Space.Routes.Count ? T.Space.Routes[Route - 1] : null;
     public List<Contact> Contacts = new();
-    public int ContactSeq, RockSeq;
+    public int ContactSeq, RockSeq, CloudSeq;
     public long Docked, LateArrivals;
     private RngStream _traffic, _route;
 
     public string ContactName(in Contact c) => $"{KindName(c.Kind)} {ShipNames[c.NameNo % ShipNames.Length]}";
 
-    /// <summary>다른 배 하나를 놓는다 (이야기꾼 · 시험): 종류 · 지금 거리(m) · 오는 쪽 · 상대 속도(m/s) · 비낀 거리(m).</summary>
+    /// <summary>다른 배 하나를 놓는다 (교통량 · 시험): 종류 · 지금 거리(m) · 오는 쪽 · 상대 속도(m/s) · 비낀 거리(m).</summary>
     public int AddContact(Sim sim, ContactKind kind, double distance, double dirX, double dirY, double speed, double offset, int crew, float airHours, int cause, byte fire = 0, byte sick = 0)
     {
         double len = Math.Sqrt(dirX * dirX + dirY * dirY);
@@ -69,7 +72,7 @@ public sealed partial class Outside
         {
             var tr = T.Space.Traffic;
             bool near = T.Space.System.Bodies.Exists(b => Math.Abs(b.Au - Distance) < tr.NearAu);
-            if (_traffic.Unit() < tr.PerDay * (near ? tr.Boost : 1) / Time.TicksPerDay)
+            if (_traffic.Unit() < tr.PerDay * (near ? tr.Boost : 1) * (Rt?.Traffic ?? 1) / Time.TicksPerDay)
             {
                 double u = _traffic.Unit();
                 var kind = u < 0.5 ? ContactKind.Trader : u < 0.72 ? ContactKind.Patrol : u < 0.9 ? ContactKind.Distress : ContactKind.Derelict;
@@ -129,13 +132,13 @@ public sealed partial class Outside
 
     private void SaveContacts(StateWriter w)
     {
-        w.Bool(TrafficOn); w.List(Contacts); w.I32(ContactSeq); w.I32(RockSeq); w.I64(Docked); w.I64(LateArrivals);
+        w.Bool(TrafficOn); w.I32(Route); w.List(Contacts); w.I32(ContactSeq); w.I32(RockSeq); w.I32(CloudSeq); w.I64(Docked); w.I64(LateArrivals);
         _traffic.Save(w); _route.Save(w);
     }
 
     private void LoadContacts(StateReader r)
     {
-        TrafficOn = r.Bool(); Contacts = r.List<Contact>(); ContactSeq = r.I32(); RockSeq = r.I32(); Docked = r.I64(); LateArrivals = r.I64();
+        TrafficOn = r.Bool(); Route = r.I32(); Contacts = r.List<Contact>(); ContactSeq = r.I32(); RockSeq = r.I32(); CloudSeq = r.I32(); Docked = r.I64(); LateArrivals = r.I64();
         _traffic.Load(r); _route.Load(r);
     }
 }

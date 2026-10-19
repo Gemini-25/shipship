@@ -23,6 +23,7 @@ public sealed partial class ShipMind
         double half = Math.Max(L.W, L.H) / 2.0;
         foreach (var c in _out.Clouds)
         {
+            if (_sense == null || !_sense.Tracked(TrackKind.Cloud, c.Id)) continue;   // ⑥ 센서가 잡은 구름만 (잡힌 뒤로는 레이더가 거리 · 빠르기를 잰다)
             if (_out.DebrisMaxKg(c.Kind) < 0.01) continue;           // 먼지 구름 — 외판을 뚫지 못한다
             double dist = Math.Sqrt(c.X * c.X + c.Y * c.Y), sp = Math.Sqrt(c.Vx * c.Vx + c.Vy * c.Vy);
             double gap = dist - c.Radius - half;
@@ -31,9 +32,12 @@ public sealed partial class ShipMind
             kind = 1; cause = c.Cause; eta = Math.Max(0, gap) / Math.Max(1, sp); ux = c.Vx / Math.Max(1, sp); uy = c.Vy / Math.Max(1, sp); what = _out.DebrisName(c.Kind);
             break;
         }
-        if (kind == 0 && (_out.FlareWarnAt >= 0 || _out.FlareStart >= 0 && sim.Tick < _out.FlareEnd))
+        // 양성자 폭풍: X선 감시가 조짐을 잡았거나(⑥) · 배 안 선량계가 바깥 방사선이 평소의 두 배를 넘은 것을 잰다 (조짐을 못 잡았으면 폭풍이 와서야)
+        bool warned = _sense != null && _out.FlareCause != 0 && _sense.Tracked(TrackKind.Flare, _out.FlareCause);
+        bool storm = _out.FlareStart >= 0 && sim.Tick < _out.FlareEnd && _out.DoseOut > 2 * _out.CalmDose + 0.05;
+        if (kind == 0 && (warned || storm))
         {
-            kind = 2; cause = _out.FlareCause;
+            kind = 2; cause = warned ? _sense!.CauseOf(TrackKind.Flare, _out.FlareCause) : _out.FlareCause;
             eta = _out.FlareStart >= 0 ? 0 : Math.Max(0, _out.NextFlare - sim.Tick) * Time.SecondsPerTick;
         }
 

@@ -7,7 +7,7 @@ public static partial class Program
 {
     private const string WeatherShip = @"
 ##############################
-#..e.......#.......#.........#
+#..e.......#..R....#.........#
 #..........D..c.pb.D.........#
 #..e.......#.......#.........#
 ##############################";
@@ -17,7 +17,7 @@ public static partial class Program
         if (!Do("우주 날씨")) return;
         Console.WriteLine("\n[⑤ · ⑩ · ⑧ 우주 날씨 대비]");
         bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
-        var legend = new Dictionary<char, string> { ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed" };
+        var legend = new Dictionary<char, string> { ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['R'] = "SensorArray" };   // 센서 배열 — 바깥에서 아는 것은 센서가 잡은 것만 (⑫)
         var lay = Worlds.Ascii(WeatherShip, legend);
         int At(int x, int y) => Worlds.At(lay, x, y);
         double Kpa(Sim s, int x, int y) => s.Layout.Rooms[s.Layout.Room[At(x, y)]].Cells.Average(c => s.Get<Field>().Pressure(c));

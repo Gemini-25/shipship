@@ -65,7 +65,7 @@ public sealed partial class Director
     public static int EngineOf(CauseKind k) => k switch
     {
         CauseKind.Story => 12, CauseKind.Corrosion or CauseKind.Fire or CauseKind.Reaction => 2, CauseKind.Pressure or CauseKind.Heat => 3,
-        CauseKind.Breach => 4, CauseKind.Impact or CauseKind.Weather or CauseKind.Flare or CauseKind.Route or CauseKind.Contact => 5, CauseKind.Electric or CauseKind.Machine => 6,
+        CauseKind.Breach => 4, CauseKind.Impact or CauseKind.Weather or CauseKind.Flare or CauseKind.Route or CauseKind.Contact => 5, CauseKind.Electric or CauseKind.Machine or CauseKind.Sensor => 6,
         CauseKind.Biology => 7, CauseKind.Person or CauseKind.Robot => 8, CauseKind.Society => 9, CauseKind.Computer => 10, CauseKind.Supply => 11, _ => 0,
     };
 
