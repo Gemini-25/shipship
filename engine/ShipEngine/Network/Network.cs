@@ -79,6 +79,9 @@ public sealed partial class Network : IEngine
     // ── 상태 (장치마다) ──
     public byte[] On;
     public float[] Supply;        // 받은 비율 0~1
+    /// <summary>방마다 조명 몫 (0~1 · 주컴퓨터가 밤에 낮춰 달라고 요청한다 — 그래픽 결정 8 '밤엔 복도 조명을 낮추고 아침엔 밝게') · 비상등은 따로.</summary>
+    public float[] LampDim = Array.Empty<float>();
+    public void SetLampDim(int room, float dim) { if (room >= 0 && room < LampDim.Length) LampDim[room] = Math.Clamp(dim, 0f, 1f); }
     public float[] Wear;          // [장치 × 4 + 부품] 시간
     public byte[] Broken;         // [장치 × 4 + 부품]
     public int[] SealLeakCause;   // [장치] 봉함이 망가져 냉매가 새기 시작한 원인 마디 (고치면 0)
@@ -153,6 +156,7 @@ public sealed partial class Network : IEngine
         }
         int nd = Devices.Count;
         On = Devices.Select(d => (byte)(d.Def.On ? 1 : 0)).ToArray();
+        LampDim = Enumerable.Repeat(1f, Math.Max(1, L.Rooms.Count)).ToArray();
         Supply = new float[nd]; Duty = Enumerable.Repeat(1f, nd).ToArray(); Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd]; OnCause = new int[nd]; PanK = Enumerable.Repeat(293.15f, nd).ToArray(); PanWater = new float[nd];
         Charge = Devices.Select(d => (float)d.Def.Kwh).ToArray();
         _limit = new float[nd * 4];
@@ -651,7 +655,7 @@ public sealed partial class Network : IEngine
                 double frac = _feed[r] >= 0 ? _iFrac[FeederIsland(_feed[r])] : 0;
                 bool lit = _feed[r] >= 0 && Breaker[_feed[r]] != 0 && !Cut(_feed[r]) && frac > 0.05;
                 float emergency = EmergencyLit(r) ? 30 : 0;
-                light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac)) : emergency);
+                light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac) * (r < LampDim.Length ? LampDim[r] : 1)) : emergency);
             }
         var st = sim.Find<Structure>();
         if (st != null)
@@ -1278,6 +1282,7 @@ public sealed partial class Network : IEngine
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
         SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w); SaveChips(w); SaveRobots(w); SaveVibration(w);
+        w.Tag("조명"); w.Arr(LampDim);
     }
 
     public void Load(StateReader r)
@@ -1298,5 +1303,6 @@ public sealed partial class Network : IEngine
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
         LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r); LoadChips(r); LoadRobots(r); LoadVibration(r);
+        r.Tag("조명"); LampDim = r.Arr<float>();
     }
 }

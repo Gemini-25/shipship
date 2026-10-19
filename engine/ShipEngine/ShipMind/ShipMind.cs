@@ -202,6 +202,7 @@ public sealed partial class ShipMind : IEngine
         Comms(sim);   // ⑤ 통신 지연 — 원격 진료 · 태양 합
         Voyage(sim);  // ⑤ 별계 지도 — 다음 들를 곳
         CalendarStep(sim);   // ⑫ 긴 줄기 — 항해 달력
+        NightLights(sim);    // 야간 조명 — 밤엔 복도 · 침실을 낮추고 아침엔 환하게 (그래픽 결정 8)
         Supply(sim); t = Prof.Lap("주컴퓨터:배급", t);   // ⑪ 배급 · 보관함 무게
         Helm(sim); t = Prof.Lap("주컴퓨터:조타", t);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
         GravityWatch(sim);   // 인공 중력 — 꺼진 발생기를 다시 켜고 · 사라질 때 · 돌아올 때 알린다
