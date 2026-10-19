@@ -508,6 +508,7 @@ public sealed partial class Network
     private void LeakStep(Sim sim, double dt)
     {
         if (_leakCells.Count == 0) return;
+        var chem = sim.Find<Chemistry>();
         foreach (int c in _leakCells)
         {
             float lc = PipeLeak[c * 2], lw = PipeLeak[c * 2 + 1];
@@ -515,7 +516,7 @@ public sealed partial class Network
             {
                 double n = Math.Min(Coolant, LeakFlow(c, LineKind.Coolant) * dt);
                 Coolant -= n;
-                if (F.Severed[c] != 0 || F.RegionOf.Length <= c || F.RegionOf[c] < 0) VentedNH3 += n; else F.AddGas(c, T.gNH3, n, F.Temp(c));
+                if (F.Severed[c] != 0 || F.RegionOf.Length <= c || F.RegionOf[c] < 0) VentedNH3 += n; else { F.AddGas(c, T.gNH3, n, F.Temp(c)); chem?.MarkGas(c, LineCause[c * 3 + (int)LineKind.Coolant]); }
             }
             if (lw > 0 && WaterTank > 0)
             {

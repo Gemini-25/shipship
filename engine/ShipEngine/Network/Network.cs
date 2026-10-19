@@ -352,7 +352,7 @@ public sealed partial class Network : IEngine
         UpdateCuts();
         EnsureLines();
         LinkInsulation(sim);
-        if (sim.Tick % 25 == 0) MeasureO2();
+        if (sim.Tick % 25 == 0) { AgeO2Sensor(sim, 25 * dt); MeasureO2(); }
         Faults(sim);
         t = Lap("고장", t);
         Power(sim, dt);
@@ -370,7 +370,7 @@ public sealed partial class Network : IEngine
         Lap("마모", t);
     }
 
-    /// <summary>배의 평균 산소 분압 → 산소 발생기 일 몫 (비례 조절).</summary>
+    /// <summary>배의 평균 산소 분압 → 산소 발생기 일 몫 (비례 조절). 조절 센서로 잰다 — 늙으면 낮게 읽어 더 만든다 (② (마) <see cref="O2Gain"/>).</summary>
     private void MeasureO2()
     {
         double sum = 0; int n = 0;
@@ -378,11 +378,11 @@ public sealed partial class Network : IEngine
             foreach (int c in room.Cells)
                 if (F.Pressure(c) > 50) { sum += F.Partial(T.gO2, c); n++; }
         PpO2 = n > 0 ? sum / n : 0;
-        float duty = n > 0 ? (float)Math.Clamp((O2Target - PpO2) / O2Band, 0, 1) : 1;
+        float duty = n > 0 ? (float)Math.Clamp((O2Target - O2Reading) / O2Band, 0, 1) : 1;
         // 산소 비율 상한: 기압이 낮아진 배에서 분압을 맞추느라 산소 비율이 불붙기 쉬운 데까지 오르지 않게 (NASA 탐사 대기 56.5kPa · 34% — 그 위로는 멈춘다)
         double frac = 0; int m = 0;
         foreach (var room in L.Rooms) foreach (int c in room.Cells) { double pk = F.Pressure(c); if (pk > 50) { frac += F.Partial(T.gO2, c) / pk; m++; } }
-        if (m > 0 && frac / m > O2MaxFraction) duty = 0;
+        if (m > 0 && frac / m * O2Gain > O2MaxFraction) duty = 0;
         for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role == "o2gen") Duty[d] = duty;
     }
 
@@ -690,7 +690,7 @@ public sealed partial class Network : IEngine
                     {
                         WaterTank -= 2 * o2; sim.Book.Add(Res.Water, Flow.Split, -2 * o2);
                         F.AddGas(c, T.gO2, o2, F.Temp(c)); sim.Book.Add(Res.O2, Flow.Electrolysis, o2);
-                        if (sealLeak) F.AddGas(c, T.gH2, 2 * o2, F.Temp(c)); else h2 = 2 * o2;
+                        if (sealLeak) { F.AddGas(c, T.gH2, 2 * o2, F.Temp(c)); sim.Find<Chemistry>()?.MarkGas(c, SealLeakCause[d]); } else h2 = 2 * o2;
                     }
                     HeatInto(dev, kw * 1000 * (0.3 * duty + Math.Max(0, 0.1 - duty)) * dt);
                     // 사바티에 (ISS 2010~): CO₂ + 4H₂ → CH₄ + 2H₂O — 걸러 모은 이산화탄소와 갈라 낸 수소(90%)로 물을 되찾는다 · 메탄은 배 밖으로 · 반응열 165kJ/몰
@@ -752,6 +752,7 @@ public sealed partial class Network : IEngine
                         double leak = Math.Min(Coolant, 0.05 * dt);
                         Coolant -= leak;
                         F.AddGas(c, T.gNH3, leak, F.Temp(c));
+                        sim.Find<Chemistry>()?.MarkGas(c, SealLeakCause[d]);   // 암모니아도 불붙는다 (15~28%) — 터지면 그 샘이 뿌리
                     }
                     HeatInto(dev, kw * 1000 * 0.1 * dt); // 모터 겉면 열 10%만 방으로 — 나머지는 펌프가 미는 냉각수가 가져간다
                     break;
@@ -1066,6 +1067,8 @@ public sealed partial class Network : IEngine
             SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"부서진 {Ko.I(dev.Name)} 틈으로 암모니아가 새어 나온다", sim.Tick, dev.Cell, cause);
             sim.Facts.Emit(sim.Tick, FactKind.Toxic, dev.Cell, 0, SealLeakCause[d], other: d);
         }
+        if (dev.Def.Role == "o2gen" && dev.Has(Part.Seal))
+            SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"부서진 {dev.Name}의 수소 관으로 갈라 낸 수소가 방으로 샌다", sim.Tick, dev.Cell, cause);
         if (dev.Def.Role == "battery" && HasCells(dev)) CrushCell(dev, cause);   // 찌그러진 셀 — 묶음 하나가 속 합선 (② (라))
         else if (dev.Def.Role == "battery" && Charge[d] > 0.5) sim.Find<Chemistry>()?.Abuse(dev.Cell, cause);
     }
@@ -1092,6 +1095,12 @@ public sealed partial class Network : IEngine
             SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"{Ko.I(dev.Name)} 터진 틈으로 암모니아가 새어 나온다", sim.Tick, dev.Cell, cause);
             sim.Facts.Emit(sim.Tick, FactKind.Toxic, dev.Cell, 0, SealLeakCause[d], other: d);
             sim.Find<Sound>()?.Emit(sim, dev.Cell, 70, SoundKind.Hiss, SealLeakCause[d]);
+        }
+        // 산소 발생기 봉함: 갈라 낸 수소가 배 밖으로 가지 않고 방으로 샌다 (냄새 · 색 없음 — 주컴퓨터의 불붙는 기체 센서만 안다)
+        if (p == Part.Seal && dev.Def.Role == "o2gen")
+        {
+            SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"{dev.Name}의 수소 관 봉함이 터져 갈라 낸 수소가 방으로 샌다", sim.Tick, dev.Cell, cause);
+            sim.Find<Sound>()?.Emit(sim, dev.Cell, 55, SoundKind.Hiss, SealLeakCause[d]);
         }
         // 물 재생기 봉함: 오수 관이 샌다 (바닥에 고인 물이 급전선 길에 닿으면 합선 — 그 원인이 이 마디에 이어진다)
         if (p == Part.Seal && dev.Def.Role == "recycler")
@@ -1218,7 +1227,7 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
-        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w);
+        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w);
     }
 
     public void Load(StateReader r)
@@ -1237,6 +1246,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
-        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r);
+        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r);
     }
 }

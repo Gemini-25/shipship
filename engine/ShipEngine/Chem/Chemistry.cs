@@ -36,6 +36,8 @@ public sealed class Chemistry : IEngine
     public byte[] Burning;
     /// <summary>불 붙은 칸의 원인 마디.</summary>
     public int[] FireCause;
+    /// <summary>칸마다 불붙는 기체가 새어 나온 원인 (② (마) — ⑥이 요청: 봉함 샘 · 관 샘 · 배터리 뿜음). 그 칸에 불붙는 기체가 없어지면 지운다.</summary>
+    public int[] GasCause;
     /// <summary>칸을 달군 것의 원인 (켜 둔 조리대 · 과열 장치 — 위 층이 적는다) — 뜨거워 불이 붙으면 그 불의 부모가 된다.</summary>
     public int[] HeatCause;
     /// <summary>지난 틱에 낸 열 (kW) — 화면 · 연출.</summary>
@@ -72,7 +74,7 @@ public sealed class Chemistry : IEngine
     public Chemistry(Field f)
     {
         F = f; T = f.T; Cells = f.Cells;
-        Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells];
+        Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells]; GasCause = new int[Cells];
         FuelLink = new byte[Cells]; Creep = new float[Cells];
         _spark = new byte[Cells]; _sparkNext = new byte[Cells]; _sparkCause = new int[Cells]; _sparkCauseNext = new int[Cells];
         // 넉넉한 양: 바퀴 1의 몰 잣대(200몰)를 그대로 질량으로 — 고분자 2.8kg · 섬유 32kg · 음식 36kg · 그을음 2.4kg · 피복 · 폼은 고분자와 같은 2.8kg
@@ -103,6 +105,14 @@ public sealed class Chemistry : IEngine
     }
 
     private int RoomSlot(int cell) => F.L.Room[cell] >= 0 ? F.L.Room[cell] : _boomJ.Length - 1;
+
+    /// <summary>불붙는 기체가 이 칸에서 새어 나왔다 (⑥이 요청) — 그 방 칸 모두에 원인을 단다 (기체가 방에 고루 퍼진다).</summary>
+    public void MarkGas(int cell, int cause)
+    {
+        if (cause == 0 || cell < 0 || cell >= Cells) return;
+        if (F.L.Room[cell] is int r && r >= 0) { foreach (int c in F.L.Rooms[r].Cells) GasCause[c] = cause; }
+        else GasCause[cell] = cause;
+    }
 
     /// <summary>불씨 (전기 불꽃 · 성냥 · 과열): 그 칸 겉면에 열을 넣고, 다음 틱에 연소 범위의 기체를 태운다.</summary>
     public void Ignite(int cell, double joules, int cause)
@@ -449,7 +459,7 @@ public sealed class Chemistry : IEngine
     {
         double n = 0;
         foreach (var gf in _gasFires) n += F.Gas(gf.gas, i);
-        if (n < 1e-6) return;
+        if (n < 1e-6) { GasCause[i] = 0; return; }
         double total = F.Moles(i);
         if (total < 1e-6) return;
         double o2 = F.Gas(T.gO2, i) / total;
@@ -469,7 +479,11 @@ public sealed class Chemistry : IEngine
             Hrr[i] += (float)(heat / dt / 1000);
             GasBursts++;
             int cause = _spark[i] != 0 ? _sparkCause[i] : FireCause[i];
-            if (cause == 0) cause = sim.Causes.Add(CauseKind.Reaction, $"{Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i);
+            int gc = GasCause[i];
+            if (gc != 0 && gc != cause && (cause == 0 || sim.Causes[cause].Parent != gc && sim.Causes[cause].Parent2 != gc))
+                // 새어 나온 기체 — 첫 부모는 샘 (사슬의 뿌리 · 씨앗의 열매) · 둘째 부모는 불씨 (② (마)). 불꽃 앞면이 옆 칸으로 옮겨도 이 마디를 그대로 잇는다
+                cause = sim.Causes.Add(CauseKind.Reaction, $"새어 나온 {Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i, gc, cause);
+            else if (cause == 0) cause = sim.Causes.Add(CauseKind.Reaction, $"{Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i);
             sim.Facts.Emit(sim.Tick, FactKind.Ignition, i, (float)(heat / 1000), cause, other: gf.gas);
             int slot = RoomSlot(i);
             if (_boomJ[slot] <= 0 && _tickBurst[slot] <= 0) { _boomCell[slot] = i; _boomCause[slot] = cause; } // 쾅의 자리 · 원인: 그 불이 처음 터진 칸
@@ -536,6 +550,7 @@ public sealed class Chemistry : IEngine
         w.I64(Ignitions); w.I64(GasBursts);
         w.Arr(FuelLink); w.Arr(Creep); w.I64(Creeps); w.F64(PyroHcl);
         w.Tag("폭발 소리"); w.Arr(_boomJ); w.Arr(_boomCell); w.Arr(_boomCause);
+        w.Arr(GasCause);
     }
 
     public void Load(StateReader r)
@@ -544,5 +559,6 @@ public sealed class Chemistry : IEngine
         Ignitions = r.I64(); GasBursts = r.I64();
         r.ArrInto(FuelLink); r.ArrInto(Creep); Creeps = r.I64(); PyroHcl = r.F64();
         r.Tag("폭발 소리"); r.ArrInto(_boomJ); r.ArrInto(_boomCell); r.ArrInto(_boomCause);
+        r.ArrInto(GasCause);
     }
 }

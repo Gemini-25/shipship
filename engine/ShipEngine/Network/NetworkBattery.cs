@@ -110,6 +110,7 @@ public sealed partial class Network
         }
         int cause = sim.Causes.Add(CauseKind.Heat, $"{dev.Name}의 셀이 달아올라 안전 밸브로 전해액 증기를 뿜었다", sim.Tick, dev.Cell, CellCause[g]);
         CellCause[g] = cause;
+        chem.MarkGas(dev.Cell, cause);   // 수소 · 메탄 · 일산화탄소 — 터지면 이 뿜음이 뿌리 (② (마))
         sim.Facts.Emit(sim.Tick, FactKind.Overheat, dev.Cell, CellK[g], cause, other: dev.Id);
         sim.Find<Sound>()?.Emit(sim, dev.Cell, 85, SoundKind.Hiss, cause);
     }

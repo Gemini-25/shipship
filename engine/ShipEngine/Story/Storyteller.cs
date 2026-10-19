@@ -251,6 +251,15 @@ public sealed partial class Storyteller : IEngine
                 var running = net.Devices.Where(d => net.On[d.Id] != 0 && Enum.GetValues<Part>().Any(p => d.Life(p) > 0 && !net.IsBroken(d.Id, p))).ToList();
                 if (running.Count == 0) return false;
                 var dev = running[_rng.Range(0, running.Count)];
+                // 산소 발생기를 골랐으면 반은 조절 센서 — 늙어 낮게 읽기 시작해 발생기가 산소를 더 만든다 (② (마) — 배가 소리 없이 짙은 산소가 된다)
+                if (dev.Def.Role == "o2gen" && net.O2DriftRate <= 0 && _rng.Chance(0.5))
+                {
+                    double hrs = _rng.Range(1.0, 8.0) / g;
+                    text = $"{dev.Name}의 산소 조절 센서가 늙어 산소를 낮게 읽기 시작했다";
+                    int cs = sim.Causes.Add(CauseKind.Wear, text, sim.Tick, dev.Cell);
+                    net.StartO2Drift(hrs, cs);
+                    return Record(sim, kind, cs, dev.Cell, (float)hrs);
+                }
                 var parts = Enum.GetValues<Part>().Where(p => dev.Life(p) > 0 && !net.IsBroken(dev.Id, p)).ToList();
                 var part = parts[_rng.Range(0, parts.Count)];
                 double left = _rng.Range(1.0, 8.0) / g;

@@ -128,13 +128,14 @@ public sealed partial class Mind
         if (_chem == null) return 0;
         int room = RoomOf(cell);
         if (room < 0) return _chem.HeatCauseAt(cell);
-        int heat = 0;
+        int heat = 0, leak = 0;
         foreach (int c in L.Rooms[room].Cells)
         {
             if (_chem.Burning[c] != 0 && _chem.FireCause[c] != 0) return _chem.FireCause[c];
+            if (leak == 0) leak = _chem.GasCause[c];
             if (heat == 0) heat = _chem.HeatCauseAt(c);
         }
-        return heat;
+        return leak != 0 ? leak : heat;   // 불 > 샘(새어 나온 기체 — ② (마)) > 달궈진 곳
     }
 
     /// <summary>시안화수소의 쓴 아몬드 냄새를 맡는 사람인가 — 열에 여섯 (유전: 못 맡는 사람이 20~40% · 세계 시드와 사람 번호로 정해져 저장이 필요 없다).</summary>
@@ -279,7 +280,10 @@ public sealed partial class Mind
             // 코
             double soot = F.Ppm(T.gSoot, cell);
             if (soot > 30) Learn(a, t, BeliefKind.SmokeSmell, cell, -1, (float)Math.Min(1, soot / 300), BeliefSource.Smelled);
-            if (F.Ppm(T.gNH3, cell) > 25 || F.Ppm(T.gO3, cell) > 0.1) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.8f, BeliefSource.Smelled);
+            // 암모니아: 5ppm부터 지린 냄새 (냄새 문턱) — 옅으면 옅게 믿고 25ppm(눈 · 코가 따가운 짙기)이면 0.8 · 처음 알면 원인 마디 (새는 냉매 · ② (마))
+            double nh3 = F.Ppm(T.gNH3, cell);
+            if (nh3 >= 5) Noticed(sim, a, t, cell, (float)Math.Clamp(nh3 / 30, 0.2, 1), BeliefSource.Smelled, "지린 암모니아 냄새를 맡았다");
+            if (F.Ppm(T.gO3, cell) > 0.1) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.8f, BeliefSource.Smelled);
             // ② 사고 화학: 염화수소는 1ppm부터 누구나 맡는다 (코를 찌르는 매캐한 냄새) · 시안화수소는 쓴 아몬드 냄새 — 맡는 사람만 (유전 · 열에 넷은 못 맡는다)
             double hcl = F.Ppm(T.gHCl, cell), hcn = F.Ppm(T.gHCN, cell);
             if (hcl >= 1) Noticed(sim, a, t, cell, (float)Math.Min(1, 0.5 + hcl / 40), BeliefSource.Smelled, "코를 찌르는 매캐한 냄새를 맡았다");

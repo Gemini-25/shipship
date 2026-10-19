@@ -190,6 +190,109 @@ public static partial class Program
             }
         }
 
+        // ── (마) 누출: 산소 조절 센서 노화 (짙은 산소) · 산소 발생기 수소 샘 · 샘에서 폭발 · 피하기까지 원인 사슬 ──
+        {
+            (Sim s, Network net, ShipMind sm, Field f, int ls) Hw(ulong seed = 1)
+            {
+                var s = ShipWorld.Create("Hwasal", seed);
+                return (s, s.Get<Network>(), s.Get<ShipMind>(), s.Get<Field>(), s.Layout.Rooms.FindIndex(r => r.Name == "생명유지실"));
+            }
+            void SetO2(Field f, IEnumerable<int> cells, double frac)
+            {
+                foreach (int c in cells)
+                {
+                    double n = f.Moles(c), o2 = f.Gas(f.T.gO2, c), want = n * frac;
+                    if (want > o2) { f.AddGas(c, f.T.gO2, want - o2, f.Temp(c)); f.RemoveGas(c, f.T.gN2, Math.Min(f.Gas(f.T.gN2, c), want - o2)); }
+                }
+            }
+            var o2gens = (Network net) => net.Devices.Where(d => d.Def.Role == "o2gen").ToList();
+
+            // 늙은 조절 센서는 낮게 읽는다 → 배 산소가 목표를 넘어도 발생기는 쉬지 않는다 (바른 센서면 멈춘다)
+            {
+                var (s, net, sm, f, ls) = Hw();
+                SetO2(f, s.Layout.Rooms.SelectMany(r => r.Cells), 0.225);
+                net.O2Gain = 0.75; s.Run(30); float dutyOld = o2gens(net).Max(d => net.Duty[d.Id]);
+                net.O2Gain = 1; s.Run(30); float dutyOk = o2gens(net).Max(d => net.Duty[d.Id]);
+                Check("산소 조절 센서가 늙어 낮게 읽으면 (0.75) 배 산소가 목표를 넘어도 발생기가 쉬지 않는다 — 바른 센서면 멈춘다",
+                    dutyOld > 0.99f && dutyOk < 0.01f, $"배 산소 분압 {net.PpO2:0.0}kPa · 늙은 센서 일 몫 {dutyOld:0.00} · 바른 센서 {dutyOk:0.00}");
+            }
+
+            // 주컴퓨터가 제 방 센서와 견줘 짙은 산소(23.5%)를 잡는다 → 알리고 · 조절 센서를 다시 맞춘다 · 주컴퓨터가 없으면 아무도 모른다
+            (bool raised, string said, double gain, string why, bool smelled) Rich(bool computer)
+            {
+                var (s, net, sm, f, ls) = Hw(2);
+                var m = s.Get<Mind>();
+                if (!computer) { var mc = net.Devices.First(d => d.Type == "MainComputer"); net.On[mc.Id] = 0; }
+                s.Run(5);
+                net.SetO2Drift(s, 0.75, 0);
+                SetO2(f, s.Layout.Rooms[ls].Cells, 0.27);
+                s.Run(Time.Minutes(2));
+                var x = sm.Incidents.FirstOrDefault(i => i.Kind == IncidentKind.O2Rich);
+                string said = sm.Log.Select(l => l.Item2).FirstOrDefault(t => t.Contains("산소가 짙다")) ?? "";
+                bool smelled = m.Agents.Any(a => a.IsPerson && a.Beliefs.Any(b => b.Kind == BeliefKind.BadAir && b.Src is BeliefSource.Smelled or BeliefSource.Felt));
+                return (x.Id != 0, said, net.O2Gain, x.Id != 0 ? s.Causes.Story(net.O2CalCause) : "", smelled);
+            }
+            var on = Rich(true); var off = Rich(false);
+            Check("짙은 산소 (27%): 주컴퓨터가 제 방 센서로 잡아 '산소가 짙다'를 알리고 · 늙은 조절 센서를 다시 맞춘다 · 주컴퓨터가 꺼져 있으면 아무도 모른다 (사람은 못 느낀다)",
+                on.raised && on.said.Contains("%") && on.gain > 0.99 && on.why.Contains("센서") && !off.raised && off.gain < 0.8 && !on.smelled && !off.smelled,
+                $"켜짐: \"{on.said}\" · 센서 {on.gain:0.00} · {on.why} / 꺼짐: 사건 {(off.raised ? "있음" : "없음")} · 센서 {off.gain:0.00}");
+
+            // 산소 발생기 봉함이 터지면 갈라 낸 수소가 방으로 샌다 (원인 마디 · 쉬익) → 주컴퓨터 불붙는 기체 경보 (폭발 하한 25%) · 그 방 배기
+            {
+                var (s, net, sm, f, ls) = Hw(3);
+                var gen = o2gens(net)[0];
+                s.Run(5);
+                net.SetO2Drift(s, 0.5, 0);   // 발생기가 쉬지 않고 돈다 (물을 갈라 수소가 나온다)
+                net.AgeLeft(gen.Id, Part.Seal, 0.001, s.Causes.Add(CauseKind.Story, "시험: 봉함이 낡았다", s.Tick));
+                s.Run(Time.Minutes(1));
+                string leak = net.SealLeakCause[gen.Id] != 0 ? s.Causes.Text(net.SealLeakCause[gen.Id]) : "";
+                double h2a = s.Layout.Rooms[ls].Cells.Sum(c => f.Gas(f.T.gH2, c));
+                foreach (int c in s.Layout.Rooms[ls].Cells) f.AddGas(c, f.T.gH2, f.Moles(c) * 0.015, f.Temp(c));   // 몇 시간 쌓인 셈 (닫힌 방)
+                s.Run(Time.Minutes(1));
+                var x = sm.Incidents.FirstOrDefault(i => i.Kind == IncidentKind.Flammable && i.Room == ls);
+                string said = sm.Log.Select(l => l.Item2).FirstOrDefault(t => t.Contains("불붙는 기체")) ?? "";
+                Check("산소 발생기 봉함이 터지면 수소가 방으로 샌다 (원인 마디) → 수소 1.5%: 주컴퓨터가 '불붙는 기체'를 알리고 그 방을 배기한다",
+                    leak.Contains("수소") && h2a > 0 && x.Id != 0 && said.Contains("수소") && net.Exhaust[ls] != 0,
+                    $"샘 \"{leak}\" · 1분에 샌 수소 {h2a:0.00}몰 · 방송 \"{said}\" · 배기 {net.Exhaust[ls]}");
+            }
+
+            // 새어 나온 수소에 불꽃이 튀면 터진다 — 폭발의 원인 사슬이 불씨와 봉함 샘 둘 다에 닿는다
+            {
+                var (s, net, sm, f, ls) = Hw(4);
+                var ch = s.Get<Chemistry>();
+                var gen = o2gens(net)[0];
+                s.Run(5);
+                net.SetO2Drift(s, 0.5, 0);
+                net.AgeLeft(gen.Id, Part.Seal, 0.001, 0);
+                s.Run(Time.Minutes(1));
+                foreach (int c in s.Layout.Rooms[ls].Cells) f.AddGas(c, f.T.gH2, f.Moles(c) * 0.09, f.Temp(c));
+                long from = s.Facts.Total;
+                ch.Ignite(s.Layout.Rooms[ls].Cells[3], 2e4, s.Causes.Add(CauseKind.Setup, "정전기 불꽃", s.Tick));
+                s.Run(5);
+                var boom = s.Facts.Since(from).FirstOrDefault(x => x.Kind == FactKind.Ignition && x.Other == f.T.gH2);
+                string story = boom.Cause != 0 ? s.Causes.Story(boom.Cause) : "";
+                string spark = boom.Cause != 0 && s.Causes[boom.Cause].Parent2 != 0 ? s.Causes.Story(s.Causes[boom.Cause].Parent2) : "";
+                Check("새어 나온 수소에 불꽃 → 터진다: 원인 사슬의 뿌리는 봉함 샘 · 둘째 부모는 불꽃",
+                    boom.Cause != 0 && story.Contains("새어 나온 수소") && story.Contains("봉함") && spark.Contains("불꽃"), $"{story} (불씨: {spark})");
+            }
+
+            // 냉매(암모니아)가 새는 방을 피하는 사람의 원인 사슬이 그 샘에 닿는다
+            {
+                var (s, net, sm, f, ls) = Hw(5);
+                var m = s.Get<Mind>();
+                var pump = net.Devices.First(d => d.Def.Role == "pump" && d.Room == ls);
+                s.Run(5);
+                net.AgeLeft(pump.Id, Part.Seal, 0.001, 0);
+                for (int k = 0; k < Time.Minutes(2) && (net.SealLeakCause[pump.Id] == 0 || f.Ppm(f.T.gNH3, s.Layout.Index(28, 9)) < 10); k++) s.Step();
+                int p = m.AddPerson(s, s.Layout.Index(28, 9));   // 샘이 시작된 방에 들어선 사람 (주컴퓨터 방송보다 제 코가 먼저)
+                s.Run(5);
+                var b = m[p].Beliefs.FirstOrDefault(x => x.Kind == BeliefKind.BadAir && x.Src is BeliefSource.Smelled or BeliefSource.Felt);   // 제 코로 안 것 (주컴퓨터 방송이 아니라)
+                string story = b.Cause != 0 ? s.Causes.Story(b.Cause) : "";
+                Check("암모니아가 새는 방을 피하는 사람: 제 코로 안 나쁜 공기 믿음의 원인 사슬이 그 펌프의 봉함 샘에 닿는다 (불 > 샘 > 달궈진 곳)",
+                    story.Contains("암모니아가 새어"), story == "" ? $"믿음 없음 ({string.Join(",", m[p].Beliefs.Where(x => x.Kind == BeliefKind.BadAir).Select(x => x.Src))})" : story);
+            }
+        }
+
         // ── (나) 냄새 · 증상 · 센서 ──
         var mlay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
         int MAt(int x, int y) => Worlds.At(mlay, x, y);
