@@ -949,8 +949,13 @@ public sealed partial class Network : IEngine
     }
 
     /// <summary>덕트: 팬이 돌면 열린 통풍구마다 공기의 6%를 모아 고르게 돌려준다 (보존).</summary>
+    private readonly List<int> _airflowCells = new();   // 지난 틱 공조 바람을 요청한 칸 (틱마다 다시 — 장에 남은 값이 찍힌다)
+    private bool _airflowStale;                          // 되살린 뒤 아직 목록을 다시 짓지 않았다
     private void Ducts(Sim sim)
     {
+        if (_airflowStale) { _airflowStale = false; _airflowCells.Clear(); for (int c = 0; c < F.Cells; c++) if (F.Airflow[c] > 0) _airflowCells.Add(c); }   // 되살린 세계: 장에 남은 바람이 지난번 요청이다
+        foreach (int c in _airflowCells) F.Airflow[c] = 0;
+        _airflowCells.Clear();
         if (HvacKw <= 0) return; // 팬이 돌지 않는다 (냉각 고리 · 열교환기가 모두 섰다)
         // 정화 배기: 방 곳곳의 흡입구로 칸 공기의 1.5%씩(1분이면 방 공기의 3할)을 정화기로 보내 독한 기체의 90%를 걸러 그 방으로 돌려준다 (정화기가 서 있으면 못 한다)
         bool scrub = false, checkedScrub = false;
@@ -974,6 +979,14 @@ public sealed partial class Network : IEngine
         double median = ps[ps.Count / 2];
         vents.RemoveAll(v => F.Pressure(v) < 0.85 * median);
         if (vents.Count < 2) return;
+        // 통풍구에서 나오는 바람 (③ 장에 요청 — 그 칸 0.5m/s · 곁 칸 0.25m/s): 무중력에서 부력 대신 공기를 섞는다
+        Span<int> vnb = stackalloc int[4];
+        foreach (int v in vents)
+        {
+            F.Airflow[v] = 0.5f; _airflowCells.Add(v);
+            L.Neighbors(v, vnb);
+            foreach (int j in vnb) if (j >= 0 && F.RegionOf[j] >= 0 && F.RegionOf[j] == F.RegionOf[v] && F.Airflow[j] < 0.25f) { F.Airflow[j] = 0.25f; _airflowCells.Add(j); }
+        }
         int G = F.G;
         var pool = new double[G];
         double poolU = 0;
@@ -1259,6 +1272,7 @@ public sealed partial class Network : IEngine
 
     public void Load(StateReader r)
     {
+        _airflowStale = true;
         r.ArrInto(DataBroken); r.ArrInto(DataBrokenCause); r.ArrInto(DataCutCell); DataCuts = r.I64(); DataSplices = r.I64();
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
         r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(MainStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);

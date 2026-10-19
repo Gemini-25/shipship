@@ -22,6 +22,7 @@ public struct Body
     public float BloodL;       // 피 (L)
     public float RadGy, RadRecent;
     public float Pain;
+    public float FaceCO2;      // 무중력에서 얼굴 앞에 고인 날숨 (이산화탄소 kPa — 방 공기 위에 더한다 · 공조 바람 · 움직임이 걷는다)
     public float SuitO2;       // 우주복 산소 (몰)
     public float MaskO2;       // 산소 마스크 병의 산소 (몰 — 기압이 남은 곳에서만 쓸모가 있다)
     public byte Mask;          // 산소 마스크를 썼다
@@ -79,6 +80,8 @@ public sealed partial class Life : IEngine
     public const double BodyC = 245_000;     // J/K (70kg × 3.5kJ/kg·K)
     public const double SkinArea = 1.8;      // m²
     public const double BodyTemp = 310.15;
+    /// <summary>무중력에서 가만히 있는 이의 얼굴 앞에 고이는 날숨 (이산화탄소 kPa · 많아야) · 두통이 나는 들이쉬는 이산화탄소 (kPa — 1.5%).</summary>
+    public const double FacePocketKPa = 2.0, HeadacheKPa = 1.5;
 
     private readonly Field F;
     private readonly Layout L;
@@ -291,7 +294,16 @@ public sealed partial class Life : IEngine
         bool mask = !suit && b.Mask != 0 && b.MaskO2 > 0 && p > 6.3;
         bool own = suit || mask;   // 제 병의 숨
         double pO2 = suit ? 21 : F.Partial(T.gO2, c);
-        double pCO2 = own ? 0.04 : F.Partial(T.gCO2, c);
+        // 무중력: 날숨이 부력으로 떠오르지 않아 가만히 있는 이의 얼굴 앞에 고인다 (10분에 걸쳐 · 많아야 2kPa) — 공조 바람이 닿거나 움직이면 흩어진다
+        float gc = F.Grav[c];
+        if (!own && gc < Field.LowG && p > 20)
+        {
+            double still = b.Asleep != 0 || b.ActivityW <= 110 ? 1 : 0.3, target = FacePocketKPa * still * (1 - F.Fan(c)) * (1 - gc / Field.LowG);
+            double tauF = target >= b.FaceCO2 ? 600 : 30 + 570 * (1 - F.Fan(c));   // 고이는 데 10분 · 바람이 닿으면 30초에 걷힌다
+            b.FaceCO2 += (float)((target - b.FaceCO2) * (1 - Math.Exp(-dt / tauF)));
+        }
+        else if (b.FaceCO2 > 0) b.FaceCO2 = (float)(b.FaceCO2 * Math.Exp(-dt / 60));
+        double pCO2 = own ? 0.04 : F.Partial(T.gCO2, c) + b.FaceCO2;
         double co = own ? 0 : F.Ppm(T.gCO, c), nh3 = own ? 0 : F.Ppm(T.gNH3, c), o3 = own ? 0 : F.Ppm(T.gO3, c), soot = own ? 0 : F.Ppm(T.gSoot, c);
         double hcn = own ? 0 : F.Ppm(T.gHCN, c), hcl = own ? 0 : F.Ppm(T.gHCl, c);
         // ② (라) 배터리가 뿜은 플루오린 화합물 — 플루오린화수소로 센다 (POF₃는 둘 · PF₅는 셋을 낸다)
@@ -361,6 +373,7 @@ public sealed partial class Life : IEngine
         // 이산화탄소 · 독
         if (pCO2 > 7) { b.Hypoxia += (float)((pCO2 - 7) / 5 * dt / 60); harm ??= "이산화탄소가 너무 짙었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         if (pCO2 > 3) b.Pain = (float)Math.Min(1, b.Pain + (pCO2 - 3) / 40 * dt / 60);
+        else if (pCO2 > HeadacheKPa && b.Pain < 0.3f) b.Pain = (float)Math.Min(0.3, b.Pain + (pCO2 - HeadacheKPa) * 0.1 * dt / 60);   // 두통 (1.5% 넘게 오래 — 우주 정거장 승무원의 두통)
         double lung = 0;
         // 암모니아: 300ppm은 한 시간 넘게 버티고 · 3000ppm은 30분이면 위태롭고 · 1만ppm은 몇 분 (분마다 폐 손상 0.0167 × (ppm/3000)^1.3)
         if (nh3 > 100) lung += 0.0167 * Math.Pow(nh3 / 3000, 1.3);

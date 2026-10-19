@@ -202,6 +202,8 @@ public struct AgentCore
     /// <summary>무중력 (바퀴 3): 1이면 지금 떠 있다 (바닥 중력 0.3g 아래) · 떠서 지낸 시간 (시간 — 익숙해질수록 손잡이를 잘 탄다).</summary>
     public byte Floated;
     public float ZeroGH;
+    /// <summary>무중력에서 잘 자리 (칸 + 1 · 0 없음): 날숨이 고여 깬 뒤 고른 공조 바람이 닿는 자리 — 통풍구 앞에 침낭을 묶는다.</summary>
+    public int ZeroGBed;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

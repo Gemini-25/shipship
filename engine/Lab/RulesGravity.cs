@@ -218,6 +218,69 @@ public static partial class Program
             Check("그을음: 무중력에서는 오래 떠 있다 — 한 시간 뒤 떠 있는 몫이 1g보다 많다", zero > one * 1.2 && zero < 1, $"한 시간 뒤 떠 있는 몫: 1g {one:0.00} · 무중력 {zero:0.00}");
         }
 
+        // ── (라) 무중력의 불: 부력이 방 공기를 끌어들이지 않아 불꽃은 제 둘레 공기만 먹고 사그라든다 (1g보다 훨씬 적게 탄다) · 공조 바람이 닿는 자리는 계속 탄다 ──
+        {
+            (double kj, int burning) Fire(int mode)   // 0: 1g · 1: 무중력 · 2: 무중력 + 공조 바람
+            {
+                var s = Worlds.WithChem(lay, 6); var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+                int seat = At(20, 4);
+                if (mode > 0) Array.Fill(f.Grav, 0f);
+                s.Run(3);
+                ch.Ignite(seat, 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
+                double kj = 0;
+                Span<int> nb = stackalloc int[4];
+                for (int k = 0; k < Time.Minutes(15); k++)
+                {
+                    if (mode == 2) { f.Airflow[seat] = 0.5f; f.L.Neighbors(seat, nb); foreach (int j in nb) if (j >= 0) f.Airflow[j] = 0.25f; }   // 의자 곁 통풍구
+                    s.Step();
+                    kj += ch.Hrr.Sum() * Time.SecondsPerTick;
+                    if (Debug && mode == 1 && k % 75 == 0) { var fa = ch.FeedAir(seat); Console.WriteLine($"      {k / 25}분 불 {ch.Hrr.Sum():0}kW · 칸 산소 {ch.O2Frac(seat):0.000} · 먹는 공기 {fa.x:0.000}"); }
+                }
+                if (Debug) Console.WriteLine($"    불 {(mode == 0 ? "1g" : mode == 1 ? "무중력" : "무중력 + 공조")}: 탄 열 {kj / 1000:0}MJ · 타는 칸 {ch.BurningCount}");
+                return (kj, ch.BurningCount);
+            }
+            var g1 = Fire(0); var g0 = Fire(1); var fan = Fire(2);
+            Check("무중력의 불: 불꽃이 제 둘레 공기만 먹어 15분 동안 1g의 절반도 못 타고 스스로 꺼진다 · 공조 바람이 닿는 자리는 바람 없는 곳보다 훨씬 많이 탄다",
+                g0.kj < g1.kj * 0.5 && g0.burning == 0 && fan.kj > g0.kj * 1.5,
+                $"탄 열: 1g {g1.kj / 1000:0}MJ · 무중력 {g0.kj / 1000:0}MJ (남은 불 {g0.burning}칸) · 무중력 + 공조 바람 {fan.kj / 1000:0}MJ");
+        }
+
+        // ── (라) 무중력의 숨: 통풍구 바람이 닿지 않는 침대에서 자면 날숨이 얼굴 앞에 고여 머리가 아파 깬다 (원인 사슬이 무너진 중력에 닿는다) · 공조 바람이 닿는 침대 · 1g는 푹 잔다 ──
+        {
+            bool atVent = false; int staleWakes = 0;
+            (bool woke, float face, string why) Sleep(int mode)   // 0: 1g · 1: 무중력 (방에 통풍구 하나) · 2: 무중력 + 침대에 공조 바람
+            {
+                var s = Worlds.Full(lay, 7); var f = s.Get<Field>(); var net = s.Get<Network>(); var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int bed = s.Layout.Furniture.First(fu => fu.Type == "Bed").Cells[0];
+                int p = m.AddPerson(s, bed);
+                life[m[p].C.Body].Asleep = 1; m[p].C.Sleepy = 1;
+                s.Run(2);
+                long f0 = s.Facts.Total;
+                if (mode > 0) net.SetOn(net.Devices.First(d => d.Type == "GravityGenerator").Id, false);
+                float face = 0;
+                int vent = At(7, 2);   // 방의 통풍구 (공조 바람이 닿는 칸 — 이 시험 배에는 덕트가 없어 손으로 둔다)
+                for (int k = 0; k < Time.Hours(2); k++)
+                {
+                    if (mode == 2) f.Airflow[m[p].C.Cell] = 0.5f;
+                    if (mode == 1) f.Airflow[vent] = 0.5f;
+                    s.Step();
+                    face = Math.Max(face, life[m[p].C.Body].FaceCO2);
+                    if (Debug && mode == 1 && k % 300 == 0) { ref var bd = ref life[m[p].C.Body]; Console.WriteLine($"      {k / 25}분 얼굴 {bd.FaceCO2:0.00} 잠 {bd.Asleep} 칸 {m[p].C.Cell} (침대 {bed} · 통풍구 {vent}) · {m.Thought(p)}"); }
+                }
+                var wakes = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Woke && x.Actor == p && s.Causes.Story(x.Cause).Contains("날숨")).ToList();
+                var w = wakes.FirstOrDefault();
+                string why = w.Kind == FactKind.Woke ? s.Causes.Story(w.Cause) : "";
+                atVent = m[p].C.Cell == vent && life[m[p].C.Body].Asleep != 0; staleWakes = wakes.Count;
+                if (Debug && mode == 1) Console.WriteLine("      날숨에 깸: " + string.Join(" · ", wakes.Select(x => $"{x.Tick}틱 칸 {x.Cell}")));
+                if (Debug) Console.WriteLine($"    잠 {(mode == 0 ? "1g" : mode == 1 ? "무중력" : "무중력 + 공조")}: 깸 {w.Kind == FactKind.Woke} · 얼굴 앞 {face:0.00}kPa · 아픔 {life[m[p].C.Body].Pain:0.00} · \"{why}\" · {m.Thought(p)}");
+                return (w.Kind == FactKind.Woke, face, why);
+            }
+            var one = Sleep(0); var zero = Sleep(1); bool zeroAtVent = atVent; int zeroWakes = staleWakes; var fan = Sleep(2);
+            Check("무중력의 숨: 통풍구 바람이 닿지 않는 침대에서는 날숨이 얼굴 앞에 고여 머리가 아파 깨고 (원인: 무너진 중력) · 다시는 거기서 자지 않고 통풍구 앞에 침낭을 묶고 잔다 · 침대에 공조 바람이 닿으면 · 1g면 그대로 잔다",
+                zero.woke && zero.why.Contains("날숨") && zero.why.Contains("중력") && zero.face > 1 && zeroAtVent && zeroWakes == 1 && !fan.woke && fan.face < 0.3 && !one.woke && one.face == 0,
+                $"무중력: 깸 {zeroWakes}번 · 얼굴 앞 {zero.face:0.0}kPa · \"{zero.why}\" · 두 시간 뒤 통풍구 앞에서 잠 {zeroAtVent} / 공조 바람: 깸 {fan.woke} · {fan.face:0.00}kPa / 1g: 깸 {one.woke}");
+        }
+
         // ── 배가 갈라지면: 발생기가 있는 쪽은 1g · 떨어져 나간 조각은 무중력 (사실 · '발생기가 없는 조각') ──
         {
             var dl = Worlds.Ascii(Dumbbell.Replace("#.......#####.......#\n#....e..#", "#..G....#####.......#\n#....e..#"), legend);

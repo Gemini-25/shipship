@@ -4,6 +4,8 @@ public sealed partial class Field
 {
     /// <summary>방 공기의 섞임 (m²/s) — 사람 · 환기 · 대류가 만드는 섞임. 뜨거운 곳은 부력으로 더 빨리 섞인다.</summary>
     public const double MixD = 0.03;
+    /// <summary>무중력에서 공조 바람이 닿지 않는 곳의 섞임 (m²/s — 대류가 없고 남는 것은 지나가는 사람 · 문 여닫음의 흔들림쯤).</summary>
+    public const double MixQuiet = 0.002;
     private double[] _n2 = Array.Empty<double>(), _u2 = Array.Empty<double>(), _t2 = Array.Empty<double>(), _st2 = Array.Empty<double>(), _nt = Array.Empty<double>(), _tc = Array.Empty<double>();
 
     /// <summary>확산: 같은 구역 이웃끼리 같은 몰 수를 주고받는다 → 성분 · 열이 섞이고 압력은 그대로. 두 버퍼 · 줄 덩어리 병렬.</summary>
@@ -45,7 +47,9 @@ public sealed partial class Field
                         double nj = _nt[j];
                         if (nj <= 1e-12) continue;
                         double tm = Math.Max(ti, _tc[j]);
-                        double d = MixD * (1 + Math.Max(0, tm - 300) / 100);
+                        float gm = Math.Min(Grav[i], Grav[j]);
+                        double d = gm >= 1 ? MixD * (1 + Math.Max(0, tm - 300) / 100)
+                            : MixQuiet + (MixD - MixQuiet) * Math.Max(Math.Max(0, gm), Math.Max(Fan(i), Fan(j))) + MixD * Math.Max(0, gm) * Math.Max(0, tm - 300) / 100;   // 중력이 없으면 대류 · 뜨거운 기체의 부력 섞임이 사라진다 — 공조 바람이 닿는 곳만 그대로 (정거장은 팬이 없으면 공기가 고인다)
                         double m = Math.Min(0.2, d * dt) * Math.Min(ni, nj);
                         int bj = j * G;
                         double a = m / nj, bb = m / ni;

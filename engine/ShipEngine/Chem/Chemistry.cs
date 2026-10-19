@@ -182,7 +182,7 @@ public sealed class Chemistry : IEngine
                 {
                     if (F.Stored(fu.store, i) < 1e-3 || tf < IgniteK(fu.full.Def.MinK, x)) continue;
                     if (!fed) { (feedK, feedX) = FeedAir(i); jet = JetAt(i); fed = true; }
-                    if (CanFlame(fu.full.Def.Loi, x, tf, pf, feedK, feedX, jet))
+                    if (CanFlame(fu.full.Def.Loi, x, tf, pf, feedK, feedX, jet, Draw(i)))
                     {
                         Light(sim, i, nb);
                         break;
@@ -232,8 +232,8 @@ public sealed class Chemistry : IEngine
     private bool Flames(int i, double x, double tf, double pf)
     {
         var (feedK, feedX) = FeedAir(i);
-        double jet = JetAt(i);
-        foreach (var fu in _fuels) if (F.Stored(fu.store, i) > 1e-3 && CanFlame(fu.full.Def.Loi, x, tf, pf, feedK, feedX, jet)) return true;
+        double jet = JetAt(i), draw = Draw(i);
+        foreach (var fu in _fuels) if (F.Stored(fu.store, i) > 1e-3 && CanFlame(fu.full.Def.Loi, x, tf, pf, feedK, feedX, jet, draw)) return true;
         return false;
     }
 
@@ -241,11 +241,11 @@ public sealed class Chemistry : IEngine
     /// 탈 것 하나에 불꽃이 설 수 있나 (붙을 때 · 버틸 때 같은 판정): 타는 빠르기가 있고 · 불꽃이 들이쉬는 공기의 산소가 그 꺼짐 한계보다 짙다.
     /// 소화기 분사(jet 몰/초)는 들이쉬는 공기에 섞인다 — 들이쉬는 공기는 불이 셀수록 많다 (세기 1에 초당 25몰 ≈ 130kW): 작은 불은 꺼지고 큰 불은 못 끈다.
     /// </summary>
-    private static bool CanFlame(double loi, double x, double tf, double pf, double feedK, double feedX, double jet)
+    private static bool CanFlame(double loi, double x, double tf, double pf, double feedK, double feedX, double jet, double draw = 1)
     {
         double v = Vigor(loi, x, tf, pf);
         if (v <= 0) return false;
-        double entrain = 25 * Math.Max(0.2, v);
+        double entrain = 25 * Math.Max(0.2, v) * (draw >= 1 ? 1 : Math.Max(0.15, draw));   // 무중력 불꽃은 들이쉬는 공기가 적다 — 소화기 분사가 더 듣는다
         return feedX * entrain / (entrain + jet) > FlameLimit(loi, feedK, tf);
     }
 
@@ -272,6 +272,22 @@ public sealed class Chemistry : IEngine
     /// </summary>
     public (double k, double x) FeedAir(int i)
     {
+        float g = F.Grav[i];
+        if (g >= 1) return RoomFeed(i);
+        // 무중력: 부력이 방 공기를 끌어들이지 않는다 — 이웃 칸 공기(확산)를 먹고 · 공조 바람이 닿는 만큼 방 공기를 (우주 정거장 촛불 실험)
+        var local = LocalFeed(i);
+        int r = F.L.Room[i];
+        if (r < 0) return local;
+        var room = RoomFeed(i);
+        double w = Draw(i);
+        return (w * room.k + (1 - w) * local.k, w * room.x + (1 - w) * local.x);
+    }
+
+    /// <summary>불꽃이 방 공기를 끌어들이는 몫 (1g 1 · 0g면 공조 바람만큼): √g (부력 흐름 빠르기) 와 공조 바람 가운데 큰 쪽.</summary>
+    private double Draw(int i) { float g = F.Grav[i]; return g >= 1 ? 1 : Math.Max(Math.Sqrt(Math.Max(0, g)), F.Fan(i)); }
+
+    private (double k, double x) RoomFeed(int i)
+    {
         int r = F.L.Room[i];
         if (r >= 0)
         {
@@ -290,6 +306,11 @@ public sealed class Chemistry : IEngine
             if (wr > 0) return _feedRoom[r] = (tr / wr, xr / wr);
             _feedStamp[r] = 0;
         }
+        return LocalFeed(i);
+    }
+
+    private (double k, double x) LocalFeed(int i)
+    {
         double t = 0, x = 0, w = 0;
         {
             Span<int> nb = stackalloc int[4];
@@ -350,6 +371,7 @@ public sealed class Chemistry : IEngine
         double incomplete = Math.Clamp(1 - (x - 0.082) / 0.073, 0, 1) * 0.7 + 0.05;
         double heat = 0;
         double o2Budget = F.Gas(T.gO2, i) * 0.5; // 한 틱에 그 칸 산소의 절반까지
+        double draw = Draw(i), flow = draw >= 1 ? 1 : 0.3 + 0.7 * draw;   // 무중력 불꽃은 산소가 확산으로만 와 느리게 탄다 (공조 바람이 닿으면 덜)
         foreach (var fu in _fuels)
         {
             double fuel = F.Stored(fu.store, i);
@@ -360,7 +382,7 @@ public sealed class Chemistry : IEngine
             if (g <= 0) continue;
             gMax = Math.Max(gMax, g);
             double dhFull = -fu.full.DH298; // J/반응몰
-            double ext = CellHrr * fu.full.Def.Rate * g * ff / dhFull * dt; // 반응 몰
+            double ext = CellHrr * fu.full.Def.Rate * g * ff / dhFull * dt * flow; // 반응 몰
             if (ext <= 0) continue;
             // 갈래: 완전 · 일산화탄소 · 그을음
             double share = 1 - incomplete;

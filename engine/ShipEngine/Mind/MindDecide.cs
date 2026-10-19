@@ -379,6 +379,8 @@ public sealed partial class Mind
                     return true;
                 }
                 int bed = c.Bed >= 0 && !Taken(a, c.Bed) ? c.Bed : NearestFree(a, _beds);
+                int airy = ZeroGSleepSpot(c, bed >= 0 ? bed : here);   // 무중력에서 날숨에 깬 적이 있으면 통풍구 앞에 침낭을 묶고 잔다
+                if (airy >= 0) { plan.Add(Go(airy)); plan.Add(Use(UseKind.Sleep, Time.Hours(10))); return true; }
                 if (bed >= 0) plan.Add(Go(bed));
                 plan.Add(Use(UseKind.Sleep, Time.Hours(10)));
                 return true;
