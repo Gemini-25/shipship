@@ -26,9 +26,17 @@ public static partial class Program
         var people = m.Agents.Where(a => a.IsPerson).ToList();
         var meals = new int[m.Agents.Count]; var sleep = new int[m.Agents.Count]; var work = new int[m.Agents.Count]; var starving = new int[m.Agents.Count];
         var lastAte = people.ToDictionary(a => a.Id, a => a.C.AteAt);
+        // 판단 이관 (바) 감사: 하루 동안 마음이 한 사회적 행동 · 사회가 낸 '행동' 사실을 모두 모은다 (행동은 두 틱 뒤 비우고 · 사실은 고리라 틱마다)
+        var acts = new List<SocialAct>(); var deeds = new List<Fact>();
+        long actCur = m.ActsTotal, factCur = day.Facts.Total;
+        static bool Deed(in Fact f) => f.Kind is FactKind.Talk or FactKind.Fight or FactKind.Sabotage or FactKind.Lie or FactKind.Confessed
+            || f.Kind == FactKind.Meeting && f.Size >= 0 || f.Kind == FactKind.Relationship && f.Size == -1 || f.Kind == FactKind.Culture && (int)f.Size == (int)CultureEvent.Nickname;
         for (int k = 0; k < Time.Hours(24); k++)
         {
             day.Step();
+            acts.AddRange(m.ActsSince(actCur)); actCur = m.ActsTotal;
+            foreach (var f in day.Facts.Since(factCur)) if (Deed(f)) deeds.Add(f);
+            factCur = day.Facts.Total;
             foreach (var a in people)
             {
                 if (a.C.AteAt != lastAte[a.Id]) { meals[a.Id]++; lastAte[a.Id] = a.C.AteAt; }
@@ -51,6 +59,28 @@ public static partial class Program
                 ok && day.Facts.CountOf(FactKind.WallCrack) == 0 && people.Count(a => work[a.Id] > Time.Hours(2)) >= 4,
                 string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)} 끼니 {meals[a.Id]} 잠 {sleepH(a.Id):0.0}시간 일 {work[a.Id] / (double)Time.TicksPerHour:0.0}시간 굶주린 {starving[a.Id] / (double)Time.TicksPerHour:0.0}시간"))
                 + $" · 금 {day.Facts.CountOf(FactKind.WallCrack)}");
+        }
+
+        // ── 판단 이관 (바) 감사: 사회가 낸 '행동' 사실(대화 · 모임 열기 · 몸싸움 · 몰래 방해 · 헤어짐 · 별명 · 거짓말 · 털어놓음)마다 그 틱(두 틱 안)에 행위자의 판단 행동이 있다 ──
+        {
+            bool Backed(in Fact f)
+            {
+                var (kind, byTarget) = f.Kind switch
+                {
+                    FactKind.Talk => (SocialActKind.Talk, false), FactKind.Meeting => (SocialActKind.CallMeeting, false), FactKind.Fight => (SocialActKind.Attack, false),
+                    FactKind.Sabotage => (SocialActKind.Sabotage, false), FactKind.Relationship => (SocialActKind.BreakUp, false), FactKind.Lie => (SocialActKind.TellLie, false),
+                    FactKind.Confessed => (SocialActKind.Confess, false), _ => (SocialActKind.Nickname, true),   // 별명: 사실의 행위자는 불린 이 · 행동은 부른 이의 것
+                };
+                long t = f.Tick; int who = f.Actor;
+                bool talk = f.Kind == FactKind.Talk;   // 대화의 대답(듣는 이의 한 마디)은 같은 '대화' 행동 안에 마음이 정했다 — 행동의 대상
+                return acts.Any(x => x.Kind == kind && x.Tick <= t && x.Tick >= t - 2 && (byTarget ? x.Target == who : x.Actor == who || talk && x.Target == who));
+            }
+            var orphans = deeds.Where(f => !Backed(f)).ToList();
+            string counts = string.Join(" · ", deeds.GroupBy(f => f.Kind).Select(g => $"{FactNames.Of(g.Key)} {g.Count()}"));
+            if (Debug) foreach (var f in orphans.Take(8)) Console.WriteLine($"    판단 없는 행동 사실: {Time.Clock(f.Tick)} {f.Kind} {f.Size} · {m.NameOf(f.Actor)} · {day.Causes.Story(f.Cause)}");
+            Check("판단 이관 감사 (평시 하루): 사회가 낸 행동 사실(대화 · 모임 열기 · 몸싸움 · 몰래 방해 · 헤어짐 · 별명 · 거짓말 · 털어놓음)마다 그 틱에 행위자의 판단 행동이 있다 — 사회 엔진은 아무 행동도 지어내지 않는다",
+                deeds.Count > 0 && orphans.Count == 0,
+                $"행동 사실 {deeds.Count} ({counts}) · 마음의 행동 {acts.Count} · 판단 없는 것 {orphans.Count}{(orphans.Count > 0 ? $" (처음: {FactNames.Of(orphans[0].Kind)} {Time.Clock(orphans[0].Tick)})" : "")}");
         }
 
         // ── ⑧ 마음 건강: 보통의 하루에는 아무도 우울 · 불안해지지 않고 · 악몽 · 공황 발작 · 되살아남이 없다 ──
