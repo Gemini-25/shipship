@@ -182,6 +182,7 @@ public sealed partial class Mind
         if (_snd != null)
         {
             float loudest = 0, mask = 0, ambient = 0, rouse = -99;   // rouse: 문턱을 가장 크게 넘은 몫 (경보 · 비명은 문턱이 낮다)
+            float deaf = person ? _life![c.Body].HearShift : 0;          // ⑦ 일시 청력 손실 — 그만큼 덜 들린다 (소리 단계 S3)
             Heard loudH = default; loudH.Actor = -1;
             bool any = false;
             foreach (var h in _snd.At(cell))
@@ -190,11 +191,12 @@ public sealed partial class Mind
                 if (!any) { ambient = _snd.Ambient(cell); mask = Math.Max(0, ambient - Sound.MaskFrom); any = true; }
                 if (h.Actor == a.Id || person && h.Actor == Sound.BodyActor(c.Body)) { Hear(sim, a, h); continue; }   // 제 목소리 · 제 몸의 소리 (코골이 · 기침)
                 var heard = h;
-                heard.Db = h.Db - mask;
-                if (heard.Db < HearFloor) { Masked++; continue; }
+                heard.Db = h.Db - mask - deaf;
+                if (heard.Db < HearFloor) { if (deaf > 0 && h.Db - mask >= HearFloor) Deafened++; else Masked++; continue; }
                 Hear(sim, a, heard);
-                if (h.Db > loudest) loudest = h.Db;
-                if (asleep && h.Db - WakeDb(a, h.Kind) > rouse) { rouse = h.Db - WakeDb(a, h.Kind); loudH = h; }
+                float felt = h.Db - deaf;   // 귀에 닿은 크기 (먹먹한 귀는 덜 느낀다)
+                if (felt > loudest) loudest = felt;
+                if (asleep && felt - WakeDb(a, h.Kind) > rouse) { rouse = felt - WakeDb(a, h.Kind); loudH = h; loudH.Db = felt; }
             }
             if (_shoutAfter is Belief say) { _shoutAfter = null; Shout(sim, a, say); }
             c.HeardUpTo = _snd.LastEvent;
@@ -482,6 +484,8 @@ public sealed partial class Mind
 
     /// <summary>가린 몫을 뺀 크기가 이보다 작으면 못 듣는다 (dB — 귀의 문턱 근처).</summary>
     public const float HearFloor = 23;
+    /// <summary>먹먹한 귀(일시 청력 손실) 때문에 못 들은 소리 수 (확인용 — 찍지 않는다).</summary>
+    public long Deafened;
 
     private void Hear(Sim sim, Agent a, in Heard h)
     {

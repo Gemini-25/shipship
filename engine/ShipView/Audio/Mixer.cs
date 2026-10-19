@@ -69,6 +69,7 @@ public sealed class Mixer
                 case Machine m: m.Set(u.A, u.B); break;
                 case RoomTone r: r.Set(u.A); break;
                 case Breath b: b.Set(u.A, u.B); break;
+                case Ring g: g.Set(u.A); break;
             }
         }
         foreach (var s in _loops.Values)
@@ -88,6 +89,7 @@ public sealed class Mixer
             LoopKind.Fire => new Fire(seed),
             LoopKind.Machine => new Machine(u.Role ?? "", seed),
             LoopKind.Breath => new Breath(seed),
+            LoopKind.Ring => new Ring(seed),
             _ => new RoomTone(seed),
         };
     }

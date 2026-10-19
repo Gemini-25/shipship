@@ -4,7 +4,7 @@ using ShipEngine;
 namespace ShipView.Audio;
 
 /// <summary>이어 도는 소리의 종류 (섞개가 이 열쇠로 하나씩 둔다).</summary>
-public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath }
+public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring }
 
 /// <summary>이어 도는 소리 하나의 이번 모습.</summary>
 public struct LoopUpdate
@@ -72,6 +72,8 @@ public sealed class Acoustics
     public Action<string>? Log;
     public int EarCell => _ear;
     public float EarThin { get; private set; } = 1;
+    /// <summary>고른 사람의 일시 청력 손실 (dB — ⑦ 몸의 값 · 소리 출력이 그 귀로 들려준다: 작고 먹먹하고 삐 소리).</summary>
+    public float Deaf { get; private set; }
     private uint _seed = 1;
     private int _logMachines;
     private readonly HashSet<long> _logJets = new();
@@ -106,6 +108,7 @@ public sealed class Acoustics
         if (ear != _ear || _sinceMap > 0.2) { Map(ear); _ear = ear; _sinceMap = 0; }
         EarThin = ear >= 0 ? Thin(ear) : 0;
         bool suit = false; float breath = 0;
+        Deaf = 0;
         if (person >= 0)
         {
             var life = w.Find<Life>(); var mind = w.Find<Mind>();
@@ -113,6 +116,7 @@ public sealed class Acoustics
             {
                 var b = life.Bodies[mind.Agents[person].C.Body];
                 suit = b.Suit != 0 && b.Alive != 0;
+                Deaf = b.Alive != 0 ? b.HearShift : 0;
                 breath = b.Alive == 0 ? 0 : 0.22f + Math.Clamp((b.ActivityW - 90) / 600f, 0, 0.8f);
             }
         }
@@ -207,6 +211,7 @@ public sealed class Acoustics
         if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB)
             frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db((Math.Max(30, ambient) - 6 - RefDb) * Slope), Gain = 1, Cutoff = suit ? 900 : 16000 }); // 엔진의 바탕 소음을 다른 소리와 같은 잣대로 (가까운 기계는 따로 울려 6dB 덜어)
         if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 16000 });
+        if (Deaf > 2) frame.Loops.Add(new LoopUpdate { Key = 3, Kind = LoopKind.Ring, A = Deaf, Gain = 1, Cutoff = 16000 });   // 먹먹한 귀의 삐 소리 (이명 — 손실만큼)
         Out.Enqueue(frame);
         while (Out.Count > 30 && Out.TryDequeue(out _)) { } // 아무도 안 들으면 쌓지 않는다
     }
@@ -351,10 +356,12 @@ public sealed class Acoustics
         }
         if (suit) lp -= 12;                                       // 우주복 투구 너머
         else if (EarThin < 1) lp += 20 * MathF.Log10(Math.Max(EarThin, 0.01f)); // 엷은 공기에선 고막도 덜 울린다
+        lp -= Deaf;                                               // 고른 사람의 먹먹한 귀 (일시 청력 손실)
         if (lp < Audible) return false;
         gain = Dsp.Db((lp - RefDb) * Slope);
         cutoff = 16000 * MathF.Pow(2, -occl / 9f) * Math.Clamp(MathF.Pow(thin, 1.2f), 0.08f, 1f); // 44.1kHz — 막힘 없는 소리는 16kHz까지
         if (suit) cutoff = Math.Min(cutoff, 1200);
+        if (Deaf > 0) cutoff *= MathF.Pow(2, -Deaf / 12f);      // 높은 음부터 먼저 잃는다 (4kHz 언저리 — 12dB마다 반)
         cutoff = Math.Clamp(cutoff, 120, 16000);
         pan = Math.Clamp(dx / (halfW * CellM), -1, 1) * 0.85f;
         return true;

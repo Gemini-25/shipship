@@ -440,3 +440,23 @@ public sealed class Boom : Voice
         return _amp * env * MathF.Sin((float)(_ph * Dsp.Tau));
     }
 }
+
+/// <summary>
+/// 먹먹한 귀의 삐 소리 (이명 — 고른 사람의 일시 청력 손실만큼): 4kHz 언저리 두 사인이 천천히 맥놀이 · 손실이 클수록 크다 (40dB면 가장 크게) ·
+/// 손실이 줄면 따라 작아진다. 세계의 소리가 아니라 그 사람의 귀가 만든 소리다 (소리 출력에서만).
+/// </summary>
+public sealed class Ring : Voice
+{
+    private double _a, _b;
+    private float _level, _cur;
+    private readonly float _hz;
+    public Ring(uint seed) { _hz = 3800 + (seed % 700); Send = 0; }
+    public void Set(float deafDb) => _level = Math.Clamp(deafDb / 40f, 0, 1);
+    public override float Next()
+    {
+        _cur += (_level - _cur) * 0.00002f * Dsp.K;
+        if (_level <= 0 && _cur < 1e-4f) { Done = true; return 0; }
+        _a += _hz / Dsp.Rate; _b += (_hz * 1.004) / Dsp.Rate;
+        return _cur * 0.17f * (MathF.Sin((float)(_a * Dsp.Tau)) + 0.7f * MathF.Sin((float)(_b * Dsp.Tau)));
+    }
+}

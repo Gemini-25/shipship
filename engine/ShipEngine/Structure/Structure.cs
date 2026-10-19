@@ -58,6 +58,8 @@ public sealed partial class Structure : IEngine
     public long[] DoorLock;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
     public float[] ImpactJ;
+    /// <summary>폭풍이 바닥 칸에 준 가장 큰 넘친 압력 (kPa — ⑦ 귀가 읽고 지운다 · 소리 단계 S3).</summary>
+    public float[] BlastPeakKPa;
     /// <summary>점화의 관성 하중 (g — 배 가속도 / 9.8): ⑤ 바깥이 틱마다 넣는 요청. 외판 · 뼈대가 받는 하중이 이만큼 는다 (점화 한 번 = 하중 한 주기). 찍지 않는다.</summary>
     public double ThrustG;
 
@@ -69,7 +71,7 @@ public sealed partial class Structure : IEngine
         Fatigue = new float[L.N]; Corrode = new float[L.N]; Stress = new float[L.N]; DamageCause = new int[L.N];
         DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count]; Braced = new byte[L.N];
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
-        ImpactJ = new float[L.N];
+        ImpactJ = new float[L.N]; BlastPeakKPa = new float[L.N];
         BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         DoorLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         // 에어락 벽: 바깥문이 있는 방의 벽은 배의 압력 경계다 — 비운 에어락의 안쪽 벽도 한 기압을 버틴다 (외판과 같은 정격 · ISS 퀘스트 에어락)
@@ -602,7 +604,7 @@ public sealed partial class Structure : IEngine
     public void Save(StateWriter w)
     {
         w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered); w.Arr(Braced);
-        w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ); w.I64(Bleeds);
+        w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ); w.I64(Bleeds); w.Tag("폭풍 압력"); w.Arr(BlastPeakKPa);
         w.Arr(BleedSince); w.Arr(BleedFrom); w.Arr(BleedLock); w.Arr(BleedFails); w.Arr(BleedLast); w.I64(BleedAborts); w.Arr(DoorLock);
         w.Tag("금"); w.Arr(Crack); w.Arr(CrackPatch); w.Arr(SigTurn); w.Arr(SigRun); w.Arr(CrackCause); w.Arr(SigDir); w.I64(CrackGrowths); w.I64(Tears); w.I64(CrackLeaks);
         w.Tag("조각"); w.Arr(Frag); w.List(Fragments); w.I32(SplitVersion); w.I64(DeckBursts); w.I64(Smashed); w.I64(Splits); w.I64(DebrisLost); w.I64(SectionFails);
@@ -614,7 +616,7 @@ public sealed partial class Structure : IEngine
     public void Load(StateReader r)
     {
         r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered); r.ArrInto(Braced);
-        Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ); Bleeds = r.I64();
+        Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ); Bleeds = r.I64(); r.Tag("폭풍 압력"); r.ArrInto(BlastPeakKPa);
         r.ArrInto(BleedSince); r.ArrInto(BleedFrom); r.ArrInto(BleedLock); r.ArrInto(BleedFails); r.ArrInto(BleedLast); BleedAborts = r.I64(); r.ArrInto(DoorLock);
         r.Tag("금"); r.ArrInto(Crack); r.ArrInto(CrackPatch); r.ArrInto(SigTurn); r.ArrInto(SigRun); r.ArrInto(CrackCause); r.ArrInto(SigDir); CrackGrowths = r.I64(); Tears = r.I64(); CrackLeaks = r.I64();
         r.Tag("조각"); r.ArrInto(Frag); Fragments.Clear(); Fragments.AddRange(r.List<Fragment>()); SplitVersion = r.I32(); DeckBursts = r.I64(); Smashed = r.I64(); Splits = r.I64(); DebrisLost = r.I64(); SectionFails = r.I64();

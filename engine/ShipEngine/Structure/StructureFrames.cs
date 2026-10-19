@@ -431,6 +431,7 @@ public sealed partial class Structure
             }
             else if (L.Kind[c] == CellKind.Floor)
             {
+                BlastPeakKPa[c] = Math.Max(BlastPeakKPa[c], (float)kpa);   // ⑦ 귀가 읽는다 (일시 청력 손실 — 소리 단계 S3)
                 var m = T.Materials[L.Material[c]].Def;
                 double load = kpa / (DeckRatingKPa * Math.Sqrt(Math.Max(0.01, m.Strength / 250.0)) * HeatFactor(c, m) * (1 - Corrode[c]));
                 if (load >= 1)

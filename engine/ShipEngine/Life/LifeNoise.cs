@@ -67,4 +67,49 @@ public sealed partial class Life
 
     /// <summary>확인용 셈 (찍지 않는다).</summary>
     public long Snores, Coughs;
+
+    // ───────────────────────── 귀 (소리 단계 S3) ─────────────────────────
+
+    /// <summary>
+    /// 일시 청력 손실 (dB): 귀에 닿은 가장 큰 소리가 110dB를 넘은 몫의 0.6배가 한꺼번에 오른다 (충격음 — 125dB이면 9dB) ·
+    /// 폭풍의 넘친 압력은 그 압력의 소리 크기(20·log(p/20µPa) — 15kPa 177dB)가 150dB를 넘은 몫의 반 (15kPa 14dB · 35kPa 17dB · 100kPa 22dB) ·
+    /// 85dB 넘는 곳에 오래 있으면 (넘는 몫의 반)까지 두 시간에 걸쳐 오른다 (기계실 95dB → 5dB) · 많아야 60dB.
+    /// 돌아오기: 6 × (1 + 손실/20)시간에 1/e — 작은 손실은 하루 · 큰 손실은 며칠 (ISO 1999 · 충격음 일시 청력 손실 자료에서 어림).
+    /// 우주복 투구는 12dB를 막는다.
+    /// </summary>
+    public const double ImpulseFrom = 110, ImpulseGain = 0.6, BlastSplFrom = 150, BlastGain = 0.5, SteadyFrom = 85, SteadyGain = 0.5, SteadyRiseH = 2, RecoverH = 6, MaxShift = 60;
+
+    /// <summary>넘친 압력 kPa의 소리 크기 (dB SPL — 기준 20µPa).</summary>
+    public static double SplOfKPa(double kpa) => kpa > 0 ? 20 * Math.Log10(kpa * 1000 / 2e-5) : 0;
+
+    private void Ears(Sim sim, double dt)
+    {
+        var snd = sim.Find<Sound>();
+        if (snd == null) return;
+        var st = sim.Find<Structure>();
+        long since = sim.Tick - Every + 1;
+        double h = dt / 3600;
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Bodies);
+        for (int i = 0; i < span.Length; i++)
+        {
+            ref var b = ref span[i];
+            if (b.Alive == 0 || b.Cell < 0 || b.Cell >= L.N) continue;
+            double guard = b.Suit != 0 ? 12 : 0;
+            var (peak, cause) = snd.PeakSince(b.Cell, since);
+            double shift = b.HearShift;
+            double jump = peak - guard > ImpulseFrom ? ImpulseGain * (peak - guard - ImpulseFrom) : 0;
+            if (st != null && st.BlastPeakKPa[b.Cell] > 0)
+            {
+                double spl = SplOfKPa(st.BlastPeakKPa[b.Cell]) - guard;
+                if (spl > BlastSplFrom && BlastGain * (spl - BlastSplFrom) > jump) { jump = BlastGain * (spl - BlastSplFrom); cause = st.DamageCause[b.Cell] != 0 ? st.DamageCause[b.Cell] : cause; }
+            }
+            if (jump > 1) { shift += jump; if (cause != 0) b.HearCause = cause; }
+            double steady = snd.Ambient(b.Cell) - guard;
+            double target = steady > SteadyFrom ? SteadyGain * (steady - SteadyFrom) : 0;
+            if (target > shift) shift += (target - shift) * (1 - Math.Exp(-h / SteadyRiseH));
+            else { shift *= Math.Exp(-h / (RecoverH * (1 + shift / 20))); if (shift < 0.05) shift = 0; }   // 다 돌아왔다 (오르는 중엔 자르지 않는다 — 한 걸음 0.01dB씩 오른다)
+            b.HearShift = (float)Math.Clamp(shift, 0, MaxShift);
+        }
+        if (st != null) Array.Clear(st.BlastPeakKPa);
+    }
 }

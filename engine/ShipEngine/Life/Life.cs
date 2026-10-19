@@ -69,6 +69,8 @@ public struct Body
     // ⑧ 수면제 (기억 · 정신 건강 (다))
     public float Hypnotic, HypnoticTol;          // 수면제가 몸에 남은 양 (mg) · 내성 (끊으면 그만큼 잠이 얕다)
     public long HypnoticAt;                      // 마지막 수면제 (틱)
+    public float HearShift;                      // 일시 청력 손실 (dB — 들리는 문턱이 오른 만큼 · 소리 단계 S3)
+    public int HearCause;                        // 귀를 먹먹하게 한 소리의 원인 마디
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -257,6 +259,7 @@ public sealed partial class Life : IEngine
         }
         if (st != null) Array.Clear(st.ImpactJ);
         BodyNoise(sim, dt);   // 소리 단계 S2: 코골이 · 기침
+        Ears(sim, dt);        // 소리 단계 S3: 큰 소리가 귀를 먹먹하게 한다
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
         if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }

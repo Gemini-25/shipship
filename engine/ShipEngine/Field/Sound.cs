@@ -113,6 +113,7 @@ public sealed class Sound : IEngine
         F = f; L = f.L;
         int nr = L.Rooms.Count;
         _roomE = new double[nr]; _roomA = new double[nr]; _room4R = new double[nr];
+        _peakDb = new float[L.N]; _peakTick = new long[L.N]; _peakCause = new int[L.N];
         _roomDrones = Enumerable.Range(0, nr).Select(_ => new List<int>()).ToArray();
         for (int r = 0; r < nr; r++)
         {
@@ -148,6 +149,16 @@ public sealed class Sound : IEngine
     {
         for (long i = Math.Max(from, Logged - LogSize); i < Logged; i++) yield return _log[i % LogSize];
     }
+
+    // ── 귀에 닿은 가장 큰 소리 (칸마다 · 소리 단계 S3 — ⑦ 몸이 청력 피해를 셈한다) ──
+    /// <summary>창: 이보다 오래된 가장 큰 소리는 새 소리에 자리를 내준다 (틱 — 생명이 5틱마다 읽는다).</summary>
+    public const int PeakWindow = 5;
+    private float[] _peakDb;
+    private long[] _peakTick;
+    private int[] _peakCause;
+    /// <summary>틱 since부터 이 칸에 닿은 가장 큰 소리 (dB · 원인 마디 — 없으면 0).</summary>
+    public (float db, int cause) PeakSince(int cell, long since) =>
+        (uint)cell < (uint)_peakDb.Length && _peakTick[cell] >= since && _peakTick[cell] > 0 ? (_peakDb[cell], _peakCause[cell]) : (0, 0);
 
     private float[] _best = Array.Empty<float>();
     private int[] _bestStamp = Array.Empty<int>();
@@ -224,6 +235,7 @@ public sealed class Sound : IEngine
     {
         if (!_heard.TryGetValue(c, out var list)) { _heard[c] = list = new List<Heard>(2); _order.Add((sim.Tick, c)); }
         list.Add(h);
+        if (h.Db > _peakDb[c] || _peakTick[c] < sim.Tick - PeakWindow) { _peakDb[c] = h.Db; _peakTick[c] = sim.Tick; _peakCause[c] = h.Cause; }
     }
 
     /// <summary>이 칸에서 들린 소리들 (최근 틱).</summary>
@@ -414,6 +426,7 @@ public sealed class Sound : IEngine
         w.I32(_order.Count);
         foreach (var (t, c) in _order) { w.I64(t); w.I32(c); }
         w.Tag("바탕 소음"); w.List(_drones); w.Arr(_roomE);
+        w.Tag("귀에 닿은 가장 큰 소리"); w.Arr(_peakDb); w.Arr(_peakTick); w.Arr(_peakCause);
     }
 
     public void Load(StateReader r)
@@ -427,6 +440,7 @@ public sealed class Sound : IEngine
         r.Tag("바탕 소음");
         _drones.Clear(); _drones.AddRange(r.List<Drone>());
         r.ArrInto(_roomE);
+        r.Tag("귀에 닿은 가장 큰 소리"); r.ArrInto(_peakDb); r.ArrInto(_peakTick); r.ArrInto(_peakCause);
         foreach (var l in _roomDrones) l.Clear();
         for (int key = 0; key < _drones.Count; key++)
             if (_drones[key].Cell >= 0 && RoomNear(_drones[key].Cell) is int rr && rr >= 0) _roomDrones[rr].Add(key);
