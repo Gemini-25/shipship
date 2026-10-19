@@ -68,6 +68,7 @@ public static class ShipWorld
     {
         var s = Create(shipKey, seed);
         s.Get<Mind>().Crew(s, people, robots, drones);
+        s.Get<Society>().Backstory(s);   // ⑫ 출항 과거사 — 사람 사이의 지난 일 (시드에서 · 한 번)
         return s;
     }
 }

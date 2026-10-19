@@ -86,6 +86,7 @@ public static partial class Program
         NatureInsideRules();
         NatureHandsRules();
         NatureMailRules();
+        NaturePastRules();
     }
 
     private const string CrateShip = @"
@@ -284,5 +285,40 @@ public static partial class Program
                 busy.boats > calm.boats && busy.boats >= 2,
                 $"이틀 · 행성 궤도 곁: 항로 8 배 {busy.boats} (조난선 {busy.distress}) · 항로 1 배 {calm.boats} (조난선 {calm.distress})");
         }
+    }
+
+    /// <summary>⑫ 자연 사건 (마) — 출항 과거사: 승무원을 태울 때 한 번 (시드에서) · 첫날부터 사람 판에 · 항해 중에는 아무것도 심지 않는다.</summary>
+    private static void NaturePastRules()
+    {
+        Console.WriteLine("\n[⑫ 자연 사건 (마) — 출항 과거사]");
+        var kinds = new int[5]; bool applied = true, same = true, shown = false; int ties = 0;
+        string story = "";
+        foreach (ulong seed in new ulong[] { 71, 72, 73 })
+        {
+            var s = ShipWorld.Crewed("hwasal", seed, 8);
+            var so = s.Get<Society>(); var m = s.Get<Mind>();
+            var again = ShipWorld.Crewed("hwasal", seed, 8).Get<Society>();
+            same &= so.Past.Count == again.Past.Count && so.Past.Zip(again.Past).All(p => p.First.A == p.Second.A && p.First.B == p.Second.B && p.First.Kind == p.Second.Kind);
+            int N = so.N;
+            foreach (var t in so.Past)
+            {
+                kinds[t.Kind]++; ties++;
+                applied &= t.Kind switch
+                {
+                    1 => so.Known[t.A * N + t.B] >= 0.4f,
+                    2 => so.Bond[t.A * N + t.B] >= 0.3f,
+                    3 => so.GrudgeOf(t.A, t.B) >= Society.GrudgeAt,
+                    _ => so.Attract[t.A * N + t.B] >= 0.45f && so.Attract[t.B * N + t.A] < 0.45f,
+                };
+                if (t.Kind == 3 && story.Length == 0) story = s.Causes.Text(t.Cause);
+            }
+            var past0 = so.Past.Count;
+            s.Run(Time.Hours(1));
+            same &= so.Past.Count == past0;   // 항해 중에는 심지 않는다
+            shown |= m.Agents.Where(a => a.IsPerson).Any(a => so.PastLine(a.Id).StartsWith("지난 일"));
+        }
+        Check("출항 과거사: 승무원을 태울 때 사람 사이 지난 일 (아는 사이 · 오랜 벗 · 묵은 앙금 · 남몰래 좋아함 — 시드에서 · 같은 시드는 같다) · 정 · 앙금 · 끌림 값이 첫날부터 · 사람 판에 '지난 일' · 항해 중엔 심지 않는다",
+            ties > 0 && kinds[1] > 0 && kinds[2] > 0 && kinds[3] > 0 && kinds[4] > 0 && applied && same && shown && story.Length > 0,
+            $"세 시드 8명씩: 아는 사이 {kinds[1]} · 오랜 벗 {kinds[2]} · 묵은 앙금 {kinds[3]} · 남몰래 {kinds[4]} · 값 맞음 {applied} · 같은 시드 같고 한 시간 뒤 그대로 {same} · 사람 판 {shown} · \"{story}\"");
     }
 }

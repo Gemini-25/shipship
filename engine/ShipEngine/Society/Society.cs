@@ -556,6 +556,7 @@ public sealed partial class Society : IEngine
         SaveSecrets(w);
         SaveCouncil(w);
         SaveMail(w);
+        SavePast(w);
     }
 
     public void Load(StateReader r)
@@ -571,5 +572,6 @@ public sealed partial class Society : IEngine
         LoadSecrets(r);
         LoadCouncil(r);
         LoadMail(r);
+        LoadPast(r);
     }
 }

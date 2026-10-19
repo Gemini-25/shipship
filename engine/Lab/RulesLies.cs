@@ -26,6 +26,7 @@ public static partial class Program
             void Put(int a, int cell) { m[a].C.Cell = cell; life[m[a].C.Body].Cell = cell; m[a].Path.Clear(); m[a].PathIdx = 0; }   // 몸의 칸이 자리다
             void Wake() { foreach (int p in people) { m[p].C.Sleepy = 0; life[m[p].C.Body].Asleep = 0; } }   // 모두 깨어 있다 (자는 이는 보지도 듣지도 못한다)
             m.SetPersonality(x, 0.4f, 0.05f, 0.6f, 0.1f, 0.8f);   // 덜 성실 · 덜 다정 · 불안 — 털어놓지 않고 둘러댄다
+            foreach (var (u, v) in new[] { (x, sc), (sc, x) }) { so.Bond[u * so.N + v] = 0; so.Grudge[u * so.N + v] = 0; so.Attract[u * so.N + v] = 0; }   // 둘 사이는 무난하게 (출항 과거사의 오랜 벗이면 그에게 떠넘기지 않는다 — 이 장면은 둘러대기만 본다)
             // sc가 조금 전에 그 장치를 고쳤다 (배 사람들이 안다 · 주컴퓨터 기록에도)
             s.Facts.Emit(s.Tick, FactKind.Repaired, d.Cell, 0, 0, sc, d.Id);
             s.Run(Time.Minutes(10));
@@ -77,11 +78,12 @@ public static partial class Program
                 var (s, m, so, x, sc, dev, c0, ears) = Scene((ulong)(20 + k), -1, false);
                 long f0 = s.Facts.Total;
                 if (Debug && k == 0) Console.WriteLine($"    x 방 {m.RoomOf(m[x].C.Cell)} {life0(s, m, x)} · 듣는 이: " + string.Join(" ", ears.Select(e => $"{m.RoomOf(m[e].C.Cell)}:{life0(s, m, e)}")));
+                var g0 = ears.ToDictionary(e => e, e => so.GrudgeOf(e, x));   // 출항 전부터의 앙금은 빼고 — 늘어난 원망만 센다
                 Fail(s, dev, c0);
                 if (Debug && k == 0) Console.WriteLine($"    뒤: x 방 {m.RoomOf(m[x].C.Cell)} · 듣는 이: " + string.Join(" ", ears.Select(e => $"{m.RoomOf(m[e].C.Cell)}:{life0(s, m, e)}")) + $" · 들은 이 {so.Heard.Count}");
                 var lie = s.Facts.Since(f0).FirstOrDefault(f => f.Kind == FactKind.Lie);
                 int b = so.Heard.Count(h => h.Believed != 0), d = so.Heard.Count(h => h.Believed == 0);
-                int bx = ears.Count(e => so.GrudgeOf(e, x) > 0.05f);
+                int bx = ears.Count(e => so.GrudgeOf(e, x) > g0[e] + 0.05f);
                 if (Debug && lie.Kind != FactKind.Lie) Console.WriteLine($"    시드 {20 + k}: 둘러대지 않음 — 숨긴 실수 {so.Hidden.Count} · 털어놓음 {so.Confessions} · 숨김 {so.SecretsKept} · x 깨어 있음 {life0(s, m, x)}");
                 return (lie.Kind == FactKind.Lie, lie.Other == sc, b, d, bx, lie.Kind == FactKind.Lie ? s.Causes.Text(lie.Cause) : "");
             })).ToList();
