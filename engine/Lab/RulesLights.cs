@@ -81,6 +81,15 @@ public static partial class Program
             Check("정전되면 비상등 30럭스 · 전지가 다한 방은 어둡다 · 전기가 돌아오면 다시 켜지고 전지가 찬다 (6배 느리게)",
                 m1 == Network.EmergencyLux && st1 == 2 && l1 == Network.EmergencyLux && l2 == 0 && st2 == 0 && st3 == 1 && charge > 1.5f && charge < 3,
                 $"식당 1분 {m1:0}럭스(상태 {st1}) · 쉼터 1분 {l1:0} → 6분 {l2:0}(상태 {st2}) · 복구 12분 상태 {st3} · 전지 {charge:0.0}분");
+            // 그리기 시간 (60프레임 — 관전 화면 크기 41×24칸 · 조명 켬): 예전 도트마다 섞기는 34ms였다 → 빠른 얹기 · 고정 소수 곱하기로 6~7ms
+            var mroom = L.Rooms[mess];
+            int bx = Math.Clamp((int)mroom.Cells.Average(L.X) - 20, 0, Math.Max(0, L.W - 41)), by = Math.Clamp((int)mroom.Cells.Average(L.Y) - 12, 0, Math.Max(0, L.H - 24));
+            ShipSim.Art.Img? into = null;
+            for (int i = 0; i < 5; i++) into = painter.Frame(s, bx, by, 41, 24, i, into);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 20; i++) into = painter.Frame(s, bx, by, 41, 24, i, into);
+            double ms = sw.Elapsed.TotalMilliseconds / 20;
+            Check("그리기 시간: 관전 화면 한 장(41×24칸 · 조명 켬)이 25ms 아래 (시험 갈래 넷이 함께 돌 때도 — 혼자면 6~7ms)", ms < 25, $"{ms:0.0}ms/장");
             Check("화면 조명: 그림은 세계를 바꾸지 않는다 · 밤 침실은 환할 때보다 어둡다 · 정전된 식당은 붉고 어둡다 (비상등)",
                 same && Sum(night) < 0.6 * Sum(day) && dark.r > 1.8 * dark.g && Sum(dark) < 0.6 * Sum(lit),
                 $"같은 세계 {same} · 침실 밤 {night.r:0}/{night.g:0}/{night.b:0} · 환할 때 {day.r:0}/{day.g:0}/{day.b:0} · 정전 식당 {dark.r:0}/{dark.g:0}/{dark.b:0} · 켠 식당 {lit.r:0}/{lit.g:0}/{lit.b:0}");

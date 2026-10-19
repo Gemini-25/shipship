@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using ShipEngine;
 using ShipSim.Art;
 using ShipSim.Core;
@@ -41,6 +42,7 @@ public sealed partial class Painter
     private float[] _lr = Array.Empty<float>(), _lg = Array.Empty<float>(), _lb = Array.Empty<float>();
     private byte[] _lk = Array.Empty<byte>();
     private int _mx0, _my0, _mw, _mh;
+    private float[] _cr = Array.Empty<float>(), _cg = Array.Empty<float>(), _cb = Array.Empty<float>();
     private int[] _fireSeen = Array.Empty<int>();
     private int _fireStamp;
     private readonly Queue<(int c, int d)> _fireQ = new();
@@ -185,6 +187,7 @@ public sealed partial class Painter
 
     // 벽 밑 그림자: 북쪽 벽 앞면 아래 · 서쪽 · 동쪽 벽 곁 (도트 계단)
     private static readonly float[] AoN = MakeAo(T, DotTiles.Face, 8, 0.30f), AoW = MakeAo(T, 0, 5, 0.16f);
+    private static readonly int[] AoNi = AoN.Select(v => (int)(v * 256)).ToArray(), AoWi = AoW.Select(v => (int)(v * 256)).ToArray();
     private static float[] MakeAo(int n, int from, int len, float k)
     {
         var a = new float[n];
@@ -199,7 +202,8 @@ public sealed partial class Painter
     {
         // 모서리 빛 (w+1)×(h+1): 둘레 네 칸 중 빈 칸의 고른 값
         int gw = w + 1, gh = h + 1;
-        var cr = new float[gw * gh]; var cg = new float[gw * gh]; var cb = new float[gw * gh];
+        if (_cr.Length < gw * gh) { _cr = new float[gw * gh]; _cg = new float[gw * gh]; _cb = new float[gw * gh]; }
+        var cr = _cr; var cg = _cg; var cb = _cb;
         for (int gy = 0; gy < gh; gy++)
             for (int gx = 0; gx < gw; gx++)
             {
@@ -212,13 +216,15 @@ public sealed partial class Painter
                         r += _lr[i]; g += _lg[i]; b += _lb[i]; cnt++;
                     }
                 int gi = gy * gw + gx;
-                if (cnt > 0) { cr[gi] = r / cnt; cg[gi] = g / cnt; cb[gi] = b / cnt; }
+                if (cnt > 0) { cr[gi] = r / cnt; cg[gi] = g / cnt; cb[gi] = b / cnt; } else cr[gi] = cg[gi] = cb[gi] = 0;
             }
         float ar = Ambient * AmbientTint.r, ag = Ambient * AmbientTint.g, ab = Ambient * AmbientTint.b, keep = 1 - Ambient;
-        byte[] px = img.Px;
+        // 고정 소수 (16.16 · 1.0 = 256): 도트마다 더하기 · 곱하기 · 밀기만
+        const float F = 256f * 65536f;
         int W = img.W;
         Parallel.For(0, h, vy =>
         {
+            var d = MemoryMarshal.Cast<byte, uint>(img.Px.AsSpan());
             for (int vx = 0; vx < w; vx++)
             {
                 int mi = (vy + 1) * _mw + vx + 1;
@@ -232,16 +238,10 @@ public sealed partial class Painter
                     for (int yy = 0; yy < T; yy++)
                     {
                         float ty = (yy + 0.5f) / T;
-                        float lr0 = cr[g00] + (cr[g01] - cr[g00]) * ty, lg0 = cg[g00] + (cg[g01] - cg[g00]) * ty, lb0 = cb[g00] + (cb[g01] - cb[g00]) * ty;
-                        float lr1 = cr[g10] + (cr[g11] - cr[g10]) * ty, lg1 = cg[g10] + (cg[g11] - cg[g10]) * ty, lb1 = cb[g10] + (cb[g11] - cb[g10]) * ty;
-                        float aoRow = wn ? AoN[yy] : 0;
-                        int row = ((py0 + yy) * W + px0) * 4;
-                        for (int xx = 0; xx < T; xx++)
-                        {
-                            float tx = (xx + 0.5f) / T;
-                            float ao = 1 - aoRow - (ww ? AoW[xx] : 0) - (we ? AoW[T - 1 - xx] : 0);
-                            Mul(px, row + xx * 4, (ar + keep * (lr0 + (lr1 - lr0) * tx)) * ao, (ag + keep * (lg0 + (lg1 - lg0) * tx)) * ao, (ab + keep * (lb0 + (lb1 - lb0) * tx)) * ao);
-                        }
+                        float r0 = ar + keep * (cr[g00] + (cr[g01] - cr[g00]) * ty), g0 = ag + keep * (cg[g00] + (cg[g01] - cg[g00]) * ty), b0 = ab + keep * (cb[g00] + (cb[g01] - cb[g00]) * ty);
+                        float r1 = ar + keep * (cr[g10] + (cr[g11] - cr[g10]) * ty), g1 = ag + keep * (cg[g10] + (cg[g11] - cg[g10]) * ty), b1 = ab + keep * (cb[g10] + (cb[g11] - cb[g10]) * ty);
+                        int aoRow = wn ? AoNi[yy] : 0;
+                        Row(d, (py0 + yy) * W + px0, r0, g0, b0, r1, g1, b1, aoRow, ww, we);
                     }
                 }
                 else
@@ -253,30 +253,43 @@ public sealed partial class Painter
                     if (n || s) { a = n ? iN : iS; b = s ? iS : iN; vertical = true; }
                     else if (wv || e) { a = wv ? iW : iE; b = e ? iE : iW; vertical = false; }
                     else { a = mi; b = mi; vertical = true; }   // 모서리 벽: 제 빛 (대각선 · 이웃 벽에서)
+                    float ra = ar + keep * _lr[a], ga = ag + keep * _lg[a], ba = ab + keep * _lb[a];
+                    float rb = ar + keep * _lr[b], gb = ag + keep * _lg[b], bb = ab + keep * _lb[b];
                     for (int yy = 0; yy < T; yy++)
                     {
-                        int row = ((py0 + yy) * W + px0) * 4;
-                        for (int xx = 0; xx < T; xx++)
+                        if (vertical)
                         {
-                            float r = 0, g = 0, bl = 0;
-                            if (a >= 0)
-                            {
-                                float t = vertical ? (yy + 0.5f) / T : (xx + 0.5f) / T;
-                                r = _lr[a] + (_lr[b] - _lr[a]) * t; g = _lg[a] + (_lg[b] - _lg[a]) * t; bl = _lb[a] + (_lb[b] - _lb[a]) * t;
-                            }
-                            Mul(px, row + xx * 4, ar + keep * r, ag + keep * g, ab + keep * bl);
+                            float t = (yy + 0.5f) / T;
+                            float r = ra + (rb - ra) * t, g = ga + (gb - ga) * t, bl = ba + (bb - ba) * t;
+                            Row(d, (py0 + yy) * W + px0, r, g, bl, r, g, bl, 0, false, false);
                         }
+                        else Row(d, (py0 + yy) * W + px0, ra, ga, ba, rb, gb, bb, 0, false, false);
                     }
                 }
             }
         });
-    }
 
-    private static void Mul(byte[] px, int i, float r, float g, float b)
-    {
-        px[i] = (byte)Math.Min(255f, px[i] * Math.Min(MaxLight, r));
-        px[i + 1] = (byte)Math.Min(255f, px[i + 1] * Math.Min(MaxLight, g));
-        px[i + 2] = (byte)Math.Min(255f, px[i + 2] * Math.Min(MaxLight, b));
+        // 한 칸의 한 줄 (T 도트): 왼쪽 → 오른쪽 빛을 잇고 · 그림자(ao — 1.0 = 256에서 빼는 몫)를 곱한다
+        static void Row(Span<uint> d, int at, float r0, float g0, float b0, float r1, float g1, float b1, int aoRow, bool ww, bool we)
+        {
+            const int max = (int)(MaxLight * 256);
+            int vr = (int)((r0 + (r1 - r0) * (0.5f / T)) * F), vg = (int)((g0 + (g1 - g0) * (0.5f / T)) * F), vb = (int)((b0 + (b1 - b0) * (0.5f / T)) * F);
+            int sr = (int)((r1 - r0) / T * F), sg = (int)((g1 - g0) / T * F), sb = (int)((b1 - b0) / T * F);
+            bool shade = aoRow != 0 || ww || we;
+            for (int xx = 0; xx < T; xx++, vr += sr, vg += sg, vb += sb)
+            {
+                int mr = Math.Clamp(vr >> 16, 0, max), mg = Math.Clamp(vg >> 16, 0, max), mb = Math.Clamp(vb >> 16, 0, max);
+                if (shade)
+                {
+                    int ao = 256 - aoRow - (ww ? AoWi[xx] : 0) - (we ? AoWi[T - 1 - xx] : 0);
+                    mr = mr * ao >> 8; mg = mg * ao >> 8; mb = mb * ao >> 8;
+                }
+                ref uint c = ref d[at + xx];
+                uint v = c;
+                uint R = Math.Min(255u, (v & 0xFF) * (uint)mr >> 8), G = Math.Min(255u, (v >> 8 & 0xFF) * (uint)mg >> 8), B = Math.Min(255u, (v >> 16 & 0xFF) * (uint)mb >> 8);
+                c = (v & 0xFF000000u) | B << 16 | G << 8 | R;
+            }
+        }
     }
 
     /// <summary>벽 앞면 띠 조명: 방 조명이 켜졌으면 그 빛깔로 · 비상등이면 붉게 빛난다 (곱한 뒤에 — 스스로 빛나는 것).</summary>

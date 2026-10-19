@@ -80,4 +80,24 @@ public static partial class Program
         File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>lights</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif}}section div{{display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0}}img{{width:624px;image-rendering:pixelated}}</style>{page}");
         Console.WriteLine($"  lights: {k}쌍 → {dir}");
     }
+
+    /// <summary>그리기 시간만 잰다: --paint [배] [장 수] [조명 0/1] — 사람 넷 · 로봇 둘 · 아침 10시 식당 둘레 41×24칸 (관전 화면 크기).</summary>
+    private static void PaintBench(string[] args)
+    {
+        int at = Array.IndexOf(args, "--paint");
+        string ship = args.Length > at + 1 && !args[at + 1].StartsWith("-") ? args[at + 1] : "Didim";
+        int n = args.Length > at + 2 && int.TryParse(args[at + 2], out int nn) ? nn : 200;
+        bool lit = !(args.Length > at + 3 && args[at + 3] == "0");
+        var s = ShipWorld.Crewed(ship, 3, 4, 2);
+        while (Time.HourOfDay(s.Tick) < 10) s.Run(25);
+        var L = s.Layout;
+        var mess = L.Rooms.FirstOrDefault(r => r.Type == "Mess") ?? L.Rooms[0];
+        int x0 = Math.Clamp((int)mess.Cells.Average(L.X) - 20, 0, Math.Max(0, L.W - 41)), y0 = Math.Clamp((int)mess.Cells.Average(L.Y) - 12, 0, Math.Max(0, L.H - 24));
+        var painter = new Painter(L) { Lighting = lit };
+        Img? into = null;
+        for (int i = 0; i < 10; i++) into = painter.Frame(s, x0, y0, 41, 24, i, into);
+        var sw = Stopwatch.StartNew();
+        for (int i = 0; i < n; i++) into = painter.Frame(s, x0, y0, 41, 24, i, into);
+        Console.WriteLine($"  그리기 {ship} 41×24칸 · 조명 {(lit ? "켬" : "끔")}: {sw.Elapsed.TotalMilliseconds / n:0.00}ms/장 ({n}장)");
+    }
 }
