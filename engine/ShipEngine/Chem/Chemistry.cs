@@ -70,6 +70,7 @@ public sealed class Chemistry : IEngine
     /// <summary>탈 것마다: 완전 · 일산화탄소 · 검댕 · 독가스 갈래 (불완전 몫을 나누는 비율) · 저장 · '넉넉한 양' (kg — 이만큼이면 제 빠르기로 탄다).</summary>
     private readonly (Reaction full, Reaction? co, Reaction? soot, Reaction? tox, double coShare, double sootShare, double toxShare, int store, double kgFull)[] _fuels;
     private readonly Reaction _pvcPyro, _burnPvc, _burnPoly, _ventEc, _ventSalt, _pf5Hydro;
+    private readonly double _coldK;   // 이보다 차가운 칸은 어떤 탈 것도 붙지 않는다 (가장 낮은 발화 온도 − 산소 몫 150K)
     /// <summary>달궈진 피복의 탈염화수소 활성화 에너지 (J/몰 — 300℃에서 초당 0.1% · 250℃면 7분의 1 · 430℃면 45배).</summary>
     public const double PyroEa = 100_000;
     public double PyroHcl;
@@ -93,6 +94,7 @@ public sealed class Chemistry : IEngine
             (T.R("burn_pvc"), T.R("burn_pvc_co"), T.R("burn_pvc_soot"), null, 0.6, 0.4, 0.0, T.sPvc, 2.8),
             (T.R("burn_pu"), T.R("burn_pu_co"), T.R("burn_pu_soot"), T.R("burn_pu_hcn"), 0.5, 0.35, 0.15, T.sPu, 2.8),
         };
+        _coldK = _fuels.Min(fu => fu.full.Def.MinK) - 150;   // IgniteK의 아래 끝 (100% 산소)
         _pvcPyro = T.R("pvc_pyro"); _burnPvc = T.R("burn_pvc"); _burnPoly = T.R("burn_poly");
         _ventEc = T.R("vent_ec"); _ventSalt = T.R("vent_lipf6"); _pf5Hydro = T.R("pf5_hydro");
         // 연소 범위 (공기 중 부피 %): 수소 4~75 · 메탄 5~15 · 일산화탄소 12.5~74 · 암모니아 15~28
@@ -169,6 +171,7 @@ public sealed class Chemistry : IEngine
             Quench(i);
             Pyro(sim, i, dt);
             Hydrolyze(sim, i, dt);
+            if (Burning[i] == 0 && F.Tf[i] < _coldK) continue;   // 가장 낮은 발화 온도보다 차가운 칸은 붙을 것이 없다 (산소 · 기압을 셀 까닭이 없다 — 대부분의 칸)
             if (!HasFuel(i)) { if (Burning[i] != 0) { HandOff(sim, i, nb); Out(sim, i); } continue; }
             double tf = F.Tf[i], x = O2Frac(i), pf = PressureFactor(i);
             if (Burning[i] == 0)
@@ -500,8 +503,10 @@ public sealed class Chemistry : IEngine
     /// </summary>
     private void Pyro(Sim sim, int i, double dt)
     {
-        double pvc = F.Stored(T.sPvc, i), tf = F.Tf[i];
-        if (pvc < 1e-6 || tf < _pvcPyro.Def.MinK) return;
+        double tf = F.Tf[i];
+        if (tf < _pvcPyro.Def.MinK) return;
+        double pvc = F.Stored(T.sPvc, i);
+        if (pvc < 1e-6) return;
         double k = _pvcPyro.Def.Rate * Math.Exp(-PyroEa / 8.314 * (1 / tf - 1 / 573.0));
         double ext = pvc * (1 - Math.Exp(-k * dt));
         double budget = double.MaxValue;
@@ -513,9 +518,9 @@ public sealed class Chemistry : IEngine
     /// <summary>물이 고인 칸: 뜨거운 겉면이 물을 끓여 식는다 (증발열) — 불을 끄는 길.</summary>
     private void Quench(int i)
     {
-        if (!F.HasSurface(i)) return;
+        if (F.Tf[i] <= 380 || !F.HasSurface(i)) return;
         double water = F.Stored(T.sWater, i);
-        if (water < 1 || F.Tf[i] <= 380) return;
+        if (water < 1) return;
         var vap = T.Gases[T.gH2O];
         var liq = T.Substances[T.Stores[T.sWater].Index];
         double perMol = (vap.Hf - liq.Hf) * 1000 + vap.C * (373.15 - 298.15);
