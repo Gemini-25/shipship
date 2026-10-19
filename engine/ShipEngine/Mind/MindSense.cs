@@ -194,6 +194,7 @@ public sealed partial class Mind
                 heard.Db = h.Db - mask - deaf;
                 if (heard.Db < HearFloor) { if (deaf > 0 && h.Db - mask >= HearFloor) Deafened++; else Masked++; continue; }
                 Hear(sim, a, heard);
+                if (person && !asleep) Glance(a, h, heard.Db, sim.Tick);   // 소리 난 쪽으로 고개를 돌린다 (S4)
                 float felt = h.Db - deaf;   // 귀에 닿은 크기 (먹먹한 귀는 덜 느낀다)
                 if (felt > loudest) loudest = felt;
                 if (asleep && felt - WakeDb(a, h.Kind) > rouse) { rouse = felt - WakeDb(a, h.Kind); loudH = h; loudH.Db = felt; }

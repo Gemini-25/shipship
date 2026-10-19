@@ -244,6 +244,9 @@ public struct AgentCore
     public byte Adrift;
     public sbyte AdriftDx, AdriftDy;
     public long HeldAt;
+    /// <summary>소리 단계 S4: 소리 난 쪽으로 고개를 돌렸다 — 본 칸 · 언제까지 (판단 · 그림이 그 쪽을 보게 그린다).</summary>
+    public int LookAt;
+    public long LookUntil;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

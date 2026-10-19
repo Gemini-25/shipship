@@ -114,6 +114,21 @@ public sealed partial class Mind
         _snd.Emit(sim, c.Cell, 50, SoundKind.SleepTalk, 0, a.Id);
     }
 
+    /// <summary>
+    /// 소리 난 쪽으로 고개를 돌린다 (소리 단계 S4 — 감각이 소리 난 쪽을 알고 · 판단이 주의를 돌린다 · 그림이 보여 준다):
+    /// 깨어 있는 사람이 제 칸이 아닌 곳에서 귀에 35dB 넘게 닿은 소리를 들으면 2틱(5초) 그 쪽을 본다 —
+    /// 쾅 · 비명 · 경보 · 금 가는 소리는 4틱(10초)이고 · 보던 것보다 약한 소리는 고개를 다시 돌리지 않는다.
+    /// </summary>
+    private void Glance(Agent a, in Heard h, float heardDb, long t)
+    {
+        ref var c = ref a.C;
+        if (h.Source == c.Cell || heardDb < 35 || h.Kind is SoundKind.Snore or SoundKind.Step) return;
+        bool strong = h.Kind is SoundKind.Bang or SoundKind.Scream or SoundKind.Alarm or SoundKind.Crack or SoundKind.Creak;
+        if (t <= c.LookUntil && !strong) return;
+        c.LookAt = h.Source; c.LookUntil = t + (strong ? 4 : 2);
+        Glances++;
+    }
+
     /// <summary>확인용 셈: 낸 발소리 · 일하는 소리 · 흥얼거림 · 잠꼬대 (찍지 않는다).</summary>
-    public long StepsHeard, WorkSounds, Hums, SleepTalks;
+    public long StepsHeard, WorkSounds, Hums, SleepTalks, Glances;
 }

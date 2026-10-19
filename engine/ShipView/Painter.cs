@@ -148,6 +148,7 @@ public sealed partial class Painter
     /// into: 다시 쓸 그림 (크기가 맞으면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다).</summary>
     public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
+        _tick = s.Tick;
         var st = s.Find<Structure>();
         // 배가 돌면 별도 돈다 (화면은 배를 따라 돈다 — 별은 무한히 멀어 배의 자세만큼만 거꾸로 돈다 · 배의 무게중심을 축으로)
         (_skyTh, _skyX, _skyY) = st != null && st.Bodies.Count > 0 ? (double.IsNaN(SkyTh) ? st.Bodies[0].Th : SkyTh, st.Bodies[0].Lx, st.Bodies[0].Ly) : (0, 0, 0);
@@ -722,7 +723,10 @@ public sealed partial class Painter
         return l;
     }
 
-    private static DotFacing FacingOf(Layout L, Agent a)
+    private long _tick;   // 그리는 순간의 틱 (고개를 돌린 동안인지)
+
+    /// <summary>바라보는 쪽: 걸으면 가는 쪽 · 서 있으면 소리 난 쪽으로 고개를 돌린 동안 그 쪽 (판단이 정한 것 — 소리 단계 S4) · 아니면 앞(아래).</summary>
+    public static DotFacing FacingOf(Layout L, Agent a, long tick)
     {
         if (a.PathIdx < a.Path.Count)
         {
@@ -730,6 +734,12 @@ public sealed partial class Painter
             int dx = L.X(n) - L.X(a.C.Cell), dy = L.Y(n) - L.Y(a.C.Cell);
             if (dx != 0) return dx > 0 ? DotFacing.E : DotFacing.W;
             if (dy != 0) return dy > 0 ? DotFacing.S : DotFacing.N;
+        }
+        if (a.C.LookUntil >= tick && (uint)a.C.LookAt < (uint)L.N && a.C.LookAt != a.C.Cell)
+        {
+            int dx = L.X(a.C.LookAt) - L.X(a.C.Cell), dy = L.Y(a.C.LookAt) - L.Y(a.C.Cell);
+            if (Math.Abs(dx) >= Math.Abs(dy)) return dx > 0 ? DotFacing.E : DotFacing.W;
+            return dy > 0 ? DotFacing.S : DotFacing.N;
         }
         return DotFacing.S;
     }
@@ -777,7 +787,7 @@ public sealed partial class Painter
         {
             // 기는 사람 (③ 낮은 머리 — 연기 · 열 아래로 몸을 낮췄다): 엎드려 가는 쪽으로 · 걸으면 팔다리가 번갈아
             bool goes = a.PathIdx < a.Path.Count;
-            var face0 = FacingOf(L, a);
+            var face0 = FacingOf(L, a, _tick);
             l.Cycle8 = true; l.Motion = DotMotion.None;
             var crawl = PersonImg(a.Id, l, face0 == DotFacing.W ? DotFacing.W : DotFacing.E, goes ? DotPose.Walk : DotPose.Stand, goes ? (frame + a.Id) & 7 : 0, false, true);
             Put(img, crawl, px + T / 2 - crawl.W / 2, py + T / 2 - crawl.H / 2 + 4);
@@ -794,7 +804,7 @@ public sealed partial class Painter
             : step is StepKind.Spray or StepKind.Seal or StepKind.Fix or StepKind.Brace or StepKind.Craft or StepKind.Maintain or StepKind.Clean ? DotPose.Work
             : step == StepKind.Use && c.Goal is GoalKind.Eat or GoalKind.Relax or GoalKind.Socialize or GoalKind.Work ? DotPose.Sit
             : DotPose.Stand;
-        var face = FacingOf(L, a);
+        var face = FacingOf(L, a, _tick);
         if (c.Floated != 0 && pose is DotPose.Walk or DotPose.Sit) pose = DotPose.Stand;   // 떠서는 걷지도 앉지도 않는다 (손잡이를 잡고 민다)
         // 생활 동작 (그래픽 결정 10 — 하는 일에서): 먹고 마시면 손이 입으로 · 고치면 공구를 돌리고 · 말하면 손짓 · 앉아서 졸면 고개를 떨군다
         l.Cycle8 = true;

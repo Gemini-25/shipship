@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest, Surgery, Counsel }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest, Surgery, Counsel, Heard }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -189,6 +189,7 @@ public sealed partial class ShipMind : IEngine
         if (!Online) return;
         long t = Prof.Start();
         foreach (var d in L.Doors) if (F.DoorOpen[d.Id] > 0f || F.DoorBleed[d.Id] != 0) DoorWasOpen[d.Id] = 1;
+        if (!Imagining) Listen(sim);   // 소리 단계 S4: 방마다 마이크 (매 틱 — 들린 소리는 두 틱만 남는다)
         if (sim.Tick % _effectiveRead == 0)
         {
             _tick = sim.Tick; ReadSensors(); t = Prof.Lap("주컴퓨터:센서", t);
@@ -370,7 +371,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", IncidentKind.Surgery => "수술", IncidentKind.Counsel => "마음 돌봄", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", IncidentKind.Surgery => "수술", IncidentKind.Counsel => "마음 돌봄", IncidentKind.Heard => "큰 소리", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -583,6 +584,8 @@ public sealed partial class ShipMind : IEngine
                 Raise(sim, IncidentKind.DoorJam, r, dc, (float)_st.DoorDeltaP(d), d, _st.DamageCause[dc]);
                 Mark(IncidentKind.DoorJam, r, d);
             }
+        // 소리 단계 S4: 마이크가 들은 큰 소리 — 로봇이 가 볼 때까지 (10분)
+        foreach (var x in Incidents) if (x.Active != 0 && x.Kind == IncidentKind.Heard && HeardPending(sim, x)) Mark(IncidentKind.Heard, x.Room);
         // ⑥ 생명 설비 정전 (급전선을 다시 올릴 수 없다 — 연장선)
         foreach (var (r, cell, cause) in PowerLostRooms(sim)) { Raise(sim, IncidentKind.PowerLost, r, cell, 1, -1, cause); Mark(IncidentKind.PowerLost, r); }
         // 다시 멀쩡하게 두 번 읽히면 끝
@@ -1050,6 +1053,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.LineCut: g = GoalKind.Investigate; target = x.Cell; drone = false; break;    // 끊긴 전선 · 관 자리로 가서 잇고 죈다
             case IncidentKind.PipeHunt: g = GoalKind.Investigate; target = x.Cell; drone = false; break;   // 새는 관을 따라 칸마다 살핀다
             case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
+            case IncidentKind.Heard: g = GoalKind.Investigate; target = x.Cell; drone = true; break;     // 소리 단계 S4: 큰 소리가 난 자리로 가서 본다
             default: return;
         }
         int need = x.Kind is IncidentKind.Fire or IncidentKind.Arrest ? 2 : 1;
@@ -1451,7 +1455,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w); SaveParts(w); SaveComms(w); SaveVoyage(w); SaveCalendar(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
-        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w);
+        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w); SaveEars(w);
     }
 
     public void Load(StateReader r)
@@ -1465,6 +1469,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r); LoadParts(r); LoadComms(r); LoadVoyage(r); LoadCalendar(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
-        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r);
+        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r); LoadEars(r);
     }
 }
