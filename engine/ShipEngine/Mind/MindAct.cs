@@ -648,11 +648,14 @@ public sealed partial class Mind
     private double SpeedOf(Agent a)
     {
         ref var c = ref a.C;
-        if (c.Kind == AgentKind.Robot) return P.Speed["robot"];
+        double g = c.Cell >= 0 && c.Cell < L.N ? F.Grav[c.Cell] : 1;
+        if (c.Kind == AgentKind.Robot) return P.Speed["robot"] * (g < FloatG ? 0.6 : 1);   // 무중력: 자석 발로 바닥을 짚어 간다
         if (c.Kind == AgentKind.Drone) return P.Speed["drone"];
         ref var b = ref _life![c.Body];
         double v = c.Mode == 1 || c.Goal == GoalKind.Evacuate ? P.Speed["run"] : c.Carrying >= 0 ? P.Speed["carry"] : P.Speed["walk"];
-        if (SmokeBad(a, c.Cell)) v = Math.Min(v, P.Speed["crawl"]);
+        if (g < FloatG) v = Math.Min(v, FloatPace(c));                       // 손잡이를 잡고 밀어 떠 간다 (기어갈 바닥이 없다)
+        else if (g < 0.9) v *= 0.6 + 0.4 * g;                                // 옅은 중력: 겅중겅중 — 걸음이 서툴다
+        if (g >= FloatG && SmokeBad(a, c.Cell)) v = Math.Min(v, P.Speed["crawl"]);
         if (b.Suit != 0) v *= 0.7;
         if (b.CoreK > 312.15) v = Math.Min(v, P.Speed["walk"]); // 더위에 지쳐 뛰지 못한다
         return v * Math.Max(0.3, 1 - b.Pain * 0.5) * BodyPace(a);   // ⑦ 앓음 · 잃은 몸무게

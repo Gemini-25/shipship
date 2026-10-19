@@ -199,6 +199,7 @@ public sealed partial class ShipMind : IEngine
         Power(sim); t = Prof.Lap("주컴퓨터:전력", t);
         Supply(sim); t = Prof.Lap("주컴퓨터:배급", t);   // ⑪ 배급 · 보관함 무게
         Helm(sim); t = Prof.Lap("주컴퓨터:조타", t);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
+        GravityWatch(sim);   // 인공 중력 — 꺼진 발생기를 다시 켜고 · 사라질 때 · 돌아올 때 알린다
         Weather(sim); t = Prof.Lap("주컴퓨터:날씨", t);  // ⑤ 우주 날씨 대비: 파편 구름 · 양성자 폭풍 — 문을 닫고 대피실로
         long tod = sim.Tick % Time.TicksPerDay; // 멈춰 있던 때에는 일지도 방송도 없다 (다음 일지가 그 사이를 함께 적는다)
         if (tod == Time.Hours(JournalHour) % Time.TicksPerDay) WriteJournal(sim);
@@ -1378,7 +1379,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
-        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w);
+        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w);
     }
 
     public void Load(StateReader r)
@@ -1392,6 +1393,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
-        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r);
+        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r);
     }
 }

@@ -18,8 +18,10 @@ public static partial class Program
         {
             var s = Worlds.Full(lay, 1); var f = s.Get<Field>(); var net = s.Get<Network>();
             int gen = net.Devices.First(d => d.Type == "GravityGenerator").Id;
+            s.Step();
+            float first = f.Grav[At(15, 2)];   // 새 배는 처음부터 1g (장이 서는 30초는 켤 때만 — 처음 30초를 무중력으로 떠나던 결함)
             s.Run(Time.Minutes(1));
-            float start = f.Grav[At(15, 2)];
+            float start = Math.Min(first, f.Grav[At(15, 2)]);
             long f0 = s.Facts.Total;
             net.SetOn(gen, false);
             s.Run(5);   // 12초
@@ -57,6 +59,87 @@ public static partial class Program
             Check("전기가 끊기면 (차단기) 무중력 · '전기가 끊겼다' / 발생기가 망가지면 무중력 · 원인 사슬이 그 고장에 닿는다",
                 cut.g == 0 && cut.why.Contains("전기가 끊겼다") && broke.g == 0 && broke.why.Contains("망가졌다") && broke.why.Contains("→"),
                 $"차단기: {cut.g:0.00}g · \"{cut.why}\" / 고장: {broke.g:0.00}g · \"{broke.why}\"");
+        }
+
+        // ── (나) 몸 · 움직임: 무중력에서 사람은 손잡이를 잡고 떠 간다 (처음 0.4m/s · 떠서 8시간 지낸 이는 1m/s) · 로봇은 자석 발로 0.6배 ──
+        {
+            (float person, float vet, float robot, float walk) Speeds()
+            {
+                var s = Worlds.Full(lay, 4); var net = s.Get<Network>(); var m = s.Get<Mind>();
+                int p = m.AddPerson(s, At(2, 8)), v = m.AddPerson(s, At(2, 7)), r = m.AddRobot(s, At(3, 8), AgentKind.Robot, At(3, 8));
+                m[v].C.ZeroGH = 9;
+                s.Run(3);
+                float walk = (float)m.Pace(p), rwalk = (float)m.Pace(r);
+                net.SetOn(net.Devices.First(d => d.Type == "GravityGenerator").Id, false);
+                s.Run(6);
+                return ((float)m.Pace(p), (float)m.Pace(v), (float)(m.Pace(r) / rwalk), walk);
+            }
+            var sp = Speeds();
+            Check("무중력의 움직임: 처음인 이는 손잡이를 잡고 0.4m/s로 떠 가고 (1g 걸음보다 느리다) · 떠서 8시간 넘게 지낸 이는 1m/s · 로봇은 자석 발로 0.6배",
+                Math.Abs(sp.person - 0.4f) < 0.01f && sp.walk > 1 && Math.Abs(sp.vet - 1f) < 0.01f && Math.Abs(sp.robot - 0.6f) < 0.01f,
+                $"1g 걸음 {sp.walk:0.00} · 무중력 처음 {sp.person:0.00} · 익숙한 이 {sp.vet:0.00} · 로봇 {sp.robot:0.00}배");
+        }
+
+        // ── 떠오름 · 내려앉음: 침대 밖에서 자던 이는 떠다니다 부딪혀 깨고 (침대의 이는 그대로) · 중력이 돌아오면 서툰 이는 바닥에 떨어져 넘어지기도 한다 (익숙한 이는 아니다) ──
+        {
+            var s = Worlds.Full(lay, 5); var net = s.Get<Network>(); var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int gen = net.Devices.First(d => d.Type == "GravityGenerator").Id;
+            int bed = s.Layout.Furniture.First(fu => fu.Type == "Bed").Cells[0];
+            int inBed = m.AddPerson(s, bed), onFloor = m.AddPerson(s, At(13, 3));
+            var novices = Enumerable.Range(0, 8).Select(i => m.AddPerson(s, At(12 + i, i % 2 == 0 ? 2 : 4))).ToArray();
+            var vets = Enumerable.Range(0, 8).Select(i => m.AddPerson(s, At(2 + i % 6, 7 + i / 6))).ToArray();
+            foreach (int v in vets) m[v].C.ZeroGH = 10;
+            foreach (int who in new[] { inBed, onFloor }) { life[m[who].C.Body].Asleep = 1; m[who].C.Sleepy = 1; }   // 제자리에서 잠든 채로 (침대 · 바닥)
+            s.Run(2);
+            long f0 = s.Facts.Total;
+            net.SetOn(gen, false);
+            for (int k = 0; k < 6; k++) { s.Step(); if (Debug) Console.WriteLine($"    {k} g {s.Get<Field>().Grav[m[onFloor].C.Cell]:0.00} 바닥 떠 {m[onFloor].C.Floated} 잠 {life[m[onFloor].C.Body].Asleep} · {m.Thought(onFloor)} / 침대 떠 {m[inBed].C.Floated} 잠 {life[m[inBed].C.Body].Asleep}"); }
+            var woke = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Woke).ToList();
+            if (Debug) foreach (var w in woke) Console.WriteLine($"    깸 {m.NameOf(w.Actor)} ({(w.Actor == inBed ? "침대" : w.Actor == onFloor ? "바닥" : "?")}) · {s.Causes.Story(w.Cause)} · 깨운 이 {w.Other}");
+            bool bedSleeps = !woke.Any(x => x.Actor == inBed), floorWoke = woke.Any(x => x.Actor == onFloor);
+            s.Run(Time.Minutes(2));
+            net.SetOn(gen, true);
+            s.Run(Time.Minutes(1));
+            var falls = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Fell).ToList();
+            int nf = falls.Count(x => novices.Contains(x.Actor)), vf = falls.Count(x => vets.Contains(x.Actor));
+            string why = falls.Count > 0 ? s.Causes.Story(falls[0].Cause) : "";
+            Check("떠오름 · 내려앉음: 침대 밖에서 자던 이는 떠다니다 부딪혀 깨고 침대(침낭)의 이는 그대로 잔다 · 중력이 돌아오면 서툰 이는 바닥에 떨어져 넘어지기도 한다 (원인: 돌아온 중력) · 익숙한 이는 넘어지지 않는다",
+                bedSleeps && floorWoke && nf >= 1 && nf < novices.Length && vf == 0 && why.Contains("다시 돌아") && why.Contains("바닥으로 떨어져"),
+                $"침대 {(bedSleeps ? "잠" : "깸")} · 바닥 {(floorWoke ? "깸" : "잠")} · 서툰 이 넘어짐 {nf}/{novices.Length} · 익숙한 이 {vf}/{vets.Length} · \"{why}\"");
+        }
+
+        // ── 주컴퓨터: 꺼진 발생기는 다시 켜고 · 망가져 무너진 중력이 돌아올 때 '바닥 쪽을 잡으세요'를 알린다 — 들은 이는 덜 넘어진다 (주컴퓨터를 끈 배와 견준다) ──
+        {
+            var clay = Worlds.Ascii(Worlds.MindShipComputer.Replace("#.........#....a....a.r.#", "#....G....#....a....a.r.#"), legend);
+            (int falls, bool restarted, string log, float g) Run(bool computer, ulong seed)
+            {
+                var s = Worlds.Full(clay, seed); var net = s.Get<Network>(); var m = s.Get<Mind>(); var sm = s.Get<ShipMind>(); var f = s.Get<Field>();
+                var gen = net.Devices.First(d => d.Type == "GravityGenerator");
+                if (!computer) net.SetOn(net.Devices.First(d => d.Type == "MainComputer").Id, false);   // 주컴퓨터를 끈 배 (망가뜨리면 합선이 같은 회로의 발생기까지 끊는다)
+                var crew = Enumerable.Range(0, 8).Select(i => m.AddPerson(s, Worlds.At(clay, 12 + i, i % 2 == 0 ? 2 : 4))).ToArray();
+                s.Run(3);
+                long f0 = s.Facts.Total, t0 = s.Tick;
+                net.SetOn(gen.Id, false);
+                s.Run(Time.Minutes(0.5));
+                bool restarted = net.On[gen.Id] != 0;
+                if (!computer) net.SetOn(gen.Id, true);
+                s.Run(Time.Minutes(1));
+                long f1 = s.Facts.Total;
+                net.Broken[gen.Id * 4 + (int)Part.Electric] = 1;   // 이번에는 망가진다 — 다시 켤 수 없다 · 45초 뒤 고쳐진다 (두 배 같은 때)
+                s.Run(Time.Minutes(0.75));
+                net.Repair(gen.Id, Part.Electric);
+                s.Run(Time.Minutes(1.5));
+                if (Debug) Console.WriteLine($"    {(computer ? "주컴퓨터" : "끈 배")} {seed}: 내려앉음 {m.Landings} · 방송 듣고 잡음 {m.Braced} · 넘어짐 {m.LandFalls}");
+                int falls = s.Facts.Since(f1).Count(x => x.Kind == FactKind.Fell && crew.Contains(x.Actor));
+                return (falls, restarted, string.Join(" / ", sm.Log.Where(l => l.tick >= t0).Select(l => l.text).Where(l => l.Contains("중력"))), f.Grav[Worlds.At(clay, 15, 2)]);
+            }
+            // 넘어짐은 운이 낀다 — 시드 셋을 더해 견준다 (8시드: 주컴퓨터 10 · 멈춘 배 32)
+            var on = Run(true, 1); var off = Run(false, 1);
+            for (ulong sd = 2; sd <= 3; sd++) { var a2 = Run(true, sd); var b2 = Run(false, sd); on.falls += a2.falls; off.falls += b2.falls; on.restarted &= a2.restarted; on.g = Math.Min(on.g, a2.g); }
+            if (Debug) Console.WriteLine($"    주컴퓨터: {on.log}");
+            Check("주컴퓨터: 꺼진 발생기는 곧 다시 켜고 · 무너질 때 '손잡이를 잡으세요' · 돌아올 때 '바닥 쪽을 잡으세요' — 들은 이는 반도 안 넘어진다 (주컴퓨터를 끈 배보다)",
+                on.restarted && on.log.Contains("다시 켰다") && on.log.Contains("손잡이를 잡으세요") && on.log.Contains("바닥 쪽을 잡으세요") && on.g == 1 && on.falls * 2 < off.falls,
+                $"다시 켬 {on.restarted} · 넘어짐: 주컴퓨터 {on.falls} · 끈 배 {off.falls} (8명 × 시드 셋 · 망가졌다 고쳐진 뒤) · \"{on.log}\"");
         }
 
         // ── 배가 갈라지면: 발생기가 있는 쪽은 1g · 떨어져 나간 조각은 무중력 (사실 · '발생기가 없는 조각') ──

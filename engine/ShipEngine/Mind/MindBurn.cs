@@ -93,13 +93,13 @@ public sealed partial class Mind
         return false;
     }
 
-    private void FallDown(Sim sim, Agent a, double g, string how, int parent)
+    private void FallDown(Sim sim, Agent a, double g, string how, int parent, bool showG = true)
     {
         long t = sim.Tick;
         int cell = a.C.Cell;
         double u = Rng.Unit(sim.Seed, Rng.Key("넘어져 다침"), t, a.Id);
         bool bone = Rng.Unit(sim.Seed, Rng.Key("뼈"), t, a.Id) < 0.03 + 0.2 * Math.Max(0, g - 0.2);
-        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {how} 넘어졌다 ({g:0.00}g){(bone ? " — 뼈를 다쳤다" : "")}", t, cell, parent, 0, a.Id);
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {how} 넘어졌다{(showG ? $" ({g:0.00}g)" : "")}{(bone ? " — 뼈를 다쳤다" : "")}", t, cell, parent, 0, a.Id);
         float blunt = (float)(0.05 + 0.2 * g * u + (bone ? 0.35 : 0));
         if (a.C.Carrying >= 0)
         {

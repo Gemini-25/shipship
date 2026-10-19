@@ -28,6 +28,7 @@ public enum BeliefKind : byte
     Hot,
     Grind,       // 기계 소리가 이상하다 — 끽끽 · 덜컹 (대상 = 장치 · 들어서 안다)
     Burn,        // 곧 점화한다 — 붙잡아야 한다 (대상 = 점화 틱 · 방송으로 안다)
+    GravityBack, // 곧 중력이 돌아온다 — 바닥 쪽을 잡는다 (방송으로 안다)
 }
 
 public enum BeliefSource : byte { Saw, Heard, Smelled, Felt, Told, Screen }
@@ -198,6 +199,9 @@ public struct AgentCore
     public long PonderTick, OwnUntil;
     public int PonderTarget;
     public byte PonderWay;
+    /// <summary>무중력 (바퀴 3): 1이면 지금 떠 있다 (바닥 중력 0.3g 아래) · 떠서 지낸 시간 (시간 — 익숙해질수록 손잡이를 잘 탄다).</summary>
+    public byte Floated;
+    public float ZeroGH;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

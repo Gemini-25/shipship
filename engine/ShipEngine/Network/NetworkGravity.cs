@@ -14,6 +14,8 @@ public sealed partial class Network
     public float[] BodyG = Array.Empty<float>();
     /// <summary>[몸] 중력이 무너진 원인 마디 (서면 0).</summary>
     public int[] BodyGCause = Array.Empty<int>();
+    /// <summary>[몸] 중력이 다시 선 원인 마디 (떠 있던 이가 바닥에 떨어지면 그 부모 — 무너지면 0).</summary>
+    public int[] BodyGBack = Array.Empty<int>();
     public const double GravUpSec = 30, GravDownSec = 10;
     private bool? _hasGrav;
 
@@ -22,13 +24,19 @@ public sealed partial class Network
     private void GravityStep(Sim sim, double dt)
     {
         if (!HasGravity) return;
-        if (GravField.Length != Devices.Count) GravField = new float[Devices.Count];
+        if (GravField.Length != Devices.Count)
+        {
+            // 처음: 배는 켜진 발생기의 1g로 떠난다 (장이 서는 30초는 켤 때만)
+            GravField = new float[Devices.Count];
+            foreach (var d in Devices) if (d.Def.Role == "gravity" && On[d.Id] != 0) GravField[d.Id] = 1;
+            if (BodyG.Length == 0) { BodyG = new float[] { GravField.Max() }; BodyGCause = new int[1]; BodyGBack = new int[1]; }
+        }
         int bodies = Math.Max(1, _stc?.Bodies.Count ?? 0);
         if (BodyG.Length < bodies)
         {
             // 새로 떨어져 나간 조각은 배의 중력을 지닌 채 시작한다 (장이 무너지는 데 10초)
             int old = BodyG.Length;
-            Array.Resize(ref BodyG, bodies); Array.Resize(ref BodyGCause, bodies);
+            Array.Resize(ref BodyG, bodies); Array.Resize(ref BodyGCause, bodies); Array.Resize(ref BodyGBack, bodies);
             for (int b = Math.Max(1, old); b < bodies; b++) BodyG[b] = BodyG[0];
             _gravDirty = true;
         }
@@ -57,11 +65,13 @@ public sealed partial class Network
                 string text = src[b] < 0 ? $"떨어져 나간 조각에는 {Devices[dev].Name}가 없어 중력이 사라진다" : $"{Devices[dev].Name}가 멈춰 중력이 사라진다 — {WhyGravityStopped(dev)}";
                 BodyGCause[b] = sim.Causes.Add(CauseKind.Machine, text, sim.Tick, Devices[dev].Cell, src[b] < 0 && _stc != null && b < _stc.Bodies.Count ? _stc.Bodies[b].PushCause : WhyGravityParent(dev));
                 sim.Facts.Emit(sim.Tick, FactKind.Gravity, Devices[dev].Cell, 0, BodyGCause[b], other: b);
+                BodyGBack[b] = 0;
             }
             else if (BodyG[b] < 0.5f && level[b] >= 0.5f)
             {
                 int back = sim.Causes.Add(CauseKind.Machine, $"{Devices[dev].Name}가 다시 돌아 중력이 돌아온다", sim.Tick, Devices[dev].Cell, BodyGCause[b]);
                 sim.Facts.Emit(sim.Tick, FactKind.Gravity, Devices[dev].Cell, 1, back, other: b);
+                BodyGBack[b] = back;
                 BodyGCause[b] = 0;
             }
             BodyG[b] = level[b];
@@ -87,6 +97,13 @@ public sealed partial class Network
         return ReactorScram ? ScramCause : 0;
     }
 
-    private void SaveGravity(StateWriter w) { w.Tag("중력"); w.Arr(GravField); w.Arr(BodyG); w.Arr(BodyGCause); }
-    private void LoadGravity(StateReader r) { r.Tag("중력"); GravField = r.Arr<float>(); BodyG = r.Arr<float>(); BodyGCause = r.Arr<int>(); _gravDirty = true; }
+    /// <summary>그 칸 몸의 바닥 중력이 무너진 원인 · 다시 선 원인 (⑧이 읽는다 — 떠오름 · 떨어짐의 부모).</summary>
+    public (int lost, int back) GravityCauses(int cell)
+    {
+        int b = Math.Max(0, _stc?.BodyOf(cell) ?? 0);
+        return (b < BodyGCause.Length ? BodyGCause[b] : 0, b < BodyGBack.Length ? BodyGBack[b] : 0);
+    }
+
+    private void SaveGravity(StateWriter w) { w.Tag("중력"); w.Arr(GravField); w.Arr(BodyG); w.Arr(BodyGCause); w.Arr(BodyGBack); }
+    private void LoadGravity(StateReader r) { r.Tag("중력"); GravField = r.Arr<float>(); BodyG = r.Arr<float>(); BodyGCause = r.Arr<int>(); BodyGBack = r.Arr<int>(); _gravDirty = true; }
 }

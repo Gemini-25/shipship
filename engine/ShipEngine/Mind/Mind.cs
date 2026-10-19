@@ -408,7 +408,7 @@ public sealed partial class Mind : IEngine
         BeliefKind.Fire => "불", BeliefKind.Smoke => "연기", BeliefKind.Breach => "구멍", BeliefKind.Vacuum => "공기가 빠짐", BeliefKind.Injured => "쓰러진 사람",
         BeliefKind.Dead => "죽은 사람", BeliefKind.Broken => "멈춘 장치", BeliefKind.Bang => "쾅 소리", BeliefKind.Strain => "끼익 소리", BeliefKind.Leak => "새는 소리",
         BeliefKind.SmokeSmell => "타는 냄새", BeliefKind.BadAir => "이상한 공기", BeliefKind.Water => "고인 물", BeliefKind.Spark => "불꽃", BeliefKind.StuckDoor => "안 열리는 문",
-        BeliefKind.Help => "비명", BeliefKind.Cold => "추위", BeliefKind.Hot => "더위", BeliefKind.Grind => "이상한 기계 소리", _ => "",
+        BeliefKind.Help => "비명", BeliefKind.Cold => "추위", BeliefKind.Hot => "더위", BeliefKind.Grind => "이상한 기계 소리", BeliefKind.GravityBack => "중력이 돌아온다", _ => "",
     };
 
     /// <summary>머릿속 한 줄 (화면의 생각 칸).</summary>
@@ -459,6 +459,7 @@ public sealed partial class Mind : IEngine
         foreach (var a in Agents) UpdateUp(sim, a);
         Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
         BodyJolt(sim);  // ④ 칸 강체 — 몸이 덜컹이면 선 사람이 넘어진다
+        Floating(sim, dt);   // 인공 중력 — 떠오르고 · 익숙해지고 · 중력이 돌아오면 떨어진다
         t = Lap("준비", t);
         foreach (var a in Agents) Sense(sim, a, dt);
         t = Lap("감각", t);

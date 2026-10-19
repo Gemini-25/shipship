@@ -29,7 +29,7 @@ public sealed partial class Mind
             bool windy = v >= 0.5 && pa >= 1;
             double sx = 0, sy = 0, jx = 0, jy = 0;
             if (bodies) { (sx, sy) = _st!.Felt(c); (jx, jy) = _st.JoltDv(c); }
-            double mu = F.Stored(T.sWater, c) > 50 ? WetMu : ItemMu;
+            double mu = (F.Stored(T.sWater, c) > 50 ? WetMu : ItemMu) * Math.Max(0.05, F.Grav[c]);   // 바닥 중력만큼 누른다 (무중력이면 거의 안 붙는다 — 찍찍이 몫 0.05)
             bool spun = sx * sx + sy * sy > (mu * Gravity) * (mu * Gravity);    // 원심이 마찰을 넘는다
             double jv = Math.Sqrt(jx * jx + jy * jy);
             int jolted = jv > 0.3 ? (int)Math.Min(3, Math.Floor(jv * jv / (2 * mu * Gravity) + 0.5)) : 0;   // 덜컹임: 바닥이 움직인 만큼 미끄러져 마찰로 선다 (v²/2μg)
