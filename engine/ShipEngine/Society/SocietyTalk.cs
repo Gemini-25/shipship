@@ -95,8 +95,7 @@ public sealed partial class Society
         {
             case Topic.Blame:
             {
-                int lb = LieOf(o.Cause);
-                if (lb >= 0 && b == Lies[lb].Scape) Hear(sim, lb, b, a);   // 누명을 쓴 줄 이제 안다
+                // 누명을 쓴 이가 따지는 말로 거짓말을 처음 들었으면 — 그 사람이 받는다 (MindSecrets — 행동 '들은 거짓말')
                 if (end == TalkEnd.Apology)   // b가 사과했다
                 {
                     Apologies++;
@@ -132,8 +131,7 @@ public sealed partial class Society
                     int lg = LieOf(o.Cause);
                     if (lg >= 0)
                     {
-                        // 거짓말이 험담으로 번진다: 믿을지는 듣는 이가 (그때 본 이면 들통난다)
-                        Hear(sim, lg, b, a);
+                        // 거짓말이 험담으로 번진다: 믿을지는 듣는 이가 (그때 본 이면 들통난다 — MindSecrets)
                         Warm(sim, a, b, 0.02f);
                         Say(sim, a, b, o, end, Pick(sim, "험담/퍼짐", a));
                         break;

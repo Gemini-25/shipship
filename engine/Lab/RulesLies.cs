@@ -132,5 +132,40 @@ public static partial class Program
                 on.exposed && on.asked >= 1 && !off.exposed && off.asked >= 1,
                 $"기록 있음: 물음 {on.asked} · \"{Trim(on.text, 150)}\" / 기록 없음: 물음 {off.asked} · 들통 {off.exposed}");
         }
+
+        // ── 판단 이관 (라): 둘러대기 · 들은 말 · 기록 묻기는 사람의 행동 — 둘러댄 사실마다 같은 틱에 그 사람의 '둘러댐' · 기록을 물은 사실마다 '묻는다' 행동 /
+        //    기록을 물으려던 이가 잠들면 깬 뒤에 묻는다 (옛 사회 엔진은 잠든 이의 물음을 잊었다) ──
+        {
+            (int lies, int lieActs, int asks, int askActs, int heard, int hearActs, bool exposed, long asked) Run(bool sleep)
+            {
+                var (s, m, so, x, sc, dev, c0, ears) = Scene(7, -1, true);
+                m.SetPersonality(sc, 1f, 1f, 0.5f, 0.5f, 0.3f);   // 꼼꼼하고 궁금한 이 — 틀림없이 기록을 묻는다
+                var life = s.Get<Life>();
+                var acts = new List<SocialAct>();
+                long cur = m.ActsTotal, f0 = s.Facts.Total;
+                void Step(bool asleep)
+                {
+                    s.Step();
+                    acts.AddRange(m.ActsSince(cur)); cur = m.ActsTotal;
+                    if (asleep) { m[sc].C.Sleepy = 1; life[m[sc].C.Body].Asleep = 1; }
+                }
+                int c1 = s.Causes.Add(CauseKind.Wear, "부품이 깨졌다", s.Tick, s.Get<Network>().Devices[dev].Cell, c0);
+                s.Facts.Emit(s.Tick, FactKind.MachineFail, s.Get<Network>().Devices[dev].Cell, 0, c1, -1, dev);
+                Step(false);
+                if (sleep) { for (int k = 0; k < Time.Hours(4); k++) Step(true); m[sc].C.Sleepy = 0; life[m[sc].C.Body].Asleep = 0; }   // 물을 때가 지나도록 자고 · 깬다
+                for (int k = 0; k < Time.Hours(4) && !so.Lies.Any(l => l.Exposed != 0); k++) Step(false);
+                var facts = s.Facts.Since(f0).ToList();
+                var lieF = facts.Where(f => f.Kind == FactKind.Lie).ToList();
+                var askF = facts.Where(f => f.Kind == FactKind.LogAsked).ToList();
+                int lieActs = lieF.Count(f => acts.Any(a => a.Kind == SocialActKind.TellLie && a.Tick == f.Tick && a.Actor == f.Actor && a.Cause == f.Cause));
+                int askActs = askF.Count(f => acts.Any(a => a.Kind == SocialActKind.AskLog && a.Tick == f.Tick && a.Actor == f.Actor && a.Cause == f.Cause));
+                return (lieF.Count, lieActs, askF.Count, askActs, so.Heard.Count, acts.Count(a => a.Kind == SocialActKind.HearLie), so.Lies.Any(l => l.Exposed != 0), so.LogChecks);
+            }
+            var awake = Task.Run(() => Run(false)); var slept = Run(true); var aw = awake.Result;
+            Check("판단 이관 (라): 둘러댄 사실마다 같은 틱에 그 사람의 '둘러댐' 행동 · 들은 이마다 '들은 거짓말' 행동 · 기록을 물은 사실마다 '묻는다' 행동 / 물으려던 이가 잠들면 깬 뒤에 묻는다",
+                aw.lies == 1 && aw.lieActs == 1 && aw.asks >= 1 && aw.askActs == aw.asks && aw.heard == aw.hearActs && aw.exposed
+                && slept.lies == 1 && slept.asked >= 1 && slept.exposed,
+                $"깨어 있음: 둘러댐 {aw.lies} (행동 {aw.lieActs}) · 들음 {aw.heard} (행동 {aw.hearActs}) · 물음 {aw.asks} (행동 {aw.askActs}) · 들통 {aw.exposed} / 잠든 뒤: 물음 {slept.asked} · 들통 {slept.exposed}");
+        }
     }
 }

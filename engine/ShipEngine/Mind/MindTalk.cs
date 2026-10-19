@@ -41,6 +41,7 @@ public sealed partial class Mind
                 int sp = o.Speaker, li = sp == i ? j : i;
                 var end = Reply(sim, o, sp, li);
                 Act(sim, new SocialAct { Kind = SocialActKind.Talk, Actor = sp, Target = li, Other = o.About, Room = RoomOf(o.Cell), Cell = o.Cell, Cause = o.Cause, Topic = o.T, End = end });
+                HearInTalk(sim, o.T, end, sp, li, o.Cause);   // (라) 거짓말이 말로 옮겨 갔다 — 들은 이가 받는다
                 NickInTalk(sim, i, j);   // ⑨ 이야기하다 별명이 붙는다
             }
         }

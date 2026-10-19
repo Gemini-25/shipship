@@ -118,6 +118,11 @@ public sealed partial class Society
                 case SocialActKind.StopFight: _stopper.TryAdd(act.Target, act.Actor); break;
                 case SocialActKind.BreakUp when Partner[act.Actor] == act.Target: BreakUp(sim, act.Actor, act.Target); break;
                 case SocialActKind.Sabotage: Sabotaged(sim, act); break;
+                case SocialActKind.Confess: Confessed(sim, act); break;
+                case SocialActKind.KeepSecret: KeptSecret(sim, act); break;
+                case SocialActKind.TellLie: ToldLie(sim, act); break;
+                case SocialActKind.HearLie: HeardLie(sim, act); break;
+                case SocialActKind.AskLog: AskedLog(sim, act); break;
                 case SocialActKind.DeferMemorial when _mournDeferred.Add(act.Target):
                     MemorialsDeferred++;
                     sim.Facts.Emit(sim.Tick, FactKind.Culture, act.Cell, (int)CultureEvent.MemorialDeferred, act.Cause, act.Actor, act.Target);
