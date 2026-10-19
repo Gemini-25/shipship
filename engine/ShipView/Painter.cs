@@ -415,6 +415,30 @@ public sealed class Painter
             }
         }
 
+        // ── 떠 있는 물방울 (무중력 — 사람 위 공중에 떠돈다 · 많을수록 크고 많다) ──
+        for (int y = y0; y < y0 + h; y++)
+            for (int x = x0; x < x0 + w; x++)
+            {
+                if (!L.In(x, y)) continue;
+                int c = L.Index(x, y);
+                if (!Mine(c)) continue;
+                double dr = f.Floating(f.T.sWater, c);
+                if (dr < 3) continue;
+                int n = (int)Math.Min(5, 1 + dr / 25);
+                for (int k = 0; k < n; k++)
+                {
+                    uint hsh = (uint)(c * 73856093) ^ (uint)(k * 19349663);
+                    int bob = ((frame / 6 + k) % 4) switch { 0 => 0, 1 => 1, 2 => 0, _ => -1 };   // 천천히 흔들린다
+                    int r = dr > 60 && k % 2 == 0 ? 7 : dr > 20 ? 5 : 4;   // 둥근 물방울 (큰 덩어리는 출렁인다)
+                    int px = Px(x) + 1 + (int)(hsh % (uint)(T - r - 2)), py = Py(y) + 1 + (int)(hsh / 7 % (uint)(T - r - 2)) + bob;
+                    int wob = (frame / 4 + k) % 2;   // 무중력 물 덩어리는 늘 출렁인다
+                    img.Fill(px + 1, py + wob, r - 2, r - wob, Rgba.Hex("#3e8fd0"), 0.85f);
+                    img.Fill(px, py + 1, r, r - 2, Rgba.Hex("#3e8fd0"), 0.85f);
+                    img.Fill(px + 1, py + 1, r - 2, r - 3, Rgba.Hex("#7cc6f4"), 0.9f);
+                    img.Fill(px + 1, py + 1, 2, 1, Rgba.Hex("#f0fbff"), 0.95f);   // 빛 받은 자리
+                }
+            }
+
         // ── 불 · 연기 (맨 앞) ──
         for (int y = y0; y < y0 + h + 1; y++)
             for (int x = x0; x < x0 + w; x++)

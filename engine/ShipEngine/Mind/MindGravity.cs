@@ -7,7 +7,7 @@ namespace ShipEngine;
 /// </summary>
 public sealed partial class Mind
 {
-    public const float FloatG = 0.3f;
+    public const float FloatG = Field.LowG;
     public const double FloatSlow = 0.4, FloatFast = 1.0, FloatLearnH = 8, LandFall = 0.45;
     public long Floats, Landings, LandFalls, Braced;
 

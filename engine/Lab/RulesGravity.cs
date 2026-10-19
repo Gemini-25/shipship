@@ -142,6 +142,82 @@ public static partial class Program
                 $"다시 켬 {on.restarted} · 넘어짐: 주컴퓨터 {on.falls} · 끈 배 {off.falls} (8명 × 시드 셋 · 망가졌다 고쳐진 뒤) · \"{on.log}\"");
         }
 
+        // ── (다) 무중력의 물: 퍼지지 않고 · 막을 넘는 몫은 방울로 떠 떠돌다 벽 · 설비에 들러붙고 · 중력이 서면 그 자리에 떨어진다 (1g면 바닥을 따라 퍼진다) ──
+        {
+            (int wet, double peak, double stuck, double atSpot, double fell, int newWet, double left) Run(bool zeroG)
+            {
+                var s = Worlds.Full(lay, 3); var f = s.Get<Field>(); var net = s.Get<Network>();
+                var gen = net.Devices.First(d => d.Type == "GravityGenerator");
+                int w = f.T.sWater, spot = At(17, 3);
+                s.Run(3);
+                if (zeroG) { net.SetOn(gen.Id, false); s.Run(15); }
+                f.AddStore(spot, w, 1500);   // 27L — 물관이 터졌다
+                double peak = 0;
+                for (int k = 0; k < Time.Minutes(10); k++)
+                {
+                    s.Step(); peak = Math.Max(peak, f.Drops.Sum());
+                    string? shot = Environment.GetEnvironmentVariable("GRAV_SHOT");   // 그림으로 보기: GRAV_SHOT=폴더
+                    if (shot != null && zeroG && k == Time.Minutes(2)) { var img = new ShipView.Painter(lay).Frame(s, 10, 0, 15, 7, k); Png.WriteRgba(Path.Combine(shot, "drops.png"), img.W, img.H, img.Px); }
+                }
+                var wetBefore = Enumerable.Range(0, f.Cells).Where(i => f.Stored(w, i) > 1).ToHashSet();
+                double atSpot = f.Stored(w, spot), stuck = f.DropsStuck;
+                if (zeroG) { net.SetOn(gen.Id, true); s.Run(Time.Minutes(1)); }
+                int newWet = Enumerable.Range(0, f.Cells).Count(i => f.Stored(w, i) > 1 && !wetBefore.Contains(i));
+                if (Debug) Console.WriteLine($"    {(zeroG ? "무중력" : "1g")}: 젖은 칸 {wetBefore.Count} · 가장 많이 뜬 방울 {peak:0} · 들러붙음 {stuck:0} · 쏟은 칸 {atSpot:0} · 떨어짐 {f.DropsFell:0} · 새로 젖은 칸 {newWet} · 남은 방울 {f.Drops.Sum():0.0}");
+                return (wetBefore.Count, peak, stuck, atSpot, f.DropsFell, newWet, f.Drops.Sum());
+            }
+            var one = Run(false); var zero = Run(true);
+            Check("무중력의 물: 쏟아진 물은 퍼지지 않고 막을 넘는 몫이 방울로 떠 · 떠돌다 벽 · 설비에 들러붙고 · 중력이 서면 그 자리에 떨어진다 (1g면 바닥을 따라 퍼지고 방울은 없다)",
+                one.peak == 0 && one.wet >= 9 && zero.peak > 400 && zero.stuck > 100 && zero.atSpot < 300 && zero.fell > 50 && zero.newWet > 0 && zero.left < 1,
+                $"1g: 젖은 칸 {one.wet} · 방울 {one.peak:0} / 무중력: 가장 많이 뜬 방울 {zero.peak:0}몰 · 들러붙음 {zero.stuck:0} · 쏟은 칸에 남음 {zero.atSpot:0} · 중력이 서자 떨어짐 {zero.fell:0} (새로 젖은 칸 {zero.newWet}) · 남은 방울 {zero.left:0.0}");
+        }
+
+        // ── (다) 떠다니던 물방울이 전선에 들러붙어 합선 (원인 '물방울') · 우주로 트인 구멍은 방울을 빨아낸다 ──
+        {
+            var s = Worlds.Full(lay, 4); var f = s.Get<Field>(); var net = s.Get<Network>();
+            var gen = net.Devices.First(d => d.Type == "GravityGenerator");
+            s.Run(3);
+            net.SetOn(gen.Id, false); s.Run(15);
+            var path = net.Feeders.SelectMany(fd => fd.Path).ToHashSet();
+            int spill = Enumerable.Range(0, f.Cells).Where(i => f.L.Kind[i] == CellKind.Floor && f.RegionOf[i] >= 0 && !path.Contains(i) && f.L.FurnitureAt[i] < 0)
+                .OrderBy(i => path.Min(p => Math.Abs(f.L.X(p) - f.L.X(i)) + Math.Abs(f.L.Y(p) - f.L.Y(i))) == 2 ? 0 : 1).ThenBy(i => i).First();   // 전선에서 두 칸 떨어진 바닥
+            long f0 = s.Facts.Total;
+            f.AddStore(spill, f.T.sWater, 1200);
+            s.Run(Time.Minutes(15));
+            var sh = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Short);
+            string why = sh.Kind == FactKind.Short ? s.Causes.Story(sh.Cause) : "";
+
+            var s2 = Worlds.Full(lay, 4); var f2 = s2.Get<Field>(); var net2 = s2.Get<Network>();
+            s2.Run(3);
+            net2.SetOn(net2.Devices.First(d => d.Type == "GravityGenerator").Id, false); s2.Run(15);
+            f2.AddStore(At(21, 3), f2.T.sWater, 1500);
+            s2.Run(Time.Minutes(3));
+            double floatAtHole = f2.Drops.Sum();
+            f2.SetHole(At(24, 3), 0.02f);   // 외판에 200cm² 구멍 (돌풍이 방울을 끌고 나간다)
+            for (int k = 0; k < Time.Minutes(3); k++) { s2.Step(); if (Debug && k % 10 == 0 && k < 40) Console.WriteLine($"      {k} 기압 {f2.Pressure(At(21, 3)):0} 바람 {f2.WindX[At(23, 3)]:0.00},{f2.WindX[At(18, 3)]:0.00} 방울 {f2.Drops.Sum():0} 빠짐 {f2.DropsVented:0}"); }
+            if (Debug) Console.WriteLine($"    구멍 날 때 떠 있던 방울 {floatAtHole:0}");
+            if (Debug) Console.WriteLine($"    합선: {why} · 구멍: 빠진 방울 {f2.DropsVented:0}몰 · 남은 방울 {f2.Drops.Sum():0}");
+            Check("떠다니던 물방울이 전선이 지나는 칸에 들러붙어 합선한다 (원인 '물방울') · 우주로 트인 구멍은 떠 있는 방울을 빨아낸다",
+                why.Contains("물방울") && f2.DropsVented > 50, $"\"{why}\" · 구멍으로 빠진 방울 {f2.DropsVented:0}몰");
+        }
+
+        // ── (다) 그을음: 무중력에서는 가라앉는 몫이 없어 오래 떠 있다 (한 시간 뒤 떠 있는 그을음 — 1g보다 많다) ──
+        {
+            double Airborne(bool zeroG)
+            {
+                var s = Worlds.Full(lay, 5); var f = s.Get<Field>(); var net = s.Get<Network>();
+                s.Run(3);
+                if (zeroG) { net.SetOn(net.Devices.First(d => d.Type == "GravityGenerator").Id, false); s.Run(15); }
+                var room = f.L.Rooms[f.L.Room[At(17, 3)]].Cells;
+                foreach (int c in room) f.AddGas(c, f.T.gSoot, 0.05, f.Temp(c));
+                double a0 = room.Sum(c => f.Gas(f.T.gSoot, c));
+                s.Run(Time.Hours(1));
+                return f.Total(f.T.gSoot) / a0;
+            }
+            double one = Airborne(false), zero = Airborne(true);
+            Check("그을음: 무중력에서는 오래 떠 있다 — 한 시간 뒤 떠 있는 몫이 1g보다 많다", zero > one * 1.2 && zero < 1, $"한 시간 뒤 떠 있는 몫: 1g {one:0.00} · 무중력 {zero:0.00}");
+        }
+
         // ── 배가 갈라지면: 발생기가 있는 쪽은 1g · 떨어져 나간 조각은 무중력 (사실 · '발생기가 없는 조각') ──
         {
             var dl = Worlds.Ascii(Dumbbell.Replace("#.......#####.......#\n#....e..#", "#..G....#####.......#\n#....e..#"), legend);

@@ -127,6 +127,20 @@ public static partial class Program
             Check("에너지 장부가 같다", Rel(e0, e1) < 1e-9, $"{Rel(e0, e1):0.0e0}");
             bool neg = f.N.Any(v => v < 0) || f.U.Any(v => v < 0) || f.Store.Any(v => v < 0);
             Check("음수가 없다", !neg);
+            {
+                // 무중력: 고인 물이 방울로 떠 떠돌다 벽 · 설비에 들러붙어도 원소 · 에너지 장부가 그대로 (방울은 액체의 hf를 지닌 채 옮겨 다닌다)
+                var sz = Worlds.FieldOnly(Worlds.Ascii(Worlds.TwoRooms), 5, fz => { fz.Adiabatic = true; Stir(fz); });
+                var fz = sz.Get<Field>(); Array.Fill(fz.Grav, 0f);
+                int spill = Enumerable.Range(0, fz.Cells).Where(i => fz.L.Kind[i] == CellKind.Floor && fz.RegionOf[i] >= 0).Skip(7).First();
+                fz.AddStore(spill, fz.T.sWater, 800);
+                var ez0 = fz.ElementTotals(); double ee0 = fz.EnergyLedger();
+                double peak = 0;
+                for (int k = 0; k < 500; k++) { sz.Step(); peak = Math.Max(peak, fz.Drops.Sum()); }
+                var ez1 = fz.ElementTotals(); double ee1 = fz.EnergyLedger();
+                double worstZ = ez0.Zip(ez1).Max(p => Rel(p.First, p.Second));
+                Check("무중력의 물방울: 떠돌다 들러붙어도 원소 · 에너지 장부가 같고 음수가 없다", worstZ < 1e-9 && Rel(ee0, ee1) < 1e-9 && peak > 100 && fz.DropsStuck > 0 && !fz.Drops.Any(v => v < 0) && !fz.Store.Any(v => v < 0),
+                    $"원소 {worstZ:0.0e0} · 에너지 {Rel(ee0, ee1):0.0e0} · 가장 많이 뜬 방울 {peak:0}몰 · 들러붙음 {fz.DropsStuck:0}몰");
+            }
             // 압력: 문으로 이어진 두 방은 같아진다
             int left = Worlds.At(f.L, 3, 2), right = Worlds.At(f.L, 15, 2);
             Check("열린 문틈으로 이어진 두 방의 압력이 같아진다", Math.Abs(f.Pressure(left) - f.Pressure(right)) < 0.5,

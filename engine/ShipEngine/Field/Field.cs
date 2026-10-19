@@ -64,6 +64,10 @@ public sealed partial class Field : IEngine
     public byte[] Severed;
     /// <summary>칸의 바닥 쪽 중력 (g — 1이면 지구 · 0이면 무중력). ⑥ 인공 중력 발생기가 몸마다 정해 요청한다 (발생기가 없는 배 · 시험 배는 바탕 1g 그대로).</summary>
     public float[] Grav;
+    /// <summary>이 아래(g)면 무중력처럼 — 고인 액체가 퍼지지 않고 방울로 떠오르며 · 사람이 떠서 손잡이를 잡고 간다 (⑧이 같은 문턱을 읽는다).</summary>
+    public const float LowG = 0.3f;
+    /// <summary>떠 있는 액체 (저장 종류마다 · 칸마다 몰 — [저장 × 칸]): 무중력에서 바닥을 떠난 방울. 공기를 따라 떠돌다 겉면에 들러붙고 · 중력이 서면 그 자리에 떨어진다.</summary>
+    public double[] Drops;
     /// <summary>끊겨 우주로 간 응축상 (저장 종류마다 몰 — 장부) · 끊긴 칸에서 빠진 기체는 <see cref="VentedTotal"/>에.</summary>
     public double[] SeveredStore;
     /// <summary>바람 (m/s) — 틈으로 빠지는 흐름에서 계산한다.</summary>
@@ -93,7 +97,7 @@ public sealed partial class Field : IEngine
     {
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
-        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; Grav = new float[Cells]; Array.Fill(Grav, 1f); SeveredStore = new double[t.StoreCount];
+        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; Grav = new float[Cells]; Array.Fill(Grav, 1f); SeveredStore = new double[t.StoreCount]; Drops = new double[S * Cells];
         WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
@@ -296,7 +300,7 @@ public sealed partial class Field : IEngine
         double n = 0;
         for (int g = 0; g < G; g++) { n += N[cell * G + g]; N[cell * G + g] = 0; }
         U[cell] = 0; VentedTotal += n;
-        for (int s = 0; s < S; s++) { SeveredStore[s] += Store[s * Cells + cell]; Store[s * Cells + cell] = 0; }
+        for (int s = 0; s < S; s++) { SeveredStore[s] += Store[s * Cells + cell] + Drops[s * Cells + cell]; Store[s * Cells + cell] = 0; Drops[s * Cells + cell] = 0; }
         Cs[cell] = 0; Hole[cell] = 0;
         SolidLinks(); // 곁의 벽이 우주를 본다 (복사 · 햇빛) · 전도가 끊긴다
         _dirty = true;
@@ -395,6 +399,7 @@ public sealed partial class Field : IEngine
         // 달궈지거나 식은 겉면(바닥과 2K 넘게 다름)은 매 틱 열을 주고받는다 — 불이 붙고 번지는 빠르기
         for (int i = 0; i < Cells; i++)
             if (Math.Abs(Tf[i] - Ts[i]) > 2 && HasSurface(i)) { SurfaceExchange(i, dt); _surfTick[i] = sim.Tick; }
+        FloatLiquids(dt);   // 무중력 방울 — 틈 흐름의 바람을 이 틱에 따라간다 (돌풍은 몇 틱이면 그친다)
         if (sim.Tick % SlowEvery == 0)
         {
             double slow = dt * SlowEvery;
@@ -418,7 +423,7 @@ public sealed partial class Field : IEngine
         // 칸 고체 열용량(설비를 앉히며 늘었다) · 구역별 '아직 고를 차이' · 겉면을 매 틱 다룬 때 · 구역을 지은 때의 문 · 구멍 — 다음 틱의 계산을 바꾸므로 찍는다
         w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole); w.Arr(DoorTaped); w.Arr(_topoTaped); w.Arr(DoorBleed); w.Arr(_topoBleed);
         w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore);
-        w.Tag("중력"); w.Arr(Grav);
+        w.Tag("중력"); w.Arr(Grav); w.Arr(Drops);
     }
 
     public void Load(StateReader r)
@@ -428,7 +433,7 @@ public sealed partial class Field : IEngine
         Outside.Load(r);
         r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>(); r.ArrInto(DoorTaped); _topoTaped = r.Arr<byte>(); r.ArrInto(DoorBleed); _topoBleed = r.Arr<byte>();
         r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore);
-        r.Tag("중력"); r.ArrInto(Grav);
+        r.Tag("중력"); r.ArrInto(Grav); r.ArrInto(Drops); _dropsAny = Drops.Any(v => v > 0);
         SolidLinks(); // 끊긴 칸의 전도 · 우주를 보는 면은 도면 + 끊김에서 다시 센다 (찍지 않는다)
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
         RestoreTopology();

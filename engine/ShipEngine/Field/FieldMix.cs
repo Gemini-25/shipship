@@ -312,8 +312,10 @@ public sealed partial class Field
                         {
                             if (j < 0 || !Wet(j)) continue;
                             double vj = Store[s * Cells + j];
-                            if (v > vj && v > Film) d -= 0.2 * (v - Math.Max(vj, Film)) * 0.5;
-                            if (vj > v && vj > Film) d += 0.2 * (vj - Math.Max(v, Film)) * 0.5;
+                            double kg = 0.2 * SpreadG(Math.Min(Grav[i], Grav[j]));   // 액체를 낮은 쪽으로 미는 것은 중력이다 — 무중력이면 퍼지지 않는다
+                            if (kg <= 0) continue;
+                            if (v > vj && v > Film) d -= kg * (v - Math.Max(vj, Film)) * 0.5;
+                            if (vj > v && vj > Film) d += kg * (vj - Math.Max(v, Film)) * 0.5;
                         }
                         _st2[i] = Math.Max(0, v + d);
                     }
@@ -321,6 +323,98 @@ public sealed partial class Field
             for (int i = 0; i < Cells; i++) Store[s * Cells + i] = _st2[i];
         }
     }
+
+    /// <summary>퍼지는 빠르기의 중력 몫: 1g 이상 1 · 0.3 ~ 1g는 g · 0.3g(<see cref="LowG"/>) 아래 0.</summary>
+    private static double SpreadG(float g) => g >= 1 ? 1 : g < LowG ? 0 : g;
+
+    // ── 무중력의 액체 방울 (바퀴 3 인공 중력 (다) — docs/ENGINE.md) ──
+
+    /// <summary>무중력에서 겉면에 남는 막 (몰/칸 — 물 100몰 ≈ 1.8L): 표면 장력이 잡아 둔다. 넘는 몫은 떨어져 나가 방울이 된다.</summary>
+    public const double ClingMol = 100;
+    /// <summary>떨어져 나가는 빠르기 (초) · 설비에 들러붙는 빠르기 (초) · 방울이 떠도는 섞임 (m²/s — 사람 · 환기) · 1g에서 떨어지는 때 (초).</summary>
+    public const double LiftSec = 60, StickSec = 20, DropMix = 0.02, FallSec = 1;
+    private double[] _drop2 = Array.Empty<double>();
+    private bool _dropsAny;
+    /// <summary>떠 있는 방울이 어디로 갔나 (몰 누계 — 시험 · 연출): 겉면에 들러붙음 · 우주로 · 떨어짐.</summary>
+    public double DropsStuck, DropsVented, DropsFell;
+
+    /// <summary>
+    /// 무중력의 액체: 0.3g 아래 칸의 고인 액체는 막(<see cref="ClingMol"/>)을 넘는 몫이 떨어져 나가 방울이 되고 · 방울은 방 공기의 섞임 · 바람(틈) · 배의 가속(−a)을 따라 떠돌다
+    /// 벽 · 닫힌 문 쪽으로 가는 몫은 그 칸 겉면에(그 칸 저장) · 설비 칸에서는 설비에 들러붙고 · 우주로 트인 쪽은 우주로 (끊긴 응축상 장부).
+    /// 중력이 서면 그 자리에 떨어진다. 방울은 액체의 hf를 지닌 채 옮겨 다닌다 (현열은 바닥 저장처럼 고체 쪽 — 장부가 맞는다).
+    /// </summary>
+    private void FloatLiquids(double dt)
+    {
+        bool low = false;
+        for (int i = 0; i < Cells; i++) if (Grav[i] < LowG) { low = true; break; }
+        if (!low && !_dropsAny) return;   // 1g 배 — 할 일이 없다
+        if (_drop2.Length != Cells) _drop2 = new double[Cells];
+        double lift = 1 - Math.Exp(-dt / LiftSec), stick = 1 - Math.Exp(-dt / StickSec), mix = DropMix * dt;   // 칸 너비 1m — 이웃마다 mix 몫
+        double ax = Math.Clamp(-AccelX * 2, -2, 2), ay = Math.Clamp(-AccelY * 2, -2, 2);   // 배가 가속하면 떠 있는 것은 뒤로 (2초 동안 얻는 빠르기 · 많아야 2m/s — 어림)
+        bool any = false;
+        Span<int> nb = stackalloc int[4];
+        foreach (var liq in T.Stores)
+        {
+            if (liq.Phase != MatterPhase.Liquid) continue;
+            int s = liq.Store, b = s * Cells;
+            // 떠오름 · 떨어짐
+            for (int i = 0; i < Cells; i++)
+            {
+                if (RegionOf[i] < 0) continue;
+                float g = Grav[i];
+                if (g < LowG)
+                {
+                    double over = Store[b + i] - ClingMol;
+                    if (over > 1e-9) { double n = over * lift; Store[b + i] -= n; Drops[b + i] += n; }
+                }
+                else if (Drops[b + i] > 0)
+                {
+                    double n = Drops[b + i] * (1 - Math.Exp(-dt * g / FallSec));
+                    if (Drops[b + i] - n < 1e-9) n = Drops[b + i];
+                    Drops[b + i] -= n; Store[b + i] += n; DropsFell += n;
+                }
+            }
+            // 떠돌기 (두 버퍼 — 칸 차례로 흩는다)
+            for (int i = 0; i < Cells; i++) _drop2[i] = Drops[b + i];
+            for (int i = 0; i < Cells; i++)
+            {
+                double v = Drops[b + i];
+                if (v <= 1e-12 || RegionOf[i] < 0) continue;
+                any = true;
+                double vx = WindX[i] + ax, vy = WindY[i] + ay;
+                L.Neighbors(i, nb);   // 왼쪽 · 오른쪽 · 위 · 아래
+                double outSum = 0;
+                for (int d = 0; d < 4; d++)
+                {
+                    double adv = d switch { 0 => -vx, 1 => vx, 2 => -vy, _ => vy };   // 그쪽으로 부는 바람 (도면 y는 아래로)
+                    double share = mix + Math.Max(0, adv) * dt;
+                    double n = v * Math.Min(0.24, share);
+                    if (n <= 0) continue;
+                    outSum += n;
+                    int j = nb[d];
+                    if (j >= 0 && RegionOf[j] >= 0 && RegionOf[j] == RegionOf[i]) _drop2[j] += n;               // 같은 공기로
+                    else if (j < 0 || Severed[j] != 0 || L.Kind[j] == CellKind.Outside || Hole[j] > 0) { SeveredStore[s] += n; DropsVented += n; }   // 우주로 (뚫린 벽 쪽은 빠지는 공기가 끌고 나간다)
+                    else { Store[b + i] += n; DropsStuck += n; }                                                   // 벽 · 닫힌 문 — 그 칸 겉면에 들러붙는다
+                }
+                if (Hole[i] > 0 && L.Kind[i] != CellKind.Wall)   // 바닥 · 천장 판의 구멍 — 빠지는 바람을 따라
+                {
+                    double n = Math.Min(v - outSum, v * Math.Min(1, (Math.Sqrt(vx * vx + vy * vy) + 0.1) * dt));
+                    if (n > 0) { outSum += n; SeveredStore[s] += n; DropsVented += n; }
+                }
+                if (L.FurnitureAt[i] >= 0)   // 설비 · 가구에 부딪혀 들러붙는다 (전기 설비면 ⑥이 젖음을 읽는다)
+                {
+                    double n = (v - outSum) * stick;
+                    if (n > 0) { outSum += n; Store[b + i] += n; DropsStuck += n; }
+                }
+                _drop2[i] -= outSum;
+            }
+            for (int i = 0; i < Cells; i++) Drops[b + i] = _drop2[i] > 1e-12 ? _drop2[i] : 0;
+        }
+        _dropsAny = any;
+    }
+
+    /// <summary>칸에 떠 있는 액체 (몰 — 저장 종류 하나 · 그림 · 시험).</summary>
+    public double Floating(int s, int i) => Drops[s * Cells + i];
 
     /// <summary>액체가 흘러갈 수 있는 칸: 바닥 · 열린 문.</summary>
     private bool Wet(int i) => Severed[i] == 0 && (L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && DoorPassable(L.DoorAt[i]));
@@ -342,7 +436,7 @@ public sealed partial class Field
             int k = i * G + g;
             double v = N[k];
             if (v <= 1e-12) continue;
-            double n = v * f, cg = GasC(i);
+            double n = v * (Grav[i] >= 1 ? f : 1 - Math.Exp(-dt * (0.4 + 0.6 * Math.Max(0, Grav[i])) / 7200)), cg = GasC(i);   // 가라앉는 몫이 없으면 확산으로만 (0g 0.4배)
             double tg = cg > 1e-9 ? U[i] / cg : Ts[i];
             N[k] -= n; U[i] = Math.Max(0, U[i] - n * _cv[g] * tg);
             L.Neighbors(i, nb);
@@ -381,7 +475,7 @@ public sealed partial class Field
         for (int s = 0; s < S; s++)
         {
             double h = T.Stores[s].Hf * 1000;
-            for (int i = 0; i < Cells; i++) e += Store[s * Cells + i] * h;
+            for (int i = 0; i < Cells; i++) e += (Store[s * Cells + i] + Drops[s * Cells + i]) * h;
         }
         return e;
     }
@@ -391,7 +485,7 @@ public sealed partial class Field
     {
         var moles = new double[T.Substances.Count];
         for (int g = 0; g < G; g++) { double s = 0; for (int i = 0; i < Cells; i++) s += N[i * G + g]; moles[T.Gases[g].Index] += s; }
-        for (int st = 0; st < S; st++) { double s = 0; for (int i = 0; i < Cells; i++) s += Store[st * Cells + i]; moles[T.Stores[st].Index] += s; }
+        for (int st = 0; st < S; st++) { double s = 0; for (int i = 0; i < Cells; i++) s += Store[st * Cells + i] + Drops[st * Cells + i]; moles[T.Stores[st].Index] += s; }
         return T.ElementsOf(moles);
     }
 }
