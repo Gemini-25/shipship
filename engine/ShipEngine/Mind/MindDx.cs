@@ -89,13 +89,13 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (c.DxAt <= 0 || _nowTick - c.DxAt > Time.Hours(6)) return;
-        if (c.DxAil is Ail.CO or Ail.Cyanide or Ail.Overdose)
+        if (c.DxAil is Ail.CO or Ail.Cyanide or Ail.Overdose or Ail.InternalBleed or Ail.Appendicitis)   // 수술할 병도 치료 침대에서 기다린다
         {
             int mb = IsMedBedCell(here) ? here : NearestFree(a, _medBeds);
             if (mb >= 0) Add(GoalKind.Sleep, mb, mb, 3.0f, c.DxCause);
             else if (c.DxRoom >= 0 && RoomOf(here) == c.DxRoom) Add(GoalKind.Evacuate, c.DxRoom, here, 2.5f, c.DxCause);   // 치료 침대가 다 찼으면 그 방이라도 나온다
         }
-        else if (c.DxAil is Ail.Cold or Ail.Indigestion or Ail.Sleep or Ail.Heart)
+        else if (c.DxAil is Ail.Cold or Ail.Indigestion or Ail.Sleep or Ail.Heart or Ail.Bruise)
         {
             int bed = c.Bed >= 0 && !Taken(a, c.Bed) ? c.Bed : NearestFree(a, _beds);
             Add(GoalKind.Sleep, bed, bed >= 0 ? bed : here, 2.0f, c.DxCause);

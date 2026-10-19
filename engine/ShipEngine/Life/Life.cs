@@ -58,6 +58,10 @@ public struct Body
     public byte Resist;                          // 내성균 (다 먹지 않아 남은 곪음)
     public long EpiAt, OpioidAt;                 // 마지막 아드레날린 · 마지막 진통제 (틱)
     public int DrugCause;                        // 마지막으로 약을 준 원인 마디
+    // ⑦ (라) 숨은 병 둘
+    public float BleedIn;                        // 속 출혈 (L/시 — 겉으로 안 보인다 · 0.05 아래면 저절로 멎는다)
+    public float Appendix;                       // 맹장염 (0 없음 · 1이면 터진다 · −1 떼어 냈다)
+    public int AppendixCause;                    // 맹장염의 원인 마디
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -200,8 +204,10 @@ public sealed partial class Life : IEngine
         if (body < 0 || body >= Bodies.Count) return;
         ref var b = ref this[body];
         if (b.Alive == 0) return;
+        float before = b.Blunt;
         b.Blunt += blunt; b.Bleed += bleed; b.Pain = Math.Min(1, b.Pain + blunt);
         b.HurtCause = cause;
+        BleedInside(sim, body, ref b, before, cause);
         sim.Facts.Emit(sim.Tick, FactKind.Hurt, b.Cell, blunt, cause, actor: body);
     }
 
@@ -528,7 +534,9 @@ public sealed partial class Life : IEngine
         if (st != null && st.ImpactJ[c] > 0)
         {
             double e = st.ImpactJ[c];
+            float before = b.Blunt;
             b.Blunt += (float)(e / 8000);
+            BleedInside(sim, id, ref b, before, st.DamageCause[c]);
             b.Bleed += (float)(e / 4000);
             harm ??= "파편 · 충격에 맞았다";
             env = env == 0 ? st.DamageCause[c] : env;
@@ -540,7 +548,8 @@ public sealed partial class Life : IEngine
         }
 
         // ── 피 · 물 · 양분 ──
-        b.BloodL -= (float)(b.Bleed * dt / 3600);
+        b.BloodL -= (float)((b.Bleed + b.BleedIn) * dt / 3600);
+        InsideStep(sim, id, ref b, dt);   // ⑦ (라) 속 출혈 · 맹장염
         b.Bleed = (float)(b.Bleed * Math.Exp(-dt / 1800)); // 굳는다
         // 상처가 낫는다: 타박 · 화상은 살아 있으면 천천히 (가벼운 타박 1~2주 · 화상 2~3주 — e로 줄어드는 날 7일 · 14일) — 아주 큰 상처는 돌봄을 받아야 낫는다
         //   덮어 둔 상처는 두 배 · 의료 침대에서는 세 배 빨리 · 곪은 상처는 항생제가 없으면 반만 (깊이 바퀴 2)

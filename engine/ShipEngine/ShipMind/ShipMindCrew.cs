@@ -16,7 +16,7 @@ public sealed partial class ShipMind
     private int _effectiveRead = ReadEvery;
 
     /// <summary>사람이 할 수 있는 일인가 (드론 · 로봇만의 일 — 차단기 손으로 끊기 · 바깥 둘러보기 — 은 아니다).</summary>
-    private static bool PeopleCan(IncidentKind k, GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Repair or GoalKind.Brace or GoalKind.Treat
+    private static bool PeopleCan(IncidentKind k, GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Repair or GoalKind.Brace or GoalKind.Treat or GoalKind.Surgery
         || g == GoalKind.Investigate && k is IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.SensorLost or IncidentKind.LineCut or IncidentKind.PipeHunt;
 
     private void AskPerson(Sim sim, ref Incident x, GoalKind g, int target)
@@ -36,8 +36,8 @@ public sealed partial class ShipMind
             if (b.Alive == 0 || b.Conscious == 0 || x.Kind == IncidentKind.PersonDown && a.C.Body == x.Subject) continue;
             if (a.C.AssignedUntil > t && (a.C.AssignedGoal != GoalKind.Idle || a.C.AssignedArg == Mind.PlanBound)) continue;   // 이미 다른 일을 맡았다 (지어낸 계획의 몸이 되어 기다리는 이도)
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
-            if (g == GoalKind.Treat && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
-            float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, _ => a.C.SkSeal };
+            if (g is GoalKind.Treat or GoalKind.Surgery && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
+            float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat or GoalKind.Surgery => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, _ => a.C.SkSeal };
             double cost = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) * (1.5 - skill) + (b.Asleep != 0 ? 30 : 0);
             if (cost < bc) { bc = cost; best = a.Id; }
         }
@@ -84,7 +84,7 @@ public sealed partial class ShipMind
     /// <summary>급한 차례 (작을수록 급하다): 쓰러진 사람 · 불 · 공기 빠짐 · 샘 · 다친 사람 · 전기 사고 · 버팀 · 고장 · 센서 · 그 밖.</summary>
     internal static int Rank(IncidentKind k) => k switch
     {
-        IncidentKind.PersonDown or IncidentKind.Arrest => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured => 4,
+        IncidentKind.PersonDown or IncidentKind.Arrest => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured or IncidentKind.Surgery => 4,
         IncidentKind.ElectricFault => 5, IncidentKind.Strain or IncidentKind.DoorJam => 6, IncidentKind.CO or IncidentKind.Toxic => 7,
         IncidentKind.PowerLost => 5, IncidentKind.LineCut or IncidentKind.PipeHunt => 7, IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
     };

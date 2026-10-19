@@ -42,7 +42,7 @@ public sealed partial class Life
     public static double Analgesia(in Body b) => Math.Min(0.8, 0.05 * OpioidEffect(b)) + Math.Min(0.2, b.Apap / 1000 * 0.2);
 
     /// <summary>느끼는 아픔 (0~1): 아픔 + 화상 · 타박 · 압력 상처 − 약.</summary>
-    public static double FeltPain(in Body b) => Math.Clamp(b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4 - Analgesia(b), 0, 1);
+    public static double FeltPain(in Body b) => Math.Clamp(b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4 + AppendixPain(b) - Analgesia(b), 0, 1);
 
     /// <summary>진통제로 얕아진 숨 (피의 산소에 곱할 1 − 이 값).</summary>
     public static double RespDepression(in Body b) => Math.Clamp((OpioidEffect(b) - 25) / 35, 0, 0.9);

@@ -57,7 +57,7 @@ public sealed partial class Life
     }
 
     /// <summary>열 (설정점이 오른 K): 곪음 × 2.5 (많아야 2.5 — 곪음 0.6이면 38.5℃ 언저리) + 앓음 1.3 (38℃ 남짓).</summary>
-    public static double FeverK(in Body b) => Math.Min(2.5, b.Infect * 2.5) + (b.Ill == 2 ? 1.3 : 0);
+    public static double FeverK(in Body b) => Math.Min(2.5, b.Infect * 2.5) + (b.Ill == 2 ? 1.3 : 0) + Math.Max(0, b.Appendix);   // ⑦ (라) 맹장염 +1℃ × 맹장
 
     /// <summary>잃은 몸무게의 몫 (처음 70kg에서): 지방 1몰 256g · 글리코겐 1몰 180g + 붙은 물 3배.</summary>
     public static double WeightLoss(in Body b) => Math.Max(0, (Fat0 - b.Fat) * 0.256 + (GlycogenMax * 0.8 - b.Reserve) * 0.18 * 4) / 70;

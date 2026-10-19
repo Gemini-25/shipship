@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut, PipeHunt, O2Rich, Flammable, Arrest, Surgery }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -364,7 +364,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", IncidentKind.PipeHunt => "관이 샌다", IncidentKind.O2Rich => "산소가 짙다", IncidentKind.Flammable => "불붙는 기체", IncidentKind.Arrest => "심정지", IncidentKind.Surgery => "수술", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -492,6 +492,7 @@ public sealed partial class ShipMind : IEngine
                     Mark(IncidentKind.Arrest, r, a.C.Body);
                     continue;
                 }
+                if (_mind.UnderSurgery(a.C.Body)) continue;   // ⑦ (라) 수술대 위에서 정신을 잃었다 — 곁에서 수술하고 있다
                 Raise(sim, IncidentKind.PersonDown, r, b.Cell, b.Hypoxia, a.C.Body, b.HurtCause);
                 Mark(IncidentKind.PersonDown, r, a.C.Body);
             }
@@ -509,6 +510,12 @@ public sealed partial class ShipMind : IEngine
                     Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(0.2f, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect))), a.C.Body,
                         b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : a.C.DxCause != 0 ? a.C.DxCause : b.HurtCause, exam ? $"{_mind.NameOf(a.Id)} — 몸이 좋지 않다 ({Life.SymText(Life.Symptoms(b))})" : null);
                     Mark(IncidentKind.Injured, r, a.C.Body);
+                }
+                // ⑦ (라) 진료 기록이 속 출혈 · 맹장염이면 수술을 잡는다 (로봇이 먼저 · 없으면 사람에게 부탁)
+                if (a.C.DxAil is Ail.InternalBleed or Ail.Appendicitis && a.C.DxAt > 0)
+                {
+                    Raise(sim, IncidentKind.Surgery, r, b.Cell, 1, a.C.Body, a.C.DxCause, $"{_mind.NameOf(a.Id)} — {Life.AilName(a.C.DxAil)} · 치료 침대로");
+                    Mark(IncidentKind.Surgery, r, a.C.Body);
                 }
                 // ⑦ (다) 진료 기록이 일산화탄소 중독이면 그 방을 알린다 (센서가 알림 아래거나 못 읽어도) — 로봇이 살피고 통풍구를 닫는다
                 if (a.C.DxAil == Ail.CO && a.C.DxAt > 0 && sim.Tick - a.C.DxAt < Time.Hours(1) && a.C.DxRoom >= 0 && a.C.DxRoom < L.Rooms.Count && _roomVent[a.C.DxRoom] >= 0)
@@ -1008,7 +1015,8 @@ public sealed partial class ShipMind : IEngine
                 break;
             }
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
-            case IncidentKind.Arrest: g = GoalKind.Cpr; target = x.Subject; drone = false; break;   // ⑦ 하나는 누르고 하나는 제세동기를 가져온다
+            case IncidentKind.Arrest: g = GoalKind.Cpr; target = x.Subject; drone = false; break;
+            case IncidentKind.Surgery: g = GoalKind.Surgery; target = x.Subject; drone = false; break;   // ⑦ (라) 진료 기록이 속 출혈 · 맹장염   // ⑦ 하나는 누르고 하나는 제세동기를 가져온다
             case IncidentKind.Injured: g = GoalKind.Treat; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
             case IncidentKind.ElectricFault when _net != null && _net.IsStuckFault(x.Subject):

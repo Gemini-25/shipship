@@ -74,7 +74,7 @@ public sealed partial class Mind
                 var body = _life!.Bodies[vb];
                 if (body.Alive == 0 || body.Conscious != 0) { Forget(a, b => b.Kind == BeliefKind.Injured && b.Subject == vb); EndPlan(a); return; }
                 if (Dist(c.Cell, body.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-                if (SafeAt(body.Cell))
+                if (SafeAt(body.Cell) && st.Arg != 1)   // ⑦ (라) 수술하러 옮기는 것은 안전한 곳에서도
                 {
                     // 이미 안전한 곳 — 옮길 까닭이 없다 (치료는 의무관의 몫)
                     a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Rescue, Target = vb, Until = t + Time.Minutes(30) });
@@ -206,6 +206,7 @@ public sealed partial class Mind
         if (use == UseKind.Cpr) Activity(a, "hard");   // 가슴 압박은 힘든 일
         bool done = t - c.StepStart >= st.Value;
         if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
+        if (use == UseKind.Surgery) { int r = SurgeryTick(sim, a, st); if (r < 0) return; done = r > 0 || t - c.StepStart >= st.Value; }
         switch (use)
         {
             // 한번 누우면 다섯 시간은 잔다 · 목이 몹시 마르면 깬다 (마실 것이 없어도 30분은 눈을 붙인다)
@@ -228,6 +229,7 @@ public sealed partial class Mind
             case UseKind.Pilfer when a.IsPerson: PilferDone(sim, a, st); break;
             case UseKind.Treat: TreatDone(sim, a, st); break;
             case UseKind.Cpr: CprDone(sim, a, st); break;
+            case UseKind.Surgery: SurgeryDone(sim, a, st); break;
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)

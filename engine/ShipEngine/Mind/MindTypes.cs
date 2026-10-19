@@ -70,6 +70,7 @@ public enum GoalKind : byte
     Meeting,    // ⑨ 회의 — 식당으로 모인다 (대상: 방)
     Improvise,  // ⑧ 판단 엔진 — 제 궁리를 한다 (막혀서 지어낸 몸 걸음 · 대상: 막으려던 구멍)
     Cpr,        // ⑦ 멎은 심장 — 곁에서 가슴을 누르고 · 제세동기를 가져와 친다 (대상: 몸)
+    Surgery,    // ⑦ (라) 수술 — 치료 침대에서 마취하고 속 출혈을 멈추거나 맹장을 떼어 낸다 (대상: 몸)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -99,7 +100,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep
@@ -211,6 +212,8 @@ public struct AgentCore
     public int DxBy, DxCause, DxRoom;
     public Sym DxSym;
     public byte DxAwake;
+    /// <summary>⑦ (라) 집도의: 이번 수술의 마취를 한 때 (목표를 잡은 때보다 앞이면 아직 안 했다).</summary>
+    public long OpAnesAt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>
