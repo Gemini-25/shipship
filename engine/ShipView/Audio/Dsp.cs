@@ -1,10 +1,17 @@
 namespace ShipView.Audio;
 
-/// <summary>소리 계산의 바탕 — 22,050Hz · 실수. 거름(한 극 · 두 극) · 공명 · 잡음 · 울림(슈뢰더) · 좌우(같은 세기).</summary>
+/// <summary>소리 계산의 바탕 — 44,100Hz (함장 결정 16) · 실수. 거름(한 극 · 두 극) · 공명 · 잡음 · 울림(슈뢰더) · 좌우(같은 세기).</summary>
 public static class Dsp
 {
-    public const int Rate = 22050;
+    public const int Rate = 44100;
     public const float Tau = MathF.PI * 2;
+    /// <summary>표본마다 따라가는 몫 · 확률은 22,050Hz에서 정했다 — 지금 빠르기에서 같은 시간에 같은 만큼 (표본이 두 배면 몫은 반).</summary>
+    public const float K = 22050f / Rate;
+    public static readonly float SqK = MathF.Sqrt(K);
+    /// <summary>22,050Hz에서 표본마다 c만큼 따라가던 것을 지금 빠르기로 (1 − (1 − c)^K).</summary>
+    public static float Per(float c) => 1f - MathF.Pow(1f - c, K);
+    /// <summary>거름이 다루는 가장 높은 음 (나이퀴스트 아래).</summary>
+    public const float Top = Rate * 0.45f;
     public static float Db(float db) => MathF.Pow(10f, db / 20f);
 }
 
@@ -19,7 +26,7 @@ public struct Noise
         _s ^= _s << 13; _s ^= _s >> 17; _s ^= _s << 5;
         return (_s & 0xFFFFFF) / (float)0x800000 - 1f;
     }
-    public float Brown() { _brown = Math.Clamp(_brown + 0.02f * White(), -1f, 1f); return _brown; }
+    public float Brown() { _brown = Math.Clamp(_brown + 0.02f * Dsp.SqK * White(), -1f, 1f); return _brown; }
     public float Pink()
     {
         float w = White();
@@ -33,7 +40,7 @@ public struct Noise
 public struct OnePole
 {
     private float _y;
-    public float Low(float x, float hz) { float a = 1f - MathF.Exp(-Dsp.Tau * Math.Clamp(hz, 10f, 10000f) / Dsp.Rate); _y += a * (x - _y); return _y; }
+    public float Low(float x, float hz) { float a = 1f - MathF.Exp(-Dsp.Tau * Math.Clamp(hz, 10f, Dsp.Top) / Dsp.Rate); _y += a * (x - _y); return _y; }
     public float High(float x, float hz) => x - Low(x, hz);
 }
 
@@ -45,12 +52,12 @@ public struct Biquad
     public static Biquad Lowpass(float hz, float q = 0.707f) { var f = new Biquad(); f.SetLow(hz, q); return f; }
     public void SetBand(float hz, float q)
     {
-        float w = Dsp.Tau * Math.Clamp(hz, 20f, 10500f) / Dsp.Rate, al = MathF.Sin(w) / (2 * q), a0 = 1 + al;
+        float w = Dsp.Tau * Math.Clamp(hz, 20f, Dsp.Top) / Dsp.Rate, al = MathF.Sin(w) / (2 * q), a0 = 1 + al;
         b0 = al / a0; b1 = 0; b2 = -al / a0; a1 = -2 * MathF.Cos(w) / a0; a2 = (1 - al) / a0;
     }
     public void SetLow(float hz, float q = 0.707f)
     {
-        float w = Dsp.Tau * Math.Clamp(hz, 20f, 10500f) / Dsp.Rate, al = MathF.Sin(w) / (2 * q), c = MathF.Cos(w), a0 = 1 + al;
+        float w = Dsp.Tau * Math.Clamp(hz, 20f, Dsp.Top) / Dsp.Rate, al = MathF.Sin(w) / (2 * q), c = MathF.Cos(w), a0 = 1 + al;
         b0 = (1 - c) / 2 / a0; b1 = (1 - c) / a0; b2 = b0; a1 = -2 * c / a0; a2 = (1 - al) / a0;
     }
     public float Run(float x)
@@ -87,8 +94,9 @@ public struct Mode
 /// </summary>
 public sealed class Reverb
 {
-    private static readonly int[] CombLen = { 1116 / 2, 1188 / 2, 1277 / 2, 1356 / 2 }; // 22kHz에 맞춘 프리버브 길이
-    private static readonly int[] ApLen = { 556 / 2, 441 / 2 };
+    private static readonly int[] CombLen = new[] { 1116, 1188, 1277, 1356 }.Select(n => n * Dsp.Rate / 44100).ToArray(); // 프리버브 길이 (44.1kHz 기준)
+    private static readonly int[] ApLen = new[] { 556, 441 }.Select(n => n * Dsp.Rate / 44100).ToArray();
+    private static readonly float Damp = Dsp.Per(0.35f);
     private readonly float[][] _comb, _ap;
     private readonly int[] _ci = new int[4], _ai = new int[2];
     private readonly float[] _fb = new float[4];
@@ -117,7 +125,7 @@ public sealed class Reverb
         {
             var b = _comb[i]; int k = _ci[i];
             float o = b[k];
-            _damp[i] += 0.35f * (o - _damp[i]); // 벽이 높은 음을 먹는다
+            _damp[i] += Damp * (o - _damp[i]); // 벽이 높은 음을 먹는다
             b[k] = x + _damp[i] * _fb[i];
             _ci[i] = (k + 1) % b.Length;
             y += o;

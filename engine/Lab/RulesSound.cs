@@ -130,6 +130,44 @@ public static partial class Program
                 same && after > before * 4, $"같음 {same} · 앞 {20 * Math.Log10(before + 1e-9):0}dB → 쾅 뒤 {20 * Math.Log10(after + 1e-9):0}dB");
         }
     
+        // ── 넓은 폭 (함장 결정 17) · 연출의 과장 (결정 2 — 소리 출력에서만) ──
+        {
+            var show = Fresh();
+            var mix = new Mixer { MusicGain = 0 };
+            var snd = show.Sim.Get<Sound>();
+            int per = (int)(Dsp.Rate * dt);
+            var buf = new float[per * 2 * 240];
+            long booms0 = show.Ears.Booms;
+            float redBefore = 0;
+            for (int fr = 0; fr < 240; fr++)
+            {
+                if (fr == 10) snd.Emit(show.Sim, At(7, 3), 60, SoundKind.Voice, 0, -1);
+                if (fr == 100) { redBefore = mix.MaxReduction; snd.Emit(show.Sim, At(8, 2), 125, SoundKind.Bang); }
+                if (fr == 200) snd.Emit(show.Sim, At(8, 2), 88, SoundKind.Bang);
+                show.Advance(dt);
+                mix.Take(show.Ears);
+                mix.Render(buf.AsSpan(fr * per * 2, per * 2), per);
+            }
+            double Rms(int f0, int f1) => Math.Sqrt(buf.Skip(f0 * per * 2).Take((f1 - f0) * per * 2).Average(x => (double)x * x));
+            double talk = Rms(11, 40), blast = Rms(101, 130);
+            float peak = buf.Max(MathF.Abs);
+            long bigBooms = show.Ears.Booms - booms0;
+            // 진공: 듣는 방의 공기를 빼면 발밑으로 온 쾅에 둔한 울림이 더해진다
+            var vac = Fresh();
+            var vf = vac.Sim.Get<Field>();
+            foreach (int c in lay.Rooms[lay.Room[At(5, 3)]].Cells) for (int g = 0; g < vf.G; g++) vf.RemoveGas(c, g, vf.N[c * vf.G + g]);
+            vac.Sim.Run(1);
+            vac.Ears.Remap(At(5, 3));
+            long vb0 = vac.Ears.Booms;
+            vac.Sim.Get<Sound>().Emit(vac.Sim, At(8, 1), 95, SoundKind.Bang);
+            vac.Advance(dt);
+            long vacBooms = vac.Ears.Booms - vb0;
+            int vacShots = 0; while (vac.Ears.Out.TryDequeue(out var vfr)) vacShots += vfr.Shots.Count;
+            Check("소리(화면): 넓은 폭 — 같은 방 말소리는 작고 폭발은 20dB 넘게 크다 · 마지막 누름은 폭발만 누르고(말소리 땐 0) 1을 넘지 않는다 / 연출의 과장은 소리 출력에서만 — 큰 쾅(귀 98dB 넘게)에만 낮은 울림 · 작은 쾅엔 없다 · 진공에선 발밑으로 온 쾅에 둔한 울림",
+                blast - talk > 0 && 20 * Math.Log10(blast / talk) > 20 && redBefore == 0 && mix.MaxReduction > 1 && peak <= 1f && bigBooms == 1 && vacBooms == 1,
+                $"말소리 {20 * Math.Log10(talk + 1e-9):0}dB · 폭발 {20 * Math.Log10(blast + 1e-9):0}dB · 누름 말소리 때 {redBefore:0.0} · 폭발 {mix.MaxReduction:0.0}dB · 꼭대기 {peak:0.00} / 낮은 울림 큰 쾅+작은 쾅 {bigBooms} · 진공 {vacBooms} (귀 짙기 {vac.Ears.EarThin:0.00} · 소리 {vacShots})");
+        }
+
         // ── 바탕 음악: 연출의 분위기를 따라 — 조용할 때 작고 · 조짐부터 낮은 심장 박동 · 위험이면 빨라지고 밝아진다 · 결정적 순간엔 비우고 지속음만 ──
         {
             const int sec = 12;

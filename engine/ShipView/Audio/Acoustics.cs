@@ -40,6 +40,12 @@ public sealed class SoundFrame
 public sealed class Acoustics
 {
     public const float CellM = 1f, Height = 2.5f, Audible = 22f; // 이보다 작으면 (dB) 내지 않는다
+    /// <summary>화면 소리의 크기 (함장 결정 17 — 넓은 폭): 귀에서 RefDb가 0dB · 1dB마다 Slope dB (평소는 작게 · 폭발은 크게 — 마지막 누름이 넘침만 막는다).</summary>
+    public const float RefDb = 92, Slope = 0.75f;
+    /// <summary>연출의 과장 (함장 결정 2 — 소리 출력에서만): 귀에서 이보다 큰 쾅엔 낮은 울림을 더한다 (dB).</summary>
+    public const float BoomFrom = 98;
+    /// <summary>확인용: 이번에 더한 과장의 수 (시험).</summary>
+    public long Booms;
     public const int MaxShots = 8, MaxMachines = 6, MaxJets = 6, MaxFires = 3;
 
     private Sim? _world;
@@ -147,6 +153,12 @@ public sealed class Acoustics
                 if (v == null) continue;
                 v.Gain = gain; v.Cutoff = cut; v.Pan = pan; v.Delay = DelayOf(e.Cell, structAt);
                 shots.Add((lp, v));
+                // 연출의 과장 (소리 출력에서만 — 세계의 소리값은 그대로): 큰 쾅엔 몸으로 느끼는 낮은 울림 · 진공에선 발밑 · 우주복으로 온 쾅 · 쿵 · 쩍에 둔한 울림
+                if (e.Kind is SoundKind.Bang or SoundKind.Thud or SoundKind.Crack)
+                {
+                    float boom = e.Kind == SoundKind.Bang && lp > BoomFrom ? (lp - BoomFrom) / 30f : EarThin <= 0 && lp > 30 ? (lp - 30) / 60f : 0; // 진공(우주복 선외 작업 포함)엔 뼈대 · 발밑으로 온 것뿐
+                    if (boom > 0) { shots.Add((lp - 0.5f, new Boom(boom) { Gain = 1, Cutoff = 16000, Pan = pan * 0.3f, Delay = v.Delay })); Booms++; }
+                }
                 Log?.Invoke($"{Time.Clock(e.Tick)} {e.Kind} {e.Db:0}dB → 귀 {lp:0}dB · 거름 {cut:0}Hz · 좌우 {pan:0.0}");
             }
             _cursor = snd.Logged;
@@ -193,8 +205,8 @@ public sealed class Acoustics
         Fires(frame, w, ear, halfW, suit);
         Machines(frame, w, ear, halfW, suit);
         if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB — 0.3배로 눌러 기계 소리와 겹치지 않게)
-            frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = 0.05f * Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db(Math.Clamp(ambient - 35, -10, 30) * 0.3f), Gain = 1, Cutoff = suit ? 900 : 10000 });
-        if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 10000 });
+            frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = 0.05f * Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db(Math.Clamp(ambient - 35, -10, 30) * 0.3f), Gain = 1, Cutoff = suit ? 900 : 16000 });
+        if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 16000 });
         Out.Enqueue(frame);
         while (Out.Count > 30 && Out.TryDequeue(out _)) { } // 아무도 안 들으면 쌓지 않는다
     }
@@ -302,7 +314,7 @@ public sealed class Acoustics
 
     /// <summary>
     /// 소리 한 자리 → 귀에서의 크기 · 자르는 높이 · 좌우. 들리지 않으면 false.
-    /// 크기: 1m에서의 dB − 20·log 거리 − 길에서 준 것 → 화면 소리로 (88dB가 0dB · 0.6배로 눌러 넓은 차이를 들을 만하게 — 귀의 크기 감각도 로그다).
+    /// 크기: 1m에서의 dB − 20·log 거리 − 길에서 준 것 → 화면 소리로 (92dB가 0dB · 0.75배 — 넓은 폭: 말소리는 작게 · 폭발은 크게 · 귀의 크기 감각도 로그다).
     /// </summary>
     public bool Hear(int src, float db, int ear, float halfW, bool suit, out float lp, out float gain, out float cutoff, out float pan, int structAt = -1)
     {
@@ -323,10 +335,10 @@ public sealed class Acoustics
         if (suit) lp -= 12;                                       // 우주복 투구 너머
         else if (EarThin < 1) lp += 20 * MathF.Log10(Math.Max(EarThin, 0.01f)); // 엷은 공기에선 고막도 덜 울린다
         if (lp < Audible) return false;
-        gain = Dsp.Db((lp - 88) * 0.6f);
-        cutoff = 9000 * MathF.Pow(2, -occl / 9f) * Math.Clamp(MathF.Pow(thin, 1.2f), 0.08f, 1f);
+        gain = Dsp.Db((lp - RefDb) * Slope);
+        cutoff = 16000 * MathF.Pow(2, -occl / 9f) * Math.Clamp(MathF.Pow(thin, 1.2f), 0.08f, 1f); // 44.1kHz — 막힘 없는 소리는 16kHz까지
         if (suit) cutoff = Math.Min(cutoff, 1200);
-        cutoff = Math.Clamp(cutoff, 120, 10000);
+        cutoff = Math.Clamp(cutoff, 120, 16000);
         pan = Math.Clamp(dx / (halfW * CellM), -1, 1) * 0.85f;
         return true;
     }

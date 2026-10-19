@@ -27,7 +27,7 @@ public readonly record struct Acoustic(float F1, float Eta, float Hard, float Ab
 /// <summary>소리 하나 (한 번 울리는 것 · 이어 도는 것). 섞개가 거름 · 크기 · 좌우 · 울림을 덧씌운다.</summary>
 public abstract class Voice
 {
-    public float Gain = 1, Cutoff = 10000, Pan, Send = 0.25f;
+    public float Gain = 1, Cutoff = 16000, Pan, Send = 0.25f;
     /// <summary>늦게 닿는 소리: 섞개가 이만큼(표본) 기다렸다 울린다 (공기 343m/s · 뼈대 5,000m/s — 화면 시간으로).</summary>
     public int Delay;
     public bool Done;
@@ -57,7 +57,7 @@ public sealed class Hit : Voice
         for (int k = 0; k < Ratio.Length; k++)
         {
             float f = f1 * Ratio[k] * (1 + 0.04f * _n.White());
-            if (f > 9500) { _modes[k] = default; continue; }
+            if (f > Dsp.Top * 0.95f) { _modes[k] = default; continue; }
             float t60 = Math.Clamp(2.2f / (f * m.Eta), 0.04f, 4f);
             float amp = MathF.Pow(1f / (k + 1), 1.4f - m.Hard) * 0.5f;
             _modes[k] = new Mode(f, t60, amp, _n.White() * MathF.PI);
@@ -144,14 +144,14 @@ public sealed class Jet : Voice
     private float _hz, _level, _curHz = 1000, _curLevel;
     private int _k;
     public Jet(uint seed) { _n = new Noise(seed); _band = Biquad.Band(1000, 0.7f); _band2 = Biquad.Band(2000, 1.2f); }
-    public void Set(float hz, float level) { _hz = Math.Clamp(hz, 150, 9000); _level = level; }
+    public void Set(float hz, float level) { _hz = Math.Clamp(hz, 150, 14000); _level = level; }
     public void Stop() => _level = 0;
     public override float Next()
     {
-        _curLevel += (_level - _curLevel) * 0.0008f;
+        _curLevel += (_level - _curLevel) * 0.0008f * Dsp.K;
         if ((_k++ & 63) == 0)
         {
-            _curHz += (_hz - _curHz) * 0.05f;
+            _curHz += (_hz - _curHz) * 0.05f * Dsp.K;
             _band.SetBand(_curHz, 0.7f); _band2.SetBand(_curHz * 1.9f, 1.4f);
         }
         if (_level <= 0 && _curLevel < 1e-4f) { Done = true; return 0; }
@@ -166,19 +166,19 @@ public sealed class Jet : Voice
 public sealed class Fire : Voice
 {
     private Noise _n;
-    private OnePole _roar, _flick;
+    private OnePole _roar, _flick, _dc;
     private Biquad _pop;
     private float _kw, _curKw;
     public Fire(uint seed) { _n = new Noise(seed); _pop = Biquad.Band(2600, 2.5f); }
     public void Set(float kw) => _kw = kw;
     public override float Next()
     {
-        _curKw += (_kw - _curKw) * 0.0005f;
+        _curKw += (_kw - _curKw) * 0.0005f * Dsp.K;
         if (_kw <= 0 && _curKw < 0.5f) { Done = true; return 0; }
         float size = MathF.Log10(1 + _curKw);                 // 1kW 0.3 · 100kW 2 · 1MW 3
         float flicker = 0.6f + 0.4f * _flick.Low(_n.White() * 3f, 6f);
-        float roar = _roar.Low(_n.Brown(), 90 + 60 * size) * flicker * 2.2f;
-        float pop = _n.Chance(0.0004f * size * size) ? _n.White() * 4f : 0;
+        float roar = _dc.High(_roar.Low(_n.Brown(), 90 + 60 * size), 30) * flicker * 2.2f; // 갈색 잡음의 아주 느린 떠돎(30Hz 아래 — 들리지 않고 꼭대기만 먹는다)은 덜어 낸다
+        float pop = _n.Chance(0.0004f * Dsp.K * size * size) ? _n.White() * 4f : 0;
         return Math.Min(1f, size / 3f) * (roar + _pop.Run(pop) * 0.8f);
     }
 }
@@ -219,7 +219,7 @@ public sealed class Machine : Voice
     public void Set(float level, float wear) { _level = level; _wear = Math.Clamp(wear, 0, 12); }
     public override float Next()
     {
-        _cur += (_level - _cur) * 0.0005f;
+        _cur += (_level - _cur) * 0.0005f * Dsp.K;
         if (_level <= 0 && _cur < 1e-4f) { Done = true; return 0; }
         float t = _i / (float)Dsp.Rate;
         _ph += _f0 / Dsp.Rate;
@@ -310,6 +310,7 @@ public sealed class Door : Voice
     private Noise _n;
     private float _lp, _prev;
     private int _i;
+    private static readonly float DoorA = Dsp.Per(0.25f);   // 1kHz 언저리 낮은 음 거름
     public Door(uint seed) { _n = new Noise(seed); }
     public override float Next()
     {
@@ -317,7 +318,7 @@ public sealed class Door : Voice
         if (_i >= n) { Done = true; return 0; }
         float t = _i++ / (float)Dsp.Rate;
         float x = _n.White();
-        _lp += 0.25f * (x - _lp);
+        _lp += DoorA * (x - _lp);
         float hp = _lp - _prev; _prev = _lp;
         float env = t < 0.32f ? MathF.Sin(MathF.PI * t / 0.32f) : 0f;
         float thunk = t > 0.3f ? MathF.Sin((t - 0.3f) * Dsp.Tau * 70f) * MathF.Exp(-(t - 0.3f) * 30f) : 0f;
@@ -370,7 +371,7 @@ public sealed class Grind : Voice
         _ph += (300 + 180 * MathF.Sin(t * Dsp.Tau * 9) + 60 * _n.White()) / Dsp.Rate;
         float ph = (float)(_ph - Math.Floor(_ph));
         float saw = _lp.Low(2 * ph - 1, 2500);
-        float clunk = _n.Chance(0.0006f) ? 3f : 0;
+        float clunk = _n.Chance(0.0006f * Dsp.K) ? 3f : 0;
         return MathF.Sin(MathF.PI * t / 0.7f) * (0.5f * saw + 0.3f * _n.White() * MathF.Abs(saw)) + clunk * MathF.Exp(-t);
     }
 }
@@ -385,7 +386,7 @@ public sealed class RoomTone : Voice
     public void Set(float level) => _level = level;
     public override float Next()
     {
-        _cur += (_level - _cur) * 0.0003f;
+        _cur += (_level - _cur) * 0.0003f * Dsp.K;
         float p = _n.Pink();
         return _cur * (_lp.Low(p, 380) * 1.3f + 0.25f * _lp2.Low(_n.White(), 2200));
     }
@@ -408,5 +409,33 @@ public sealed class Breath : Voice
         float exhale = c >= 0.45f && c < 0.9f ? MathF.Sin(MathF.PI * (c - 0.45f) / 0.45f) : 0;
         float w = _n.White();
         return _level * (_mouth.Run(w) * (0.8f * exhale + 0.4f * inhale) + _valve.Run(w) * 0.5f * inhale);
+    }
+}
+
+/// <summary>
+/// 연출의 낮은 울림 (함장 결정 2 — 세계에 없는 소리 · 소리 출력에서만 하는 과장): 큰 쾅에 몸으로 느끼는 48 → 28Hz로 내려앉는 사인 ·
+/// 진공에서 발밑으로 온 쾅에 둔한 울림 (영화 '그래비티'처럼 몸을 타고 오는 소리). 세계의 소리값 · 감각 · 판단은 건드리지 않는다.
+/// </summary>
+public sealed class Boom : Voice
+{
+    private double _ph;
+    private int _i;
+    private readonly float _amp, _decay;
+    private readonly int _len;
+    public Boom(float amount)
+    {
+        amount = Math.Clamp(amount, 0, 1);
+        _amp = 0.9f * amount;
+        _decay = 2.6f / (0.5f + amount);                       // 클수록 길게
+        _len = (int)(Dsp.Rate * (0.8f + 1.4f * amount));
+        Send = 0;
+    }
+    public override float Next()
+    {
+        if (_i >= _len) { Done = true; return 0; }
+        float t = _i++ / (float)Dsp.Rate;
+        _ph += (28 + 20 * MathF.Exp(-t * 3)) / Dsp.Rate;
+        float env = MathF.Min(1, t / 0.012f) * MathF.Exp(-t * _decay) * MathF.Min(1, (_len - _i) / (0.05f * Dsp.Rate));
+        return _amp * env * MathF.Sin((float)(_ph * Dsp.Tau));
     }
 }

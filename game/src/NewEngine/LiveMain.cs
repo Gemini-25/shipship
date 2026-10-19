@@ -209,7 +209,7 @@ public partial class LiveMain : Node2D
         if (_audio.Length < frames * 2) _audio = new float[frames * 2];
         if (_push.Length != frames) _push = new Vector2[frames];
         _mix.Master = _mute == 2 ? 0 : 0.9f;
-        _mix.MusicGain = _mute == 0 ? 0.8f : 0;
+        _mix.MusicGain = _mute == 0 ? Mixer.MusicLevel : 0;
         _mix.Render(_audio, frames);
         for (int i = 0; i < frames; i++) _push[i] = new Vector2(_audio[2 * i], _audio[2 * i + 1]);
         _playback.PushBuffer(_push);
