@@ -76,6 +76,8 @@ public enum GoalKind : byte
     Counsel,    // ⑧ 상담 — 주컴퓨터의 부탁으로 마음이 힘든 이 곁에 앉아 이야기를 들어 준다 (대상: 몸)
     Haul,       // ⑪ 공급 사슬 — 헌 부품을 정제기로 나른다 (맡긴 일: 대상 정제기 설비 · Arg 헌 부품이 있는 설비 × 256 + 물건)
     Tighten,    // ④ 열 · 진동 — 진동에 풀려 덜컹거리는 장치의 볼트를 조인다 (대상: 장치)
+    Toilet,     // 화장실 — 변기에 비운다 (대상: 변기 설비 · 없으면 용변 봉투)
+    Wash,       // 씻는다 — 샤워 칸 (대상: 샤워 칸 설비 · 없으면 물수건)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -108,7 +110,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery, Counsel }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery, Counsel, Queue, Toilet, Shower, Hands, Bag, Wipe }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep
@@ -250,6 +252,8 @@ public struct AgentCore
     /// <summary>소리 단계 S5: 쉬며 음악을 어떻게 듣나 (0 이어폰 · 1 작은 스피커로 튼다 · 2 악기를 친다) · 마지막으로 소리 내어 튼 때.</summary>
     public byte Playing;
     public long PlayedAt;
+    /// <summary>화장실 · 샤워실 (docs/WASH.md): 마지막으로 변기에 비운 때 · 씻은 때 · 손을 씻은 때.</summary>
+    public long ToiletAt, ShoweredAt, HandsAt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

@@ -42,6 +42,7 @@ public sealed partial class ShipPlan
         ["School"] = (0.30, new[] { "Bookshelf:4", "MeetingBoard:1", "Seat" }),
         ["Chapel"] = (0.25, new[] { "Seat", "Bookshelf:2", "PlantRack:4" }),
         ["DroneBay"] = (0.25, new[] { "Shelf", "MaintCart:1" }),
+        ["Washroom"] = (0.36, new[] { "ClothesRack:2", "Shelf:1", "Dehumidifier:1" }),   // 세면대는 도면이 정한 만큼 (변기 곁)
     };
 
     /// <summary>방 가운데에 놓아도 되는 것 (곁의 설비에 붙여 — 탁자 곁 의자처럼) · 나머지는 벽에 붙인다.</summary>

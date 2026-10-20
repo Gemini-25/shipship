@@ -34,7 +34,12 @@ public struct Body
     public long DiedAt;
     public int HurtCause;
     public double Fat;         // 몸의 지방 (팔미트산 몰 — 1몰 256g · 10MJ) — 쉴 때 주로 태운다
-    public double Bladder;     // 방광의 물 (몰) — 0.4L 넘으면 비운다 (오수로)
+    public double Bladder;     // 방광의 물 (몰) — 비우는 것은 사람이 변기에서 (판단) · 0.6L를 넘으면 참지 못하고 지린다 (월드)
+    // 화장실 · 샤워실 (함장 요청 — docs/WASH.md)
+    public double Bowel;       // 장에 찬 찌꺼기 (kg — 먹은 것에서 · 0.45kg를 넘으면 참지 못한다)
+    public float Dirt;         // 몸의 더러움 (0 깨끗 · 1 몹시 — 날마다 · 땀 · 피 · 지림 · 씻으면 준다)
+    public byte Wet;           // 지렸다 (1 — 씻을 때까지 옷이 젖어 있다)
+    public int SoilCause;      // 마지막으로 지린 원인 마디
     // ⑦ 돌봄 · 감염 · 옮는 병 (깊이 바퀴 2)
     public float Dressed;      // 상처를 덮어 둔 남은 시간 (시간 — 붕대 · 화상 덮개)
     public float Infect;       // 상처 감염 (0 없음 · 1 넘으면 패혈증 — 쓰러진다 · 2면 죽는다)
@@ -152,6 +157,10 @@ public sealed partial class Life : IEngine
     public const double UrineRefWater = Mind.BodyWater0 * 0.995; // 이 물에서 하루 1.5L (목마름은 몸의 물이 0.5% 줄 때쯤 마시게 한다 — 그 언저리가 보통)
     public const double BluntHealDays = 7, BurnHealDays = 14;
     public const double NightUrine = 0.5;          // 자는 동안 오줌 빠르기 (낮의 절반)
+    // 화장실 · 샤워실 (docs/WASH.md): 방광은 0.6L(33몰)를 넘으면 참지 못한다 (보통 어른 방광 0.4~0.6L) · 장의 찌꺼기는 먹은 음식의 13% (하루 0.15kg 남짓) · 0.45kg를 넘으면 참지 못한다
+    public const double BladderMax = 33, BowelPerMol = 0.039, BowelMax = 0.45;
+    // 더러움: 날마다 0.2 (닷새면 몹시) · 땀 1몰(18mL)에 0.01 · 피 1L에 0.5 · 샤워 물 8L(444몰)면 다 씻긴다
+    public const double DirtPerDay = 0.2, DirtPerSweatMol = 0.01, DirtPerBloodL = 0.5, ShowerMol = 444;
     public const double Insensible = 83.3 / 86400; // 숨 · 피부로 늘 잃는 물 (몰/초 — 하루 1.5L · 대사로 생긴 물 0.35L와 합쳐 BVAD 1.85kg)
     /// <summary>산소 1몰에서 나오는 에너지 (J · 물이 액체인 열량 — 식품 열량과 같은 기준): 포도당 467kJ · 지방 434kJ.</summary>
     public const double CropMolPerM2Day = 0.1;     // 작물 1m²가 하루에 내는 양분 (몰 — 밝은 재배등 · 알맞은 온도 · 이산화탄소)
@@ -204,7 +213,7 @@ public sealed partial class Life : IEngine
     public ref Body this[int i] => ref CollectionsMarshal.AsSpan(Bodies)[i];
 
     public void Move(int body, int cell) => this[body].Cell = cell;
-    public void Eat(int body, double glucoseMol) => this[body].Reserve += glucoseMol;
+    public void Eat(int body, double glucoseMol) { this[body].Reserve += glucoseMol; this[body].Bowel += glucoseMol * BowelPerMol; }
     public void Drink(int body, double waterMol) => this[body].Water += waterMol;
 
     /// <summary>⑨ 맞았다 (몸싸움): 타박 · 출혈 · 아픔 — 원인 마디에 때린 사람 (죽으면 그 사슬이 죽음의 원인).</summary>
@@ -505,6 +514,7 @@ public sealed partial class Life : IEngine
                 n = Math.Min(n, b.Water * 0.01);
                 double need = n * ((T.Gases[T.gH2O].Hf - _waterL.Hf) * 1000 + T.Gases[T.gH2O].C * (BodyTemp - 298.15));
                 b.Water -= n;
+                b.Dirt = (float)Math.Min(1, b.Dirt + n * DirtPerSweatMol);   // 땀이 마르면 몸이 끈적하다
                 F.AddGas(c, T.gH2O, n, BodyTemp);
                 // sweat W는 이미 체온에서 뺐다 — 장부를 맞추는 차이만 몸에서
                 b.CoreK -= (need - sweat * dt) / BodyC;
@@ -514,7 +524,10 @@ public sealed partial class Life : IEngine
         // 자는 동안은 절반 (밤의 항이뇨 호르몬 — 건강한 어른의 밤 오줌은 하루의 20% 아래: ICS 2002)
         double urine = Math.Min(b.Water * 0.001, Urine0 * Math.Clamp(1 + (b.Water - UrineRefWater) / (0.01 * Mind.BodyWater0), 0.33, 3) * (b.Asleep != 0 ? NightUrine : 1) * dt);
         b.Water -= urine; b.Bladder += urine; UrineMade += urine;
-        if (b.Bladder > 22 && _net != null && b.Conscious != 0) { _net.WasteWater += b.Bladder; b.Bladder = 0; }
+        // 몸이 더러워진다: 날마다 · 땀 · 피 (씻는 것은 사람의 판단 — 샤워 칸 · 물수건)
+        b.Dirt = (float)Math.Min(1, b.Dirt + DirtPerDay * dt / 86400 + (b.Bleed + b.BleedIn > 0 ? DirtPerBloodL * b.Bleed * dt / 3600 : 0));
+        // 참지 못한다 (월드): 방광 · 장이 한계를 넘으면 그 자리에 지린다 — 바닥이 젖고 몸이 더러워진다 (비우러 가는 것은 사람의 판단)
+        if (b.Bladder > BladderMax || b.Bowel > BowelMax) Soil(sim, id, ref b, c);
         // 늘 조금씩 물을 잃는다 (숨 · 피부 — 하루 1.5L)
         double insens = Insensible * dt;
         b.Water -= insens;
@@ -717,6 +730,6 @@ public sealed partial class Life : IEngine
         return (g, w, f);
     }
 
-    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); }
-    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); }
+    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); }
+    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); }
 }

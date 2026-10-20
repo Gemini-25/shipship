@@ -106,5 +106,8 @@
   "MaintCart":       { "name": "정비 수레",    "parts": { "steel": 25, "polymer": 4 } },
   "SpiceRack":       { "name": "양념 선반",    "parts": { "aluminum": 3, "glass": 2, "food": 3 } },
   "DishWasher":      { "name": "식기세척기",   "parts": { "steel": 30, "polymer": 6, "copper": 2 } },
-  "HeatSuitRack":    { "name": "내열복 걸이",  "parts": { "steel": 6, "fabric": 8, "ceramic": 4 } }
+  "HeatSuitRack":    { "name": "내열복 걸이",  "parts": { "steel": 6, "fabric": 8, "ceramic": 4 } },
+  "Toilet":          { "name": "변기",         "parts": { "steel": 12, "polymer": 8, "copper": 1 } },
+  "Sink":            { "name": "세면대",       "parts": { "steel": 6, "ceramic": 8, "glass": 2 } },
+  "Shower":          { "name": "샤워 칸",      "parts": { "polymer": 14, "glass": 8, "steel": 6, "copper": 1 } }
 }

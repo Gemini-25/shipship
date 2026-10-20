@@ -210,13 +210,15 @@ public sealed partial class Mind
         if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
         if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }
         if (use == UseKind.Cpr) Activity(a, "hard");   // 가슴 압박은 힘든 일
+        if (use == UseKind.Queue) { QueueStep(sim, a, st); return; }   // 화장실 · 샤워 줄
+        if (use == UseKind.Shower && t <= c.StepStart + 1) ShowerStart(st);
         bool done = t - c.StepStart >= st.Value;
         if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
         if (use == UseKind.Surgery) { int r = SurgeryTick(sim, a, st); if (r < 0) return; done = r > 0 || t - c.StepStart >= st.Value; }
         switch (use)
         {
             // 한번 누우면 다섯 시간은 잔다 · 목이 몹시 마르면 깬다 (마실 것이 없어도 30분은 눈을 붙인다)
-            case UseKind.Sleep: done |= c.Sleepy < 0.03f && t - c.StepStart >= Time.Hours(5) || a.IsPerson && c.Thirst > WakeThirst && t - c.StepStart >= Time.Minutes(30); break;
+            case UseKind.Sleep: done |= c.Sleepy < 0.03f && t - c.StepStart >= Time.Hours(5) || a.IsPerson && (c.Thirst > WakeThirst || Urge(a) > 0.85f) && t - c.StepStart >= Time.Minutes(30); break;   // 목이 마르거나 마려우면 깬다
             case UseKind.Charge: done |= c.Battery >= 0.98f && t - c.StepStart >= Time.Minutes(10); break; // 다 차면 독에서 10분씩 기다린다
             case UseKind.Work: done |= !InWindow(Time.HourOfDay(t), c.ShiftHour, 8); break;
         }
@@ -262,6 +264,7 @@ public sealed partial class Mind
                 FinishRelax(a, st.Cell);
                 c.Playing = 0;
                 break;
+            case UseKind.Toilet or UseKind.Bag or UseKind.Shower or UseKind.Hands or UseKind.Wipe when a.IsPerson: WashDone(sim, a, st, use); break;
             case UseKind.Exercise when a.IsPerson:
                 // 땀 흘리고 나면 개운하다: 지루함 · 긴장이 풀린다 (운동과 기분 연구)
                 c.Unfit = 0; c.ExercisedAt = t; Exercised++;

@@ -57,5 +57,7 @@
   "WashingMachine":  { "role": "appliance","kw": 0.5,   "on": false, "db": 60, "parts": { "기계": 10000, "봉함": 15000 } },
   "SuitDryer":       { "role": "appliance","kw": 0.3,   "on": false, "db": 50, "parts": { "전기": 20000 } },
   "Treadmill":       { "role": "appliance","kw": 0.1,   "on": false, "db": 74, "parts": { "기계": 15000 } },
+  "Toilet":          { "role": "appliance","kw": 0.02,  "on": true,  "db": 40, "parts": { "기계": 20000, "봉함": 30000 } },
+  "Shower":          { "role": "appliance","kw": 3,     "on": false, "db": 50, "parts": { "전기": 30000, "봉함": 25000 } },
   "EngineCore":      { "role": "engine",   "kw": 2,     "on": true, "db": 70, "parts": { "기계": 20000, "전기": 30000 } }
 }

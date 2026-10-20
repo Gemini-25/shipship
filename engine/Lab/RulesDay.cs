@@ -76,7 +76,7 @@ public static partial class Program
                 };
                 long t = f.Tick; int who = f.Actor;
                 bool talk = f.Kind == FactKind.Talk;   // 대화의 대답(듣는 이의 한 마디)은 같은 '대화' 행동 안에 마음이 정했다 — 행동의 대상
-                return acts.Any(x => x.Kind == kind && x.Tick <= t && x.Tick >= t - 2 && (byTarget ? x.Target == who : x.Actor == who || talk && x.Target == who));
+                return acts.Any(x => (x.Kind == kind || talk && x.Kind == SocialActKind.Mediate) && x.Tick <= t && x.Tick >= t - 2 && (byTarget ? x.Target == who : x.Actor == who || talk && x.Target == who));   // 말림도 그 사람의 말 (말린 이의 한 마디가 대화 사실로 남는다)
             }
             var orphans = deeds.Where(f => !Backed(f)).ToList();
             string counts = string.Join(" · ", deeds.GroupBy(f => f.Kind).Select(g => $"{FactNames.Of(g.Key)} {g.Count()}"));

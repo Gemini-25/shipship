@@ -48,7 +48,7 @@ public sealed partial class Mind
         if (busy)
             foreach (var o in _opts)
                 if (o.Goal == c.Goal && o.Target == c.GoalTarget) { current = o.Score + 1.0f; break; }
-        if (busy && current < 0 && c.Goal is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink && c.StepIndex > 0) current = 1.5f; // 하던 식사 · 잠은 웬만하면 마친다
+        if (busy && current < 0 && c.Goal is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Toilet or GoalKind.Wash && c.StepIndex > 0) current = 1.5f; // 하던 식사 · 잠 · 볼일 · 샤워는 웬만하면 마친다
         // 시작한 쉼 · 어울림도 마친다 (하는 동안 지루함 · 외로움이 풀려 선택지가 사라져도 — 일 · 끼니처럼 더 급한 것은 끼어든다)
         if (busy && current < 0 && c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex > 0) current = 1.0f;
 
@@ -200,6 +200,7 @@ public sealed partial class Mind
             OwnOption(a);            // ⑧ 판단 엔진 (마): 제 궁리
             MeetingOption(a, here);  // ⑨ 회의에 갈 이는 식당으로
             if (c.Thirst > 0.3f && WaterAllowed(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
+            WashOptions(a, here, hour);   // 화장실 · 씻기
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief) * WorkFactor(a));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
@@ -457,6 +458,8 @@ public sealed partial class Mind
                 return true;
             }
             case GoalKind.Relax: return BuildRelax(sim, a, plan);
+            case GoalKind.Toilet: return PlanToilet(sim, a, o, plan);
+            case GoalKind.Wash: return PlanWash(sim, a, o, plan);
             case GoalKind.Meeting:
             {
                 if (GatherRoom < 0) return false;
@@ -851,7 +854,7 @@ public sealed partial class Mind
     }
 
     /// <summary>일상 목표 (위기를 다루는 일이 아닌 것) — 빠져나온 위험한 방으로는 이것 때문에 돌아가지 않는다.</summary>
-    private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize
+    private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize or GoalKind.Toilet or GoalKind.Wash
         or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook or GoalKind.Haul or GoalKind.Tighten;
 
     /// <summary>

@@ -16,6 +16,8 @@ public static partial class Program
     };
 
     private static (int, string, string, (string, int)[]) R(int w, string type, string name, params (string, int)[] furn) => (w, type, name, furn);
+    /// <summary>화장실 · 샤워실 (함장 요청): 변기 · 샤워 칸 · 세면대 — 변기는 여섯 명에 하나 · 샤워 칸은 여덟 명에 하나쯤 (국제 우주 정거장: 일곱 명에 변기 둘).</summary>
+    private static (string, int)[] Wash(int toilets, int showers, int sinks) => new[] { F("Toilet", toilets), F("Shower", showers), F("Sink", sinks) };
 
     /// <summary>연락선 화살호 — 3명 · 60일. 뾰족한 뱃머리 · 뒤로 젖힌 날개(내릴 때 미끄럼판) · 엔진 둘. 착륙한다.</summary>
     private static ShipPlan Hwasal()
@@ -25,8 +27,9 @@ public static partial class Program
         s.Row(12, 12, 13, 'N', 4, cor,
             R(7, "Reactor", "원자로실", F("ReactorCore"), F("Console")),
             R(5, "Power", "배전실", F("AuxGenerator"), F("PowerPanel"), F("Battery", 2), F("SurgeProtector")),
-            R(7, "LifeSupport", "생명유지실", F("OxygenGenerator", 2), F("WaterRecycler"), F("Scrubber"), F("HeatExchanger"), F("CoolantPump", 2)),
-            R(8, "Quarters", "침실", F("Bed", 3), F("Shelf")));
+            R(6, "LifeSupport", "생명유지실", F("OxygenGenerator", 2), F("WaterRecycler"), F("Scrubber"), F("HeatExchanger"), F("CoolantPump", 2)),
+            R(3, "Washroom", "화장실 겸 샤워실", Wash(1, 1, 1)),
+            R(5, "Quarters", "침실", F("Bed", 3), F("Shelf")));
         var south = s.Row(12, 12, 13, 'S', 4, cor,
             R(6, "Workshop", "정비실", F("Workbench"), F("Shelf"), F("RobotDock", 3)),
             R(4, "Storage", "식량 창고", F("FoodLocker"), F("OxygenMaskBox")),
@@ -81,13 +84,17 @@ public static partial class Program
             ("LifeSupport", "생명유지실", new[] { F("OxygenGenerator", 2), F("WaterRecycler"), F("Scrubber", 2), F("Dehumidifier"), F("HeatExchanger"), F("CoolantPump", 2) }),
             ("Bridge", "함교", new[] { F("MainComputer"), F("NavComputer"), F("Console", 2), F("SensorArray"), F("CrashSeat", 6) }),
             ("Comms", "통신실", new[] { F("Console"), F("SensorArray") }),
+            ("Washroom", "화장실 겸 샤워실", Wash(2, 1, 1)),
             ("Quarters", "침실 하나", new[] { F("Bed", 3), F("Shelf") }),
         };
         int gear = -1;
-        for (int k = 0; k < 12; k++)
+        double[] span = { 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 15, 15, 30 };   // 통신실 자리를 반으로 나눠 화장실 겸 샤워실
+        double at = -15;
+        for (int k = 0; k < ring.Length; k++)
         {
-            double a0 = k * 30 - 15;
-            int r = s.Rect(0, 0, 63, 63, ring[k].T, ring[k].N, (x, y) => Body(x, y) && M(x, y) >= 10 && InAng(Ang(x + 0.5 - c, y + 0.5 - c), a0, a0 + 30), ring[k].F);
+            double a0 = at, a1 = at + span[k];
+            at = a1;
+            int r = s.Rect(0, 0, 63, 63, ring[k].T, ring[k].N, (x, y) => Body(x, y) && M(x, y) >= 10 && InAng(Ang(x + 0.5 - c, y + 0.5 - c), a0, a1), ring[k].F);
             s.Link(r, cor);
             if (ring[k].T == "Gear") gear = r;
         }
@@ -111,14 +118,15 @@ public static partial class Program
             R(8, "Reactor", "원자로실", F("ReactorCore"), F("Console")),
             R(6, "Power", "배전실", F("AuxGenerator"), F("PowerPanel"), F("Battery", 2), F("SurgeProtector")),
             R(5, "Cooling", "냉각실", F("CoolantPump", 2), F("HeatExchanger")),
-            R(10, "LifeSupport", "생명유지실", F("OxygenGenerator", 3), F("WaterRecycler"), F("Scrubber", 2), F("Dehumidifier"), F("HeatExchanger")),
-            R(8, "Workshop", "정비실", F("Workbench"), F("Lathe"), F("SolderStation"), F("Shelf"), F("RobotDock", 4)),
+            R(9, "LifeSupport", "생명유지실", F("OxygenGenerator", 3), F("WaterRecycler"), F("Scrubber", 2), F("Dehumidifier"), F("HeatExchanger")),
+            R(7, "Workshop", "정비실", F("Workbench"), F("Lathe"), F("SolderStation"), F("Shelf"), F("RobotDock", 4)),
             R(2, "Corridor", "", Array.Empty<(string, int)>()),
-            R(9, "Quarters", "침실 가", F("Bed", 4), F("Shelf")),
-            R(9, "Quarters", "침실 나", F("Bed", 4), F("Shelf")),
+            R(8, "Quarters", "침실 가", F("Bed", 4), F("Shelf")),
+            R(8, "Quarters", "침실 나", F("Bed", 4), F("Shelf")),
             R(2, "Corridor", "", Array.Empty<(string, int)>()),
-            R(9, "Quarters", "침실 다", F("Bed", 4), F("Shelf")),
-            R(7, "Comms", "통신실", F("Console"), F("SensorArray", 2)));
+            R(5, "Washroom", "화장실 · 샤워실", Wash(2, 2, 2)),
+            R(8, "Quarters", "침실 다", F("Bed", 4), F("Shelf")),
+            R(6, "Comms", "통신실", F("Console"), F("SensorArray", 2)));
         var nx = s.RowX.ToList();
         var south = s.Row(17, 24, 25, 'S', 6, cor,
             R(9, "Storage", "식량 창고 하나", F("FoodLocker", 7), F("RobotDock", 2)),
@@ -185,10 +193,11 @@ public static partial class Program
             s.Link(so, cor, kind: "pressure");
         }
         s.Row(101, 22, 23, 'N', 6, cor,
-            R(8, "Quarters", "침실 가", F("Bed", 4), F("Shelf")),
-            R(8, "Quarters", "침실 나", F("Bed", 4), F("Shelf")),
-            R(8, "Lounge", "휴게실", F("GameTable"), F("Treadmill"), F("Bookshelf"), F("Seat", 3)),
-            R(6, "ComputerRoom", "주컴퓨터실", F("MainComputer"), F("Console")));
+            R(7, "Quarters", "침실 가", F("Bed", 4), F("Shelf")),
+            R(7, "Quarters", "침실 나", F("Bed", 4), F("Shelf")),
+            R(4, "Washroom", "화장실 · 샤워실", Wash(2, 1, 1)),
+            R(6, "Lounge", "휴게실", F("GameTable"), F("Treadmill"), F("Bookshelf"), F("Seat", 3)),
+            R(5, "ComputerRoom", "주컴퓨터실", F("MainComputer"), F("Console")));
         var south = s.Row(101, 22, 23, 'S', 6, cor,
             R(6, "Galley", "주방", F("Stove"), F("Fridge"), F("Shelf")),
             R(6, "Mess", "식당", F("Table", 2), F("MealDispenser"), F("Seat", 8)),
@@ -218,11 +227,12 @@ public static partial class Program
         int fnd = s.Rect(44, 18 + o, 57, 37 + o, "Foundry", "정제 공장", null, F("Refinery", 2), F("Compactor"), F("Collector"), F("Lathe"), F("Workbench"), F("Console"));
         s.Link(ore, cor); s.Link(fnd, cor); s.Link(ore, fnd);
         s.Row(20, 16 + o, 17 + o, 'N', 10, cor,
-            R(8, "Quarters", "침실 가", F("Bed", 5), F("Shelf")),
+            R(7, "Quarters", "침실 가", F("Bed", 5), F("Shelf")),
             R(7, "Quarters", "침실 나", F("Bed", 5), F("Shelf")),
-            R(7, "Lounge", "휴게실", F("GameTable"), F("Bookshelf"), F("Projector"), F("Seat", 4)),
-            R(6, "Gym", "운동실", F("Treadmill", 2)),
-            R(8, "Medbay", "의무실", F("MedBed", 2), F("DiagnosticScanner"), F("Shelf")));
+            R(4, "Washroom", "화장실 · 샤워실", Wash(2, 2, 1)),
+            R(6, "Lounge", "휴게실", F("GameTable"), F("Bookshelf"), F("Projector"), F("Seat", 4)),
+            R(5, "Gym", "운동실", F("Treadmill", 2)),
+            R(6, "Medbay", "의무실", F("MedBed", 2), F("DiagnosticScanner"), F("Shelf")));
         s.Row(20, 38 + o, 39 + o, 'S', 10, cor,
             R(8, "Galley", "주방", F("Stove"), F("Oven"), F("Fridge", 2), F("Shelf")),
             R(8, "Mess", "식당", F("Table", 3), F("MealDispenser"), F("Seat", 10)),
@@ -266,10 +276,15 @@ public static partial class Program
         s.Extend(cor, Box(16, 10, 17, 51));
         var north = new List<(int, string, string, (string, int)[])>();
         string[] q = { "가", "나", "다", "라", "마", "바", "사", "아" };
-        foreach (var n in q) north.Add(R(7, "Quarters", $"침실 {n}", F("Bed", 5), F("Shelf")));
-        north.Add(R(9, "Lounge", "휴게실", F("GameTable"), F("Bookshelf"), F("Projector"), F("Aquarium"), F("Seat", 4)));
-        north.Add(R(7, "Chapel", "추모실", F("MemorialWall"), F("Seat", 4)));
-        north.Add(R(9, "School", "배움방", F("Table", 2), F("Bookshelf"), F("Seat", 6)));
+        for (int i = 0; i < q.Length; i++)
+        {
+            north.Add(R(6, "Quarters", $"침실 {q[i]}", F("Bed", 5), F("Shelf")));
+            if (i == 3) north.Add(R(5, "Washroom", "화장실 · 샤워실 하나", Wash(3, 3, 2)));   // 침실 넷마다 하나
+        }
+        north.Add(R(5, "Washroom", "화장실 · 샤워실 둘", Wash(3, 3, 2)));
+        north.Add(R(7, "Lounge", "휴게실", F("GameTable"), F("Bookshelf"), F("Projector"), F("Aquarium"), F("Seat", 4)));
+        north.Add(R(6, "Chapel", "추모실", F("MemorialWall"), F("Seat", 4)));
+        north.Add(R(8, "School", "배움방", F("Table", 2), F("Bookshelf"), F("Seat", 6)));
         s.Row(18, 18, 19, 'N', 7, cor, north.ToArray());
         void Middle(int y0, int y1, params (int W, string T, string N, (string, int)[] F)[] rs)
         {
@@ -346,15 +361,17 @@ public static partial class Program
             if (h.T == "Hangar") s.Exit(r, 'S');
         }
         // 고리: 사분면마다 여섯 조각 (안쪽 · 바깥쪽 띠) — 0도 = 동쪽 · 시계 방향
-        var quarters = Enumerable.Range(0, 17).Select(i => ("Quarters", $"침실 {i + 1}", new[] { F("Bed", i == 16 ? 4 : 6), F("Shelf") })).ToList();
+        var quarters = Enumerable.Range(0, 13).Select(i => ("Quarters", $"침실 {i + 1}", new[] { F("Bed", i < 9 ? 8 : 7), F("Shelf") })).ToList();   // 침실 열셋 (8 × 9 + 7 × 4 = 100)
+        int wi = 0;
+        (string, string, (string, int)[]) W() => ("Washroom", $"화장실 · 샤워실 {++wi}", Wash(4, 3, 2));   // 사분면마다 하나
         int qi = 0;
         (string, string, (string, int)[]) Q() => quarters[qi++];
         var inner = new[]
         {
-            new[] { Q(), Q(), Q(), Q(), Q(), ("Medbay", "의무실 하나", new[] { F("MedBed", 3), F("DiagnosticScanner"), F("Shelf") }) },
-            new[] { Q(), Q(), ("School", "배움방", new[] { F("Table", 2), F("Bookshelf"), F("Seat", 8) }), Q(), Q(), ("Gym", "운동실", new[] { F("Treadmill", 4) }) },
-            new[] { Q(), Q(), ("Chapel", "추모실", new[] { F("MemorialWall"), F("Seat", 6) }), Q(), Q(), ("Lounge", "휴게실 하나", new[] { F("GameTable"), F("Bookshelf"), F("Projector"), F("Seat", 4) }) },
-            new[] { Q(), Q(), ("Medbay", "의무실 둘", new[] { F("MedBed", 3), F("DiagnosticScanner"), F("Autoclave") }), Q(), Q(), ("Lounge", "휴게실 둘", new[] { F("GameTable"), F("Aquarium"), F("Seat", 4) }) },
+            new[] { Q(), Q(), W(), Q(), Q(), ("Medbay", "의무실 하나", new[] { F("MedBed", 3), F("DiagnosticScanner"), F("Shelf") }) },
+            new[] { Q(), Q(), ("School", "배움방", new[] { F("Table", 2), F("Bookshelf"), F("Seat", 8) }), Q(), W(), ("Gym", "운동실", new[] { F("Treadmill", 4) }) },
+            new[] { Q(), W(), ("Chapel", "추모실", new[] { F("MemorialWall"), F("Seat", 6) }), Q(), Q(), ("Lounge", "휴게실 하나", new[] { F("GameTable"), F("Bookshelf"), F("Projector"), F("Seat", 4) }) },
+            new[] { Q(), Q(), ("Medbay", "의무실 둘", new[] { F("MedBed", 3), F("DiagnosticScanner"), F("Autoclave") }), W(), Q(), ("Lounge", "휴게실 둘", new[] { F("GameTable"), F("Aquarium"), F("Seat", 4) }) },
         };
         (string, string, (string, int)[]) Farm(int n) => ("Hydroponics", $"재배 갑판 {n}", new[] { Fill("GrowRack", 16), F("NutrientDoser") });
         var outer = new[]

@@ -30,6 +30,7 @@ public sealed partial class Painter
         ["Shuttle"] = "DockClampPanel", ["Rover"] = "MaintCart", ["CargoCrate"] = "SupplyCache", ["OreBin"] = "Compactor",
     };
     private readonly FurnitureType?[] _fixType;
+    private readonly byte[] _washKind;   // 화장실 · 샤워실 설비의 제 그림 (PainterWash.cs)
     private readonly (int x, int y, int w, int h)[] _fixBox;
     private readonly Dictionary<long, Img> _cache = new();
     private int[]? _fixOrder;
@@ -43,6 +44,7 @@ public sealed partial class Painter
         L = layout;
         _roomFloor = L.Rooms.Select(r => FloorFor(r.Type)).ToArray();
         _fixType = new FurnitureType?[L.Furniture.Count];
+        _washKind = L.Furniture.Select(f => (byte)WashKind(f.Type)).ToArray();
         _fixBox = new (int, int, int, int)[L.Furniture.Count];
         for (int i = 0; i < L.Furniture.Count; i++)
         {
@@ -109,7 +111,7 @@ public sealed partial class Painter
         "Engine" or "Reactor" or "Cooling" or "PumpRoom" or "HvacRoom" or "Crusher" or "PropellantTank" or "HeatStorage" or "GasStorage" or "Recycling" => DotFloor.Grate,
         "Power" or "Substation" or "BatteryRoom" or "FuelCell" or "ServerRoom" or "ElectronicsLab" or "Bridge" or "BackupBridge" or "Comms"
             or "Navigation" or "CraneControl" or "Calibration" or "ComputerRoom" => DotFloor.Rubber,
-        "Galley" or "Medbay" or "Hydroponics" or "Laundry" or "WaterPlant" or "Decon" or "Quarantine" or "QuarantineLock" or "Triage" or "Morgue"
+        "Galley" or "Medbay" or "Hydroponics" or "Washroom" or "Laundry" or "WaterPlant" or "Decon" or "Quarantine" or "QuarantineLock" or "Triage" or "Morgue"
             or "Lab" or "AlgaeLab" or "ProteinFarm" or "Freezer" or "Hyperbaric" or "Mess" or "SeedVault" or "MushroomFarm" => DotFloor.Tile,
         "Quarters" or "PrivateCabins" or "QuietQuarters" or "Lounge" or "Chapel" or "Meditation" or "Theater" or "School" or "MeetingRoom"
             or "Archive" or "WaterWallCabin" or "Observatory" => DotFloor.Carpet,
@@ -468,6 +470,12 @@ public sealed partial class Painter
                 int gbw = bw, gbh = bh;   // 이 칸 안에서만 붙잡는다 (설비마다 갇힌 변수 묶음을 잡지 않게)
                 if (Lighting) _emissive.Add(im => GravGlow(im, gx, gy, gbw, gbh, field, gs, frame));
                 else GravGlow(img, gx, gy, gbw, gbh, field, gs, frame);
+                continue;
+            }
+            if (_washKind[i] != 0)
+            {
+                int wk = _washKind[i], wr = WashRise(wk);
+                Put(img, Cached(Key(5, 9100 + wk, bw, bh, 0), wk, static k => Shadowed(WashBody(k), WashRise(k))), Px(bx), Py(by) - wr);
                 continue;
             }
             var ft = _fixType[i] ?? FurnitureType.Shelf;

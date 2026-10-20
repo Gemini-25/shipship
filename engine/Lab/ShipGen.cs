@@ -61,6 +61,8 @@ public sealed partial class ShipPlan
         ["MeetingBoard"] = (2, 1), ["Fermenter"] = (1, 1), ["LedPanel"] = (1, 1), ["EmergencyLight"] = (1, 1),
         // 꾸밈 (ShipDress.cs)
         ["ToolWall"] = (2, 1), ["PartTestBench"] = (2, 1), ["MusicCorner"] = (2, 1), ["ServerRack"] = (1, 1), ["Telescope"] = (1, 1),
+        // 화장실 · 샤워실 (함장 요청)
+        ["Toilet"] = (1, 1), ["Sink"] = (1, 1), ["Shower"] = (1, 1),
     };
 
     /// <summary>줄지어 놓는 것 (줄 사이 통로 · 줄 끝 한 칸 비움).</summary>
@@ -70,7 +72,7 @@ public sealed partial class ShipPlan
     {
         "FoodLocker", "Seat", "CrashSeat", "SuitLocker", "RobotDock", "DroneDock", "Console", "Battery", "CargoNet", "Scrubber", "Dehumidifier",
         "HeatExchanger", "SensorArray", "NavComputer", "PowerPanel", "SurgeProtector", "OxygenMaskBox", "CoolantPump", "MealDispenser", "Fridge",
-        "Oven", "CoffeeMachine", "SolderStation", "Compactor", "NutrientDoser",
+        "Oven", "CoffeeMachine", "SolderStation", "Compactor", "NutrientDoser", "Toilet", "Sink", "Shower",
     };
 
     public static (string, int) F(string type, int n = 1) => (type, n);
