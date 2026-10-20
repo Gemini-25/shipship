@@ -4,7 +4,7 @@ using ShipEngine;
 namespace ShipView.Audio;
 
 /// <summary>이어 도는 소리의 종류 (섞개가 이 열쇠로 하나씩 둔다).</summary>
-public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring }
+public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring, Tune }
 
 /// <summary>이어 도는 소리 하나의 이번 모습.</summary>
 public struct LoopUpdate
@@ -24,6 +24,7 @@ public sealed class SoundFrame
     public float Rt60 = 0.5f, Wet = 0.25f;
     public bool Reset;       // 세계가 바뀌었다 (다시보기 · 다른 배) — 이어 도는 소리를 모두 끈다
     public string Mood = ""; // 연출의 분위기 (바탕 음악이 따른다)
+    public MusicCue Cue;     // 바탕 음악이 따라갈 것 (소리 단계 S5 — 하루 시간 · 항해 달력 · 배의 행사 · 고른 사람의 기분)
 }
 
 /// <summary>
@@ -46,7 +47,7 @@ public sealed class Acoustics
     public const float BoomFrom = 98;
     /// <summary>확인용: 이번에 더한 과장의 수 (시험).</summary>
     public long Booms;
-    public const int MaxShots = 8, MaxMachines = 6, MaxJets = 6, MaxFires = 3;
+    public const int MaxShots = 8, MaxMachines = 6, MaxJets = 6, MaxFires = 3, MaxTunes = 3;
 
     private Sim? _world;
     private Layout L = null!;
@@ -208,6 +209,8 @@ public sealed class Acoustics
         Jets(frame, ear, halfW, suit, w.Tick);
         Fires(frame, w, ear, halfW, suit);
         Machines(frame, w, ear, halfW, suit);
+        Tunes(frame, w, ear, halfW, suit);
+        frame.Cue = CueOf(show, person);
         if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB)
             frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db((Math.Max(30, ambient) - 6 - RefDb) * Slope), Gain = 1, Cutoff = suit ? 900 : 16000 }); // 엔진의 바탕 소음을 다른 소리와 같은 잣대로 (가까운 기계는 따로 울려 6dB 덜어)
         if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 16000 });
@@ -290,6 +293,64 @@ public sealed class Acoustics
             list.Add((lp, new LoopUpdate { Key = 900_000_000L + cell, Kind = LoopKind.Jet, A = 3500, B = 1, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.2f }));
         }
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxJets)) { frame.Loops.Add(j.u); if (Log != null && _logJets.Add(j.u.Key)) Log($"  쉬익 시작 {j.u.A:0}Hz → 귀 {j.lp:0}dB · 거름 {j.u.Cutoff:0}Hz"); }
+    }
+
+    // ── 배 안 음악 (소리 단계 S5): 쉬는 이가 스피커로 틀거나 악기를 친다 — 세계의 소리 크기 · 벽 너머는 먹먹하게 · 치는 이의 기분으로 ──
+    private void Tunes(SoundFrame frame, Sim w, int ear, float halfW, bool suit)
+    {
+        var mind = w.Find<Mind>();
+        if (mind == null) return;
+        var soc = w.Find<Society>();
+        var list = new List<(float lp, LoopUpdate u)>();
+        foreach (var a in mind.Agents)
+        {
+            if (!a.IsPerson || a.C.Playing == 0 || w.Tick - a.C.PlayedAt > 2) continue;
+            float db = a.C.Playing == 2 ? Mind.InstrumentDb : Mind.SpeakerDb;
+            if (!Hear(a.C.Cell, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan)) continue;
+            float mood = Math.Clamp(a.C.Joy - 0.6f * a.C.Stress - 0.8f * (soc?.GriefOf(a.Id) ?? 0) - 0.5f * a.C.Sad, -1, 1);
+            list.Add((lp, new LoopUpdate { Key = 3_000_000 + a.Id * 4 + a.C.Playing, Kind = LoopKind.Tune, A = a.C.Playing, B = mood, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.3f }));
+        }
+        foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxTunes)) frame.Loops.Add(j.u);
+    }
+
+    /// <summary>
+    /// 바탕 음악이 따라갈 것 (소리 단계 S5 · 결정 11): 하루 시간 · 항해 달력(파편 구간 사흘 앞부터 불안 · 지나온 뒤 하루 안도) ·
+    /// 배의 행사(추모 모임 · 축하 자리) · 고른 사람의 기분 (고르지 않으면 배 사람들의 평균을 반만).
+    /// </summary>
+    public static MusicCue CueOf(LiveShow show, int person)
+    {
+        var w = show.World;
+        long t = w.Tick;
+        var cue = new MusicCue { Set = true, Hour = (float)((t % Time.TicksPerDay) / (double)Time.TicksPerHour) };
+        var sm = w.Find<ShipMind>();
+        if (sm != null)
+            foreach (var e in sm.Calendar)
+            {
+                if (e.Zone < 0) continue;
+                long ahead = Time.Days(ShipMind.NoticeDays);
+                if (t >= e.From && t < e.To) cue.Unease = 1;
+                else if (t < e.From && e.From - t <= ahead) cue.Unease = Math.Max(cue.Unease, 0.4f + 0.6f * (1 - (e.From - t) / (float)ahead));
+                else if (t >= e.To && t - e.To < Time.Days(1)) cue.Relief = Math.Max(cue.Relief, 1 - (t - e.To) / (float)Time.Days(1));
+            }
+        var soc = w.Find<Society>();
+        if (soc != null)
+        {
+            if (soc.Meeting.Kind == CouncilKind.Memorial) cue.Mourn = 1;
+            if (soc.Meeting.Kind == CouncilKind.Celebration) cue.Festive = 1;
+        }
+        var mind = w.Find<Mind>(); var life = w.Find<Life>();
+        if (mind != null)
+        {
+            float V(Agent a) => Math.Clamp(a.C.Joy - 0.6f * a.C.Stress - 0.8f * a.C.Fear - 0.8f * (soc?.GriefOf(a.Id) ?? 0) - 0.5f * a.C.Sad, -1, 1);
+            if (person >= 0 && person < mind.Agents.Count) { var a = mind.Agents[person]; cue.Valence = V(a); cue.Arousal = Math.Max(a.C.Stress, a.C.Fear); }
+            else
+            {
+                float sv = 0, sa = 0; int n = 0;
+                foreach (var a in mind.Agents) if (a.IsPerson && (life == null || life[a.C.Body].Alive != 0)) { sv += V(a); sa += Math.Max(a.C.Stress, a.C.Fear); n++; }
+                if (n > 0) { cue.Valence = 0.5f * sv / n; cue.Arousal = 0.5f * sa / n; }
+            }
+        }
+        return cue;
     }
 
     // ── 불: 방마다 열 방출량을 모아 ──

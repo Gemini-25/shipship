@@ -14,6 +14,7 @@ public static partial class Program
         if (rest.Length > 0 && rest[0] == "demo") { ListenDemo(); return; }
         if (rest.Length > 0 && rest[0] == "hear") { ListenHear(); return; }
         if (rest.Length > 0 && rest[0] == "life") { ListenLife(); return; }
+        if (rest.Length > 0 && rest[0] == "music") { ListenMusic(); return; }
         string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double screenSec = rest.Length > 2 ? double.Parse(rest[2]) : 60;
@@ -196,6 +197,58 @@ public static partial class Program
         Console.WriteLine($"build/sound/life.wav · 31초 · 꼭대기 {all.Max(MathF.Abs):0.00}");
     }
 
+    /// <summary>
+    /// 음악 견본 (--listen music — 소리 단계 S5): 배 안 음악 (세계의 소리 — 같은 방 · 벽 너머) 다음에 바탕 음악이 따라가는 것.
+    /// 0~12초 기타 (치는 이가 기쁘다 — 장조) · 12~24초 같은 기타 (가라앉았다 — 단조 · 느리게) · 24~36초 작은 스피커 노래 · 36~48초 옆 방에서 듣는 기타 (열어 둔 문 너머 — 작고 먹먹하게) /
+    /// 48초부터 20초씩 바탕 음악: 낮 · 밤 · 축하 자리 · 추모 모임 · 파편 구간 앞 불안 → build/sound/music.wav
+    /// </summary>
+    private static void ListenMusic()
+    {
+        var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        var show = new LiveShow(Worlds.Full(lay, 5), "시험호");
+        var m = show.Sim.Get<Mind>();
+        int who = m.AddPerson(show.Sim, At(3, 3));
+        const double dt = 1.0 / 60;
+        show.Advance(dt);
+        show.SpeedOverride = 1;
+        var mix = new Mixer { MusicGain = 0 };
+        int door = lay.Doors.First(d => d.Cell == At(10, 3)).Id;
+        var cues = new (double t, string what, Action act)[]
+        {
+            (0, "같은 방 · 기타 (기쁘다)", () => { show.Ears.ForceEar = At(6, 3); m[who].C.Playing = 2; m[who].C.Joy = 0.8f; m[who].C.Stress = 0; m[who].C.Sad = 0; }),
+            (12, "같은 방 · 기타 (가라앉았다)", () => { m[who].C.Joy = 0.1f; m[who].C.Sad = 0.8f; m[who].C.Stress = 0.4f; }),
+            (24, "같은 방 · 작은 스피커 노래", () => { m[who].C.Playing = 1; m[who].C.Joy = 0.6f; m[who].C.Sad = 0; m[who].C.Stress = 0; }),
+            (36, "옆 방에서 · 기타 (열어 둔 문 너머 — 닫힌 기밀문 너머로는 35dB 깎여 들리지 않는다)", () => { m[who].C.Playing = 2; show.Ears.ForceEar = At(13, 3); }),
+            (48, "바탕 음악 · 낮 (14시)", () => { m[who].C.Playing = 0; mix.MusicGain = Mixer.MusicLevel; }),
+            (68, "바탕 음악 · 밤 (1시)", () => { }),
+            (88, "바탕 음악 · 축하 자리", () => { }),
+            (108, "바탕 음악 · 추모 모임", () => { }),
+            (128, "바탕 음악 · 파편 구간 하루 앞", () => { }),
+        };
+        MusicCue Cue(double t) => t < 68 ? new MusicCue { Set = true, Hour = 14 } : t < 88 ? new MusicCue { Set = true, Hour = 1 } : t < 108 ? new MusicCue { Set = true, Hour = 19, Festive = 1, Valence = 0.5f }
+            : t < 128 ? new MusicCue { Set = true, Hour = 16, Mourn = 1, Valence = -0.5f } : new MusicCue { Set = true, Hour = 11, Unease = 0.8f, Arousal = 0.3f };
+        int per = (int)(Dsp.Rate * dt), frames = (int)(148 / dt);
+        var all = new float[frames * per * 2];
+        int next = 0;
+        for (int f = 0; f < frames; f++)
+        {
+            double t = f * dt;
+            while (next < cues.Length && t >= cues[next].t) { Console.WriteLine($"  {cues[next].t,5:0}초 · {cues[next].what}"); cues[next].act(); next++; }
+            if (m[who].C.Playing != 0) m[who].C.PlayedAt = show.Sim.Tick;   // 쉬며 트는 중 (시험 차리기)
+            if (t >= 36 && t < 48) show.Sim.Get<Structure>().RequestDoor(door, 1);   // 문을 열어 둔다 (시험 차리기)
+            ref var wc = ref m[who].C;   // 그 자리에 머문다 (시험 차리기 — 계획의 몸처럼)
+            wc.AssignedGoal = GoalKind.Idle; wc.AssignedArg = Mind.PlanBound; wc.AssignedTarget = At(3, 3); wc.AssignedUntil = show.Sim.Tick + 100;
+            wc.Hunger = 0; wc.Thirst = 0; wc.Sleepy = 0; wc.Bored = 0;
+            show.Advance(dt);
+            mix.Take(show.Ears);
+            if (t >= 48) mix.Music.SetCue(Cue(t));
+            mix.Render(all.AsSpan(f * per * 2, per * 2), per);
+        }
+        Mixer.WriteWav("build/sound/music.wav", all);
+        Console.WriteLine($"build/sound/music.wav · 148초 · 꼭대기 {all.Max(MathF.Abs):0.00}");
+    }
+
     /// <summary>소리마다 크기 (--voices): 같은 크기(Gain 1)로 만들었을 때 가장 센 0.1초의 RMS · 꼭대기 · 길이 — 소리끼리 기준을 맞춘다 (목표: 가장 센 0.1초 RMS 0.25).</summary>
     internal static (double rms, double peak, double sec) VoiceLevel(Voice v, double maxSec = 4)
     {
@@ -220,7 +273,10 @@ public static partial class Program
         ("컵", () => new Clink(9, 0.8f)), ("식기", () => new Clink(10)), ("냄비", () => new Clink(11, 1.6f)), ("렌치", () => new Ratchet(12)), ("드라이버", () => new Ratchet(13, 1.3f)),
         ("용접", () => new Weld(14)), ("망치", () => new Hammer(15)), ("코골이", () => new Snore(16, 0.5f)), ("잠꼬대", () => new Mumble(140, 17)),
         ("기침", () => new CoughVoice(140, 18)), ("웃음", () => new LaughVoice(140, 19)), ("흥얼", () => new HumVoice(140, 20)), ("낮은 울림", () => new Boom(0.5f)),
+        ("기타 (기쁨)", () => Tuned(new Tune(21, 2), 0.6f)), ("기타 (가라앉음)", () => Tuned(new Tune(21, 2), -0.6f)), ("스피커 노래", () => Tuned(new Tune(22, 1), 0.3f)),
     };
+
+    private static Voice Tuned(Tune t, float mood) { t.Set(mood); return t; }
 
     private static void VoiceLevels()
     {

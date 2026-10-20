@@ -194,7 +194,7 @@ public sealed partial class Mind
                 heard.Db = h.Db - mask - deaf;
                 if (heard.Db < HearFloor) { if (deaf > 0 && h.Db - mask >= HearFloor) Deafened++; else Masked++; continue; }
                 Hear(sim, a, heard);
-                if (person && !asleep) Glance(a, h, heard.Db, sim.Tick);   // 소리 난 쪽으로 고개를 돌린다 (S4)
+                if (person && !asleep) { Glance(a, h, heard.Db, sim.Tick); if (h.Kind == SoundKind.Music) MusicHeard(a, h, heard.Db); }   // 소리 난 쪽으로 고개를 돌린다 (S4) · 들려오는 음악 (S5)
                 float felt = h.Db - deaf;   // 귀에 닿은 크기 (먹먹한 귀는 덜 느낀다)
                 if (felt > loudest) loudest = felt;
                 if (asleep && felt - WakeDb(a, h.Kind) > rouse) { rouse = felt - WakeDb(a, h.Kind); loudH = h; loudH.Db = felt; }
@@ -563,9 +563,9 @@ public sealed partial class Mind
     private void WokenBy(Sim sim, Agent a, in Heard h)
     {
         int by = h.Actor >= 0 ? h.Actor : AgentOfBody(Sound.BodyOf(h.Actor)), ev = h.Event;
-        bool annoying = h.Kind is SoundKind.Voice or SoundKind.Laugh or SoundKind.Snore && by >= 0 && by < Agents.Count && by != a.Id && Agents[by].IsPerson && !_said.Exists(x => x.ev == ev);   // 말소리 · 웃음 · 코 고는 소리 (소리 단계 S2)
+        bool annoying = h.Kind is SoundKind.Voice or SoundKind.Laugh or SoundKind.Snore or SoundKind.Music && by >= 0 && by < Agents.Count && by != a.Id && Agents[by].IsPerson && !_said.Exists(x => x.ev == ev);   // 말소리 · 웃음 · 코 고는 소리 (소리 단계 S2)
         if (!annoying || _life![a.C.Body].Asleep == 0) { Wake(sim, a, "소리에 깼다"); return; }
-        string what = h.Kind switch { SoundKind.Laugh => "웃음소리", SoundKind.Snore => "코 고는 소리", _ => "말소리" };
+        string what = h.Kind switch { SoundKind.Laugh => "웃음소리", SoundKind.Snore => "코 고는 소리", SoundKind.Music => "음악 소리", _ => "말소리" };
         int cause = sim.Causes.Add(CauseKind.Person, $"{NameOf(by)}의 {what}에 {Ko.I(NameOf(a.Id))} 깼다", sim.Tick, a.C.Cell, h.Cause, 0, by);
         Wake(sim, a, "소리에 깼다", cause, by);
     }

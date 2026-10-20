@@ -24,6 +24,7 @@ public enum SoundKind : byte
     Cough,      // 기침 (몸 — ⑦)
     Laugh,      // 웃음
     Hum,        // 흥얼거림
+    Music,      // 음악 (소리 단계 S5 — 쉬는 이가 작은 스피커로 틀거나 악기를 친다 · 판단 엔진이 정한 행동)
 }
 
 /// <summary>낸 소리 하나 (보기용 기록).</summary>

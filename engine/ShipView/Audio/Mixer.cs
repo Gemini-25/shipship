@@ -48,6 +48,7 @@ public sealed class Mixer
         if (f.Reset) { foreach (var s in _loops.Values) s.TGain = 0; }
         _rev.SetRt60(f.Rt60); _tWet = f.Wet;
         if (f.Mood.Length > 0) Music.SetMood(f.Mood);
+        if (f.Cue.Set) Music.SetCue(f.Cue);
         foreach (var v in f.Shots)
         {
             if (_shots.Count > 24) break;
@@ -70,6 +71,7 @@ public sealed class Mixer
                 case RoomTone r: r.Set(u.A); break;
                 case Breath b: b.Set(u.A, u.B); break;
                 case Ring g: g.Set(u.A); break;
+                case Tune tu: tu.Set(u.B); break;
             }
         }
         foreach (var s in _loops.Values)
@@ -90,6 +92,7 @@ public sealed class Mixer
             LoopKind.Machine => new Machine(u.Role ?? "", seed),
             LoopKind.Breath => new Breath(seed),
             LoopKind.Ring => new Ring(seed),
+            LoopKind.Tune => new Tune((uint)u.Key, (int)u.A),   // 사람마다 같은 곡 (열쇠 = 사람)
             _ => new RoomTone(seed),
         };
     }

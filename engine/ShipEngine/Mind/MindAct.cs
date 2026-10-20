@@ -226,6 +226,7 @@ public sealed partial class Mind
             if (use == UseKind.Eat) WorkNoise(sim, a, SoundKind.Clink, 50, 3);
             else if (use == UseKind.Drink && t == c.StepStart + 1) WorkNoise(sim, a, SoundKind.Clink, 45, 1);
             else if (use == UseKind.Cook) WorkNoise(sim, a, SoundKind.Clink, 58, 4);
+            else if (use == UseKind.Relax && c.Hobby == (byte)Hobby.Music) MusicStep(sim, a);   // 소리 단계 S5: 이어폰 · 스피커 · 악기
         }
         if (!done) return;
         switch (use)
@@ -259,6 +260,7 @@ public sealed partial class Mind
                 break;
             case UseKind.Relax when a.IsPerson:
                 FinishRelax(a, st.Cell);
+                c.Playing = 0;
                 break;
             case UseKind.Exercise when a.IsPerson:
                 // 땀 흘리고 나면 개운하다: 지루함 · 긴장이 풀린다 (운동과 기분 연구)

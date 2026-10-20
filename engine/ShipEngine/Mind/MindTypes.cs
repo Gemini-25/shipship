@@ -247,6 +247,9 @@ public struct AgentCore
     /// <summary>소리 단계 S4: 소리 난 쪽으로 고개를 돌렸다 — 본 칸 · 언제까지 (판단 · 그림이 그 쪽을 보게 그린다).</summary>
     public int LookAt;
     public long LookUntil;
+    /// <summary>소리 단계 S5: 쉬며 음악을 어떻게 듣나 (0 이어폰 · 1 작은 스피커로 튼다 · 2 악기를 친다) · 마지막으로 소리 내어 튼 때.</summary>
+    public byte Playing;
+    public long PlayedAt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

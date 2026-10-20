@@ -122,7 +122,7 @@ public sealed partial class Mind
     private void Glance(Agent a, in Heard h, float heardDb, long t)
     {
         ref var c = ref a.C;
-        if (h.Source == c.Cell || heardDb < 35 || h.Kind is SoundKind.Snore or SoundKind.Step) return;
+        if (h.Source == c.Cell || heardDb < 35 || h.Kind is SoundKind.Snore or SoundKind.Step or SoundKind.Music) return;   // 이어지는 음악엔 돌아보지 않는다 (처음 들릴 때도 — 10초마다 고개를 돌리지 않게)
         bool strong = h.Kind is SoundKind.Bang or SoundKind.Scream or SoundKind.Alarm or SoundKind.Crack or SoundKind.Creak;
         if (t <= c.LookUntil && !strong) return;
         c.LookAt = h.Source; c.LookUntil = t + (strong ? 4 : 2);
@@ -131,4 +131,64 @@ public sealed partial class Mind
 
     /// <summary>확인용 셈: 낸 발소리 · 일하는 소리 · 흥얼거림 · 잠꼬대 (찍지 않는다).</summary>
     public long StepsHeard, WorkSounds, Hums, SleepTalks, Glances;
+
+    // ───────────────────────── 음악 (소리 단계 S5 — docs/SOUND.md 결정 12) ─────────────────────────
+
+    /// <summary>음악의 크기 (1m에서): 기타 같은 악기 66dB (손가락으로 퉁김 60~70) · 작은 스피커 62dB (방에서 틀어 두는 크기).</summary>
+    public const float InstrumentDb = 66, SpeakerDb = 62;
+    /// <summary>음악 소리를 세계에 내는 사이 (틱 — 10초).</summary>
+    public const int MusicEvery = 4;
+
+    /// <summary>악기를 치는 이 (사람마다 정해진 버릇 — 열린 성격일수록): 열에 셋 남짓.</summary>
+    public bool PlaysInstrument(Sim sim, Agent a) => Rng.Unit(sim.Seed, Rng.Key("악기"), 0, a.Id) < 0.2 + 0.25 * a.C.Open;
+
+    /// <summary>
+    /// 음악을 어떻게 들을지 (판단 — 아는 것으로만: 곁에 자는 이 · 같은 방에서 공부 · 일하는 이가 보이나):
+    /// 조용해야 할 자리면 남을 헤아리는 이(친화 · 성실)는 이어폰을 꽂는다 — 헤아리지 않는 이는 그대로 튼다 (소음 마찰의 씨앗).
+    /// 아니면 악기를 치는 이는 악기를 · 외향적인 이는 스피커로 틀고 · 나머지는 이어폰 (사람마다 한 시간마다 다시).
+    /// </summary>
+    public byte MusicOut(Sim sim, Agent a)
+    {
+        ref var c = ref a.C;
+        bool hush = SleeperNear(c.Cell, 6);   // 곁(6칸)에 자는 이
+        if (!hush)
+            foreach (var o in Agents)
+                if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == RoomOf(c.Cell) && (o.C.Goal is GoalKind.Work or GoalKind.Sleep || o.C.Goal == GoalKind.Relax && o.C.Hobby is (byte)Hobby.Read or (byte)Hobby.Study)) { hush = true; break; }
+        if (hush && c.Agree + 0.5f * c.Consc > 0.55f) return 0;
+        if (PlaysInstrument(sim, a)) return 2;
+        return Rng.Unit(sim.Seed, Rng.Key("스피커"), a.Id, sim.Tick / Time.Hours(1)) < 0.25 + 0.5 * c.Extra ? (byte)1 : (byte)0;
+    }
+
+    /// <summary>쉬며 음악을 듣는 동안 (매 틱): 어떻게 들을지 10초마다 다시 정하고 · 소리 내어 틀면 10초마다 세계에 음악 소리를 낸다.</summary>
+    private void MusicStep(Sim sim, Agent a)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        if ((t - c.StepStart) % MusicEvery != 0) { if (c.Playing != 0) c.PlayedAt = t; return; }
+        c.Playing = MusicOut(sim, a);
+        if (c.Playing == 0 || _snd == null) return;
+        c.PlayedAt = t;
+        MusicPlayed++;
+        _snd.Emit(sim, c.Cell, c.Playing == 2 ? InstrumentDb : SpeakerDb, SoundKind.Music, 0, a.Id);
+    }
+
+    /// <summary>
+    /// 들려오는 음악 (깨어 있는 이 · 귀에 35dB 넘게): 쉬거나 먹거나 어울리는 이에겐 위안 — 기쁨을 0.4까지 끌어올리고 (10초마다 +0.0015 · 기쁨은 시간에 0.25씩 잦아드니 한 시간에 0.3 남짓 오른다) ·
+    /// 긴장 −0.0005 · 지루함 −0.0008 · 외로움 −0.0003 (한 시간이면 0.2 언저리) ·
+    /// 일하거나 공부하는 예민한 이(신경성 0.6 넘게)에겐 거슬림 (긴장 +0.0006).
+    /// </summary>
+    private void MusicHeard(Agent a, in Heard h, float heardDb)
+    {
+        ref var c = ref a.C;
+        if (heardDb < 35 || h.Actor == a.Id || c.Mode != 0) return;
+        bool busy = c.Goal is GoalKind.Work or GoalKind.Craft or GoalKind.Repair || c.Goal == GoalKind.Relax && c.Hobby is (byte)Hobby.Read or (byte)Hobby.Study;
+        if (busy) { if (c.Neuro > 0.6f) { c.Stress = Math.Min(1, c.Stress + 0.0006f); MusicIrked++; } return; }
+        if (c.Joy < 0.4f) c.Joy = Math.Min(0.4f, c.Joy + 0.0015f);
+        c.Stress = Math.Max(0, c.Stress - 0.0005f);
+        c.Bored = Math.Max(0, c.Bored - 0.0008f); c.Lonely = Math.Max(0, c.Lonely - 0.0003f);
+        MusicEnjoyed++;
+    }
+
+    /// <summary>확인용 셈: 소리 내어 튼 음악 · 즐긴 · 거슬린 (찍지 않는다).</summary>
+    public long MusicPlayed, MusicEnjoyed, MusicIrked;
 }
