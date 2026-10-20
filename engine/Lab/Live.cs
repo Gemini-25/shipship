@@ -113,5 +113,26 @@ public static partial class Program
         Console.WriteLine($"  새 그림판 {LiveShow.NewCanvas}장 / 그림 {paint.Count}장 (확대 단계가 바뀔 때만)");
         Console.WriteLine($"  소리 섞기 1/60초마다: 보통 {P(mixMs, 0.5):0.00}ms · 99% {P(mixMs, 0.99):0.00}ms · 가장 김 {mixMs.Max():0.0}ms · 목소리 {mix.Voices}");
         Console.WriteLine($"  분위기별 화면 초: 조용함 {show.Dir.CalmScreenSec:0} · 조짐 {show.Dir.OmenScreenSec:0} · 위험 {show.Dir.DangerScreenSec:0} · 결정적 {show.Dir.CriticalScreenSec:0}");
+        // 확대마다 한 장 그리기 (손 카메라 · 세계는 멈춘 채 열 장씩 · 가운데 값)
+        var zoomRow = new List<string>();
+        show.Paused = true;
+        foreach (double vw in new[] { LiveShow.MinView, 20, LiveShow.FollowMax, 64, LiveShow.MaxView, -1 })
+        {
+            if (vw < 0) show.Overview = true; else { show.ZoomBy(1); show.ViewW = vw; }
+            for (int k = 0; k < 120; k++) show.Advance(dt);   // 카메라가 자리 잡게
+            var ms = new List<double>(); int cw = 0, ch = 0;
+            Painter.Prof = new();
+            for (int k = 0; k < 10; k++)
+            {
+                sw.Restart(); var lf = show.Render(); ms.Add(sw.Elapsed.TotalMilliseconds);
+                cw = (int)(lf.SrcW / Painter.T); ch = (int)(lf.SrcH / Painter.T);
+                show.Recycle(lf.Img);
+            }
+            zoomRow.Add($"{(vw < 0 ? "배 전체" : $"{vw:0}칸")} ({cw}×{ch}) {P(ms, 0.5):0.0}ms");
+            if (vw < 0 || vw >= LiveShow.MaxView) Console.WriteLine($"    {(vw < 0 ? "배 전체" : $"{vw:0}칸")} 단계: " + string.Join(" · ", Painter.Prof.OrderByDescending(x => x.Value).Take(8).Select(x => $"{x.Key} {x.Value / 10:0.0}")));
+            Painter.Prof = null;
+        }
+        show.Paused = false; show.Overview = false; show.Follow = true;
+        Console.WriteLine("  확대마다 한 장: " + string.Join(" · ", zoomRow));
     }
 }

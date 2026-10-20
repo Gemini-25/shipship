@@ -10,6 +10,9 @@ namespace ShipView;
 public sealed partial class Painter
 {
     /// <summary>그림을 얹는다 — <see cref="Img.Draw"/>와 같은 결과.</summary>
+    /// <summary>시험용: 꽉 찬 타일도 점마다 찍는다 (줄째 옮기기와 같은 그림인지 견준다).</summary>
+    public static bool NoRowCopy;
+
     private static void Put(Img dst, Img src, int dx, int dy, bool flipX = false, float alpha = 1f)
     {
         if (flipX || alpha < 1f) { dst.Draw(src, dx, dy, flipX, alpha); return; }
@@ -17,6 +20,11 @@ public sealed partial class Painter
         if (x0 >= x1 || y0 >= y1) return;
         var s = MemoryMarshal.Cast<byte, uint>(src.Px.AsSpan());
         var d = MemoryMarshal.Cast<byte, uint>(dst.Px.AsSpan());
+        if (src.Opaque && !NoRowCopy)
+        {
+            for (int y = y0; y < y1; y++) s.Slice(y * src.W + x0, x1 - x0).CopyTo(d.Slice((dy + y) * dst.W + dx + x0));   // 알파가 모두 255 — 아래와 같은 값
+            return;
+        }
         for (int y = y0; y < y1; y++)
         {
             int si = y * src.W, di = (dy + y) * dst.W + dx;

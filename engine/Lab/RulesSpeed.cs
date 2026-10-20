@@ -170,6 +170,35 @@ public static partial class Program
                 $"복제 {a.Foresights}/{b.Foresights} · 다시 맞춤 {a.Resyncs}/{b.Resyncs} · 앞선 틱 {a.AheadSteps}/{b.AheadSteps} · 본 일 {a.Predicted}/{b.Predicted} · 미리 자름 {a.ForeCuts}/{b.ForeCuts} · 카메라 같음 {ca.SequenceEqual(cb)}");
         }
 
+        // 꽉 찬 타일 줄째 찍기 · 빛 네 점씩 · 넉넉한 그림판: 불 난 배 한 장을 빠른 길로 · 한 점씩(타일 점마다 · 빛 한 점씩) · 넉넉한 그림판(지난 그림이 남은)에 그려 견준다 — 그린 곳의 점이 모두 같다
+        {
+            var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+            var s = Worlds.Full(lay, 3);
+            s.Get<Mind>().AddPerson(s, Worlds.At(lay, 15, 2));
+            s.Run(10);
+            s.Get<Chemistry>().Ignite(Worlds.At(lay, 3, 5), 3e6, s.Causes.Add(CauseKind.Setup, "침대 불씨", s.Tick));
+            s.Run(10);
+            var p = new ShipView.Painter(lay);
+            var row = p.Frame(s, 0, 0, lay.W, lay.H, (int)s.Tick);
+            ShipView.Painter.NoRowCopy = true; ShipView.Painter.NoVector = true;
+            var dot = p.Frame(s, 0, 0, lay.W, lay.H, (int)s.Tick);
+            ShipView.Painter.NoRowCopy = false; ShipView.Painter.NoVector = false;
+            var big = new ShipSim.Art.Img(row.W + 5 * ShipView.Painter.T, row.H + 3 * ShipView.Painter.T);
+            Array.Fill(big.Px, (byte)7);
+            big = p.Frame(s, 0, 0, lay.W, lay.H, (int)s.Tick, big);
+            int diffDot = 0, diffBig = 0, opaque = 0;
+            for (int y = 0; y < row.H; y++)
+                for (int x = 0; x < row.W; x++)
+                {
+                    int i = (y * row.W + x) * 4, j = (y * big.W + x) * 4;
+                    for (int k = 0; k < 4; k++) { if (row.Px[i + k] != dot.Px[i + k]) { diffDot++; break; } }
+                    for (int k = 0; k < 4; k++) { if (row.Px[i + k] != big.Px[j + k]) { diffBig++; break; } }
+                }
+            Check("꽉 찬 타일 줄째 찍기 · 빛 네 점씩 · 넉넉한 그림판: 불 난 배 한 장이 한 점씩 그린 것 · 지난 그림이 남은 넉넉한 그림판에 그린 것과 점 하나 다르지 않다",
+                diffDot == 0 && diffBig == 0,
+                $"{row.W}×{row.H} · 한 점씩과 다른 점 {diffDot} · 넉넉한 그림판과 다른 점 {diffBig}");
+        }
+
         // 그림판 다시 쓰기 · 코드 미리 옮기기: 엔진 · 화면의 메서드를 미리 옮긴 뒤 (그다음 그리기가 그대로 되는지도 본다) ·
         // 확대를 부드럽게 넓게 → 좁게 → 넓게 바꾸며 장마다 그린다 — 새 그림판은 몇 장만 · 화면이 보일 곳에는 지난 장의 그림(표시 색)이 남지 않는다
         {

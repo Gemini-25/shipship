@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using ShipEngine;
 using ShipSim.Art;
 using ShipSim.Core;
@@ -189,6 +190,9 @@ public sealed partial class Painter
     // 벽 밑 그림자: 북쪽 벽 앞면 아래 · 서쪽 · 동쪽 벽 곁 (도트 계단)
     private static readonly float[] AoN = MakeAo(T, DotTiles.Face, 8, 0.30f), AoW = MakeAo(T, 0, 5, 0.16f);
     private static readonly int[] AoNi = AoN.Select(v => (int)(v * 256)).ToArray(), AoWi = AoW.Select(v => (int)(v * 256)).ToArray();
+    /// <summary>시험용: 빛을 한 점씩 곱한다 (네 점씩과 같은 그림인지 견준다).</summary>
+    public static bool NoVector;
+    private static readonly int[] AoWiRev = AoWi.Reverse().ToArray();   // 오른쪽 벽 그림자 (AoWi[T-1-xx]) — 네 점씩 읽는다
     private static float[] MakeAo(int n, int from, int len, float k)
     {
         var a = new float[n];
@@ -277,7 +281,37 @@ public sealed partial class Painter
             int vr = (int)((r0 + (r1 - r0) * (0.5f / T)) * F), vg = (int)((g0 + (g1 - g0) * (0.5f / T)) * F), vb = (int)((b0 + (b1 - b0) * (0.5f / T)) * F);
             int sr = (int)((r1 - r0) / T * F), sg = (int)((g1 - g0) / T * F), sb = (int)((b1 - b0) / T * F);
             bool shade = aoRow != 0 || ww || we;
-            for (int xx = 0; xx < T; xx++, vr += sr, vg += sg, vb += sb)
+            int xx = 0;
+            if (Vector128.IsHardwareAccelerated && !NoVector)
+            {
+                // 네 점씩 (정수 셈 그대로 — 아래 한 점씩과 비트까지 같다)
+                var lane = Vector128.Create(0, 1, 2, 3);
+                Vector128<int> vR = Vector128.Create(vr) + lane * sr, vG = Vector128.Create(vg) + lane * sg, vB = Vector128.Create(vb) + lane * sb;
+                Vector128<int> sR = Vector128.Create(sr * 4), sG = Vector128.Create(sg * 4), sB = Vector128.Create(sb * 4);
+                Vector128<int> vmax = Vector128.Create(max), zero = Vector128<int>.Zero, ao0 = Vector128.Create(256 - aoRow);
+                Vector128<uint> m255 = Vector128.Create(255u), mFF = Vector128.Create(0xFFu), mA = Vector128.Create(0xFF000000u);
+                ref uint row = ref d[at];
+                for (; xx + 4 <= T; xx += 4, vR += sR, vG += sG, vB += sB)
+                {
+                    Vector128<int> mr = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vR, 16), zero), vmax);
+                    Vector128<int> mg = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vG, 16), zero), vmax);
+                    Vector128<int> mb = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vB, 16), zero), vmax);
+                    if (shade)
+                    {
+                        var ao = ao0;
+                        if (ww) ao -= Vector128.LoadUnsafe(ref AoWi[xx]);
+                        if (we) ao -= Vector128.LoadUnsafe(ref AoWiRev[xx]);
+                        mr = Vector128.ShiftRightArithmetic(mr * ao, 8); mg = Vector128.ShiftRightArithmetic(mg * ao, 8); mb = Vector128.ShiftRightArithmetic(mb * ao, 8);
+                    }
+                    var v = Vector128.LoadUnsafe(ref row, (nuint)xx);
+                    var R = Vector128.Min(m255, ((v & mFF) * mr.AsUInt32()) >> 8);
+                    var G = Vector128.Min(m255, (((v >> 8) & mFF) * mg.AsUInt32()) >> 8);
+                    var B = Vector128.Min(m255, (((v >> 16) & mFF) * mb.AsUInt32()) >> 8);
+                    ((v & mA) | B << 16 | G << 8 | R).StoreUnsafe(ref row, (nuint)xx);
+                }
+                vr += xx * sr; vg += xx * sg; vb += xx * sb;
+            }
+            for (; xx < T; xx++, vr += sr, vg += sg, vb += sb)
             {
                 int mr = Math.Clamp(vr >> 16, 0, max), mg = Math.Clamp(vg >> 16, 0, max), mb = Math.Clamp(vb >> 16, 0, max);
                 if (shade)

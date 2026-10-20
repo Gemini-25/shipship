@@ -123,9 +123,17 @@ public sealed partial class Painter
     }
 
     /// <summary>상태를 넘기는 꼴 (static 람다) — 칸마다 부르는 곳에서 갇힌 변수 묶음 · 대리자를 장마다 새로 잡지 않는다.</summary>
+    private Img?[] _tileOf = Array.Empty<Img?>();
+
     private Img Cached<TS>(long key, TS st, Func<TS, Img> make)
     {
-        if (!_cache.TryGetValue(key, out var img)) _cache[key] = img = make(st);
+        if (!_cache.TryGetValue(key, out var img))
+        {
+            _cache[key] = img = make(st);
+            bool opaque = true;
+            for (int i = 3; i < img.Px.Length && opaque; i += 4) opaque = img.Px[i] == 255;
+            img.Opaque = opaque;   // 바닥 · 벽 위 같은 꽉 찬 타일은 줄째로 찍는다
+        }
         return img;
     }
 
@@ -244,7 +252,7 @@ public sealed partial class Painter
 
     private Img Draw(Sim s, int x0, int y0, int w, int h, int frame, Img? into, bool part)
     {
-        var img = into != null && into.W >= w * T && into.H >= h * T ? into : new Img(w * T, h * T);   // 넉넉한 그림판이면 왼쪽 위에 그린다 (관전 화면 — 4칸 단위)
+        var img = into != null && into.W >= w * T && into.H >= h * T ? into : new Img(w * T, h * T);   // 넉넉한 그림판이면 왼쪽 위에 그린다 (관전 화면 — 다시 쓰는 그림판)
         var f = s.Get<Field>();
         var net = s.Find<Network>();
         var st = s.Find<Structure>();
@@ -262,7 +270,7 @@ public sealed partial class Painter
 
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
-        if (!part) FillOpaque(img, 0, 0, img.W, img.H, space);
+        if (!part) Parallel.For(0, h, r => FillOpaque(img, 0, r * T, w * T, T, space));   // 그릴 칸만 (넉넉히 잡은 그림판의 나머지는 화면에 나가지 않는다) · 칸 줄마다 여러 코어에서
         if (!part && _skyTh == 0)
             for (int y = y0 - 1; y <= y0 + h; y++)
                 for (int x = x0 - 1; x <= x0 + w; x++)
@@ -298,10 +306,14 @@ public sealed partial class Painter
         }
 
         lt = Lap("우주", lt);
-        // ── 바닥 · 벽 · 문 ──
+        // ── 바닥 · 벽 · 문 ── 칸마다 타일을 차례로 고르고 (타일 캐시) · 찍기는 칸 줄마다 여러 코어에서 (타일은 꼭 한 칸 — 서로 겹쳐 쓰지 않는다)
+        if (_tileOf.Length < w * h) _tileOf = new Img?[w * h];
+        var tileOf = _tileOf;
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
             {
+                ref var tile = ref tileOf[(y - y0) * w + x - x0];
+                tile = null;
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (!Mine(c)) continue;
@@ -311,22 +323,27 @@ public sealed partial class Painter
                     case CellKind.Floor:
                     {
                         var fl = L.Room[c] >= 0 ? _roomFloor[L.Room[c]] : DotFloor.Metal;
-                        Put(img, Cached(Key(1, (int)fl, variant), (fl, variant), static q => DotTiles.Floor(q.fl, q.variant)), Px(x), Py(y));
+                        tile = Cached(Key(1, (int)fl, variant), (fl, variant), static q => DotTiles.Floor(q.fl, q.variant));
                         break;
                     }
                     case CellKind.Door:
-                        Put(img, Cached(Key(1, (int)DotFloor.Metal, variant), variant, static v => DotTiles.Floor(DotFloor.Metal, v)), Px(x), Py(y));
+                        tile = Cached(Key(1, (int)DotFloor.Metal, variant), variant, static v => DotTiles.Floor(DotFloor.Metal, v));
                         break;
                     case CellKind.Wall:
                     {
                         if (F(f, c).hole >= 2f && (st == null || st.Sub[c] == 0)) break; // 통째로 뚫린 벽 — 우주가 보인다 (남은 테두리 잔칸은 아래에서 가린다)
                         var wk = WallOf(c);
                         int mask = (Solid(x, y - 1) ? 1 : 0) | (Solid(x + 1, y) ? 2 : 0) | (Solid(x, y + 1) ? 4 : 0) | (Solid(x - 1, y) ? 8 : 0);
-                        Put(img, Cached(Key(2, (int)wk, mask), (wk, mask), static q => DotTiles.WallTop(q.wk, q.mask)), Px(x), Py(y));
+                        tile = Cached(Key(2, (int)wk, mask), (wk, mask), static q => DotTiles.WallTop(q.wk, q.mask));
                         break;
                     }
                 }
             }
+        Parallel.For(0, h, r =>
+        {
+            for (int k = 0; k < w; k++)
+                if (tileOf[r * w + k] is { } tile) Put(img, tile, k * T, r * T);
+        });
         lt = Lap("바닥 · 벽 · 문", lt);
         // ── 잔칸 (④ 칸 강체 (라)): 판 구멍은 우주 (덧댄 것은 덧판) · 찢긴 가장자리는 밝은 금속 테 · 우주가 된 사이 칸에 남은 잔칸은 붙은 몸과 함께 ──
         if (st != null && st.Sub.Length == L.N)

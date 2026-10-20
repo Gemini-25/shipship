@@ -386,6 +386,9 @@ public sealed class Img
 
     public Img(int w, int h) { W = w; H = h; Px = new byte[w * h * 4]; }
 
+    /// <summary>모든 점이 불투명하고 다시 바뀌지 않는 그림 (그린 쪽이 알려 준다 — 그러면 줄째로 옮겨 찍는다).</summary>
+    public bool Opaque;
+
     /// <summary>다 투명한가 (그릴 것이 없는 그림은 텍스처를 만들지 않는다).</summary>
     public bool Blank
     {
