@@ -103,6 +103,29 @@ public static partial class Program
                 $"혼자 어울린 시간 {alone / (double)Time.TicksPerHour:0.0}시간");
         }
 
+        // ── 어울리러 가면 쉬는 사람 곁(말이 닿는 거리) 자리에 앉는다 — 꾸민 배는 의자가 많아 예전엔 가까운 빈 의자에 혼자 앉았다 (대화 15 → 9) ──
+        {
+            var s = ShipWorld.Crewed("Didim", 7, 2, 0);
+            var m = s.Get<Mind>();
+            var ps = m.Agents.Where(a => a.IsPerson).Select(a => a.Id).ToArray();
+            int p = ps[0], q = ps[1];
+            int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24;   // 둘 다 일도 잠도 아닌 빈 시간
+            void Hold(int x, float bored, float lonely) { ref var c = ref m[x].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Unfit = 0; c.Bored = bored; c.Lonely = lonely; }
+            bool Seated(int x) => m[x].C.StepIndex < m.Agents[x].Plan.Count && m.Agents[x].Plan[m[x].C.StepIndex].Kind == StepKind.Use;
+            // q가 먼저 쉬러 가 자리를 잡는다 (p는 아직 외롭지 않다)
+            for (long t = 0; t < Time.Hours(1) && !(m[q].C.Goal == GoalKind.Relax && Seated(q)); t++) { Hold(q, 1, 0); Hold(p, 0, 0); s.Step(); }
+            bool qSeated = m[q].C.Goal == GoalKind.Relax && Seated(q);
+            int dist = -1;
+            for (long t = 0; t < Time.Hours(1) && dist < 0; t++)
+            {
+                Hold(q, 1, 0); Hold(p, 0, 1); s.Step();
+                if (m[p].C.Goal == GoalKind.Socialize && Seated(p)) dist = m.Dist(m[p].C.Cell, m[q].C.Cell);
+            }
+            Check("어울리러 가면 쉬는 사람 곁(말이 닿는 거리) 자리에 앉는다 (의자 많은 방에서 혼자 먼 의자에 앉지 않는다)",
+                qSeated && dist >= 0 && dist < Society.TalkReach,
+                $"먼저 쉬는 이 자리 잡음 {qSeated} · 어울리러 온 이와의 거리 {dist}칸 (말이 닿는 거리 {Society.TalkReach - 1}칸 안) · {m.Thought(p)}");
+        }
+
         // ── 신경성: 불을 본 순간 — 불안한 사람은 더 겁먹고 · 차분한 사람은 덜 ──
         {
             float PeakFear(float neuro, float extra)

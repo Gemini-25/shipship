@@ -397,13 +397,12 @@ public static partial class Program
     {
         string? only = args.SkipWhile(a => a != "--shipgen").Skip(1).FirstOrDefault(a => !a.StartsWith("--"));
         bool show = args.Contains("--show");
-        bool draft = args.Contains("--draft");   // 꾸밈 초안 (함장 승인 전): build/shipdraft 에만 쓰고 전 · 후 그림을 남긴다
+        bool draft = args.Contains("--draft");   // 꾸밈 견주기: build/shipdraft 에만 쓰고 지금 도면 · 새 도면 그림을 남긴다
         string dir = draft ? Directory.CreateDirectory("build/shipdraft").FullName : FindShipDir();
         foreach (var (key, make) in Designs)
         {
             if (only != null && !key.Equals(only, StringComparison.OrdinalIgnoreCase)) continue;
             var s = make();
-            s.Dress = draft;
             try { s.Build(); }
             catch (InvalidOperationException) { if (show) Console.WriteLine(s.Show()); throw; }
             string json = s.Json();

@@ -5,15 +5,14 @@ namespace Lab;
 /// 놓는 법은 설비와 같다 (문 앞 칸은 비우고 · 빈 칸은 한 덩어리로 이어진다) — 더해서 이미 놓인 것마다 곁에 빈 칸이 하나는 남는다 (쓰러 갈 자리).
 /// 벽에 붙이는 것끼리는 맞닿아도 되고 (선반 · 사물함 줄) · 한쪽에 몰리지 않게 다른 것에서 먼 벽부터.
 /// 통로는 세 칸 넘게 넓은 곳의 벽에만 드문드문 (일곱 칸에 하나 · 문 곁은 비운다).
-/// 함장 승인 전에는 Lab --shipgen --draft 로만 (배 도면 파일은 그대로).
+/// 함장 승인 (docs/FURNISH.md 전부) — 배 도면에 들어간다. Lab --shipgen --draft 는 지금 도면과 견주는 그림만.
 /// </summary>
 public sealed partial class ShipPlan
 {
-    public bool Dress;
+    public bool Dress = true;
     /// <summary>꾸밈으로 더 놓은 것 (방 · 종류 — 초안 보고용).</summary>
     public readonly List<(int Room, string Type)> Dressed = new();
 
-    /// <summary>방 종류마다 채울 몫(설비가 덮는 칸 / 방의 칸)과 더 놓을 것 (차례로 돌아가며 — 자리가 없으면 그 종류는 그만).</summary>
     /// <summary>방 종류마다 채울 몫(설비가 덮는 칸 / 방의 칸)과 더 놓을 것 (차례로 돌아가며 — 자리가 없거나 그 방에 '종류:몇 개'만큼 놓았으면 그 종류는 그만).</summary>
     public static readonly Dictionary<string, (double Fill, string[] Items)> Dressing = new()
     {

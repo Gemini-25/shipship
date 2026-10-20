@@ -84,5 +84,27 @@
   "Shuttle":         { "name": "셔틀",         "parts": { "aluminum": 1500, "titanium": 300, "composite": 200, "polymer": 150, "copper": 80, "glass": 20 } },
   "Rover":           { "name": "탐사차",       "parts": { "aluminum": 300, "titanium": 50, "polymer": 40, "copper": 20, "glass": 5 } },
   "CargoCrate":      { "name": "화물 상자",    "parts": { "steel": 40, "polymer": 30, "fabric": 20 } },
-  "OreBin":          { "name": "광석 통",      "parts": { "steel": 60, "ceramic": 500 } }
+  "OreBin":          { "name": "광석 통",      "parts": { "steel": 60, "ceramic": 500 } },
+  // 꾸밈 (함장 승인 — docs/FURNISH.md): 놓여 있는 물건 · 타는 재질은 그 칸의 연료
+  "ToolWall":        { "name": "공구 벽",      "parts": { "steel": 30, "polymer": 4 } },
+  "ClothesRack":     { "name": "옷걸이",       "parts": { "aluminum": 4, "fabric": 12 } },
+  "MedCabinet":      { "name": "약장",         "parts": { "steel": 18, "glass": 3, "polymer": 6 } },
+  "BloodFridge":     { "name": "혈액 냉장고",  "parts": { "steel": 35, "polymer": 8, "foam": 4, "copper": 3 } },
+  "EyeWash":         { "name": "세안대",       "parts": { "steel": 8, "polymer": 3 } },
+  "ServerRack":      { "name": "서버 선반",    "parts": { "steel": 40, "copper": 8, "polymer": 6 } },
+  "Telescope":       { "name": "망원경",       "parts": { "aluminum": 18, "glass": 6, "steel": 6 } },
+  "MusicCorner":     { "name": "음악 구석",    "parts": { "polymer": 12, "fabric": 8, "copper": 2, "steel": 6 } },
+  "ArcadeCabinet":   { "name": "오락기",       "parts": { "polymer": 30, "glass": 6, "copper": 3, "steel": 10 } },
+  "VrChair":         { "name": "VR 의자",      "parts": { "steel": 12, "polymer": 10, "foam": 3, "fabric": 2 } },
+  "PlantRack":       { "name": "화분 선반",    "parts": { "aluminum": 8, "polymer": 6, "food": 2 } },
+  "Composter":       { "name": "퇴비통",       "parts": { "polymer": 15, "food": 10 } },
+  "LabStill":        { "name": "증류기",       "parts": { "glass": 10, "steel": 8, "copper": 2 } },
+  "SignalBooster":   { "name": "신호 증폭기",  "parts": { "steel": 12, "copper": 6, "polymer": 3 } },
+  "ListeningPost":   { "name": "청음기",       "parts": { "steel": 8, "copper": 3, "polymer": 4, "fabric": 2 } },
+  "SupplyCache":     { "name": "비상 물자함",  "parts": { "steel": 15, "polymer": 6, "fabric": 4, "food": 5 } },
+  "FireBlanket":     { "name": "방화 담요",    "parts": { "steel": 2, "ceramic": 3 } },
+  "MaintCart":       { "name": "정비 수레",    "parts": { "steel": 25, "polymer": 4 } },
+  "SpiceRack":       { "name": "양념 선반",    "parts": { "aluminum": 3, "glass": 2, "food": 3 } },
+  "DishWasher":      { "name": "식기세척기",   "parts": { "steel": 30, "polymer": 6, "copper": 2 } },
+  "HeatSuitRack":    { "name": "내열복 걸이",  "parts": { "steel": 6, "fabric": 8, "ceramic": 4 } }
 }

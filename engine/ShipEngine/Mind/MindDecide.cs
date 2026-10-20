@@ -210,6 +210,9 @@ public sealed partial class Mind
                 Add(GoalKind.Exercise, -1, -1, c.Unfit * (0.2f + 1.4f * c.Consc + 0.4f * c.Extra - 0.4f * c.Neuro));
             // 어울리기: 어울릴 사람이 깨어 있고 일하지 않을 때만 (모두 자거나 일하는데 혼자 휴게실에 앉아 몇 시간씩 기다리지 않는다)
             if ((c.Lonely > 0.3f || grief > 0.3f) && SomeoneFree(a)) Add(GoalKind.Socialize, -1, -1, (Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief) * (1 - c.Depress));   // ⑧ 우울하면 사람을 덜 찾는다
+            // 아주 외향적인 이는 외롭지 않아도 빈 시간을 사람 곁에서 보낸다 (어울림이 그의 쉼 — 심심함을 사람과 푼다)
+            if (c.Extra > 0.6f && c.Bored > 0.1f && !InWindow(hour, c.ShiftHour, 8) && SomeoneFree(a))
+                Add(GoalKind.Socialize, -1, -1, (Math.Max(0.35f, c.Bored * 1.5f) + 0.1f) * (c.Extra - 0.5f) * 2.5f * (1 - c.Depress));
             HeartOptions(a, here, InWindow(hour, c.ShiftHour, 8));   // ⑧ 공황 발작 · 침대에 틀어박힘
             Add(GoalKind.Idle, -1, here, 0.3f * (1 - DreadAt(a, here)));   // 꺼리는 방에서는 우두커니 머물지 않는다
             JobOption(a);
@@ -971,7 +974,10 @@ public sealed partial class Mind
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell) { used = true; break; }
             if (used) continue;
-            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 - Manhattan(a.C.Cell, cell) * 0.1
+            // 어울리러 가면 쉬는 사람 곁(말이 닿는 거리) 자리에 앉는다 — 의자가 많은 방에서 혼자 먼 구석에 앉지 않게
+            int near = 0;
+            foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && Society.Leisure(o.C.Goal) && Dist(o.C.Cell, cell) < Society.TalkReach) near++;
+            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 + near * 8 - Manhattan(a.C.Cell, cell) * 0.1
                        - Shun(a.Id, L.Furniture[fu].Room) * 30; // 꺼리는 방 · 금기의 방은 사람이 모여 있어도 덜 간다
             if (s > bs) { bs = s; best = cell; }
         }
