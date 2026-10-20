@@ -15,6 +15,7 @@ public static partial class Program
         if (rest.Length > 0 && rest[0] == "hear") { ListenHear(); return; }
         if (rest.Length > 0 && rest[0] == "life") { ListenLife(); return; }
         if (rest.Length > 0 && rest[0] == "music") { ListenMusic(); return; }
+        if (rest.Length > 0 && rest[0] == "world") { ListenWorld(); return; }
         string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double screenSec = rest.Length > 2 ? double.Parse(rest[2]) : 60;
@@ -249,6 +250,54 @@ public static partial class Program
         Console.WriteLine($"build/sound/music.wav · 148초 · 꼭대기 {all.Max(MathF.Abs):0.00}");
     }
 
+    /// <summary>
+    /// 소리 마무리 견본 (--listen world — 소리 단계 S6): 외판 곁 방에서 — 열 수축의 딱 셋 · 주컴퓨터 방송 띵동 · 푸른 행성에 내려 잔잔한 바람 → 모래 폭풍 (외판 너머 · 먹먹하게).
+    /// 소리 자막을 켜고 들린 것을 한 줄씩 찍는다 → build/sound/world.wav
+    /// </summary>
+    private static void ListenWorld()
+    {
+        var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        var show = new LiveShow(Worlds.Full(lay, 6), "시험호");
+        var s = show.Sim;
+        var m = s.Get<Mind>(); var life = s.Get<Life>();
+        int who = m.AddPerson(s, At(16, 3));   // 그 방에 깨어 있는 이 (방송 알림음은 깨어 있는 이가 있는 방에서만)
+        const double dt = 1.0 / 60;
+        show.Advance(dt);
+        show.SpeedOverride = 1;
+        show.Ears.ForceEar = At(15, 3); show.Ears.Captions = true;
+        var mix = new Mixer { MusicGain = 0 };
+        var f = s.Get<Field>(); var st = s.Get<Structure>(); var o = s.Get<Outside>();
+        int hull = At(15, 0);
+        var cues = new (double t, string what, Action act)[]
+        {
+            (1.0, "외판이 식으며 딱", () => { st.TsSlip[hull] = (float)f.Ts[hull]; f.Ts[hull] -= 14; }),
+            (2.2, "또 딱 (이음매)", () => { int c = At(16, 0); st.TsSlip[c] = (float)f.Ts[c]; f.Ts[c] -= 20; }),
+            (3.5, "옆 외판 딱", () => { int c = At(13, 0); st.TsSlip[c] = (float)f.Ts[c]; f.Ts[c] -= 30; }),
+            (5.0, "주컴퓨터 방송 띵동", () => s.Get<ShipMind>().Broadcast(s, "견본 방송")),
+            (9.0, "푸른 행성에 내렸다 — 잔잔한 바람 (외판 너머)", () => o.Land("earthlike", s.Tick)),
+            (20.0, "모래 폭풍이 온다", () => { o.Storm = true; o.StormUntil = s.Tick + Time.Hours(10); }),
+        };
+        int per = (int)(Dsp.Rate * dt), frames = (int)(36 / dt);
+        var all = new float[frames * per * 2];
+        int next = 0;
+        var said = new HashSet<string>();
+        for (int k = 0; k < frames; k++)
+        {
+            double t = k * dt;
+            ref var wc = ref m[who].C;   // 제자리 · 깨어 있다 (견본 차리기)
+            wc.AssignedGoal = GoalKind.Idle; wc.AssignedArg = Mind.PlanBound; wc.AssignedTarget = At(16, 3); wc.AssignedUntil = s.Tick + 100;
+            wc.Hunger = 0; wc.Thirst = 0; wc.Sleepy = 0; wc.Bored = 0; life[wc.Body].Asleep = 0;
+            while (next < cues.Length && t >= cues[next].t) { Console.WriteLine($"  {cues[next].t,5:0.0}초 · {cues[next].what}"); cues[next].act(); next++; }
+            show.Advance(dt);
+            mix.Take(show.Ears);
+            mix.Render(all.AsSpan(k * per * 2, per * 2), per);
+            foreach (var c in show.Ears.CaptionsNow()) if (said.Add(c.Text + c.Dir)) Console.WriteLine($"        자막: {c.Dir} {c.Text}");
+        }
+        Mixer.WriteWav("build/sound/world.wav", all);
+        Console.WriteLine($"build/sound/world.wav · 36초 · 꼭대기 {all.Max(MathF.Abs):0.00}");
+    }
+
     /// <summary>소리마다 크기 (--voices): 같은 크기(Gain 1)로 만들었을 때 가장 센 0.1초의 RMS · 꼭대기 · 길이 — 소리끼리 기준을 맞춘다 (목표: 가장 센 0.1초 RMS 0.25).</summary>
     internal static (double rms, double peak, double sec) VoiceLevel(Voice v, double maxSec = 4)
     {
@@ -274,6 +323,7 @@ public static partial class Program
         ("용접", () => new Weld(14)), ("망치", () => new Hammer(15)), ("코골이", () => new Snore(16, 0.5f)), ("잠꼬대", () => new Mumble(140, 17)),
         ("기침", () => new CoughVoice(140, 18)), ("웃음", () => new LaughVoice(140, 19)), ("흥얼", () => new HumVoice(140, 20)), ("낮은 울림", () => new Boom(0.5f)),
         ("기타 (기쁨)", () => Tuned(new Tune(21, 2), 0.6f)), ("기타 (가라앉음)", () => Tuned(new Tune(21, 2), -0.6f)), ("스피커 노래", () => Tuned(new Tune(22, 1), 0.3f)),
+        ("딱 (열 수축)", () => new Ping(23)), ("띵동 (방송)", () => new Chime()),
     };
 
     private static Voice Tuned(Tune t, float mood) { t.Set(mood); return t; }
@@ -302,6 +352,8 @@ public static partial class Program
         var pump = new Machine("pump", 5); pump.Set(1, 0);
         var hvac = new Machine("hvac", 6); hvac.Set(1, 0);
         var breath = new Breath(7); breath.Set(0.3f, 0.35f);
-        return new (string, Voice)[] { ("방 공기 A=1", room), ("쉬익 1kHz", jet), ("쉬익 6kHz", jet2), ("불 250kW", fire), ("펌프", pump), ("공조", hvac), ("우주복 숨", breath) };
+        var breeze = new Wind(8); breeze.Set(0, 0.2f);
+        var storm = new Wind(9); storm.Set(1, 0.9f);
+        return new (string, Voice)[] { ("방 공기 A=1", room), ("쉬익 1kHz", jet), ("쉬익 6kHz", jet2), ("불 250kW", fire), ("펌프", pump), ("공조", hvac), ("우주복 숨", breath), ("바람", breeze), ("모래 폭풍", storm) };
     }
 }

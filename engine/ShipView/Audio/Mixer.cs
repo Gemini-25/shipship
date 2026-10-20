@@ -72,6 +72,7 @@ public sealed class Mixer
                 case Breath b: b.Set(u.A, u.B); break;
                 case Ring g: g.Set(u.A); break;
                 case Tune tu: tu.Set(u.B); break;
+                case Wind wi: wi.Set(u.A, u.B); break;
             }
         }
         foreach (var s in _loops.Values)
@@ -93,6 +94,7 @@ public sealed class Mixer
             LoopKind.Breath => new Breath(seed),
             LoopKind.Ring => new Ring(seed),
             LoopKind.Tune => new Tune((uint)u.Key, (int)u.A),   // 사람마다 같은 곡 (열쇠 = 사람)
+            LoopKind.Wind => new Wind(seed),
             _ => new RoomTone(seed),
         };
     }

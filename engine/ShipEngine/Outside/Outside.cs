@@ -180,6 +180,7 @@ public sealed partial class Outside : IEngine
         {
             o.KPa = 0; o.Temp = 2.7; o.Frac = Array.Empty<double>();
             o.Sun = sun; o.SunX = Math.Cos(SunAngle); o.SunY = Math.Sin(SunAngle);
+            o.Wind = 0; o.Grit = 0;
             return;
         }
         var p = T.Space.Planets[Planet];
@@ -199,6 +200,10 @@ public sealed partial class Outside : IEngine
         foreach (var (g, frac) in p.Air) o.Frac[T.S(g).Gas] = frac;
         o.Sun = sun * daylight * Math.Exp(-0.1 * atmo) * (Storm ? 0.2 : 1);
         o.SunX = Math.Cos(SunAngle); o.SunY = Math.Sin(SunAngle);
+        // 겉바람 (소리 단계 S6): 행성 표의 평균 바람 × (0.6 ~ 1.3 — 7.3시간 너울 · 낮에 데워진 땅이 더 분다) · 모래 폭풍이면 평균의 세 배(적어도 18m/s)에 모래가 날린다 — 대기가 없으면 없다
+        double gust = Math.Sin(2 * Math.PI * hours / 7.3);
+        o.Wind = p.KPa < 0.05 || p.Wind <= 0 ? 0 : Storm ? Math.Max(18, 3 * p.Wind) * (1 + 0.2 * gust) : p.Wind * (0.8 + 0.25 * gust + 0.25 * daylight);
+        o.Grit = p.KPa < 0.05 || !Storm ? 0 : 1;
     }
 
     private void FlareStep(Sim sim, double dt)

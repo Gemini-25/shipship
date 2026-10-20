@@ -462,13 +462,15 @@ public sealed class Exterior : IState
     public double[] Frac = Array.Empty<double>();
     /// <summary>햇빛 세기 (W/m²) · 방향 (도면 좌표 — 빛이 오는 쪽).</summary>
     public double Sun = 1361, SunX = 1, SunY = 0;
+    /// <summary>겉의 바람 (m/s — 행성 대기에서만) · 날리는 모래 (0~1 — 모래 폭풍) — ⑤가 쓴다 · ③ 소리가 외판 너머로 듣는다 (소리 단계 S6).</summary>
+    public double Wind, Grit;
 
     public bool Vacuum => KPa < 1e-6;
 
     public static Exterior Space() => new();
 
-    public void Save(StateWriter w) { w.F64(KPa); w.F64(Temp); w.Arr(Frac); w.F64(Sun); w.F64(SunX); w.F64(SunY); }
-    public void Load(StateReader r) { KPa = r.F64(); Temp = r.F64(); Frac = r.Arr<double>(); Sun = r.F64(); SunX = r.F64(); SunY = r.F64(); }
+    public void Save(StateWriter w) { w.F64(KPa); w.F64(Temp); w.Arr(Frac); w.F64(Sun); w.F64(SunX); w.F64(SunY); w.F64(Wind); w.F64(Grit); }
+    public void Load(StateReader r) { KPa = r.F64(); Temp = r.F64(); Frac = r.Arr<double>(); Sun = r.F64(); SunX = r.F64(); SunY = r.F64(); Wind = r.F64(); Grit = r.F64(); }
 }
 
 /// <summary>물의 포화 증기압 등.</summary>

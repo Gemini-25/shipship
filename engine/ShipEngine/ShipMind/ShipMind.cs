@@ -1438,7 +1438,7 @@ public sealed partial class ShipMind : IEngine
         else { string ahead = AheadLine(sim.Tick); if (ahead.Length > 0) parts.Add(ahead + "."); }   // ⑫ 긴 줄기 — 이레 안의 일
         if (NextLine.Length > 0 && (_out == null || _out.VoyageTicks <= 0)) parts.Add(NextLine + ".");   // ⑤ 별계 지도 — 머무는 동안 다음 들를 곳
         Morning = string.Join(" ", parts);
-        Say(sim, "아침 방송: " + Morning);
+        Broadcast(sim, Morning, "아침 방송: " + Morning);   // 소리 단계 S6: 자막 + 알림음
         sim.Facts.Emit(sim.Tick, FactKind.ComputerBroadcast, _computer >= 0 && _net != null ? _net.Devices[_computer].Cell : -1);
     }
 

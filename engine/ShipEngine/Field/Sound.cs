@@ -25,6 +25,8 @@ public enum SoundKind : byte
     Laugh,      // 웃음
     Hum,        // 흥얼거림
     Music,      // 음악 (소리 단계 S5 — 쉬는 이가 작은 스피커로 틀거나 악기를 친다 · 판단 엔진이 정한 행동)
+    Tick,       // 딱 · 뚝 (소리 단계 S6 — 데워지거나 식은 외판 · 이음매가 늘고 줄며 미끄러진다: ④ 구조가 낸다 · 위험한 소리가 아니다)
+    Chime,      // 띵동 (소리 단계 S6 — 주컴퓨터 방송 알림음: 깨어 있는 이가 있는 방의 스피커에서)
 }
 
 /// <summary>낸 소리 하나 (보기용 기록).</summary>
@@ -108,6 +110,25 @@ public sealed class Sound : IEngine
     private readonly double[] _roomA, _room4R;               // 방의 흡음 넓이 A = Sα · 4/R (R = A/(1−α))
     private readonly (int cell, int a, int b)[] _doorPairs;  // 문 칸 · 양쪽 방
     private readonly (int cell, int a, int b)[] _wallPairs;  // 두 방 사이의 벽 칸
+    private readonly int[] _roomHull;                         // 방마다 바깥에 닿은 외판 칸 수 (소리 단계 S6 — 바깥 바람이 넘어온다)
+    private readonly double[] _roomOut;                       // 방마다 외판을 넘어온 바깥 소리 세기 (지난 셈 — 찍지 않는다: 바탕 소음에 이미 들었다)
+
+    /// <summary>외판의 투과 손실 (dB — 바깥 소리 · 얇은 금속 외피 + 단열재: 안 벽 45dB보다 얇다).</summary>
+    public const double HullTL = 35;
+
+    /// <summary>
+    /// 바깥 바람 소리 (외판 겉에서 · dB): 바람이 외판 · 모서리를 스치는 소리 — 5m/s · 1기압이면 40dB · 빠르기의 5제곱 꼴(50·log v) · 공기 짙기만큼(20·log ρ) ·
+    /// 모래가 날리면 알갱이가 외판을 때려 +8dB (화성의 옅은 대기 0.6kPa에선 폭풍도 40dB 남짓 — InSight가 녹음한 바람처럼 희미하다).
+    /// </summary>
+    public static double WindDb(Exterior o)
+    {
+        if (o.Vacuum || o.Wind <= 0) return 0;
+        double rho = o.KPa * 1000 * 0.029 / (8.314 * Math.Max(50, o.Temp));
+        return Math.Max(0, 40 + 50 * Math.Log10(Math.Max(0.5, o.Wind) / 5) + 20 * Math.Log10(Math.Max(1e-4, rho) / 1.2) + 8 * o.Grit);
+    }
+
+    /// <summary>외판을 넘어 이 방에 들어온 바깥 소리 (dB — 바탕 소음의 한 몫 · 소리 출력이 바람으로 들려준다).</summary>
+    public float OutsideIn(int room) => (uint)room < (uint)_roomOut.Length ? Db(_roomOut[room]) : 0;
 
     public Sound(Field f)
     {
@@ -139,6 +160,14 @@ public sealed class Sound : IEngine
             if (L.Kind[c] == CellKind.Door) doors.Add((c, Math.Min(a, b), Math.Max(a, b))); else walls.Add((c, Math.Min(a, b), Math.Max(a, b)));
         }
         _doorPairs = doors.ToArray(); _wallPairs = walls.ToArray();
+        _roomHull = new int[nr]; _roomOut = new double[nr];
+        for (int c = 0; c < L.N; c++)
+        {
+            if (L.Kind[c] != CellKind.Wall || L.Hull.Length <= c || !L.Hull[c]) continue;
+            L.Neighbors(c, nb);
+            int seen = -1;
+            foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0 && L.Room[j] != seen) { _roomHull[L.Room[j]]++; seen = L.Room[j]; }
+        }
     }
 
     // ── 보기용 기록: 낸 소리 사건 (관전 화면의 소리 엔진이 읽는다 — 세계는 읽지 않고 찍지도 않는다 · 되살린 세계는 빈 기록에서) ──
@@ -346,10 +375,14 @@ public sealed class Sound : IEngine
             if (d.Db > 0) own[r] += E(d.Db + 11) * _room4R[r];
         }
         var thin = new double[nr];
+        double outE = E(WindDb(F.Outside)), hullTau = Math.Pow(10, -HullTL / 10);
         for (int r = 0; r < nr; r++)
         {
             thin[r] = RoomThin(r);
             own[r] = thin[r] > 0 ? (own[r] + E(VentDb)) * thin[r] * thin[r] : 0;
+            // 바깥 바람 · 모래 (소리 단계 S6): 외판 넓이 × 투과율 / 방의 흡음 넓이 — 옆 방으로도 문 · 벽을 넘어 간다
+            _roomOut[r] = outE > 1 && thin[r] > 0 && _roomHull[r] > 0 ? outE * hullTau * _roomHull[r] * WallM2 / _roomA[r] * thin[r] * thin[r] : 0;
+            own[r] += _roomOut[r];
         }
         for (int r = 0; r < nr; r++) _roomE[r] = own[r];
         foreach (var (c, a, b) in _doorPairs)

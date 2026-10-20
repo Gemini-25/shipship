@@ -64,7 +64,7 @@ public sealed partial class ShipMind
     {
         int c = sim.Causes.Add(CauseKind.Computer, "항해 달력: " + line, sim.Tick);
         sim.Facts.Emit(sim.Tick, FactKind.Ahead, -1, size, c, -1, kind);
-        Say(sim, line);
+        Broadcast(sim, line);   // 소리 단계 S6: 자막 + 알림음
     }
 
     private void BuildCalendar(Sim sim, long key)

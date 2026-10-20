@@ -99,6 +99,6 @@ public sealed partial class ShipMind
         return true;
     }
 
-    private void SaveEars(StateWriter w) { w.Tag("마이크"); w.I32(_micUpTo); w.I64(MicHeard); }
-    private void LoadEars(StateReader r) { r.Tag("마이크"); _micUpTo = r.I32(); MicHeard = r.I64(); }
+    private void SaveEars(StateWriter w) { w.Tag("마이크"); w.I32(_micUpTo); w.I64(MicHeard); w.I64(MicSleepCries); SaveBroadcasts(w); }
+    private void LoadEars(StateReader r) { r.Tag("마이크"); _micUpTo = r.I32(); MicHeard = r.I64(); MicSleepCries = r.I64(); LoadBroadcasts(r); }
 }

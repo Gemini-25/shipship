@@ -307,6 +307,21 @@ public partial class LiveMain : Node2D
             DrawMultilineString(_font, new Vector2(r.Position.X + 20, r.Position.Y + 28), f.Broadcast, HorizontalAlignment.Left, bw - 40, 17, 3, new Color(0.8f, 0.96f, 1f, f.BroadcastAlpha));
         }
 
+        // 소리 자막 (U로 켜고 끈다 — 소리 단계 S6): 무엇이 · 어느 쪽에서 (화살표 · 곁)
+        if (f.Captions.Length > 0)
+        {
+            float y = vp.Y - (f.Story.Length > 0 ? 74 : 14) - f.Captions.Length * 26;
+            foreach (var c in f.Captions)
+            {
+                float a = (float)Math.Clamp(c.Left / 0.4, 0, 1);
+                string line = (c.Dir.Length > 0 ? c.Dir + "  " : "") + c.Text + (c.Count > 1 ? $" ×{c.Count}" : "");
+                var sz = _font.GetStringSize(line, HorizontalAlignment.Left, -1, 16);
+                DrawRect(new Rect2(16, y - 18, sz.X + 20, 24), new Color(0.02f, 0.03f, 0.05f, 0.72f * a));
+                DrawString(_font, new Vector2(26, y), line, HorizontalAlignment.Left, -1, 16, new Color(0.92f, 0.94f, 0.98f, a));
+                y += 26;
+            }
+        }
+
         if (f.Card.Length > 0) DrawCard(f, vp);
         if (f.PanelTitle.Length > 0) DrawPanel(f, vp);
         if (_meter) DrawString(_font, new Vector2(vp.X - 340, 60), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장 · 소리 {_mix.Voices}개", HorizontalAlignment.Right, 324, 14, new Color(0.6f, 0.9f, 0.6f));
@@ -384,7 +399,7 @@ public partial class LiveMain : Node2D
             "J  주컴퓨터 (지금 사건 · 배 형편 · 일지)",
             "C  사슬 (지금 장면은 어디서 시작됐나)      P  사람",
             "O  겹쳐 보기: 공기 → 열 → 연기 → 사슬 선 → 끔",
-            "M  다 켬 → 음악 끔 → 소리 끔",
+            "M  다 켬 → 음악 끔 → 소리 끔      U  소리 자막 (켬 / 끔)",
             "H  도움말      Esc  처음 화면 (기존 판 · 새 엔진 판 고르기)",
             $"지금 항로: {_shown?.Route}",
         };
@@ -453,6 +468,7 @@ public partial class LiveMain : Node2D
                 case Key.P: _cmds.Enqueue(s => s.TogglePanel(PanelKind.People)); break;
                 case Key.O: _cmds.Enqueue(s => s.CycleOverlay()); break;
                 case Key.F3: _meter = !_meter; break;
+                case Key.U: _cmds.Enqueue(s => { s.Ears.Captions = !s.Ears.Captions; s.Notify(s.Ears.Captions ? "소리 자막 켬 (무엇이 · 어느 쪽에서)" : "소리 자막 끔"); }); break;
                 case Key.M: _mute = (_mute + 1) % 3; { string t = _mute switch { 0 => "소리 · 음악 켬", 1 => "음악 끔 (배 안 소리만)", _ => "소리 끔" }; _cmds.Enqueue(s => s.Notify(t)); } break;
                 case Key.Escape: GetTree().ChangeSceneToFile(StartScene); break;
             }

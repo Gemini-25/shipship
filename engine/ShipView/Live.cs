@@ -18,8 +18,10 @@ public sealed class LiveFrame
     public double CamLeft, CamTop, CamW, CamH;   // 화면이 보는 곳 (칸 · 소수) — 누른 자리를 칸으로 바꿀 때
     public string[] Card = Array.Empty<string>(); // 고른 사람 · 로봇 카드 (첫 줄: 이름)
     public double SelX = double.NaN, SelY;        // 고른 이가 그려진 자리 (칸 · 가운데)
-    public string Broadcast = "";                 // 주컴퓨터 방송 자막 (아침 방송 · 몇 초)
+    public string Broadcast = "";                 // 주컴퓨터 방송 자막 (아침 방송 · 항해 달력 · 몇 초)
     public float BroadcastAlpha;
+    /// <summary>소리 자막 (소리 단계 S6 — 설정으로 켰을 때만): 무엇이 · 어느 쪽에서.</summary>
+    public ShipView.Audio.SoundCaption[] Captions = Array.Empty<ShipView.Audio.SoundCaption>();
     /// <summary>열린 판 (하이라이트 목록 · 항로 · 일지) — 제목이 비면 닫혔다.</summary>
     public string PanelTitle = "", PanelFoot = "";
     public PanelRow[] PanelRows = Array.Empty<PanelRow>();
@@ -500,6 +502,7 @@ public sealed class LiveShow
             Card = Card(), SelX = sel.x, SelY = sel.y,
             Notice = Notice, Route = RouteLine(),
             Broadcast = _castLeft > 0 ? _cast : "", BroadcastAlpha = (float)Math.Clamp(Math.Min(_castLeft, CastSec - _castLeft) / 0.5, 0, 1),
+            Captions = Ears.Captions ? Ears.CaptionsNow() : Array.Empty<ShipView.Audio.SoundCaption>(),
             PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows(), PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
         };
@@ -527,17 +530,17 @@ public sealed class LiveShow
     public void Recycle(Img img) { if (_spare.Count < 3) _spare.Add(img); }
 
     // ── 주컴퓨터 방송 · 일지 (⑩) — 산 세계에서만 ──
-    private string _cast = ""; private double _castLeft; private int _journals = -1; private string _morning = "";
+    private string _cast = ""; private double _castLeft; private int _journals = -1; private long _castTick = long.MinValue;
     public const double CastSec = 12;
 
-    /// <summary>아침 방송이 나오면 자막으로 몇 초 · 일지를 쓰면 알림 (J로 보기).</summary>
+    /// <summary>주컴퓨터가 방송하면 (아침 방송 · 항해 달력 — 소리 단계 S6) 자막으로 몇 초 · 일지를 쓰면 알림 (J로 보기).</summary>
     private void WatchComputer(double realSec)
     {
         _castLeft = Math.Max(0, _castLeft - realSec);
         var sm = Sim.Find<ShipMind>();
         if (sm == null) return;
-        if (_journals < 0) { _journals = sm.Journal.Count; _morning = sm.Morning; }
-        if (!ReferenceEquals(sm.Morning, _morning) && sm.Morning != _morning) { _morning = sm.Morning; _cast = "주컴퓨터 방송 — " + sm.Morning; _castLeft = CastSec; }
+        if (_journals < 0) { _journals = sm.Journal.Count; _castTick = sm.Broadcasts.Count > 0 ? sm.Broadcasts[^1].tick : long.MinValue; }
+        if (sm.Broadcasts.Count > 0 && sm.Broadcasts[^1].tick != _castTick) { _castTick = sm.Broadcasts[^1].tick; _cast = "주컴퓨터 방송 — " + sm.Broadcasts[^1].text; _castLeft = CastSec; }
         if (sm.Journal.Count != _journals) { _journals = sm.Journal.Count; if (_journals > 0) Notify("주컴퓨터가 일지를 썼다 — J로 보기", 5); }
     }
 

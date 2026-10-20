@@ -4,7 +4,7 @@ using ShipEngine;
 namespace ShipView.Audio;
 
 /// <summary>이어 도는 소리의 종류 (섞개가 이 열쇠로 하나씩 둔다).</summary>
-public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring, Tune }
+public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring, Tune, Wind }
 
 /// <summary>이어 도는 소리 하나의 이번 모습.</summary>
 public struct LoopUpdate
@@ -14,6 +14,16 @@ public struct LoopUpdate
     public string Role;      // 기계: 장치 역할
     public float A, B;       // 쉬익: 띠 Hz · 세기 / 불: kW / 기계 · 방: 세기 / 숨: 빠르기 · 세기
     public float Gain, Cutoff, Pan, Send;
+}
+
+/// <summary>소리 자막 한 줄 (소리 단계 S6 · 결정 15): 무엇이 · 어느 쪽에서 (화면 기준 화살표 · '곁') · 몇 번 · 남은 때.</summary>
+public struct SoundCaption
+{
+    public string Text, Dir;
+    public float Lp;
+    public int Count;
+    public double Left;
+    public bool Loop;    // 이어 도는 소리 (들리는 동안 남는다)
 }
 
 /// <summary>귀가 한 번 들은 것: 새로 울린 소리들 + 이어 도는 소리들의 지금 모습 + 방 울림.</summary>
@@ -75,6 +85,68 @@ public sealed class Acoustics
     public float EarThin { get; private set; } = 1;
     /// <summary>고른 사람의 일시 청력 손실 (dB — ⑦ 몸의 값 · 소리 출력이 그 귀로 들려준다: 작고 먹먹하고 삐 소리).</summary>
     public float Deaf { get; private set; }
+    /// <summary>소리 자막을 모은다 (설정 — 켜면 들린 소리마다 한 줄 · 어느 쪽인지 화살표).</summary>
+    public bool Captions;
+    /// <summary>한 소리의 자막이 남는 때 (초).</summary>
+    public const double CaptionSec = 3;
+    private readonly List<SoundCaption> _caps = new();
+    /// <summary>지금 자막 (최근 것이 위 · 많아야 6줄).</summary>
+    public SoundCaption[] CaptionsNow() => _caps.Where(c => c.Left > 0).OrderBy(c => c.Loop).ThenByDescending(c => c.Left).Take(6).ToArray();
+
+    /// <summary>소리 이름 (게임 안 글 — 그 소리를 낸 세상의 일).</summary>
+    public static string CaptionOf(SoundKind k, float db) => k switch
+    {
+        SoundKind.Bang => db >= 110 ? "쾅! — 큰 폭발" : "쾅",
+        SoundKind.Crack => "쩍 — 금 가는 소리",
+        SoundKind.Creak => "끼익 — 벽 · 문이 버틴다",
+        SoundKind.Alarm => "경보",
+        SoundKind.Voice => "외침",
+        SoundKind.Scream => "비명",
+        SoundKind.Machine => "끽끽 — 기계",
+        SoundKind.Thud => "쿵",
+        SoundKind.Clink => "딸그락",
+        SoundKind.Tool => "딸깍딸깍 — 공구",
+        SoundKind.Weld => "지지직 — 용접",
+        SoundKind.Hammer => "탕탕 — 망치",
+        SoundKind.Snore => "드르렁 — 코골이",
+        SoundKind.SleepTalk => "웅얼웅얼 — 잠꼬대",
+        SoundKind.Cough => "콜록",
+        SoundKind.Laugh => "웃음소리",
+        SoundKind.Hum => "흥얼흥얼",
+        SoundKind.Music => "♪ 음악",
+        SoundKind.Tick => "딱 — 외판이 늘고 준다",
+        SoundKind.Chime => "띵동 — 방송",
+        _ => "",
+    };
+
+    /// <summary>귀에서 본 소리의 쪽 (화면 기준 — 위가 북): 곁(1칸) · ← → ↑ ↓ ↖ ↗ ↙ ↘.</summary>
+    public string DirOf(int cell, int ear)
+    {
+        if (ear < 0 || (uint)cell >= (uint)L.N) return "";
+        int dx = L.X(cell) - L.X(ear), dy = L.Y(cell) - L.Y(ear);
+        if (Math.Abs(dx) <= 1 && Math.Abs(dy) <= 1) return "곁";
+        double a = Math.Atan2(-dy, dx) * 180 / Math.PI;   // 0 오른쪽 · 90 위
+        int o = (int)Math.Round(((a + 360) % 360) / 45) % 8;
+        return o switch { 0 => "→", 1 => "↗", 2 => "↑", 3 => "↖", 4 => "←", 5 => "↙", 6 => "↓", _ => "↘" };
+    }
+
+    private void Caption(string text, string dir, float lp, bool loop = false)
+    {
+        if (!Captions || text.Length == 0) return;
+        for (int i = 0; i < _caps.Count; i++)
+        {
+            var c = _caps[i];
+            if (c.Text != text || c.Dir != dir) continue;
+            if (!loop && c.Left > 0) c.Count++;
+            c.Left = loop ? Math.Max(c.Left, 0.5) : CaptionSec; c.Lp = Math.Max(c.Lp, lp);
+            _caps[i] = c;
+            return;
+        }
+        _caps.Add(new SoundCaption { Text = text, Dir = dir, Lp = lp, Count = 1, Left = loop ? 0.5 : CaptionSec, Loop = loop });
+    }
+
+    /// <summary>듣는 방에 외판을 넘어온 바깥 바람 · 모래 소리 (dB — 소리 단계 S6).</summary>
+    public float WindIn { get; private set; }
     private uint _seed = 1;
     private int _logMachines;
     private readonly HashSet<long> _logJets = new();
@@ -91,6 +163,7 @@ public sealed class Acoustics
     {
         if (!Enabled) return;
         var w = show.World;
+        for (int i = _caps.Count - 1; i >= 0; i--) { var c = _caps[i]; c.Left -= realSec; if (c.Left <= -0.5 || !Captions) _caps.RemoveAt(i); else _caps[i] = c; }
         var frame = new SoundFrame { Mood = show.View.Mood };
         if (!ReferenceEquals(w, _world))
         {
@@ -156,6 +229,7 @@ public sealed class Acoustics
                 }
                 var v = MakeShot(e, w);
                 if (v == null) continue;
+                Caption(CaptionOf(e.Kind, e.Db), DirOf(e.Cell, ear), lp);
                 v.Gain = gain; v.Cutoff = cut; v.Pan = pan; v.Delay = DelayOf(e.Cell, structAt);
                 shots.Add((lp, v));
                 // 연출의 과장 (소리 출력에서만 — 세계의 소리값은 그대로): 큰 쾅엔 몸으로 느끼는 낮은 울림 · 진공에선 발밑 · 우주복으로 온 쾅 · 쿵 · 쩍에 둔한 울림
@@ -199,7 +273,10 @@ public sealed class Acoustics
         {
             float now = F.DoorOpen[d], was = _doorWas[d];
             if (MathF.Abs(now - was) > 0.04f && Hear(L.Doors[d].Cell, 72, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan))
+            {
                 shots.Add((lp, new Door(NextSeed()) { Gain = gain, Cutoff = cut, Pan = pan }));
+                if (MathF.Abs(was) < 0.05f || MathF.Abs(now - 1) < 0.05f) Caption(now > was ? "문이 열린다" : "문이 닫힌다", DirOf(L.Doors[d].Cell, ear), lp);
+            }
             _doorWas[d] = now;
         }
 
@@ -214,7 +291,14 @@ public sealed class Acoustics
         if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB)
             frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db((Math.Max(30, ambient) - 6 - RefDb) * Slope), Gain = 1, Cutoff = suit ? 900 : 16000 }); // 엔진의 바탕 소음을 다른 소리와 같은 잣대로 (가까운 기계는 따로 울려 6dB 덜어)
         if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 16000 });
-        if (Deaf > 2) frame.Loops.Add(new LoopUpdate { Key = 3, Kind = LoopKind.Ring, A = Deaf, Gain = 1, Cutoff = 16000 });   // 먹먹한 귀의 삐 소리 (이명 — 손실만큼)
+        if (Deaf > 2) { frame.Loops.Add(new LoopUpdate { Key = 3, Kind = LoopKind.Ring, A = Deaf, Gain = 1, Cutoff = 16000 }); Caption("삐 — 귀가 먹먹하다", "", 60, true); }   // 먹먹한 귀의 삐 소리 (이명 — 손실만큼)
+        // 외판 너머 바람 · 모래 폭풍 (소리 단계 S6): ③이 셈한 '외판을 넘어온 바깥 소리'를 듣는 방에서 — 외판이 높은 음을 먹는다
+        float windIn = room >= 0 && sndAmb != null ? sndAmb.OutsideIn(room) : 0;
+        WindIn = windIn;
+        if (windIn > Audible && EarThin > 0.02f && !suit)
+            Caption(F.Outside.Grit > 0 ? "모래 폭풍 — 외판 너머" : "바람 — 외판 너머", "", windIn, true);
+        if (windIn > Audible && EarThin > 0.02f && !suit)
+            frame.Loops.Add(new LoopUpdate { Key = 4, Kind = LoopKind.Wind, A = (float)F.Outside.Grit, B = (float)Math.Clamp(F.Outside.Wind / 28, 0, 1), Gain = Dsp.Db((windIn - Deaf - RefDb) * Slope), Cutoff = 700 * MathF.Pow(2, -Deaf / 12f), Send = 0.15f });
         Out.Enqueue(frame);
         while (Out.Count > 30 && Out.TryDequeue(out _)) { } // 아무도 안 들으면 쌓지 않는다
     }
@@ -253,6 +337,9 @@ public sealed class Acoustics
             case SoundKind.Cough: return new CoughVoice(F0Of(w, e.Actor), seed);
             case SoundKind.Laugh: return new LaughVoice(F0Of(w, e.Actor), seed);
             case SoundKind.Hum: return new HumVoice(F0Of(w, e.Actor), seed);
+            // ── 소리 단계 S6 ──
+            case SoundKind.Tick: return new Ping(seed, mat.Hard > 0.6f ? 1.2f : 0.85f);   // 열 수축 · 팽창의 딱 (단단한 판일수록 높게)
+            case SoundKind.Chime: return new Chime();                                       // 주컴퓨터 방송 알림음
             default: return null;
         }
     }
@@ -284,6 +371,7 @@ public sealed class Acoustics
             if (!Hear(at, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan)) continue;
             long key = 1000 + (long)(k.Via >= 0 ? k.Via : at) * 4 + (k.B < 0 ? 1 : 0);
             list.Add((lp, new LoopUpdate { Key = key, Kind = LoopKind.Jet, A = hz, B = 1, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.2f }));
+            Caption(k.B < 0 ? "쉬익 — 공기가 바깥으로 샌다" : "쉬익 — 공기가 샌다", DirOf(at, ear), lp, true);
         }
         // 장치 봉함이 새는 쉬익 (엔진이 낸 소리 — 6틱 넘게 안 들리면 그친다)
         foreach (var (cell, last) in _sealHiss.ToList())
@@ -308,6 +396,7 @@ public sealed class Acoustics
             float db = a.C.Playing == 2 ? Mind.InstrumentDb : Mind.SpeakerDb;
             if (!Hear(a.C.Cell, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan)) continue;
             float mood = Math.Clamp(a.C.Joy - 0.6f * a.C.Stress - 0.8f * (soc?.GriefOf(a.Id) ?? 0) - 0.5f * a.C.Sad, -1, 1);
+            Caption(a.C.Playing == 2 ? "♪ 악기 소리" : "♪ 음악", DirOf(a.C.Cell, ear), lp, true);
             list.Add((lp, new LoopUpdate { Key = 3_000_000 + a.Id * 4 + a.C.Playing, Kind = LoopKind.Tune, A = a.C.Playing, B = mood, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.3f }));
         }
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxTunes)) frame.Loops.Add(j.u);
@@ -373,6 +462,7 @@ public sealed class Acoustics
             float db = (float)(60 + 10 * Math.Log10(Math.Max(1, f.kw)));
             if (!Hear(f.cell, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan)) continue;
             list.Add((lp, new LoopUpdate { Key = 2_000_000 + r, Kind = LoopKind.Fire, A = (float)f.kw, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.3f }));
+            Caption("우르릉 — 불", DirOf(f.cell, ear), lp, true);
         }
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxFires)) frame.Loops.Add(j.u);
     }

@@ -168,5 +168,11 @@ public static partial class Program
                 ch != null && ch.Title.StartsWith("1일째 — ") && ch.Arc.Length > 0 && ch.From == startTick + 1 && ch.To == Time.TicksPerDay && dir.Chapters.Count(c => !c.Week) == 1,
                 ch == null ? $"장 없음 (시작 {startTick} · 끝 {day.Tick})" : $"\"{ch.Title}\" · {Time.Clock(ch.From)}~{Time.Clock(ch.To)} · 장면 {ch.Scenes.Count} · {string.Join(" / ", ch.Lines)}");
         }
+
+        // ── 소리 단계 S6: 열 수축의 딱 — 외판이 해를 받고 그늘에 들며 늘고 준다 (너무 잦으면 안 된다) ──
+        {
+            long ticks = day.Get<Structure>().ThermalTicks;
+            Check("열 수축: 디딤호 하루의 딱 소리는 배 전체에서 시간당 몇 번 (하루 20 ~ 1,000번)", ticks >= 20 && ticks <= 1000, $"하루 {ticks}번");
+        }
     }
 }

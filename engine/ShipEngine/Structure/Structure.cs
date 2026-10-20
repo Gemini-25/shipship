@@ -318,6 +318,7 @@ public sealed partial class Structure : IEngine
             if (kind == CellKind.Wall && (dp >= 1 || SigRun[c] != 0 || SigTurn[c] != 0 || ThrustG > 0 || L.Hull[c]))
             {
                 double th = ThermalSigma(c);
+                ThermalTick(sim, c);              // 소리 단계 S6: 늘고 줄며 이음매가 딱
                 double sig = Sigma(c, dp) + th;   // ④ 열 · 진동 (가): 막힌 열 응력도 되돌이를 만든다
                 Cycle(sim, c, sig, th);
                 if (Crack[c] > 0) { Fracture(sim, c, sig); if (F.Hole[c] >= 2) { Stress[c] = 0; continue; } }
@@ -610,6 +611,7 @@ public sealed partial class Structure : IEngine
         w.Tag("조각"); w.Arr(Frag); w.List(Fragments); w.I32(SplitVersion); w.I64(DeckBursts); w.I64(Smashed); w.I64(Splits); w.I64(DebrisLost); w.I64(SectionFails);
         w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
         w.Tag("열 · 진동"); w.Arr(ThTurn); w.Arr(ThRun); w.I64(VibGrowths); w.I64(ThermalCracks);
+        w.Tag("열 수축"); w.Arr(TsSlip); w.I64(ThermalTicks);
         SaveBodies(w);
     }
 
@@ -622,6 +624,7 @@ public sealed partial class Structure : IEngine
         r.Tag("조각"); r.ArrInto(Frag); Fragments.Clear(); Fragments.AddRange(r.List<Fragment>()); SplitVersion = r.I32(); DeckBursts = r.I64(); Smashed = r.I64(); Splits = r.I64(); DebrisLost = r.I64(); SectionFails = r.I64();
         r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();
         r.Tag("열 · 진동"); r.ArrInto(ThTurn); r.ArrInto(ThRun); VibGrowths = r.I64(); ThermalCracks = r.I64();
+        r.Tag("열 수축"); TsSlip = r.Arr<float>(); ThermalTicks = r.I64();
         LoadBodies(r);
         Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)
     }

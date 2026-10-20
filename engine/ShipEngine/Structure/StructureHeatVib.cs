@@ -11,6 +11,30 @@ public sealed partial class Structure
     public const double ThermalRestraint = 0.5, JointKt = 3, SnK = 0.002;
     public long VibGrowths, ThermalCracks;
 
+    /// <summary>
+    /// 열 수축 · 팽창의 딱 소리 (소리 단계 S6 · docs/SOUND.md 결정 14 — 세상에서 실제로 나는 소리만): 외판 · 골조 이음매는 늘고 줄며 붙들린 자리가 미끄러질 때 딱 소리를 낸다
+    /// (식는 차 · 밤의 집이 딱딱거리는 것과 같다). 지난번 미끄러진 뒤 겉면 온도가 이음매 6K · 외판 12K 넘게 바뀌면 한 번 — 44 ~ 56dB (바뀐 만큼).
+    /// 위험한 소리가 아니다 (끼익 · 쩍과 다르다 — 사람은 '벽이 버틴다'로 듣지 않는다 · 잠귀가 밝은 이는 깰 수도 있다).
+    /// </summary>
+    public const double SlipJointK = 6, SlipPlateK = 12;
+    public float[] TsSlip = Array.Empty<float>();
+    /// <summary>열 수축 딱 소리 수 (확인용 · 찍는다).</summary>
+    public long ThermalTicks;
+
+    private void ThermalTick(Sim sim, int c)
+    {
+        bool joint = _axis.Length > c && _axis[c] == 3;
+        if (!joint && !L.Hull[c]) return;
+        if (TsSlip.Length != L.N) { TsSlip = new float[L.N]; Array.Fill(TsSlip, float.NaN); }
+        float ts = (float)F.Ts[c];
+        if (float.IsNaN(TsSlip[c])) { TsSlip[c] = ts; return; }   // 처음 본 온도 (딱 소리 없이 기준만)
+        double d = Math.Abs(ts - TsSlip[c]), slip = joint ? SlipJointK : SlipPlateK;
+        if (d < slip) return;
+        TsSlip[c] = ts;
+        ThermalTicks++;
+        sim.Find<Sound>()?.Emit(sim, NearestAir(c), (float)(44 + 4 * Math.Min(3, d / slip)), SoundKind.Tick, 0);
+    }
+
     /// <summary>막힌 열 응력 (MPa — 데우면 누르는 쪽 · 음수).</summary>
     public double ThermalSigma(int c)
     {
