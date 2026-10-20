@@ -9,7 +9,7 @@ namespace Lab;
 /// → 칠한 곳 둘레가 외판 → 이을 방 사이에 문 · 바깥문 → 방마다 설비 자리 → 다리 · 날개 같은 뼈대 → 스스로 검사.
 /// 같은 입력 → 같은 도면. 칸 하나 = 1m.
 /// </summary>
-public sealed class ShipPlan
+public sealed partial class ShipPlan
 {
     public const int Out = -1, Wall = -2;
 
@@ -59,6 +59,8 @@ public sealed class ShipPlan
         ["Projector"] = (1, 1), ["MemorialWall"] = (2, 1), ["Aquarium"] = (2, 1), ["WashingMachine"] = (1, 1), ["SuitDryer"] = (1, 1),
         ["FoodLocker"] = (1, 1), ["CargoCrate"] = (2, 2), ["CargoNet"] = (1, 1), ["OreBin"] = (2, 2), ["Rover"] = (3, 2), ["Shuttle"] = (7, 3), ["GravityGenerator"] = (2, 1),
         ["MeetingBoard"] = (2, 1), ["Fermenter"] = (1, 1), ["LedPanel"] = (1, 1), ["EmergencyLight"] = (1, 1),
+        // 꾸밈 (ShipDress.cs)
+        ["ToolWall"] = (2, 1), ["PartTestBench"] = (2, 1), ["MusicCorner"] = (2, 1), ["ServerRack"] = (1, 1), ["Telescope"] = (1, 1),
     };
 
     /// <summary>줄지어 놓는 것 (줄 사이 통로 · 줄 끝 한 칸 비움).</summary>
@@ -212,7 +214,7 @@ public sealed class ShipPlan
 
     public ShipPlan Build()
     {
-        Carve(); DropFragments(); MakeWalls(); PlaceDoors(); PlaceExits(); PlaceFurniture(); AddStruts(); Check();
+        Carve(); DropFragments(); MakeWalls(); PlaceDoors(); PlaceExits(); PlaceFurniture(); if (Dress) DressRooms(); AddStruts(); Check();
         return this;
     }
 

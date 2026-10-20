@@ -397,11 +397,13 @@ public static partial class Program
     {
         string? only = args.SkipWhile(a => a != "--shipgen").Skip(1).FirstOrDefault(a => !a.StartsWith("--"));
         bool show = args.Contains("--show");
-        string dir = FindShipDir();
+        bool draft = args.Contains("--draft");   // 꾸밈 초안 (함장 승인 전): build/shipdraft 에만 쓰고 전 · 후 그림을 남긴다
+        string dir = draft ? Directory.CreateDirectory("build/shipdraft").FullName : FindShipDir();
         foreach (var (key, make) in Designs)
         {
             if (only != null && !key.Equals(only, StringComparison.OrdinalIgnoreCase)) continue;
             var s = make();
+            s.Dress = draft;
             try { s.Build(); }
             catch (InvalidOperationException) { if (show) Console.WriteLine(s.Show()); throw; }
             string json = s.Json();
@@ -412,6 +414,39 @@ public static partial class Program
             if (show) Console.WriteLine(s.Show() + "\n");
             Console.WriteLine(Summary(s));
             if (!show) File.WriteAllText(Path.Combine(dir, s.Key.ToLowerInvariant() + ".json"), json);
+            if (draft) DraftReport(s, L, sim, dir);
+        }
+    }
+
+    /// <summary>꾸밈 초안: 방 종류마다 채운 몫 전 → 후 · 더 놓은 것 · 지금 배와 초안의 그림 (사람 · 로봇을 태우고 50틱 뒤).</summary>
+    private static void DraftReport(ShipPlan s, Layout after, Sim simAfter, string dir)
+    {
+        var before = Layout.Ship(s.Key, Tables.Default);
+        static Dictionary<string, (int Cells, int Furn)> Fill(Layout L)
+        {
+            var o = new Dictionary<string, (int, int)>();
+            var furnAt = new bool[L.N];
+            foreach (var f in L.Furniture) foreach (int c in f.Cells) furnAt[c] = true;
+            foreach (var r in L.Rooms)
+            {
+                var (a, b) = o.GetValueOrDefault(r.Type);
+                o[r.Type] = (a + r.Cells.Length, b + r.Cells.Count(c => furnAt[c]));
+            }
+            return o;
+        }
+        var fb = Fill(before); var fa = Fill(after);
+        int cb = fb.Values.Sum(v => v.Furn), ca = fa.Values.Sum(v => v.Furn), all = fa.Values.Sum(v => v.Cells);
+        Console.WriteLine($"  꾸밈: 설비 {before.Furniture.Count} → {after.Furniture.Count} (+{s.Dressed.Count}) · 덮은 칸 {cb * 100.0 / all:0}% → {ca * 100.0 / all:0}%");
+        Console.WriteLine("    방 종류: " + string.Join(" · ", fa.OrderByDescending(kv => kv.Value.Cells).Select(kv =>
+            $"{kv.Key} {fb.GetValueOrDefault(kv.Key).Furn * 100.0 / Math.Max(1, kv.Value.Cells):0}→{kv.Value.Furn * 100.0 / Math.Max(1, kv.Value.Cells):0}%")));
+        Console.WriteLine("    더 놓은 것: " + string.Join(" · ", s.Dressed.GroupBy(d => d.Type).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}")));
+        var simBefore = ShipWorld.Create(before, 1);
+        simBefore.Get<Mind>().Crew(simBefore, s.Crew, s.Robots, s.Drones);
+        simBefore.Run(50);
+        foreach (var (L, sim, tag) in new[] { (before, simBefore, "before"), (after, simAfter, "after") })
+        {
+            var img = new ShipView.Painter(L).Frame(sim, 0, 0, L.W, L.H, (int)sim.Tick);
+            Png.WriteRgba(Path.Combine(dir, $"{s.Key.ToLowerInvariant()}-{tag}.png"), img.W, img.H, img.Px);
         }
     }
 
