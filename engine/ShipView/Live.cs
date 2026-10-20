@@ -463,15 +463,21 @@ public sealed class LiveShow
     }
 
     /// <summary>지금 화면을 그린다 (32px 칸 · 보이는 곳을 덮는 칸들 + 그 안의 보일 곳).</summary>
+    /// <summary>새로 잡은 그림판 수 (재기용).</summary>
+    public static int NewCanvas;
+    private readonly List<Img> _keep = new();
     public LiveFrame Render()
     {
         var (left, top, w, h) = Camera();
         int x0 = (int)Math.Floor(left), y0 = (int)Math.Floor(top);
         int wc = (int)Math.Ceiling(w) + 1, hc = (int)Math.Ceiling(h) + 1; // 줌이 바뀔 때만 크기가 바뀐다 (텍스처를 덜 새로 만든다)
+        // 그림판은 4칸 단위로 넉넉히 (그리는 칸은 그대로) — 확대가 부드럽게 바뀌는 동안 장마다 새 그림판(몇 MB) · 새 텍스처를 만들지 않게
+        int cw = (wc + 3) & ~3, ch = (hc + 3) & ~3;
         Img? reuse = null;
-        var keep = new List<Img>();
-        while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == wc * Painter.T && sp.H == hc * Painter.T) reuse = sp; else keep.Add(sp); }
-        foreach (var k in keep.Take(2)) _spare.Add(k);
+        _keep.Clear();
+        while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == cw * Painter.T && sp.H == ch * Painter.T) reuse = sp; else _keep.Add(sp); }
+        for (int k = 0; k < _keep.Count && k < 2; k++) _spare.Add(_keep[k]);
+        if (reuse == null) { reuse = new Img(cw * Painter.T, ch * Painter.T); NewCanvas++; }
         Painter.Show = Show; Painter.ChainCells = Show == Overlay.Chain ? ChainCellsNow() : null;
         // ④ 칸 강체: 틱 사이를 메운 몸의 자세 · 배의 자세(별)
         var stb = World.Find<Structure>();

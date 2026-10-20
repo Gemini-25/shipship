@@ -11,6 +11,8 @@ public sealed partial class Director
 {
     public bool Foresee = true;
     public const int ForeseeTicks = 38, LeadTicks = 20, CutLeadTicks = 6;   // 1.5분 앞 · 50초 전부터 · 15초 전에 자른다
+    /// <summary>한 틱에 앞선 세계를 많아야 이만큼 돌린다 — 복제 직후 1.5분 앞까지 한꺼번에 돌리면 화면이 멈칫한다 (새터호 약 0.2초) · 틱마다 둘씩 더 가며 19틱 안에 따라잡는다.</summary>
+    public const int AheadPerTick = 3;
     public int Foresights, Predicted, ForeCuts, Resyncs;
     public long AheadSteps;
     public double ForeseeMs;
@@ -53,7 +55,8 @@ public sealed partial class Director
             _future.Clear(); Foresights++;
         }
         var mind = _ahead.Find<Mind>();
-        while (_ahead.Tick < t + ForeseeTicks)
+        int budget = AheadPerTick;
+        while (_ahead.Tick < t + ForeseeTicks && budget-- > 0)
         {
             _ahead.Step(); AheadSteps++;
             foreach (var f in _ahead.Facts.Since(_aheadCursor))

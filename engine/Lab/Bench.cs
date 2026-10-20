@@ -120,6 +120,30 @@ public static partial class Program
         }
         Field.Prof = null; Network.Prof = null; Mind.Prof = null; Prof.D = null;
         Console.WriteLine($"{ship} 사람 {people} · 로봇 {robots} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (하루 = {ms * Time.TicksPerDay / 1000:0.0}초)");
+        if (args.Contains("--clone"))   // 복제 한 번에 드는 것 (연출 미리 보기 · 주컴퓨터 상상)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                long m0 = GC.GetAllocatedBytesForCurrentThread(); var w = Stopwatch.StartNew();
+                var blank = new Sim(s.Setup); long m1 = GC.GetAllocatedBytesForCurrentThread(); double t1 = w.Elapsed.TotalMilliseconds;
+                var bytes = s.Save(); long m2 = GC.GetAllocatedBytesForCurrentThread(); double t2 = w.Elapsed.TotalMilliseconds;
+                blank.Load(bytes); long m3 = GC.GetAllocatedBytesForCurrentThread(); double t3 = w.Elapsed.TotalMilliseconds;
+                {
+                    var parts = new List<string>();
+                    long a0 = GC.GetAllocatedBytesForCurrentThread(); var pw = Stopwatch.StartNew();
+                    void P(string nm) { long a1 = GC.GetAllocatedBytesForCurrentThread(); parts.Add($"{nm} {(a1 - a0) / 1048576.0:0.0}MB {pw.Elapsed.TotalMilliseconds:0.0}ms"); a0 = a1; pw.Restart(); }
+                    var e = new Sim(new SimSetup(s.Layout, 3, _ => { })); P("빈 세계");
+                    var ff = new Field(e.Layout, e.Tables); P("장"); var ch = new Chemistry(ff); P("화학"); var so = new Sound(ff); P("소리"); var li = new Light(ff); P("빛");
+                    var stt = new Structure(ff); P("구조"); var ou = new Outside(ff, 3); P("바깥"); var ne = new Network(ff, 3); P("망"); var se = new Sensors(e.Tables); P("감지");
+                    var lf = new Life(ff); P("생명"); var mi = new Mind(ff); P("마음"); var soc = new Society(ff.L); P("사회"); var sm = new ShipMind(ff); P("주컴퓨터"); var wk = new Work(ff.L, ff.T); P("일");
+                    Console.WriteLine("  새 세계 엔진마다: " + string.Join(" · ", parts));
+                }
+                long c0 = GC.GetAllocatedBytesForCurrentThread(); var cw = Stopwatch.StartNew();
+                s.Clone();
+                Console.WriteLine($"  복제 {k + 1}: Clone() {(GC.GetAllocatedBytesForCurrentThread() - c0) / 1048576.0:0.0}MB {cw.Elapsed.TotalMilliseconds:0}ms");
+                Console.WriteLine($"  복제 {k + 1}: 새 세계 {(m1 - m0) / 1048576.0:0.0}MB {t1:0}ms · 찍기 {(m2 - m1) / 1048576.0:0.0}MB {t2 - t1:0}ms (크기 {bytes.Length / 1048576.0:0.0}MB) · 읽기 {(m3 - m2) / 1048576.0:0.0}MB {t3 - t2:0}ms");
+            }
+        }
         var pm = s.Get<Mind>();
         Console.WriteLine($"  길찾기: 부름 {pm.PathCalls} · 못 찾음 {pm.PathFails} · 펼친 칸 {pm.PathExpanded} (부름마다 {pm.PathExpanded / Math.Max(1, pm.PathCalls)})");
         Console.WriteLine("  " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));

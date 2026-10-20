@@ -466,16 +466,20 @@ public sealed partial class Mind : IEngine
         ClearOldActs(sim.Tick);   // 오랜 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
+        t = Lap("준비:물건", t);
         if (Agents.Count == 0) { HoldDoorsByItems(); ApplyPlugs(); return; }
         F.RebuildNow();
+        t = Lap("준비:장 다시", t);
         IndexBodies();
         HearCall();     // 판단 이관 (가): 새 모임의 부름을 듣고 저마다 갈지 정한다
         Drag(sim, dt);  // ③ 국소 현상 — 감압 돌풍에 끌려가는 사람 · 구멍에 빨려 붙은 몸과 물건
+        t = Lap("준비:끌림", t);
         foreach (var a in Agents) UpdateUp(sim, a);
+        t = Lap("준비:움직일 수 있나", t);
         Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
         BodyJolt(sim);  // ④ 칸 강체 — 몸이 덜컹이면 선 사람이 넘어진다
         Floating(sim, dt);   // 인공 중력 — 떠오르고 · 익숙해지고 · 중력이 돌아오면 떨어진다
-        t = Lap("준비", t);
+        t = Lap("준비:관성 · 중력", t);
         foreach (var a in Agents) Sense(sim, a, dt);
         t = Lap("감각", t);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);

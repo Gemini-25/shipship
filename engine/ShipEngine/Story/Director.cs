@@ -43,7 +43,7 @@ public sealed partial class Director
     public string Mood = "조용함";
     public string Caption = "";
     public readonly List<Highlight> Highlights = new();
-    public readonly List<(long tick, byte[] snap)> Ring = new();
+    public readonly List<(long tick, byte[] snap, int len)> Ring = new();   // 찍은 것은 snap의 앞 len 바이트 (칸을 다시 쓴다)
     public bool KeepRing = true;
     public long Switches;
     public double ScreenSeconds;                // 지금까지 흐른 화면 시간
@@ -177,8 +177,10 @@ public sealed partial class Director
         // 다시보기 고리 (처음 본 틱에도 한 장 — 첫 2분 안에 시작한 일도 첫 조짐부터 되살린다)
         if (KeepRing && (t % RingEvery == 0 || Ring.Count == 0))
         {
-            Ring.Add((t, sim.Save()));
-            if (Ring.Count > RingSize) Ring.RemoveAt(0);
+            byte[]? buf = null;
+            if (Ring.Count >= RingSize) { buf = Ring[0].snap; Ring.RemoveAt(0); }   // 가장 오래된 칸에 다시 찍는다
+            int len = sim.SaveInto(ref buf);
+            Ring.Add((t, buf!, len));
         }
     }
 
@@ -373,11 +375,11 @@ public sealed partial class Director
     /// <summary>하이라이트의 시작(첫 조짐) 직전 찍기에서 되살린 세계 — 이어 돌리면 같은 일이 그대로 일어난다. 고리에 없으면 null.</summary>
     public Sim? Replay(Sim sim, Highlight h)
     {
-        (long tick, byte[] snap)? pick = null;
+        (long tick, byte[] snap, int len)? pick = null;
         foreach (var r in Ring) if (r.tick <= h.StartTick) pick = r;
         if (pick == null) { if (Ring.Count > 0 && Ring[0].tick <= h.Tick) pick = Ring[0]; else return null; }
         var w = new Sim(sim.Setup);
-        w.Load(pick.Value.snap);
+        w.Load(pick.Value.snap, pick.Value.len);
         return w;
     }
 

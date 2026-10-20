@@ -22,6 +22,22 @@ public sealed class StateWriter
         _w = new BinaryWriter(_ms, Encoding.UTF8, leaveOpen: true);
     }
 
+    /// <summary>다시 쓰는 버퍼에 찍는다 (복제 — 비우고 처음부터 · 잡아 둔 크기는 그대로).</summary>
+    public StateWriter(MemoryStream reuse)
+    {
+        _ms = reuse; _ms.SetLength(0);
+        _w = new BinaryWriter(_ms, Encoding.UTF8, leaveOpen: true);
+    }
+
+    /// <summary>찍은 길이 (바이트).</summary>
+    public int Length { get { _w.Flush(); return (int)_ms.Length; } }
+
+    /// <summary>찍은 것을 dst 앞에 옮긴다 (dst는 Length 이상).</summary>
+    public void CopyTo(byte[] dst) { _w.Flush(); Buffer.BlockCopy(_ms.GetBuffer(), 0, dst, 0, (int)_ms.Length); }
+
+    /// <summary>찍은 것을 옮기지 않고 읽게 넘긴다 (버퍼 · 길이 — 다음에 찍으면 덮어쓴다).</summary>
+    public StateReader Reader() { _w.Flush(); return new StateReader(_ms.GetBuffer(), (int)_ms.Length); }
+
     /// <summary>저장 모양 (무엇을 어떤 꼴로 쓰나 — 값은 빼고) · 켜 두면 적는다 (Sim.ShapeOf — 판 번호를 올릴 때를 잡는다).</summary>
     public List<string>? Shape;
 
@@ -58,6 +74,7 @@ public sealed class StateReader
     private readonly BinaryReader _r;
 
     public StateReader(byte[] data) => _r = new BinaryReader(new MemoryStream(data, writable: false), Encoding.UTF8);
+    public StateReader(byte[] data, int length) => _r = new BinaryReader(new MemoryStream(data, 0, length, writable: false), Encoding.UTF8);
 
     public void Tag(string name)
     {

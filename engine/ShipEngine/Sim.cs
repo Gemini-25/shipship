@@ -74,10 +74,13 @@ public sealed class Sim
 
     public byte[] Save()
     {
-        var w = new StateWriter();
+        var w = new StateWriter(Math.Max(1 << 20, _saveHint));   // 지난 크기만큼 처음부터 (거듭 키우며 옮기지 않게)
         SaveTo(w);
-        return w.ToArray();
+        var bytes = w.ToArray();
+        _saveHint = bytes.Length + bytes.Length / 8;
+        return bytes;
     }
+    private static int _saveHint;
 
     /// <summary>저장 모양 지문: 값을 빼고 무엇을 어떤 꼴로 쓰는지만 (표준 세계 하나로 잰다 — 배 도면이 바뀌어도 바뀐다: 그 저장은 새 배에 맞지 않으니 판을 올리는 게 맞다).</summary>
     public ulong ShapeOf()
@@ -102,9 +105,13 @@ public sealed class Sim
         w.Tag("end");
     }
 
-    public void Load(byte[] data)
+    public void Load(byte[] data) => Load(new StateReader(data));
+
+    /// <summary>앞 length 바이트만 읽는다 (다시 쓰는 버퍼에 찍어 둔 것 — <see cref="SaveInto"/>).</summary>
+    public void Load(byte[] data, int length) => Load(new StateReader(data, length));
+
+    private void Load(StateReader r)
     {
-        var r = new StateReader(data);
         if (!r.IsTag("판")) throw new InvalidDataException($"판 번호가 없는 저장이다 (판을 붙이기 전에 쓴 것) — 이 엔진은 저장 판 {SaveVersion}만 읽는다");
         int version = r.I32();
         if (version != SaveVersion) throw new InvalidDataException($"저장 판 {version} — 이 엔진은 저장 판 {SaveVersion}만 읽는다");
@@ -118,11 +125,32 @@ public sealed class Sim
     }
 
     /// <summary>같은 준비로 새 세계를 만들고 지금 상태를 읽어 넣는다 (주컴퓨터 · 연출의 미래 돌려 보기).</summary>
-    public Sim Clone()
+    public Sim Clone() => Clones(1)[0];
+
+    /// <summary>복제 여럿: 한 번 찍어 모두 읽는다 (찍은 것은 스레드마다 다시 쓰는 버퍼에 — 복제마다 몇 MB를 새로 잡지 않게).</summary>
+    public Sim[] Clones(int n)
     {
-        var s = new Sim(Setup);
-        s.Load(Save());
-        return s;
+        var o = new Sim[n];
+        for (int i = 0; i < n; i++) o[i] = new Sim(Setup);
+        var w = new StateWriter(_cloneBuf ??= new MemoryStream(1 << 20));
+        SaveTo(w);
+        foreach (var s in o) s.Load(w.Reader());
+        return o;
+    }
+    [ThreadStatic] private static MemoryStream? _cloneBuf;
+
+    /// <summary>
+    /// 지금 상태를 buf에 찍고 길이를 돌려준다 — buf가 모자라면 넉넉히 새로 잡는다 (다시보기 고리처럼 같은 칸을 거듭 쓰는 곳: 2분마다 몇 MB를 새로 잡고 버리지 않게).
+    /// 바이트는 <see cref="Save"/>와 같다.
+    /// </summary>
+    public int SaveInto(ref byte[]? buf)
+    {
+        var w = new StateWriter(_cloneBuf ??= new MemoryStream(1 << 20));
+        SaveTo(w);
+        int n = w.Length;
+        if (buf == null || buf.Length < n) buf = new byte[n + n / 16];
+        w.CopyTo(buf);
+        return n;
     }
 
     public ulong Hash() => Fingerprint.Of(Save());

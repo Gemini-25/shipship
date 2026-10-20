@@ -14,10 +14,11 @@ public readonly record struct Rgba(byte R, byte G, byte B, byte A = 255)
 {
     public static Rgba Hex(string hex)
     {
-        hex = hex.TrimStart('#');
-        byte r = Convert.ToByte(hex[..2], 16), g = Convert.ToByte(hex[2..4], 16), b = Convert.ToByte(hex[4..6], 16);
-        byte a = hex.Length >= 8 ? Convert.ToByte(hex[6..8], 16) : (byte)255;
+        var s = hex.AsSpan().TrimStart('#');   // 칸마다 부르는 곳이 있다 — 문자열 조각을 새로 잡지 않고 읽는다
+        byte r = Hx(s[..2]), g = Hx(s[2..4]), b = Hx(s[4..6]);
+        byte a = s.Length >= 8 ? Hx(s[6..8]) : (byte)255;
         return new Rgba(r, g, b, a);
+        static byte Hx(ReadOnlySpan<char> two) => byte.Parse(two, System.Globalization.NumberStyles.AllowHexSpecifier);
     }
 
     public Rgba WithA(byte a) => new(R, G, B, a);

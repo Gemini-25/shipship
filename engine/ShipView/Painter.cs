@@ -122,6 +122,13 @@ public sealed partial class Painter
         return img;
     }
 
+    /// <summary>상태를 넘기는 꼴 (static 람다) — 칸마다 부르는 곳에서 갇힌 변수 묶음 · 대리자를 장마다 새로 잡지 않는다.</summary>
+    private Img Cached<TS>(long key, TS st, Func<TS, Img> make)
+    {
+        if (!_cache.TryGetValue(key, out var img)) _cache[key] = img = make(st);
+        return img;
+    }
+
     private static long Key(int kind, int a = 0, int b = 0, int c = 0, int d = 0) =>
         ((long)kind << 56) ^ ((long)(a & 0xFFFF) << 40) ^ ((long)(b & 0xFFFF) << 24) ^ ((long)(c & 0xFFF) << 12) ^ (d & 0xFFF);
 
@@ -145,7 +152,7 @@ public sealed partial class Painter
     public double SkyTh = double.NaN;
 
     /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.
-    /// into: 다시 쓸 그림 (크기가 맞으면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다).</summary>
+    /// into: 다시 쓸 그림 (w × h 칸이 들어가면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다 · 남는 곳은 우주색).</summary>
     public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
         _tick = s.Tick;
@@ -221,9 +228,23 @@ public sealed partial class Painter
     private Structure? _stc;
     private bool Mine(int c) => _only < 0 || _stc!.BodyOf(c) == _only;
 
+    /// <summary>단계별 그리기 시간 (ms 합 — 실험실에서만 켠다 · null이면 재지 않는다).</summary>
+    public static Dictionary<string, double>? Prof;
+    /// <summary>단계별 새로 잡은 바이트 (Prof와 함께 켠다).</summary>
+    public static Dictionary<string, long>? ProfAlloc;
+    [ThreadStatic] private static long _lapAlloc;
+    private static long Lap(string name, long t0)
+    {
+        if (Prof == null) return 0;
+        long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+        Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (ProfAlloc != null) { long a = GC.GetAllocatedBytesForCurrentThread(); if (_lapAlloc != 0) ProfAlloc[name] = ProfAlloc.GetValueOrDefault(name) + a - _lapAlloc; _lapAlloc = GC.GetAllocatedBytesForCurrentThread(); }
+        return System.Diagnostics.Stopwatch.GetTimestamp();
+    }
+
     private Img Draw(Sim s, int x0, int y0, int w, int h, int frame, Img? into, bool part)
     {
-        var img = into != null && into.W == w * T && into.H == h * T ? into : new Img(w * T, h * T);
+        var img = into != null && into.W >= w * T && into.H >= h * T ? into : new Img(w * T, h * T);   // 넉넉한 그림판이면 왼쪽 위에 그린다 (관전 화면 — 4칸 단위)
         var f = s.Get<Field>();
         var net = s.Find<Network>();
         var st = s.Find<Structure>();
@@ -235,6 +256,9 @@ public sealed partial class Painter
         int Py(int y) => (y - y0) * T;
         _emissive.Clear();
         GatherFacts(s);
+        long lt = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        if (ProfAlloc != null) _lapAlloc = GC.GetAllocatedBytesForCurrentThread();
+        lt = Lap("준비", lt);
 
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
@@ -273,6 +297,7 @@ public sealed partial class Painter
                 }
         }
 
+        lt = Lap("우주", lt);
         // ── 바닥 · 벽 · 문 ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -286,22 +311,23 @@ public sealed partial class Painter
                     case CellKind.Floor:
                     {
                         var fl = L.Room[c] >= 0 ? _roomFloor[L.Room[c]] : DotFloor.Metal;
-                        Put(img, Cached(Key(1, (int)fl, variant), () => DotTiles.Floor(fl, variant)), Px(x), Py(y));
+                        Put(img, Cached(Key(1, (int)fl, variant), (fl, variant), static q => DotTiles.Floor(q.fl, q.variant)), Px(x), Py(y));
                         break;
                     }
                     case CellKind.Door:
-                        Put(img, Cached(Key(1, (int)DotFloor.Metal, variant), () => DotTiles.Floor(DotFloor.Metal, variant)), Px(x), Py(y));
+                        Put(img, Cached(Key(1, (int)DotFloor.Metal, variant), variant, static v => DotTiles.Floor(DotFloor.Metal, v)), Px(x), Py(y));
                         break;
                     case CellKind.Wall:
                     {
                         if (F(f, c).hole >= 2f && (st == null || st.Sub[c] == 0)) break; // 통째로 뚫린 벽 — 우주가 보인다 (남은 테두리 잔칸은 아래에서 가린다)
                         var wk = WallOf(c);
                         int mask = (Solid(x, y - 1) ? 1 : 0) | (Solid(x + 1, y) ? 2 : 0) | (Solid(x, y + 1) ? 4 : 0) | (Solid(x - 1, y) ? 8 : 0);
-                        Put(img, Cached(Key(2, (int)wk, mask), () => DotTiles.WallTop(wk, mask)), Px(x), Py(y));
+                        Put(img, Cached(Key(2, (int)wk, mask), (wk, mask), static q => DotTiles.WallTop(q.wk, q.mask)), Px(x), Py(y));
                         break;
                     }
                 }
             }
+        lt = Lap("바닥 · 벽 · 문", lt);
         // ── 잔칸 (④ 칸 강체 (라)): 판 구멍은 우주 (덧댄 것은 덧판) · 찢긴 가장자리는 밝은 금속 테 · 우주가 된 사이 칸에 남은 잔칸은 붙은 몸과 함께 ──
         if (st != null && st.Sub.Length == L.N)
             for (int y = y0; y < y0 + h; y++)
@@ -319,6 +345,7 @@ public sealed partial class Painter
                     if (!Mine(c)) continue;
                     SubMask(img, m, Px(x), Py(y), f.Hole[c] < Structure.SubMinArea, part, space);
                 }
+        lt = Lap("잔칸", lt);
 
         // 벽 남쪽 앞면: 아래 칸이 바닥이면 그 칸 위쪽에
         for (int y = y0 - 1; y < y0 + h; y++)
@@ -331,9 +358,10 @@ public sealed partial class Painter
                 bool openW = !Solid(x - 1, y) || KindAt(x - 1, y + 1) != CellKind.Floor;
                 bool openE = !Solid(x + 1, y) || KindAt(x + 1, y + 1) != CellKind.Floor;
                 bool lamp = DotHash.U(x, y, 5) % 7 == 0;
-                Put(img, Cached(Key(3, (int)wk, openW ? 1 : 0, openE ? 1 : 0, lamp ? 1 : 0), () => DotTiles.WallFace(wk, openW, openE, lamp)), Px(x), Py(y + 1));
+                Put(img, Cached(Key(3, (int)wk, openW ? 1 : 0, openE ? 1 : 0, lamp ? 1 : 0), (wk, openW, openE, lamp), static q => DotTiles.WallFace(q.wk, q.openW, q.openE, q.lamp)), Px(x), Py(y + 1));
                 if (lamp && Lighting && wk != DotWall.Hull && wk != DotWall.Partition) FaceLamp(Px(x), Py(y + 1), L.Room[L.Index(x, y + 1)], net, light);
             }
+        lt = Lap("벽 앞면", lt);
         // 벽에 묻은 그을음 (② — 불 곁의 벽이 검게): 윗면 · 남쪽 앞면
         for (int y = y0 - 1; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -345,7 +373,9 @@ public sealed partial class Painter
                 if (y >= y0) SootStain(img, Px(x), Py(y), T, T, sg, c);
                 if (KindAt(x, y + 1) == CellKind.Floor) SootStain(img, Px(x), Py(y + 1), T, DotTiles.Face, sg, c + 7);
             }
+        lt = Lap("벽 그을음", lt);
         if (st != null) WallTraces(img, st, x0, y0, w, h);   // 녹 · 실금 (④ 부식 · 피로)
+        lt = Lap("녹 · 실금", lt);
         foreach (var d in L.Doors)
         {
             int x = L.X(d.Cell), y = L.Y(d.Cell);
@@ -355,10 +385,11 @@ public sealed partial class Painter
             int kind = d.External ? 1 : d.Kind == "normal" ? 0 : 2;
             bool jam = st != null && st.DoorJam[d.Id] != 0;
             int lightKind = st != null && st.DoorPowered[d.Id] == 0 ? 2 : jam ? 3 : open > 0.05f ? 1 : 0;
-            Put(img, Cached(Key(4, d.Vertical ? 1 : 0, step, kind, lightKind), () => DotTiles.Door(d.Vertical, step, kind, lightKind)), Px(x), Py(y));
+            Put(img, Cached(Key(4, d.Vertical ? 1 : 0, step, kind, lightKind), (d.Vertical, step, kind, lightKind), static q => DotTiles.Door(q.Vertical, q.step, q.kind, q.lightKind)), Px(x), Py(y));
             if (f.DoorBleed[d.Id] != 0) Hiss(img, Px(x) + T / 2, Py(y) + T / 2, frame); // 압력 맞춤 밸브
         }
 
+        lt = Lap("문", lt);
         // ── 외판 구멍 · 금 ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -402,6 +433,7 @@ public sealed partial class Painter
                 }
             }
 
+        lt = Lap("외판 구멍 · 금", lt);
         // ── 설비 (아래쪽 것이 앞) ──
         _fixOrder ??= Enumerable.Range(0, L.Furniture.Count).Where(i => L.Furniture[i].Cells.Length > 0)
             .OrderBy(i => _fixBox[i].y + _fixBox[i].h).ThenBy(i => i).ToArray();   // 설비는 움직이지 않는다 — 한 번만 줄 세운다
@@ -415,27 +447,30 @@ public sealed partial class Painter
                 var gs = gdev < 0 ? FixState.On : net!.IsBroken(gdev, Part.Electric) || net.IsBroken(gdev, Part.Mechanical) ? FixState.Broken : net.Working(gdev) ? FixState.On : FixState.Off;
                 float field = gdev >= 0 && net!.GravField.Length > gdev ? net.GravField[gdev] : 1f;
                 int gx = Px(bx), gy = Py(by) - GravRise;
-                Put(img, Cached(Key(5, 9001, bw, bh, 0), () => Shadowed(GravBody(bw, bh), GravRise)), gx, gy);
-                if (Lighting) _emissive.Add(im => GravGlow(im, gx, gy, bw, bh, field, gs, frame));
-                else GravGlow(img, gx, gy, bw, bh, field, gs, frame);
+                Put(img, Cached(Key(5, 9001, bw, bh, 0), (bw, bh), static q => Shadowed(GravBody(q.bw, q.bh), GravRise)), gx, gy);
+                int gbw = bw, gbh = bh;   // 이 칸 안에서만 붙잡는다 (설비마다 갇힌 변수 묶음을 잡지 않게)
+                if (Lighting) _emissive.Add(im => GravGlow(im, gx, gy, gbw, gbh, field, gs, frame));
+                else GravGlow(img, gx, gy, gbw, gbh, field, gs, frame);
                 continue;
             }
             var ft = _fixType[i] ?? FurnitureType.Shelf;
             int rise = DotMachines.RiseOf(ft);
-            var body = Cached(Key(5, (int)ft, bw, bh, i), () => Shadowed(DotMachines.Body(ft, bw, bh, -1, 1, 0, i), rise));
+            var body = Cached(Key(5, (int)ft, bw, bh, i), (ft, bw, bh, i, rise), static q => Shadowed(DotMachines.Body(q.ft, q.bw, q.bh, -1, 1, 0, q.i), q.rise));
             int px = Px(bx), py = Py(by) - rise;
             Put(img, body, px, py);
             var dev = DeviceOf(net, i);
             var state = dev < 0 ? FixState.On : net!.IsBroken(dev, Part.Electric) || net.IsBroken(dev, Part.Mechanical) ? FixState.Broken : net.Working(dev) ? FixState.On : FixState.Off;
             if (state != FixState.Off)
             {
-                var glow = Cached(Key(10, (int)ft, bw * 64 + bh, (int)state, frame & 7), () => DotMachines.Life(ft, bw, bh, state, frame & 7, 1f));   // 같은 종류 · 크기 · 상태 · 장이면 같은 그림
-                if (Lighting) _emissive.Add(im => Put(im, glow, px, py));   // 화면 · 불빛은 스스로 빛난다
+                var glow = Cached(Key(10, (int)ft, bw * 64 + bh, (int)state, frame & 7), (ft, bw, bh, state, f8: frame & 7), static q => DotMachines.Life(q.ft, q.bw, q.bh, q.state, q.f8, 1f));   // 같은 종류 · 크기 · 상태 · 장이면 같은 그림
+                int gpx = px, gpy = py;   // 켜진 설비만 붙잡는다 (설비마다 갇힌 변수 묶음을 잡지 않게)
+                if (Lighting) _emissive.Add(im => Put(im, glow, gpx, gpy));   // 화면 · 불빛은 스스로 빛난다
                 else Put(img, glow, px, py);
             }
             else img.Fill(px, py, bw * T, bh * T + rise, Rgba.Hex("#000308"), 0.3f);
         }
 
+        lt = Lap("설비", lt);
         // ── 바닥에 놓인 · 날아온 물건 (④ — 문틀에 걸린 것은 문 위에) ──
         if (mind != null)
         {
@@ -447,11 +482,12 @@ public sealed partial class Painter
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
                 int n = count.GetValueOrDefault(c); count[c] = n + 1;
-                var icon = Cached(Key(9, it.Item), () => LooseIcon(mind.ItemNames[it.Item]));
+                var icon = Cached(Key(9, it.Item), mind.ItemNames[it.Item], static nm => LooseIcon(nm));
                 Put(img, icon, Px(x) + T / 2 - icon.W / 2 + (n % 3 - 1) * 7, Py(y) + T / 2 - icon.H / 2 + n / 3 * 6);
             }
         }
 
+        lt = Lap("바닥에 놓인 · 날아온 물건", lt);
         // ── 칸 덮개: 물 · 진공 · 열 · 어둠 ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -463,7 +499,7 @@ public sealed partial class Painter
                 if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, sootG, c); // 바닥에 앉은 그을음
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 double water = f.Stored(f.T.sWater, c);
-                if (water > 2) Put(img, Cached(Key(6, frame & 3, c & 7), () => DotFx.WaterTile(frame & 3, c & 7)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
+                if (water > 2) Put(img, Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
                 double kpa = f.Pressure(c);
                 if (kpa < 40) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#8fd0ff"), (float)(0.36 * (1 - kpa / 40))); // 진공: 서리
                 double temp = f.Temp(c);
@@ -473,6 +509,7 @@ public sealed partial class Painter
                 if (dark > 0.02f) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#02040a"), dark);
             }
 
+        lt = Lap("칸 덮개", lt);
         // ── 사람 · 로봇 (아래쪽이 앞) ──
         if (mind != null && life != null)
         {
@@ -487,6 +524,7 @@ public sealed partial class Painter
             }
         }
 
+        lt = Lap("사람 · 로봇", lt);
         // ── 떠 있는 물방울 (무중력 — 사람 위 공중에 떠돈다 · 많을수록 크고 많다) ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -511,8 +549,10 @@ public sealed partial class Painter
                 }
             }
 
+        lt = Lap("떠 있는 물방울", lt);
         // ── 새는 공기 줄기 (칸 바람이 빠른 칸만) ──
         AirJets(img, f, x0, y0, w, h, frame);
+        lt = Lap("새는 공기 줄기", lt);
         // ── 연기 (빛을 받는다 — 불 곁은 붉게 · 정전된 방은 어둡게): 뭉게 연기는 아랫층 · 천장 아래 짙은 층은 엷은 막 ──
         for (int y = y0; y < y0 + h + 1; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -525,12 +565,13 @@ public sealed partial class Painter
                 if (soot > 20)
                 {
                     float al = (float)Math.Min(0.8, soot / 500);
-                    var puff = Cached(Key(7, c & 15), () => DotFx.SmokeSprite(T + 12, c & 15));
+                    var puff = Cached(Key(7, c & 15), c & 15, static k => DotFx.SmokeSprite(T + 12, k));
                     int dx = (int)((DotHash.F(c, frame / 4) - 0.5f) * 6);
                     Put(img, puff, Px(x) - 6 + dx, Py(y) - 10, false, al);
                 }
             }
         SmokeVeil(img, f, x0, y0, w, h, frame);
+        lt = Lap("연기", lt);
         // ── 빛: 곱하고 · 스스로 빛나는 것 · 불꽃 (맨 앞) ──
         if (Lighting)
         {
@@ -548,9 +589,12 @@ public sealed partial class Painter
                         if (Mine(c) && chem.Burning[c] != 0) FireAt(img, chem, c, Px(x), Py(y), frame);
                     }
         }
+        lt = Lap("빛", lt);
         HeatHaze(img, f, x0, y0, w, h, frame);          // 아지랑이 (불꽃까지 함께 일렁인다)
         FxEmissive(img, s, net, x0, y0, w, h, frame);   // 합선 불꽃 · 충격파 · 방사선 잡음
+        lt = Lap("아지랑이 · 효과", lt);
         if (Show != Overlay.None) DrawOverlay(img, f, net, x0, y0, w, h);
+        Lap("겹쳐 보기", lt);
         return img;
     }
 
@@ -960,12 +1004,12 @@ public sealed partial class Painter
             : DotBotState.Ok;
         if (c.Kind == AgentKind.Drone)
         {
-            var dr = Cached(Key(9, (int)state, frame & 3, a.Id & 3), () => DotBots.Drone(DotDroneKind.Repair, state, frame & 3));
+            var dr = Cached(Key(9, (int)state, frame & 3, a.Id & 3), (state, f4: frame & 3), static q => DotBots.Drone(DotDroneKind.Repair, q.state, q.f4));
             Put(img, dr, px + T / 2 - dr.W / 2, py + T / 2 - dr.H / 2 - 8);
             return;
         }
         var kind = (DotBotKind)(a.Id % 4);
-        var bot = Cached(Key(8, (int)kind, (int)state, frame & 3, a.Id & 7), () => DotBots.Robot(kind, state, frame & 3, a.Id));
+        var bot = Cached(Key(8, (int)kind, (int)state, frame & 3, a.Id & 7), (kind, state, f4: frame & 3, a.Id), static q => DotBots.Robot(q.kind, q.state, q.f4, q.Id));
         Put(img, bot, px + T / 2 - DotBots.Cx, py + T - DotBots.Foot - 1);
     }
 }

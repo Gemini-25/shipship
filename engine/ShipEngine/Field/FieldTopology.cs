@@ -91,6 +91,7 @@ public sealed partial class Field
     {
         _dirty = false;
         TopologyVersion++;
+        ScanPass();
         PushOutTrapped();
         BuildTopology();
         MarkAllDirty();
@@ -102,6 +103,7 @@ public sealed partial class Field
         if (_topoDoor.Length != DoorOpen.Length || _topoHole.Length != Hole.Length || _topoTaped.Length != DoorTaped.Length || _topoBleed.Length != DoorBleed.Length) { _dirty = true; Rebuild(); return; }
         var door = DoorOpen; var hole = Hole; var taped = DoorTaped; var bleed = DoorBleed;
         DoorOpen = (float[])_topoDoor.Clone(); Hole = (float[])_topoHole.Clone(); DoorTaped = (byte[])_topoTaped.Clone(); DoorBleed = (byte[])_topoBleed.Clone();
+        ScanPass();
         BuildTopology();
         DoorOpen = door; Hole = hole; DoorTaped = taped; DoorBleed = bleed;
     }
@@ -110,7 +112,20 @@ public sealed partial class Field
     private byte[] _topoTaped = Array.Empty<byte>();
     private byte[] _topoBleed = Array.Empty<byte>();
 
-    /// <summary>1. 기체가 못 드는 칸(닫힌 문 등)에 남은 기체는 이웃으로 밀어낸다.</summary>
+    /// <summary>칸마다 트였나를 한 번 센다 (밀어내기 · 구역이 함께 쓴다) — 지난번과 달라진 칸은 그 둘레 틈 곁 칸 기억을 지운다.</summary>
+    private void ScanPass()
+    {
+        if (_pass.Length != Cells) { _pass = new byte[Cells]; _near.Clear(); }
+        _passChanged.Clear();
+        for (int i = 0; i < Cells; i++)
+        {
+            byte p = Passable(i) ? (byte)1 : (byte)0;
+            if (p != _pass[i]) { _pass[i] = p; _passChanged.Add(i); }
+        }
+        ForgetNear();
+    }
+
+    /// <summary>1. 기체가 못 드는 칸(닫힌 문 등)에 남은 기체는 이웃으로 밀어낸다 (<see cref="ScanPass"/> 다음에).</summary>
     private void PushOutTrapped()
     {
         Span<int> nb = stackalloc int[4];
@@ -118,15 +133,15 @@ public sealed partial class Field
         // 1. 기체가 못 드는 칸(닫힌 문 등)에 남은 기체는 이웃으로 밀어낸다
         for (int i = 0; i < Cells; i++)
         {
-            if (Passable(i) || L.Kind[i] == CellKind.Outside) continue;
-            if (Moles(i) <= 0 && U[i] <= 0) continue;
+            if (_pass[i] != 0 || L.Kind[i] == CellKind.Outside) continue;
+            if (U[i] <= 0 && Moles(i) <= 0) continue;   // 값싼 쪽 먼저 (벽 칸은 거의 다 여기서 끝난다)
             L.Neighbors(i, nb);
             int cnt = 0;
-            foreach (int j in nb) if (j >= 0 && Passable(j)) cnt++;
+            foreach (int j in nb) if (j >= 0 && _pass[j] != 0) cnt++;
             if (cnt == 0) continue;
             foreach (int j in nb)
             {
-                if (j < 0 || !Passable(j)) continue;
+                if (j < 0 || _pass[j] == 0) continue;
                 for (int g = 0; g < G; g++) N[j * G + g] += N[i * G + g] / cnt;
                 U[j] += U[i] / cnt;
             }
@@ -136,7 +151,7 @@ public sealed partial class Field
 
     }
 
-    /// <summary>2 · 3. 구역 (칸 번호 순서로 — 결정론) · 틈.</summary>
+    /// <summary>2 · 3. 구역 (칸 번호 순서로 — 결정론) · 틈 (<see cref="ScanPass"/> 다음에).</summary>
     private void BuildTopology()
     {
         Span<int> nb = stackalloc int[4];
@@ -145,26 +160,35 @@ public sealed partial class Field
         if (_topoTaped.Length != DoorTaped.Length) _topoTaped = new byte[DoorTaped.Length];
         if (_topoBleed.Length != DoorBleed.Length) _topoBleed = new byte[DoorBleed.Length];
         Array.Copy(DoorOpen, _topoDoor, DoorOpen.Length); Array.Copy(Hole, _topoHole, Hole.Length); Array.Copy(DoorTaped, _topoTaped, DoorTaped.Length); Array.Copy(DoorBleed, _topoBleed, DoorBleed.Length);
+        // 2. 구역: 한 번 훑으며 왼쪽 · 위 이웃과 잇는다 (뿌리는 늘 무리에서 가장 작은 칸) · 다시 훑으며 뿌리를 만난 차례로 번호
+        //    — 가장 작은 칸 번호 차례 · 구역 안 칸은 번호 차례 (넓이 우선으로 채우고 줄 세우던 것과 같다)
         if (RegionOf.Length != Cells) RegionOf = new int[Cells];
-        Array.Fill(RegionOf, -1);
-        Regions.Clear();
-        var q = new Queue<int>();
-        var list = new List<int>();
+        if (_uf.Length != Cells) { _uf = new int[Cells]; _regN = new int[Cells]; }
+        var pass = _pass; var uf = _uf; var regOf = RegionOf; var regN = _regN;
+        int w = L.W, h = L.H, count = 0;
+        for (int y = 0, i = 0; y < h; y++)
+            for (int x = 0; x < w; x++, i++)
+            {
+                if (pass[i] == 0) { uf[i] = -1; continue; }
+                uf[i] = i;
+                if (x > 0 && pass[i - 1] != 0) Join(i, i - 1);
+                if (y > 0 && pass[i - w] != 0) Join(i, i - w);
+            }
         for (int i = 0; i < Cells; i++)
         {
-            if (RegionOf[i] >= 0 || !Passable(i)) continue;
-            int id = Regions.Count;
-            list.Clear();
-            RegionOf[i] = id; q.Enqueue(i);
-            while (q.Count > 0)
-            {
-                int c = q.Dequeue(); list.Add(c);
-                L.Neighbors(c, nb);
-                foreach (int j in nb)
-                    if (j >= 0 && RegionOf[j] < 0 && Passable(j)) { RegionOf[j] = id; q.Enqueue(j); }
-            }
-            list.Sort();
-            Regions.Add(list.ToArray());
+            if (uf[i] < 0) { regOf[i] = -1; continue; }
+            int r = Root(i);
+            int id = r == i ? count++ : regOf[r];
+            if (r == i) regN[id] = 0;
+            regOf[i] = id;
+            regN[id]++;
+        }
+        Regions.Clear();
+        for (int r = 0; r < count; r++) { Regions.Add(new int[regN[r]]); regN[r] = 0; }
+        for (int i = 0; i < Cells; i++)
+        {
+            int r = regOf[i];
+            if (r >= 0) Regions[r][regN[r]++] = i;
         }
 
         // 3. 틈
@@ -179,8 +203,10 @@ public sealed partial class Field
             var (a, b) = door.Vertical ? (Cell(x, y - 1), Cell(x, y + 1)) : (Cell(x - 1, y), Cell(x + 1, y));
             AddLink(a, b, c, area, DoorOpen[d] > 0 ? LinkKind.DoorAjar : LinkKind.DoorGap);
         }
+        Edges();
         for (int i = 0; i < Cells; i++)
         {
+            if (!(Hole[i] > 0) && _edge[i] == 0) continue;   // 구멍도 없고 바깥과 맞닿지도 않은 칸에는 틈이 없다
             if (L.Kind[i] == CellKind.Wall && Hole[i] > 0 && Hole[i] < 2f)
             {
                 int x = L.X(i), y = L.Y(i);
@@ -242,25 +268,87 @@ public sealed partial class Field
         return n > 1e-9 ? ((float)(dx / n), (float)(dy / n)) : (0f, 0f);
     }
 
-    /// <summary>틈 곁 칸들과 무게 (거리 d에서 e^(−d/2) · 반지름 6).</summary>
+    private const int NearRadius = 6;
+
+    /// <summary>
+    /// 틈 곁 칸들과 무게 (거리 d에서 e^(−d/2) · 반지름 6). 같은 구역 = 트인 칸으로 이어짐이라 시작 칸에서 6걸음 안의 트임에만 달려 있다 —
+    /// 시작 칸마다 기억해 두고 그 안의 칸이 트이거나 막히면 지운다 (<see cref="ForgetNear"/> — 문이 여닫힐 때마다 짓는데 대개 먼 곳이다).
+    /// </summary>
     private (int[], double[]) Near(int start, int region)
     {
-        const int Radius = 6;
-        var cells = new List<int>(); var ws = new List<double>();
-        var dist = new Dictionary<int, int> { [start] = 0 };
-        var q = new Queue<int>(); q.Enqueue(start);
+        if (_near.TryGetValue(start, out var hit)) return hit;
+        if (_nearSeen.Length != Cells) { _nearSeen = new int[Cells]; _nearDist = new int[Cells]; _nearQ = new int[Cells]; _nearGen = 0; }
+        int gen = ++_nearGen;
+        _nearCells.Clear(); _nearW.Clear();
+        int head = 0, tail = 0;
+        _nearQ[tail++] = start; _nearSeen[start] = gen; _nearDist[start] = 0;
         Span<int> nb = stackalloc int[4];
-        while (q.Count > 0)
+        while (head < tail)
         {
-            int c = q.Dequeue(); int d = dist[c];
-            cells.Add(c); ws.Add(Math.Exp(-d / 2.0));
-            if (d >= Radius) continue;
+            int c = _nearQ[head++]; int d = _nearDist[c];
+            _nearCells.Add(c); _nearW.Add(Math.Exp(-d / 2.0));
+            if (d >= NearRadius) continue;
             L.Neighbors(c, nb);
             foreach (int j in nb)
-                if (j >= 0 && RegionOf[j] == region && !dist.ContainsKey(j)) { dist[j] = d + 1; q.Enqueue(j); }
+                if (j >= 0 && RegionOf[j] == region && _nearSeen[j] != gen) { _nearSeen[j] = gen; _nearDist[j] = d + 1; _nearQ[tail++] = j; }
         }
-        return (cells.ToArray(), ws.ToArray());
+        var res = (_nearCells.ToArray(), _nearW.ToArray());
+        _near[start] = res;
+        return res;
     }
+
+    /// <summary>트임이 바뀐 칸에서 6칸(맨해튼) 안의 시작 칸 기억을 지운다 — 6걸음 길은 그 밖을 밟지 못한다.</summary>
+    private void ForgetNear()
+    {
+        if (_passChanged.Count == 0 || _near.Count == 0) return;
+        if (_passChanged.Count > 64) { _near.Clear(); return; }
+        _nearDrop.Clear();
+        foreach (int s in _near.Keys)
+        {
+            int sx = L.X(s), sy = L.Y(s);
+            foreach (int c in _passChanged)
+                if (Math.Abs(L.X(c) - sx) + Math.Abs(L.Y(c) - sy) <= NearRadius) { _nearDrop.Add(s); break; }
+        }
+        foreach (int s in _nearDrop) _near.Remove(s);
+    }
+
+    /// <summary>바깥(도면 끝 · 바깥 칸 · 떨어져 나간 칸)과 맞닿은 칸 — 떨어져 나간 칸이 바뀔 때만 다시 센다.</summary>
+    private void Edges()
+    {
+        if (_edge.Length == Cells && Severed.AsSpan().SequenceEqual(_edgeSevered)) return;
+        if (_edge.Length != Cells) _edge = new byte[Cells];
+        Span<int> nb = stackalloc int[4];
+        for (int i = 0; i < Cells; i++)
+        {
+            L.Neighbors(i, nb);
+            byte e = 0;
+            foreach (int j in nb) if (j < 0 || IsOut(j)) { e = 1; break; }
+            _edge[i] = e;
+        }
+        _edgeSevered = (byte[])Severed.Clone();
+    }
+
+    private int Root(int x)
+    {
+        while (_uf[x] != x) { _uf[x] = _uf[_uf[x]]; x = _uf[x]; }
+        return x;
+    }
+
+    /// <summary>두 무리를 잇는다 — 큰 번호 뿌리를 작은 번호 뿌리 밑에 (뿌리 = 무리에서 가장 작은 칸).</summary>
+    private void Join(int a, int b)
+    {
+        int ra = Root(a), rb = Root(b);
+        if (ra == rb) return;
+        if (ra < rb) _uf[rb] = ra; else _uf[ra] = rb;
+    }
+
+    // 다시 짓기 살림 (찍지 않는다 — 트임에서 다시 나온다)
+    private byte[] _pass = Array.Empty<byte>(), _edge = Array.Empty<byte>(), _edgeSevered = Array.Empty<byte>();
+    private int[] _uf = Array.Empty<int>(), _regN = Array.Empty<int>(), _nearSeen = Array.Empty<int>(), _nearDist = Array.Empty<int>(), _nearQ = Array.Empty<int>();
+    private int _nearGen;
+    private readonly List<int> _passChanged = new(), _nearCells = new(), _nearDrop = new();
+    private readonly List<double> _nearW = new();
+    private readonly Dictionary<int, (int[], double[])> _near = new();
 
     /// <summary>구역 안 각 칸의 '틈까지 거리' (바람 계산).</summary>
     private int[] DistanceFrom(int start, int region, int[] buffer)

@@ -1258,7 +1258,7 @@ public sealed partial class ShipMind : IEngine
             return new Imagined { Tick = sim.Tick, Room = room, Option = option, Dead = dead, Down = down, LostKPa = (float)lost, Score = (float)(dead * 100 + down * 30 + lost * 0.5) };
         }
         // 두 복제 세계는 서로 닿지 않는다 — 함께 돌린다 (복제는 차례로: 원래 세계를 동시에 읽지 않게). 결과는 순서와 상관없이 같다.
-        var w0 = sim.Clone(); var w1 = sim.Clone();
+        var ws = sim.Clones(2); var w0 = ws[0]; var w1 = ws[1];
         Imagined a = default, b = default;
         if (Par.Threads <= 1) { a = Run(0, w0); b = Run(1, w1); }
         else Parallel.Invoke(() => a = Run(0, w0), () => b = Run(1, w1));

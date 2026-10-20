@@ -432,41 +432,41 @@ public sealed partial class Field
     /// 낮은 칸이 모자란 만큼 나눠 받는다 — 그래서 한 칸에 넣은 연기 · 이산화탄소는 그 칸에 남고(확산으로 천천히 퍼진다), 압력만 고르게 된다.
     /// 성분 · 에너지가 그대로 옮겨져 보존된다.
     /// </summary>
+    private sealed class EqBuf { public double[] Pool = Array.Empty<double>(), Avg = Array.Empty<double>(), Give = Array.Empty<double>(), P = new double[256], Pn = new double[256], Pc = new double[256]; }
+    [ThreadStatic] private static EqBuf? _eqBuf;
+
     private void Equalize()
     {
         int nr = Regions.Count;
         if (_imb.Length < nr) { var a = new double[nr]; Array.Fill(a, 1.0); Array.Copy(_imb, a, _imb.Length); _imb = a; }
         Par.Items(nr, 4, (a, b) =>
         {
-            var pool = new double[G];
-            var avg = new double[G];
-            var give = new double[G];
-            var p = new double[256];
-            var pn = new double[256];   // 칸의 몰 · 열용량 (압력을 셀 때 한 번 — 넘친 칸에서 다시 세지 않는다)
-            var pc = new double[256];
+            // 일꾼마다 한 벌 (덩어리마다 새로 잡지 않는다 — 구역마다 다 덮어쓰거나 지우고 쓴다)
+            var buf = _eqBuf ??= new EqBuf();
+            if (buf.Pool.Length != G) { buf.Pool = new double[G]; buf.Avg = new double[G]; buf.Give = new double[G]; }
+            var pool = buf.Pool; var avg = buf.Avg; var give = buf.Give;
+            var p = buf.P; var pn = buf.Pn; var pc = buf.Pc;   // 칸의 압력 · 몰 · 열용량 (압력을 셀 때 한 번 — 넘친 칸에서 다시 세지 않는다)
             for (int r = a; r < b; r++)
             {
                 if (_imb[r] < ImbalanceTolerance) continue;
                 _imb[r] = 0;
                 var cells = Regions[r];
                 if (cells.Length < 2) continue;
-                if (p.Length < cells.Length) { p = new double[cells.Length]; pn = new double[cells.Length]; pc = new double[cells.Length]; }
+                if (p.Length < cells.Length) { buf.P = p = new double[cells.Length]; buf.Pn = pn = new double[cells.Length]; buf.Pc = pc = new double[cells.Length]; }
                 double sum = 0, mx = double.MinValue, mn = double.MaxValue;
+                Array.Clear(avg);
+                double tot = 0;   // 구역 평균 조성도 같은 훑기에서 (같은 차례로 더한다)
                 for (int k = 0; k < cells.Length; k++)
                 {
                     int i = cells[k], bi = i * G;
                     double n0 = 0, c0 = 0;
-                    for (int g = 0; g < G; g++) { double w = N[bi + g]; n0 += w; c0 += w * _cv[g]; }
+                    for (int g = 0; g < G; g++) { double w = N[bi + g]; n0 += w; c0 += w * _cv[g]; avg[g] += w; tot += w; }
                     double v = c0 > 1e-9 ? n0 * R * (U[i] / c0) / CellVolume / 1000.0 : 0;   // Pressure(i)와 같은 셈
                     p[k] = v; pn[k] = n0; pc[k] = c0; sum += v;
                     if (v > mx) mx = v; if (v < mn) mn = v;
                 }
                 double mean = sum / cells.Length;
                 if (mx - mn <= 1e-9 * mean + 1e-9) continue;
-                // 구역 평균 조성
-                Array.Clear(avg);
-                double tot = 0;
-                foreach (int i in cells) for (int g = 0; g < G; g++) { double v = N[i * G + g]; avg[g] += v; tot += v; }
                 if (tot <= 0) continue;
                 for (int g = 0; g < G; g++) avg[g] /= tot;
                 Array.Clear(pool);
