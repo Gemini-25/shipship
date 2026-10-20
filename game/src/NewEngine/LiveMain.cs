@@ -57,6 +57,7 @@ public partial class LiveMain : Node2D
     private int _facesVer = -1;
     private readonly List<(Rect2 R, int Id)> _crewHits = new();
     private readonly List<(Rect2 R, int Cell)> _feedHits = new();
+    private readonly List<(Rect2 R, int Speed)> _speedHits = new();   // 빠르기 단추: -1 멈춤 · 0 연출 · 1~5 배속
     private float _crewH;
 
     // ── 소리: 작업 스레드의 귀가 보낸 것을 메인 스레드의 섞개가 받아 그리고, Godot에는 다 섞인 소리만 밀어 넣는다 ──
@@ -290,8 +291,8 @@ public partial class LiveMain : Node2D
             var film = new Color(0.95f, 0.78f, 0.45f, 0.75f);
             DrawRect(new Rect2(0, 40, vp.X, vp.Y - 40), film, false, 4);
         }
-        string hint = _speedAt == 0 ? "빠르기: 연출" : $"빠르기: ×{GameSecPerSec[_speedAt]:0} (손)";
-        DrawString(_font, new Vector2(vp.X - 230, 27), hint + " · H 도움말", HorizontalAlignment.Right, 214, 15, new Color(0.65f, 0.7f, 0.8f));
+        DrawSpeed(f, vp);
+        DrawString(_font, new Vector2(vp.X - 230, 27), "H 도움말", HorizontalAlignment.Right, 214, 15, new Color(0.65f, 0.7f, 0.8f));
         DrawVitals(f, vp);
 
         // 함장이 항로를 골랐다 (몇 초)
@@ -488,6 +489,37 @@ public partial class LiveMain : Node2D
     }
 
     /// <summary>고른 사람 · 로봇: 그려진 자리에 고리 · 왼쪽에 카드.</summary>
+    /// <summary>빠르기 단추 (UI U5 — 위 줄 가운데 오른쪽): 멈춤 · 연출 · ×1 · ×10 · ×60 · ×600 · ×3600 — 지금 것은 밝게 · 누르면 바꾼다 (스페이스 · 1~6과 같다).</summary>
+    private void DrawSpeed(LiveFrame f, Vector2 vp)
+    {
+        _speedHits.Clear();
+        string[] labels = { "연출", "×1", "×10", "×60", "×600", "×3600" };
+        float h = 24, gap = 4, right = vp.X - 344, y = 8;   // "새 엔진 판" 표지(오른쪽 끝에서 248~330) 왼쪽에
+        var widths = labels.Select(l => _font.GetStringSize(l, HorizontalAlignment.Left, -1, 14).X + 16).ToArray();
+        float x = right - widths.Sum() - gap * labels.Length - 34;
+        var mouse = GetViewport().GetMousePosition();
+        void Button(Rect2 r, string text, bool on, int code)
+        {
+            bool hover = r.HasPoint(mouse);
+            DrawRect(r, on ? new Color(0.25f, 0.42f, 0.7f, 0.95f) : new Color(0.06f, 0.08f, 0.12f, hover ? 0.95f : 0.8f));
+            DrawRect(r, on ? new Color(0.65f, 0.8f, 1f) : new Color(0.3f, 0.38f, 0.5f, hover ? 1 : 0.7f), false, 1);
+            DrawString(on ? _bold : _font, new Vector2(r.Position.X, r.Position.Y + 17), text, HorizontalAlignment.Center, r.Size.X, 14, on ? Colors.White : new Color(0.75f, 0.8f, 0.9f));
+            _speedHits.Add((r, code));
+        }
+        // 멈춤 · 계속 (두 줄 막대 / 세모)
+        var pr = new Rect2(x, y, 30, h);
+        Button(pr, "", f.Paused, -1);
+        var c = new Color(0.9f, 0.93f, 1f);
+        if (f.Paused) DrawColoredPolygon(new[] { pr.Position + new Vector2(11, 6), pr.Position + new Vector2(11, 18), pr.Position + new Vector2(21, 12) }, c);
+        else { DrawRect(new Rect2(pr.Position + new Vector2(10, 6), new Vector2(3, 12)), c); DrawRect(new Rect2(pr.Position + new Vector2(17, 6), new Vector2(3, 12)), c); }
+        x += 30 + gap;
+        for (int i = 0; i < labels.Length; i++)
+        {
+            Button(new Rect2(x, y, widths[i], h), labels[i], !f.Paused && _speedAt == i, i);
+            x += widths[i] + gap;
+        }
+    }
+
     /// <summary>
     /// 사건 띠 (UI U4 — 왼쪽 위 · 사람 카드가 있으면 그 아래): 주컴퓨터가 아는 지금의 사건 · 막 끝난 사건 다섯 줄까지.
     /// 왼쪽 색 띠: 위험 빨강(깜빡임) · 조심 호박 · 알림 파랑 · 끝난 일은 옅게. 누르면 그 자리로.
@@ -597,6 +629,15 @@ public partial class LiveMain : Node2D
         DrawString(_font, new Vector2(box.Position.X + 18, box.End.Y - 12), f.PanelFoot, HorizontalAlignment.Left, inner, 14, new Color(0.6f, 0.68f, 0.8f));
     }
 
+    /// <summary>빠르기를 바꾼다: -1 멈춤 · 계속 (스페이스) · 0 연출 · 1~5 배속 (단추 · 1~6). 멈춘 채 빠르기를 고르면 다시 간다.</summary>
+    private void SetSpeed(int at)
+    {
+        if (at < 0) { _cmds.Enqueue(s => s.Paused = !s.Paused); return; }
+        _speedAt = at;
+        double tps = GameSecPerSec[_speedAt] / Time.SecondsPerTick;
+        _cmds.Enqueue(s => { s.SpeedOverride = tps; s.Paused = false; });
+    }
+
     private void DrawHelp(Vector2 vp)
     {
         string[] lines =
@@ -660,14 +701,8 @@ public partial class LiveMain : Node2D
         {
             switch (k.Keycode)
             {
-                case Key.Space: _cmds.Enqueue(s => s.Paused = !s.Paused); break;
-                case >= Key.Key1 and <= Key.Key6:
-                {
-                    _speedAt = (int)(k.Keycode - Key.Key1);
-                    double tps = GameSecPerSec[_speedAt] / Time.SecondsPerTick;
-                    _cmds.Enqueue(s => s.SpeedOverride = tps);
-                    break;
-                }
+                case Key.Space: SetSpeed(-1); break;
+                case >= Key.Key1 and <= Key.Key6: SetSpeed((int)(k.Keycode - Key.Key1)); break;
                 case Key.F: _cmds.Enqueue(s => { s.Follow = true; s.Overview = false; s.Selected = -1; s.FollowSelected = false; }); break;
                 case Key.B: _cmds.Enqueue(s => { if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
                 case Key.Tab: _cmds.Enqueue(s => s.Overview = !s.Overview); break;
@@ -701,6 +736,9 @@ public partial class LiveMain : Node2D
                     int hitId = -1, hitCell = -1;
                     foreach (var (r, id) in _crewHits) if (r.HasPoint(mb.Position)) { hitId = id; break; }
                     foreach (var (r, cell) in _feedHits) if (r.HasPoint(mb.Position)) { hitCell = cell; break; }
+                    int hitSpeed = int.MinValue;
+                    foreach (var (r, sp) in _speedHits) if (r.HasPoint(mb.Position)) { hitSpeed = sp; break; }
+                    if (_dragDist < 6 && hitSpeed != int.MinValue) { SetSpeed(hitSpeed); return; }   // 빠르기 단추
                     if (_dragDist < 6 && hitId >= 0) { int id = hitId; _cmds.Enqueue(s => s.SelectAgent(id)); }   // 사람 줄: 그를 고르고 따라간다
                     else if (_dragDist < 6 && hitCell >= 0) { int cell = hitCell; _cmds.Enqueue(s => s.LookAt(cell)); }   // 사건 띠: 그 자리로
                     else if (_dragDist < 6 && _shown != null)

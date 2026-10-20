@@ -35,6 +35,8 @@ public sealed class LiveFrame
     public int Selected = -1;
     /// <summary>사건 띠 (UI U4): 주컴퓨터가 아는 지금의 사건 · 막 끝난 사건 (누르면 그 자리로).</summary>
     public FeedItem[] Feed = Array.Empty<FeedItem>();
+    /// <summary>멈춤 (빠르기 단추 — UI U5).</summary>
+    public bool Paused;
 }
 
 /// <summary>사건 띠의 한 줄: 때 · 글 · 단계 (0 알림 · 1 조심 · 2 위험) · 자리 칸 (-1 없음) · 아직인가.</summary>
@@ -553,7 +555,7 @@ public sealed class LiveShow
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
             Vitals = Vitals(),
             Crew = CrewBar(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
-            Feed = Feed(),
+            Feed = Feed(), Paused = Paused,
         };
     }
 
