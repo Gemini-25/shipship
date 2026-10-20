@@ -15,6 +15,7 @@ public enum Hobby : byte { Rest, Read, Game, Film, Music, Study, Tinker }
 public sealed partial class Mind
 {
     private int[] _books = Array.Empty<int>(), _games = Array.Empty<int>(), _films = Array.Empty<int>(), _study = Array.Empty<int>(), _tinker = Array.Empty<int>();
+    private int[] _arcade = Array.Empty<int>(), _vr = Array.Empty<int>(), _musicCorner = Array.Empty<int>(), _scope = Array.Empty<int>();   // 꾸밈 (함장 승인)
     private bool _hobbyBound;
     public long[] HobbyCount = new long[7];
     private int[] _habitCell = Array.Empty<int>();   // [사람 × 쉬는 일] 단골 자리 (설비 칸 · −1 없음)
@@ -48,6 +49,27 @@ public sealed partial class Mind
         Hobby.Study => "자료를 들여다본다", Hobby.Tinker => "손으로 무언가 만든다", _ => "쉰다",
     };
 
+    /// <summary>쉬러 가는 · 쉬는 자리 (계획의 쉼 걸음 칸 — 없으면 -1).</summary>
+    private static int RelaxSpot(Agent a)
+    {
+        for (int i = a.Plan.Count - 1; i >= 0; i--) if (a.Plan[i].Kind == StepKind.Use && a.Plan[i].Arg == (byte)UseKind.Relax) return a.Plan[i].Cell;
+        return -1;
+    }
+
+    /// <summary>쉬는 일의 이름 — 꾸밈의 물건으로 하면 그 물건대로 (오락기 · VR 의자 · 음악 구석 · 망원경).</summary>
+    public string HobbyNameAt(Hobby h, int cell)
+    {
+        int fu = cell >= 0 && cell < L.N ? L.FurnitureAt[cell] : -1;
+        return (h, fu >= 0 ? L.Furniture[fu].Type : "") switch
+        {
+            (Hobby.Game, "ArcadeCabinet") => "오락기를 한다",
+            (Hobby.Film, "VrChair") => "가상 현실에 들어가 있다",
+            (Hobby.Music, "MusicCorner") => "음악 구석에서 악기를 만진다",
+            (Hobby.Study, "Telescope") => "망원경으로 별을 본다",
+            _ => HobbyName(h),
+        };
+    }
+
     /// <summary>아침형 · 저녁형 (시간 — 음수가 아침형): 따로 갈래 낸 난수 + 성격.</summary>
     private static float ChronoOf(ulong seed, int person, float consc, float open)
     {
@@ -68,6 +90,10 @@ public sealed partial class Mind
         _films = Furn(fu => fu.Type is "Projector");
         _study = Furn(fu => fu.Type is "Console" or "DiagnosticScanner" or "SensorArray" && RoomType(fu) is "Lab" or "Observatory" or "Bridge" or "School");
         _tinker = Furn(fu => fu.Type is "Workbench" or "SolderStation" or "Lathe");
+        _arcade = Furn(fu => fu.Type is "ArcadeCabinet");
+        _vr = Furn(fu => fu.Type is "VrChair");
+        _musicCorner = Furn(fu => fu.Type is "MusicCorner");
+        _scope = Furn(fu => fu.Type is "Telescope");
     }
 
     /// <summary>함께 쓰는 설비 (책장 · 놀이 탁자 · 영사기): 같은 일로 곁에 와 있는 이가 cap 명이 안 되는 가장 가까운 것의 칸 (−1 없음).</summary>
@@ -116,6 +142,11 @@ public sealed partial class Mind
         Opt(Hobby.Music, seat >= 0 ? seat : c.Bed >= 0 && !Taken(a, c.Bed) ? c.Bed : -1, 0, 0.3f + 0.6f * c.Neuro);
         Opt(Hobby.Study, NearestFree(a, _study, (int)Hobby.Study), 0, 0.2f + c.SkScience + 0.6f * c.Open);
         Opt(Hobby.Tinker, NearestFree(a, _tinker, (int)Hobby.Tinker), 0, 0.2f + c.SkRepair + 0.6f * c.Consc);
+        // 꾸밈 (함장 승인): 같은 쉼을 그 물건으로 — 오락기(놀이 · 혼자서도) · VR 의자(영상 · 새것을 좋아하는 이) · 음악 구석(음악 · 손으로 켠다) · 망원경(공부 · 별)
+        Opt(Hobby.Game, NearestFree(a, _arcade, (int)Hobby.Game), 0, 0.2f + 0.5f * c.Extra + 0.3f * c.Open);
+        Opt(Hobby.Film, NearestFree(a, _vr, (int)Hobby.Film), 0, 0.2f + 0.6f * c.Open);
+        Opt(Hobby.Music, NearestFree(a, _musicCorner, (int)Hobby.Music), 0, 0.2f + 0.5f * c.Open + 0.3f * c.Extra);
+        Opt(Hobby.Study, NearestFree(a, _scope, (int)Hobby.Study), 0, 0.1f + 0.6f * c.Open + 0.5f * c.SkScience);
         if (opts.Count == 0) return false;
         float sum = 0; foreach (var o in opts) sum += o.w;
         float r = (float)Rng.Unit(sim.Seed, Rng.Key("쉼"), a.Id, sim.Tick / Time.Hours(1)) * sum;

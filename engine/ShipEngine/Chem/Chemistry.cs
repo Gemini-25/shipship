@@ -47,6 +47,11 @@ public sealed class Chemistry : IEngine
     public int[] HeatCause;
     /// <summary>지난 틱에 낸 열 (kW) — 화면 · 연출.</summary>
     public float[] Hrr;
+    /// <summary>꾸밈의 방화 담요가 덮은 칸 (남은 틱): 산소가 겉면에 닿지 않아 타지도 붙지도 않는다 — 덮은 지 약 5분.</summary>
+    public byte[] Smother = Array.Empty<byte>();
+    /// <summary>담요로 덮어 끌 수 있는 불 (그 칸의 열 방출 kW — 휴지통 · 작은 물건 하나의 불 · 이보다 크면 담요 둘레로 번진다).</summary>
+    public const double BlanketMaxKw = 150;
+    public const byte SmotherTicks = 125;
     /// <summary>이번 틱의 불씨 (전기 불꽃 · 불 붙은 이웃의 기체 불) — 다음 틱에 쓴다.</summary>
     private byte[] _spark, _sparkNext;
     private int[] _sparkCause, _sparkCauseNext;
@@ -80,6 +85,7 @@ public sealed class Chemistry : IEngine
     public Chemistry(Field f)
     {
         F = f; T = f.T; Cells = f.Cells;
+        Smother = new byte[Cells];
         Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells]; GasCause = new int[Cells]; _jet = new double[Cells]; _jetNext = new double[Cells];
         FuelLink = new byte[Cells]; Creep = new float[Cells];
         _spark = new byte[Cells]; _sparkNext = new byte[Cells]; _sparkCause = new int[Cells]; _sparkCauseNext = new int[Cells];
@@ -142,6 +148,16 @@ public sealed class Chemistry : IEngine
 
     public bool IsBurning(int cell) => Burning[cell] != 0;
 
+    /// <summary>⑧의 요청: 방화 담요로 그 칸의 불을 덮는다 — 작은 불(열 방출 150kW 아래)만 꺼진다 (큰 불은 담요 둘레로 번진다 — false).</summary>
+    public bool Blanket(Sim sim, int cell, int cause)
+    {
+        if (cell < 0 || cell >= Cells || Burning[cell] == 0 || Hrr[cell] > BlanketMaxKw) return false;
+        Smother[cell] = SmotherTicks;
+        if (cause != 0) FireCause[cell] = sim.Causes.Add(CauseKind.Person, "담요에 덮여 불이 숨을 못 쉰다", sim.Tick, cell, cause);
+        Out(sim, cell);
+        return true;
+    }
+
     /// <summary>이 칸의 탈 것이 그 쪽 이웃의 탈 것과 이어져 있다 (전선 묶음 — ⑥이 요청).</summary>
     public void LinkFuel(int cell, byte dirs) { if (cell >= 0 && cell < Cells) FuelLink[cell] |= dirs; }
 
@@ -171,6 +187,7 @@ public sealed class Chemistry : IEngine
             Quench(i);
             Pyro(sim, i, dt);
             Hydrolyze(sim, i, dt);
+            if (Smother[i] != 0) { Smother[i]--; if (Burning[i] != 0) Out(sim, i); continue; }   // 방화 담요가 덮고 있다 — 타지도 붙지도 않는다 (겉면은 그대로 식는다)
             if (Burning[i] == 0 && F.Tf[i] < _coldK) continue;   // 가장 낮은 발화 온도보다 차가운 칸은 붙을 것이 없다 (산소 · 기압을 셀 까닭이 없다 — 대부분의 칸)
             if (!HasFuel(i)) { if (Burning[i] != 0) { HandOff(sim, i, nb); Out(sim, i); } continue; }
             double tf = F.Tf[i], x = O2Frac(i), pf = PressureFactor(i);
@@ -684,6 +701,7 @@ public sealed class Chemistry : IEngine
         w.Arr(FuelLink); w.Arr(Creep); w.I64(Creeps); w.F64(PyroHcl);
         w.Tag("폭발 소리"); w.Arr(_boomJ); w.Arr(_boomCell); w.Arr(_boomCause);
         w.Arr(GasCause); w.Arr(_jet); w.Arr(_jetNext);
+        w.Tag("담요"); w.Arr(Smother);
     }
 
     public void Load(StateReader r)
@@ -693,5 +711,6 @@ public sealed class Chemistry : IEngine
         r.ArrInto(FuelLink); r.ArrInto(Creep); Creeps = r.I64(); PyroHcl = r.F64();
         r.Tag("폭발 소리"); r.ArrInto(_boomJ); r.ArrInto(_boomCell); r.ArrInto(_boomCause);
         r.ArrInto(GasCause); r.ArrInto(_jet); r.ArrInto(_jetNext);
+        r.Tag("담요"); r.ArrInto(Smother);
     }
 }

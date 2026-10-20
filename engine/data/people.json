@@ -33,7 +33,9 @@
     "DiagnosticScanner": { "인공 심장": 1, "인공 폐": 1 },
     "Refinery":      { "원료": 4 },
     "PowerPanel":    { "이산화탄소 소화기": 1 },
-    "MainComputer":  { "이산화탄소 소화기": 1 }
+    "MainComputer":  { "이산화탄소 소화기": 1 },
+    "FireBlanket":   { "방화 담요": 1 },
+    "SupplyCache":   { "산소 마스크": 2, "봉합 꾸러미": 1, "구급 상자": 1 }
   },
   "items": {
     "소화기":      { "water": 500, "minutes": 0, "kg": 9 },
@@ -64,7 +66,8 @@
     "전자 소자":   { "minutes": 0, "kg": 0.3 },
     "헌 부품":     { "minutes": 0, "kg": 3 },
     "헌 전기 부품": { "minutes": 0, "kg": 2 },
-    "외장 틀":     { "minutes": 90, "kg": 15 }
+    "외장 틀":     { "minutes": 90, "kg": 15 },
+    "방화 담요":   { "minutes": 0.1, "kg": 2 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

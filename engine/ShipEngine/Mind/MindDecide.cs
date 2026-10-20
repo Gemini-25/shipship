@@ -503,6 +503,22 @@ public sealed partial class Mind
                 // ② (바) 소화기 고르기: 전기가 흐르는 곳의 불이면 아는 이(로봇 · 전기 0.3 넘게)는 이산화탄소 · 아니면 물 (식혀 다시 붙지 않게) · 모르면 가까운 것
                 var (want, picky) = ChooseExtinguisher(a, o.Cell, here);
                 bool held = (c.Holding == iExt || c.Holding == iCO2) && c.HoldCharge >= 20;
+                // 꾸밈의 방화 담요: 막 붙은 작은 불(보이는 불꽃이 작다)이면 — 소화기가 없거나 담요가 훨씬 가까울 때 · 이미 들고 있으면 바로 덮는다
+                if (!held && _chem != null && _chem.Hrr[o.Cell] <= Chemistry.BlanketMaxKw)
+                {
+                    int bl = c.Holding == iBlanket ? -2 : NearestStock(here, iBlanket), ext = NearestStock(here, want);
+                    if (bl == -2 || bl >= 0 && (ext < 0 || Manhattan(here, L.Furniture[bl].Cells[0]) + 4 < Manhattan(here, L.Furniture[ext].Cells[0])))
+                    {
+                        if (bl >= 0)
+                        {
+                            plan.Add(Go(L.Furniture[bl].Cells[0], 1));
+                            plan.Add(new PlanStep { Kind = StepKind.Take, Target = bl, Arg = iBlanket });
+                        }
+                        plan.Add(Go(o.Cell, 1));
+                        plan.Add(new PlanStep { Kind = StepKind.Spray, Cell = o.Cell });
+                        return true;
+                    }
+                }
                 if (!held || picky && c.Holding != want)
                 {
                     int src = NearestStock(here, want);   // 다른 것을 들고 있으면 소화기를 집을 때 내려놓는다 (수리 꾸러미를 든 채 불을 못 끄던 빈틈)
@@ -974,10 +990,11 @@ public sealed partial class Mind
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell) { used = true; break; }
             if (used) continue;
-            // 어울리러 가면 쉬는 사람 곁(말이 닿는 거리) 자리에 앉는다 — 의자가 많은 방에서 혼자 먼 구석에 앉지 않게
-            int near = 0;
-            foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && Society.Leisure(o.C.Goal) && Dist(o.C.Cell, cell) < Society.TalkReach) near++;
-            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 + near * 8 - Manhattan(a.C.Cell, cell) * 0.1
+            // 어울리러 가면 같은 방에서 쉬는 사람 곁 자리에 앉는다 (가까울수록 — 말이 닿는 거리면 크게) — 의자가 많은 방에서 혼자 먼 구석에 앉지 않게
+            double near = 0;
+            foreach (var o in Agents)
+                if (o != a && o.IsPerson && o.C.Up != 0 && Society.Leisure(o.C.Goal) && RoomOf(o.C.Cell) == L.Furniture[fu].Room) near += Math.Max(0, 10 - Dist(o.C.Cell, cell));
+            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 + near - Manhattan(a.C.Cell, cell) * 0.1
                        - Shun(a.Id, L.Furniture[fu].Room) * 30; // 꺼리는 방 · 금기의 방은 사람이 모여 있어도 덜 간다
             if (s > bs) { bs = s; best = cell; }
         }

@@ -611,6 +611,17 @@ public sealed partial class Mind
     }
 
     private bool HeatBad(int cell) => F.Temp(cell) > 330 || BurningNear(cell, 1);
+
+    /// <summary>곁(한 칸)의 불이 모두 담요로 덮을 만큼 작다 (보이는 불꽃).</summary>
+    private bool SmallFireOnly(int cell)
+    {
+        if (_chem == null) return false;
+        int x0 = L.X(cell), y0 = L.Y(cell);
+        for (int y = Math.Max(0, y0 - 1); y <= Math.Min(L.H - 1, y0 + 1); y++)
+            for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++)
+                if (_chem.Burning[L.Index(x, y)] != 0 && _chem.Hrr[L.Index(x, y)] > Chemistry.BlanketMaxKw) return false;
+        return true;
+    }
     private bool SmokeBad(Agent a, int cell) => _light != null && _light.Visibility(cell) < 3 && !(a.IsPerson && _life![a.C.Body].Suit != 0);
 
     /// <summary>몸이 느끼는 대로 안전한 칸인가.</summary>
@@ -623,6 +634,8 @@ public sealed partial class Mind
         ref var c = ref a.C;
         int cell = c.Cell;
         bool air = AirBad(a, cell), heat = HeatBad(cell), smoke = SmokeBad(a, cell);
+        // 꾸밈의 방화 담요: 담요를 들고 작은 불 바로 곁에 온 이는 잠깐의 열을 견디고 덮는다 (불 곁이라고 물러서면 담요를 쓸 수 없다 — 공기가 데지 않을 때만)
+        if (heat && !air && c.Mode == 0 && c.Goal == GoalKind.FightFire && c.Holding == iBlanket && F.Temp(cell) <= 330 && SmallFireOnly(cell)) heat = false;
         if (c.Mode == 1)
         {
             bool arrived = a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count;

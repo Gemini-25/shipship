@@ -311,6 +311,18 @@ public sealed partial class Mind
             else Fail(sim, a, "불이 손 닿는 곳에 없다");
             return;
         }
+        if (c.Holding == iBlanket)
+        {
+            // 꾸밈의 방화 담요: 가장 가까운 불 한 칸을 덮는다 — 작은 불만 꺼진다 (큰 불이면 담요를 든 채 다른 길을 찾는다)
+            int f0 = fires[0];
+            foreach (int f in fires) if (Dist(c.Cell, f) < Dist(c.Cell, f0)) f0 = f;
+            if (Dist(c.Cell, f0) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+            Activity(a, "hard");
+            int bcause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 방화 담요로 불을 덮었다", t, f0, c.GoalCause, 0, a.Id);
+            if (_chem == null || !_chem.Blanket(sim, f0, bcause)) { Fail(sim, a, "불이 담요로 덮기엔 크다", SnagKind.Other, f0); return; }
+            UseHeld(sim, a);   // 담요는 불 위에 남는다
+            return;
+        }
         bool co2 = c.Holding == iCO2;
         if (c.Holding != iExt && !co2 || c.HoldCharge <= 0.5f)
         {

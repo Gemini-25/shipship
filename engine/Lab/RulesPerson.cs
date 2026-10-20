@@ -112,18 +112,22 @@ public static partial class Program
             int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24;   // 둘 다 일도 잠도 아닌 빈 시간
             void Hold(int x, float bored, float lonely) { ref var c = ref m[x].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Unfit = 0; c.Bored = bored; c.Lonely = lonely; }
             bool Seated(int x) => m[x].C.StepIndex < m.Agents[x].Plan.Count && m.Agents[x].Plan[m[x].C.StepIndex].Kind == StepKind.Use;
-            // q가 먼저 쉬러 가 자리를 잡는다 (p는 아직 외롭지 않다)
-            for (long t = 0; t < Time.Hours(1) && !(m[q].C.Goal == GoalKind.Relax && Seated(q)); t++) { Hold(q, 1, 0); Hold(p, 0, 0); s.Step(); }
-            bool qSeated = m[q].C.Goal == GoalKind.Relax && Seated(q);
+            // q가 먼저 어울림 방(식당 · 휴게실)에 쉬러 가 자리를 잡는다 (p는 아직 외롭지 않다 — 꾸민 배는 망원경 · 오락기처럼 다른 방에서도 쉬니 어울림 방에 앉을 때까지)
+            bool SocialRoom(int x) => m.RoomOf(m[x].C.Cell) is int r && r >= 0 && s.Layout.Rooms[r].Type is "Mess" or "Lounge" or "Galley";
+            for (long t = 0; t < Time.Hours(4) && !(m[q].C.Goal == GoalKind.Relax && Seated(q) && SocialRoom(q)); t++) { Hold(q, 1, 0); Hold(p, 0, 0); s.Step(); }
+            bool qSeated = m[q].C.Goal == GoalKind.Relax && Seated(q) && SocialRoom(q);
             int dist = -1;
             for (long t = 0; t < Time.Hours(1) && dist < 0; t++)
             {
                 Hold(q, 1, 0); Hold(p, 0, 1); s.Step();
                 if (m[p].C.Goal == GoalKind.Socialize && Seated(p)) dist = m.Dist(m[p].C.Cell, m[q].C.Cell);
             }
-            Check("어울리러 가면 쉬는 사람 곁(말이 닿는 거리) 자리에 앉는다 (의자 많은 방에서 혼자 먼 의자에 앉지 않는다)",
-                qSeated && dist >= 0 && dist < Society.TalkReach,
-                $"먼저 쉬는 이 자리 잡음 {qSeated} · 어울리러 온 이와의 거리 {dist}칸 (말이 닿는 거리 {Society.TalkReach - 1}칸 안) · {m.Thought(p)}");
+            // 쉬는 이에게서 가장 가까운 어울림 자리 (식당 · 휴게실 · 주방의 의자 · 탁자) — 그보다 멀리 앉으면 안 된다
+            int best = s.Layout.Furniture.Where(fu => fu.Type is "Seat" or "Table" && fu.Room >= 0 && s.Layout.Rooms[fu.Room].Type is "Mess" or "Lounge" or "Galley" && fu.Cells[0] != m[q].C.Cell)
+                .Select(fu => m.Dist(fu.Cells[0], m[q].C.Cell)).DefaultIfEmpty(99).Min();
+            Check("어울리러 가면 쉬는 사람 곁(말이 닿는 거리 · 없으면 가장 가까운) 자리에 앉는다 (의자 많은 방에서 혼자 먼 의자에 앉지 않는다)",
+                qSeated && dist >= 0 && (dist < Society.TalkReach || dist <= best + 1),
+                $"먼저 쉬는 이 자리 잡음 {qSeated} ({m.Thought(q)}) · 어울리러 온 이와의 거리 {dist}칸 (말이 닿는 거리 {Society.TalkReach - 1}칸 · 가장 가까운 어울림 자리 {best}칸) · {m.Thought(p)}");
         }
 
         // ── 신경성: 불을 본 순간 — 불안한 사람은 더 겁먹고 · 차분한 사람은 덜 ──

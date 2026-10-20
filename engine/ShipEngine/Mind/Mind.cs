@@ -42,6 +42,7 @@ public sealed partial class Mind : IEngine
     public readonly byte iOpioid, iApap, iAbx, iAntidote, iEpi;   // ⑦ 약품고 (의료 침대)
     public readonly byte iRegen, iArtHeart, iArtLung, iHypnotic;             // ⑦ (라-2) 재생 젤 (의료 침대) · 인공 심장 · 인공 폐 (진단 장치)
     public readonly byte iChip, iScrap, iScrapElec, iFrame;                  // ⑪ 공급 사슬 — 전자 소자 · 헌 부품 · 헌 전기 부품 · 외장 틀
+    public readonly byte iBlanket;                                           // 꾸밈의 방화 담요 (함장 승인)
     /// <summary>⑪ 부품 갈래마다 갈아 끼울 부품 (전기 · 기계 · 봉함 · 거르개 — <see cref="Part"/> 차례).</summary>
     public readonly byte[] iSpare;
     /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
@@ -82,6 +83,7 @@ public sealed partial class Mind : IEngine
         iOpioid = Item("진통제"); iApap = Item("해열제"); iAbx = Item("항생제"); iAntidote = Item("해독제"); iEpi = Item("아드레날린");
         iRegen = Item("재생 젤"); iArtHeart = Item("인공 심장"); iArtLung = Item("인공 폐"); iHypnotic = Item("수면제");
         iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품"); iFrame = Item("외장 틀");
+        iBlanket = Item("방화 담요");
         iSpare = new[] { Item("전기 부품"), Item("기계 부품"), Item("봉함재"), Item("거르개") };
 
         Stock = new int[L.Furniture.Count * ItemCount];
@@ -427,13 +429,13 @@ public sealed partial class Mind : IEngine
     public string Thought(int agent)
     {
         var a = Agents[agent];
-        string s = a.C.Goal == GoalKind.Relax && a.IsPerson ? HobbyName((Hobby)a.C.Hobby) : GoalName(a.C.Goal);
+        string s = a.C.Goal == GoalKind.Relax && a.IsPerson ? HobbyNameAt((Hobby)a.C.Hobby, RelaxSpot(a)) : GoalName(a.C.Goal);
         if (a.Plan.Count > 0 && a.C.StepIndex < a.Plan.Count)
         {
             var st = a.Plan[a.C.StepIndex];
             string step = st.Kind switch
             {
-                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Tighten => "조이는 중", StepKind.Clean => "닦는 중", StepKind.Harvest => "거두는 중", StepKind.Stow => "갈무리하는 중", StepKind.TakeFood => "식량 상자 꺼내는 중",
+                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => a.C.Holding == iBlanket ? "담요로 덮는 중" : a.C.Holding == iCO2 ? "소화기를 뿜는 중" : "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Tighten => "조이는 중", StepKind.Clean => "닦는 중", StepKind.Harvest => "거두는 중", StepKind.Stow => "갈무리하는 중", StepKind.TakeFood => "식량 상자 꺼내는 중",
                 StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중", _ => "",
             };
             if (step.Length > 0) s += " — " + step;
