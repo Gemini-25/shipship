@@ -16,6 +16,7 @@ public static partial class Program
         const double dt = 1.0 / 60;
         Directory.CreateDirectory("build/live");
         foreach (var old in Directory.GetFiles("build/live", "*.png")) File.Delete(old);
+        Warmup.Start();   // 게임처럼: 큰 메서드를 처음 부를 때의 멈칫을 미리 (낮은 우선순위 스레드)
         var show = LiveShow.Crewed(ship, seed);
         show.Sim.Measure = true;
         var adv = new List<double>(); var paint = new List<double>(); var mixMs = new List<double>();
@@ -28,6 +29,8 @@ public static partial class Program
         var sw = new System.Diagnostics.Stopwatch();
         string lastMood = ""; int shots = 0; double nextShot = 0; long ticks = 0;
         int frames = (int)(screenSec / dt);
+        LiveShow.AdvAlloc = new();
+
         for (int fr = 0; fr < frames; fr++)
         {
             show.Sim.LastMs.Clear();
@@ -52,11 +55,13 @@ public static partial class Program
                 Painter.Prof = new(); Painter.ProfAlloc ??= new();
                 sw.Restart();
                 long p0 = GC.GetAllocatedBytesForCurrentThread();
+                var j0 = System.Runtime.JitInfo.GetCompilationTime(true); long jm0 = System.Runtime.JitInfo.GetCompiledMethodCount(true);
                 var lf = show.Render();
+                double jitMs = (System.Runtime.JitInfo.GetCompilationTime(true) - j0).TotalMilliseconds; long jm = System.Runtime.JitInfo.GetCompiledMethodCount(true) - jm0;
                 paintAlloc += GC.GetAllocatedBytesForCurrentThread() - p0;
                 paint.Add(sw.Elapsed.TotalMilliseconds);
                 foreach (var kv in Painter.Prof) paintParts[kv.Key] = paintParts.GetValueOrDefault(kv.Key) + kv.Value;
-                if (paint[^1] > 20 && fr > 60) Console.WriteLine($"  ⚠ 그리기 {fr * dt:0.0}초 · {paint[^1]:0}ms — {string.Join(" · ", Painter.Prof.OrderByDescending(x => x.Value).Take(4).Select(x => $"{x.Key} {x.Value:0.0}ms"))}");
+                if (paint[^1] > 20 && fr > 60) Console.WriteLine($"  ⚠ 그리기 {fr * dt:0.0}초 · {paint[^1]:0}ms (처음 쓰는 코드 옮기기 {jitMs:0.0}ms · {jm}개) — {string.Join(" · ", Painter.Prof.OrderByDescending(x => x.Value).Take(4).Select(x => $"{x.Key} {x.Value:0.0}ms"))}");
                 Painter.Prof = null;
                 if ((banner || t >= nextShot) && shots < 40)
                 {
@@ -102,7 +107,9 @@ public static partial class Program
         if (Painter.ProfAlloc != null) Console.WriteLine("    단계마다 한 장 새로 잡기 KB: " + string.Join(" · ", Painter.ProfAlloc.OrderByDescending(x => x.Value).Take(10).Select(x => $"{x.Key} {x.Value / 1024.0 / Math.Max(1, paint.Count):0}")));
         Console.WriteLine("    단계마다 한 장 평균: " + string.Join(" · ", paintParts.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value / Math.Max(1, paint.Count):0.00}")));
         Console.WriteLine($"  새로 잡기: 나아가기 틱마다 {advAlloc / Math.Max(1, ticks) / 1024.0:0}KB · 그리기 한 장 {paintAlloc / Math.Max(1, paint.Count) / 1024.0:0}KB · 수거 {GC.CollectionCount(0) - g0}/{GC.CollectionCount(1) - g1}/{GC.CollectionCount(2) - g2} · 멈춤 합 {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds:0}ms");
+        if (LiveShow.AdvAlloc != null) Console.WriteLine("    나아가기 단계마다 틱마다 KB: " + string.Join(" · ", LiveShow.AdvAlloc.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value / 1024.0 / Math.Max(1, ticks):0.0}")));
         Console.WriteLine($"  미리 보기: 복제 {show.Dir.Foresights} · 다시 맞춤 {show.Dir.Resyncs} · 앞선 틱 {show.Dir.AheadSteps} · {show.Dir.ForeseeMs:0}ms");
+        Console.WriteLine($"  코드 미리 옮기기: {Warmup.Methods}개 · {Warmup.Ms / 1000:0.0}초 (낮은 우선순위 스레드){(Warmup.Ms == 0 ? " — 아직 하는 중" : "")}");
         Console.WriteLine($"  새 그림판 {LiveShow.NewCanvas}장 / 그림 {paint.Count}장 (확대 단계가 바뀔 때만)");
         Console.WriteLine($"  소리 섞기 1/60초마다: 보통 {P(mixMs, 0.5):0.00}ms · 99% {P(mixMs, 0.99):0.00}ms · 가장 김 {mixMs.Max():0.0}ms · 목소리 {mix.Voices}");
         Console.WriteLine($"  분위기별 화면 초: 조용함 {show.Dir.CalmScreenSec:0} · 조짐 {show.Dir.OmenScreenSec:0} · 위험 {show.Dir.DangerScreenSec:0} · 결정적 {show.Dir.CriticalScreenSec:0}");

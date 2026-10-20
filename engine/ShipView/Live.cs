@@ -135,9 +135,15 @@ public sealed class LiveShow
     }
 
     /// <summary>화면 시간 realSec만큼 나아간다 — 돌린 틱 수.</summary>
+    /// <summary>나아가기 단계마다 새로 잡은 바이트 (재기용 — null이면 재지 않는다).</summary>
+    public static Dictionary<string, long>? AdvAlloc;
+    private long _al;
+    private void AL(string k) { if (AdvAlloc == null) return; long b = GC.GetAllocatedBytesForCurrentThread(); AdvAlloc[k] = AdvAlloc.GetValueOrDefault(k) + b - _al; _al = b; }
+
     public int Advance(double realSec)
     {
         int n = 0;
+        if (AdvAlloc != null) _al = GC.GetAllocatedBytesForCurrentThread();
         if (!Paused)
         {
             _carry += Speed * realSec;
@@ -152,10 +158,13 @@ public sealed class LiveShow
             for (int i = 0; i < n; i++)
             {
                 if (i == n - 1) Remember();
-                w.Step(); d.Observe(w);
+                AL("자세 · 걸음");
+                w.Step(); AL("세계");
+                d.Observe(w); AL("연출");
                 if (_replay != null && w.Tick >= _replayEnd) break;
             }
             if (n > 0) Trace();
+            AL("자세 · 걸음");
             if (_replay != null && _replay.Tick >= _replayEnd) StopReplay();
         }
         _anim += realSec;
@@ -167,6 +176,7 @@ public sealed class LiveShow
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         TickNotice(realSec);
         WatchComputer(realSec);
+        AL("알림 · 주컴퓨터 지켜보기");
         // 카메라: 연출이 고른 곳으로 부드럽게 (전체 보기면 배 가운데)
         var L = Sim.Layout;
         var vd = View;
@@ -191,7 +201,9 @@ public sealed class LiveShow
         }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
+        AL("카메라");
         Ears.Update(this, realSec);
+        AL("소리 듣기");
         return n;
     }
 
@@ -471,13 +483,21 @@ public sealed class LiveShow
         var (left, top, w, h) = Camera();
         int x0 = (int)Math.Floor(left), y0 = (int)Math.Floor(top);
         int wc = (int)Math.Ceiling(w) + 1, hc = (int)Math.Ceiling(h) + 1; // 줌이 바뀔 때만 크기가 바뀐다 (텍스처를 덜 새로 만든다)
-        // 그림판은 4칸 단위로 넉넉히 (그리는 칸은 그대로) — 확대가 부드럽게 바뀌는 동안 장마다 새 그림판(몇 MB) · 새 텍스처를 만들지 않게
-        int cw = (wc + 3) & ~3, ch = (hc + 3) & ~3;
+        // 그림판은 넉넉히 (그리는 칸은 그대로) — 확대가 부드럽게 바뀌는 동안 장마다 새 그림판(몇 MB) · 새 텍스처를 만들지 않게:
+        // 남은 그림판이 담을 수 있고 넓이가 1.5배 안이면 그대로 쓰고 (가장 작은 것) · 새로 잡을 때는 가로세로 1/8과 한 칸씩 더
+        int needW = wc * Painter.T, needH = hc * Painter.T;
+        long needA = (long)needW * needH;
         Img? reuse = null;
         _keep.Clear();
-        while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == cw * Painter.T && sp.H == ch * Painter.T) reuse = sp; else _keep.Add(sp); }
-        for (int k = 0; k < _keep.Count && k < 2; k++) _spare.Add(_keep[k]);
-        if (reuse == null) { reuse = new Img(cw * Painter.T, ch * Painter.T); NewCanvas++; }
+        while (_spare.TryTake(out var sp))
+        {
+            long a = (long)sp.W * sp.H;
+            if (sp.W >= needW && sp.H >= needH && a * 2 <= needA * 3 && (reuse == null || a < (long)reuse.W * reuse.H)) { if (reuse != null) _keep.Add(reuse); reuse = sp; }
+            else _keep.Add(sp);
+        }
+        _keep.Sort((a, b) => ((long)b.W * b.H).CompareTo((long)a.W * a.H));
+        for (int k = 0; k < _keep.Count && k < 2; k++) _spare.Add(_keep[k]);   // 큰 것을 남긴다 (다시 넓게 볼 때 쓴다)
+        if (reuse == null) { reuse = new Img((wc + wc / 8 + 1) * Painter.T, (hc + hc / 8 + 1) * Painter.T); NewCanvas++; } // 넓이 1.35배쯤 — 다음 장에 그대로 쓰인다
         Painter.Show = Show; Painter.ChainCells = Show == Overlay.Chain ? ChainCellsNow() : null;
         // ④ 칸 강체: 틱 사이를 메운 몸의 자세 · 배의 자세(별)
         var stb = World.Find<Structure>();
@@ -494,8 +514,8 @@ public sealed class LiveShow
         var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         var (shx, shy) = Shake();
-        float srcX = Math.Clamp((float)((left - x0) * Painter.T) + shx, 0, Math.Max(0, img.W - (float)(w * Painter.T)));
-        float srcY = Math.Clamp((float)((top - y0) * Painter.T) + shy, 0, Math.Max(0, img.H - (float)(h * Painter.T)));
+        float srcX = Math.Clamp((float)((left - x0) * Painter.T) + shx, 0, Math.Max(0, needW - (float)(w * Painter.T)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
+        float srcY = Math.Clamp((float)((top - y0) * Painter.T) + shy, 0, Math.Max(0, needH - (float)(h * Painter.T)));
         return new LiveFrame
         {
             Img = img,

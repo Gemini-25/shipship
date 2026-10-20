@@ -70,6 +70,7 @@ public partial class LiveMain : Node2D
 
     public override void _Ready()
     {
+        Warmup.Start();   // 큰 메서드를 처음 부를 때의 멈칫(20~40ms)을 미리 — 낮은 우선순위 스레드
         LoadFonts();
         TextureFilter = TextureFilterEnum.Nearest;
         var player = new AudioStreamPlayer { Stream = new AudioStreamGenerator { MixRate = Dsp.Rate, BufferLength = 0.2f } };

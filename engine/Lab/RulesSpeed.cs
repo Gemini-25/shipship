@@ -169,5 +169,35 @@ public static partial class Program
                 same && a.Foresights > 1 && a.AheadSteps > 0,
                 $"복제 {a.Foresights}/{b.Foresights} · 다시 맞춤 {a.Resyncs}/{b.Resyncs} · 앞선 틱 {a.AheadSteps}/{b.AheadSteps} · 본 일 {a.Predicted}/{b.Predicted} · 미리 자름 {a.ForeCuts}/{b.ForeCuts} · 카메라 같음 {ca.SequenceEqual(cb)}");
         }
+
+        // 그림판 다시 쓰기 · 코드 미리 옮기기: 엔진 · 화면의 메서드를 미리 옮긴 뒤 (그다음 그리기가 그대로 되는지도 본다) ·
+        // 확대를 부드럽게 넓게 → 좁게 → 넓게 바꾸며 장마다 그린다 — 새 그림판은 몇 장만 · 화면이 보일 곳에는 지난 장의 그림(표시 색)이 남지 않는다
+        {
+            ShipView.Warmup.Start(); ShipView.Warmup.Job!.Join();
+            var show = new ShipView.LiveShow(Worlds.Full(Worlds.Ascii(Worlds.TwoRooms), 1), "시험호") { Follow = false, ViewW = 20 };
+            int before = ShipView.LiveShow.NewCanvas, frames = 0, stale = 0;
+            bool srcIn = true;
+            foreach (double f in new[] { 1.02, 1 / 1.02, 1.02 })
+                for (int k = 0; k < 36; k++)
+                {
+                    show.ZoomBy(f); show.Advance(1.0 / 60);
+                    var lf = show.Render(); frames++;
+                    var img = lf.Img;
+                    int x0 = (int)lf.SrcX, y0 = (int)lf.SrcY, x1 = Math.Min(img.W, (int)(lf.SrcX + lf.SrcW)), y1 = Math.Min(img.H, (int)(lf.SrcY + lf.SrcH));
+                    srcIn &= lf.SrcX >= 0 && lf.SrcY >= 0 && lf.SrcX + lf.SrcW <= img.W + 0.01 && lf.SrcY + lf.SrcH <= img.H + 0.01;
+                    for (int y = y0; y < y1; y++)
+                        for (int x = x0; x < x1; x++)
+                        {
+                            int p = (y * img.W + x) * 4;
+                            if (img.Px[p] == 7 && img.Px[p + 1] == 7 && img.Px[p + 2] == 7 && img.Px[p + 3] == 7) stale++;
+                        }
+                    Array.Fill(img.Px, (byte)7);   // 표시 색으로 칠해 돌려준다 — 다음에 이 그림판을 쓸 때 다시 그리지 않은 곳이 있으면 보인다
+                    show.Recycle(img);
+                }
+            int made = ShipView.LiveShow.NewCanvas - before;
+            Check("그림판 다시 쓰기 · 코드 미리 옮기기: 엔진 · 화면 메서드를 미리 옮긴 뒤에도 그대로 그리고 · 확대를 넓게 → 좁게 → 넓게 바꾸는 108장에 새 그림판은 12장 안 (옛 방식 — 4칸 단위 · 크기가 꼭 같아야 다시 씀 — 은 18장) · 보일 곳에 지난 장이 남지 않는다",
+                ShipView.Warmup.Methods > 2000 && made <= 12 && stale == 0 && srcIn,
+                $"미리 옮긴 메서드 {ShipView.Warmup.Methods} · 그림 {frames}장 · 새 그림판 {made}장 · 남은 지난 장 점 {stale} · 보일 곳이 그림판 안 {srcIn}");
+        }
     }
 }
