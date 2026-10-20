@@ -95,7 +95,7 @@ public sealed class LiveShow
     public LiveShow(Sim sim, string shipName)
     {
         Sim = sim; ShipName = shipName;
-        Dir = new Director(sim.Layout);
+        Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다)
         Painter = new Painter(sim.Layout) { Nudge = Nudge };
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
@@ -883,7 +883,7 @@ public sealed class LiveShow
         var w = Dir.Replay(Sim, h);
         if (w == null) return false;
         _replay = w; _replayOf = h;
-        _replayDir = new Director(w.Layout) { KeepRing = false };
+        _replayDir = new Director(w.Layout) { KeepRing = false, AheadInBackground = true };
         _shots = Dir.Shots(Sim, h);
         _replayEnd = Math.Min(Sim.Tick, Math.Max(h.Last + Time.Minutes(ReplayAfterMin), _shots.Count > 0 ? _shots[^1].To : 0));
         _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();

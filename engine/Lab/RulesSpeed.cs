@@ -97,5 +97,32 @@ public static partial class Program
                 first >= 0 && most <= Director.AheadPerTick && caught is > 0 and <= 20 && d.Foresights == 1,
                 $"복제 {d.Foresights}번 (틱 {first}) · 한 틱에 가장 많이 {most}틱 · 따라잡은 데 {caught}틱 · 앞선 틱 {d.AheadSteps}");
         }
+
+        // 미리 보기를 다른 코어에서: 운석이 오고 · 6틱마다 진짜 세계에만 사실이 생겨 다시 복제하는 세계 둘 — 앞선 세계를 차례로 돌린 연출과 다른 코어에서 미리 돌린 연출의
+        // 복제 · 다시 맞춤 · 앞선 틱 · 본 일 · 미리 자름 · 틱마다 카메라 자리가 같다
+        {
+            var lay = Worlds.Ascii(Worlds.TwoRooms);
+            (Director d, List<int> cams) Run(bool background)
+            {
+                var s = Worlds.Full(lay, 7);
+                var d = new Director(s.Layout) { KeepRing = false, AheadInBackground = background };
+                int keep = s.Causes.Add(CauseKind.Fire, "왼쪽 방 상자가 그을린다", s.Tick, Worlds.At(lay, 3, 2));
+                s.Get<Outside>().AddRock(0.3, 6000, -1, 0, 0, 6000 * 60 * 2, s.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", s.Tick));
+                var cams = new List<int>();
+                for (int i = 0; i < 90; i++)
+                {
+                    if (i % 6 == 0) s.Facts.Emit(s.Tick, FactKind.FireSpread, Worlds.At(lay, 3, 2), 1, keep);
+                    s.Step(); d.Observe(s);
+                    cams.Add(d.FocusCell);
+                }
+                return (d, cams);
+            }
+            var (a, ca) = Run(false);
+            var (b, cb) = Run(true);
+            bool same = a.Foresights == b.Foresights && a.Resyncs == b.Resyncs && a.AheadSteps == b.AheadSteps && a.Predicted == b.Predicted && a.ForeCuts == b.ForeCuts && ca.SequenceEqual(cb);
+            Check("미리 보기를 다른 코어에서: 차례로 돌린 연출과 복제 · 다시 맞춤 · 앞선 틱 · 본 일 · 미리 자름 · 틱마다 카메라 자리가 같다",
+                same && a.Foresights > 1 && a.AheadSteps > 0,
+                $"복제 {a.Foresights}/{b.Foresights} · 다시 맞춤 {a.Resyncs}/{b.Resyncs} · 앞선 틱 {a.AheadSteps}/{b.AheadSteps} · 본 일 {a.Predicted}/{b.Predicted} · 미리 자름 {a.ForeCuts}/{b.ForeCuts} · 카메라 같음 {ca.SequenceEqual(cb)}");
+        }
     }
 }

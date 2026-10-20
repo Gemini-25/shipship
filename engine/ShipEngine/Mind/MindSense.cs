@@ -157,6 +157,25 @@ public sealed partial class Mind
             if (match(a.Beliefs[i])) { var b = a.Beliefs[i]; b.Conf = 0; a.Beliefs[i] = b; }
     }
 
+    /// <summary>그 갈래 · 대상의 믿음을 지운다 — 람다 없이 (보는 칸마다 부르는 곳: 갇힌 변수 묶음을 칸마다 새로 잡지 않게).</summary>
+    private static void Forget(Agent a, BeliefKind k, int subject)
+    {
+        for (int i = 0; i < a.Beliefs.Count; i++)
+        {
+            var b = a.Beliefs[i];
+            if (b.Kind == k && b.Subject == subject) { b.Conf = 0; a.Beliefs[i] = b; }
+        }
+    }
+
+    private static void Forget(Agent a, BeliefKind k1, BeliefKind k2, int subject)
+    {
+        for (int i = 0; i < a.Beliefs.Count; i++)
+        {
+            var b = a.Beliefs[i];
+            if ((b.Kind == k1 || b.Kind == k2) && b.Subject == subject) { b.Conf = 0; a.Beliefs[i] = b; }
+        }
+    }
+
     // ───────────────────────── 감각 ─────────────────────────
 
     private void Sense(Sim sim, Agent a, double dt)
@@ -428,17 +447,17 @@ public sealed partial class Mind
             bool broken = false;
             for (int p = 0; p < 4; p++) if (_net.Broken[dev * 4 + p] != 0) { broken = true; break; }
             if (broken) Learn(a, t, BeliefKind.Broken, x, dev, 1, BeliefSource.Saw);
-            else Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev);
+            else Forget(a, BeliefKind.Broken, dev);
         }
         for (int bi = _bodyHead.Length == L.N ? _bodyHead[x] : -1; bi >= 0; bi = _bodyNext[bi])
         {
             if (a.IsPerson && bi == a.C.Body) continue;
             var body = _life!.Bodies[bi];
-            if (body.Alive == 0) { Learn(a, t, BeliefKind.Dead, x, bi, 1, BeliefSource.Saw, body.DeathCause); Forget(a, b => b.Kind == BeliefKind.Injured && b.Subject == bi); }
+            if (body.Alive == 0) { Learn(a, t, BeliefKind.Dead, x, bi, 1, BeliefSource.Saw, body.DeathCause); Forget(a, BeliefKind.Injured, bi); }
             else if (body.Conscious == 0) Learn(a, t, BeliefKind.Injured, x, bi, 1, BeliefSource.Saw, body.HurtCause);
             else if (_soc != null && AgentOfBody(bi) is int who && who >= 0 && who != a.Id && _soc.InBrawl(who, out _, out bool att) && !att)
                 Learn(a, t, BeliefKind.Help, x, who, 1, BeliefSource.Saw); // ⑨ 맞고 있다 — 깨어 있어도 '도와 달라'
-            else Forget(a, b => b.Kind is BeliefKind.Injured or BeliefKind.Help && b.Subject == bi);
+            else Forget(a, BeliefKind.Injured, BeliefKind.Help, bi);
         }
     }
 

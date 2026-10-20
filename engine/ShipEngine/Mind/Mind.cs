@@ -451,17 +451,22 @@ public sealed partial class Mind : IEngine
 
     /// <summary>마음 안 단계별 시간 (실험실 --profile — 켜 두면 잰다 · 생각 · 걸음은 사람 · 로봇마다 모아서).</summary>
     public static Dictionary<string, double>? Prof;
+    /// <summary>마음 안 단계별 새로 잡은 바이트 (Prof와 함께 · null이 아니면 잰다).</summary>
+    public static Dictionary<string, long>? ProfAlloc;
+    private static long _lapAlloc;
     private static long Lap(string name, long t0)
     {
         if (Prof == null) return 0;
         long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (ProfAlloc != null) { long a = GC.GetTotalAllocatedBytes(true); if (_lapAlloc != 0) ProfAlloc[name] = ProfAlloc.GetValueOrDefault(name) + a - _lapAlloc; _lapAlloc = a; return System.Diagnostics.Stopwatch.GetTimestamp(); }
         return t1;
     }
 
     public void Step(Sim sim, double dt)
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        if (ProfAlloc != null) _lapAlloc = GC.GetTotalAllocatedBytes(true);
         Bind(sim);
         ClearOldActs(sim.Tick);   // 오랜 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);

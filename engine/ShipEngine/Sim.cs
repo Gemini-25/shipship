@@ -25,6 +25,8 @@ public sealed class Sim
 
     /// <summary>엔진마다 마지막 한 걸음에 쓴 시간 (ms · 성능 측정).</summary>
     public Dictionary<string, double> LastMs { get; } = new();
+    /// <summary>엔진마다 새로 잡은 바이트 (Measure와 함께 · null이 아니면 잰다 — 실험실).</summary>
+    public Dictionary<string, long>? LastAlloc;
     public bool Measure { get; set; }
 
     public Sim(SimSetup setup)
@@ -51,10 +53,12 @@ public sealed class Sim
             if (k != 0) continue;
             if (Measure)
             {
+                long a0 = LastAlloc != null ? GC.GetTotalAllocatedBytes(true) : 0;
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 e.Step(this, e.Every * Time.SecondsPerTick);
                 double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                 LastMs[e.Name] = LastMs.GetValueOrDefault(e.Name) + ms;
+                if (LastAlloc != null) LastAlloc[e.Name] = LastAlloc.GetValueOrDefault(e.Name) + GC.GetTotalAllocatedBytes(true) - a0;
             }
             else e.Step(this, e.Every * Time.SecondsPerTick);
         }

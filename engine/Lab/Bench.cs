@@ -103,6 +103,7 @@ public static partial class Program
         }
         s.Run(100);
         s.Measure = !args.Contains("--nolap"); s.LastMs.Clear();
+        if (args.Contains("--alloc")) { s.Measure = true; s.LastAlloc = new(); Mind.ProfAlloc = new(); }   // 엔진마다 · 마음 안 단계마다 새로 잡는 것 (재기 자체가 느리다)
         bool laps = !args.Contains("--nolap");   // --nolap: 단계별 재기를 끈다 (재기 자체가 25%쯤 먹는다 — tools/hot.sh 표본 수집은 끄고 잰다)
         if (laps) { Field.Prof = new(); Network.Prof = new(); Mind.Prof = new(); Prof.D = new(); }
         long alloc0 = GC.GetTotalAllocatedBytes(true); int gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), gc2 = GC.CollectionCount(2);
@@ -147,6 +148,8 @@ public static partial class Program
         var pm = s.Get<Mind>();
         Console.WriteLine($"  길찾기: 부름 {pm.PathCalls} · 못 찾음 {pm.PathFails} · 펼친 칸 {pm.PathExpanded} (부름마다 {pm.PathExpanded / Math.Max(1, pm.PathCalls)})");
         Console.WriteLine("  " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
+        if (Mind.ProfAlloc != null) { Console.WriteLine("  마음 안 할당 KB/틱: " + string.Join(" · ", Mind.ProfAlloc.OrderByDescending(kv => kv.Value).Take(12).Select(kv => $"{kv.Key} {kv.Value / 1024.0 / ticks:0.0}"))); Mind.ProfAlloc = null; }
+        if (s.LastAlloc != null) Console.WriteLine("  할당 엔진마다 KB/틱: " + string.Join(" · ", s.LastAlloc.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / 1024.0 / ticks:0.0}")));
     }
 
     private static void Bench()
