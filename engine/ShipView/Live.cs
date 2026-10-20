@@ -42,7 +42,10 @@ public readonly record struct Gauge(string Icon, string Name, string Value, int 
 public readonly record struct CrewFace(int Id, string Name, string State, int Level, int Slot);
 
 /// <summary>판 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등).</summary>
-public readonly record struct PanelRow(string Main, string Sub, bool On);
+/// <summary>판의 한 줄: 제목 · 아래 글 · 강조 — 사람 판은 얼굴(사람 줄 얼굴 그림의 칸)과 상태 막대도.</summary>
+public readonly record struct PanelRow(string Main, string Sub, bool On, int Face = -1, PanelBar[]? Bars = null);
+/// <summary>판 줄의 막대 하나 (UI U3): 이름 · 0~1 · 단계 (0 괜찮다 · 1 조심 · 2 위험).</summary>
+public readonly record struct PanelBar(string Name, float Value, int Level);
 
 /// <summary>관전 화면의 판.</summary>
 public enum PanelKind { None, Highlights, Route, Journal, Chain, People }
@@ -815,9 +818,19 @@ public sealed class LiveShow
                 var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>(); var so = w.Find<Society>();
                 if (mind == null || life == null) break;
                 if (so != null && so.CultureLine(w) is string culture) rows.Add(new PanelRow("이 배의 관습", culture, false));   // ⑨ 함께 먹는 때 · 금기 · 배의 규칙
+                var slots = new Dictionary<int, int>();   // 사람 줄 얼굴 그림의 칸 (사람 차례)
+                foreach (var pa in mind.Agents) if (pa.IsPerson) slots[pa.Id] = slots.Count;
+                static PanelBar Bar(string name, float v) => new(name, Math.Clamp(v, 0, 1), v < 0.3f ? 2 : v < 0.6f ? 1 : 0);
                 foreach (int id in PeopleOrder())
                 {
                     var a = mind.Agents[id]; var b = life.Bodies[a.C.Body];
+                    var bars = b.Alive == 0 ? null : new[]
+                    {
+                        Bar("숨", (b.SpO2 - 0.7f) / 0.28f),
+                        Bar("배", 1 - a.C.Hunger),
+                        Bar("잠", 1 - a.C.Sleepy),
+                        Bar("마음", 1 - Math.Max(a.C.Stress, Math.Max(a.C.Sad, a.C.Fear))),
+                    };
                     bool danger = b.Alive != 0 && (b.Conscious == 0 || b.SpO2 < 0.85f || b.Hypoxia > 0.2f || a.C.Mode != 0);
                     string state = b.Alive == 0 ? "숨을 거두었다" : b.Conscious == 0 ? "쓰러져 있다" : Mind.GoalName(a.C.Goal);
                     var body = new List<string> { $"산소 {b.SpO2 * 100:0}%" };
@@ -842,7 +855,8 @@ public sealed class LiveShow
                     if (so?.PastLine(id) is { Length: > 0 } past) near.Add(past);   // ⑫ 출항 과거사
                     string pondered = b.Alive != 0 ? mind.RecentThought(id, w.Tick, Time.Hours(1)) : "";
                     rows.Add(new PanelRow($"{mind.NameOf(id)}{(so?.NickOf(id) is string nk ? $" '{nk}'" : "")} — {state}",
-                        $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger));
+                        $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
+                        slots.GetValueOrDefault(id, -1), bars));
                 }
                 break;
             }

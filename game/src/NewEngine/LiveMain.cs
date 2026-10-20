@@ -500,9 +500,13 @@ public partial class LiveMain : Node2D
     /// <summary>판 (하이라이트 목록 · 항로 · 일지): 오른쪽에 · 고른 줄이 늘 보이게 내려 보인다.</summary>
     private void DrawPanel(LiveFrame f, Vector2 vp)
     {
-        float w = Math.Min(640, Math.Max(380, vp.X * 0.42f)), top = TopUi + 8, bottom = vp.Y - 76;
+        float w = Math.Min(640, Math.Max(380, vp.X * 0.42f)), top = TopUi + 8, bottom = vp.Y - 76 - _crewH;
+        // 얼굴이 있는 줄 (사람 판 — UI U3): 왼쪽에 얼굴 ×2 · 글은 그 오른쪽 · 제목 밑에 상태 막대
+        const float FaceBox = 56;
+        float Left(PanelRow r) => r.Face >= 0 && _facesTex != null ? FaceBox : 0;
         float inner = w - 36;
-        var heights = f.PanelRows.Select(r => 26f + (r.Sub.Length > 0 ? _font.GetMultilineStringSize(r.Sub, HorizontalAlignment.Left, inner, 14, 8).Y + 4 : 0)).ToArray();
+        var heights = f.PanelRows.Select(r => Math.Max(r.Face >= 0 && _facesTex != null ? 48f : 0f,
+            26f + (r.Bars is { Length: > 0 } ? 16 : 0) + (r.Sub.Length > 0 ? _font.GetMultilineStringSize(r.Sub, HorizontalAlignment.Left, inner - Left(r), 14, 8).Y + 4 : 0)) + (r.Face >= 0 ? 6 : 0)).ToArray();
         float room = bottom - top - 50 - 34;
         int first = 0;
         float Span(int a, int b) { float t = 0; for (int i = a; i <= b && i < heights.Length; i++) t += heights[i]; return t; }
@@ -519,10 +523,35 @@ public partial class LiveMain : Node2D
         {
             var r = f.PanelRows[i];
             if (i == f.PanelPick) DrawRect(new Rect2(box.Position.X + 6, y - 2, w - 12, heights[i]), new Color(0.3f, 0.45f, 0.75f, 0.35f));
+            float x0 = box.Position.X + 18, lx = Left(r);
+            if (lx > 0)
+            {
+                var src = new Rect2(r.Face % f.FacesPerRow * Painter.FaceW, r.Face / f.FacesPerRow * Painter.FaceH, Painter.FaceW, Painter.FaceH);
+                var dst = new Rect2(x0, y + 2, Painter.FaceW * 2, Painter.FaceH * 2);
+                DrawRect(dst.Grow(2), new Color(0.06f, 0.08f, 0.12f, 1f));
+                DrawTextureRectRegion(_facesTex, dst, src, r.Bars == null ? new Color(0.45f, 0.45f, 0.5f, 0.8f) : Colors.White);
+                DrawRect(dst.Grow(2), r.On ? new Color(1f, 0.35f, 0.3f) : new Color(0.4f, 0.52f, 0.7f, 0.7f), false, 1);
+            }
             var head = r.On ? new Color(1f, 0.88f, 0.55f) : new Color(0.9f, 0.92f, 0.97f);
-            DrawString(_bold, new Vector2(box.Position.X + 18, y + 17), (r.On ? "● " : "") + r.Main, HorizontalAlignment.Left, inner, 16, head);
+            DrawString(_bold, new Vector2(x0 + lx, y + 17), (r.On ? "● " : "") + r.Main, HorizontalAlignment.Left, inner - lx, 16, head);
+            float ty = y + 38;
+            if (r.Bars is { Length: > 0 } bars)
+            {
+                float bw = Math.Min(110, (inner - lx) / bars.Length - 8), bx = x0 + lx;
+                foreach (var bar in bars)
+                {
+                    DrawString(_font, new Vector2(bx, y + 37), bar.Name, HorizontalAlignment.Left, -1, 12, new Color(0.62f, 0.68f, 0.78f));
+                    float lw = _font.GetStringSize(bar.Name, HorizontalAlignment.Left, -1, 12).X + 4;
+                    var track = new Rect2(bx + lw, y + 29, bw - lw, 7);
+                    DrawRect(track, new Color(0.12f, 0.15f, 0.2f));
+                    var fill = bar.Level switch { 2 => new Color(1f, 0.38f, 0.32f), 1 => new Color(1f, 0.76f, 0.32f), _ => new Color(0.45f, 0.82f, 0.62f) };
+                    DrawRect(new Rect2(track.Position, new Vector2(track.Size.X * bar.Value, track.Size.Y)), fill);
+                    bx += bw + 8;
+                }
+                ty += 16;
+            }
             if (r.Sub.Length > 0)
-                DrawMultilineString(_font, new Vector2(box.Position.X + 18, y + 38), r.Sub, HorizontalAlignment.Left, inner, 14, 8, new Color(0.68f, 0.73f, 0.83f));
+                DrawMultilineString(_font, new Vector2(x0 + lx, ty), r.Sub, HorizontalAlignment.Left, inner - lx, 14, 8, new Color(0.68f, 0.73f, 0.83f));
             y += heights[i];
         }
         if (first > 0 || last < heights.Length)
