@@ -77,6 +77,51 @@ public static partial class Program
                 $"구역 {f.Regions.Count} (옛 셈 {regs.Count}) 같음 {regionsSame} · 틈 {f.Links.Count} · 곁 칸 다름 {nearBad} · 되살린 세계 같음 {linksSame}");
         }
 
+        // 방사선 가림: 벽 하나를 크게 뚫은 새터호 — 칸마다 선량이 옛 셈(광선 다섯을 모두 반 칸씩 걷기 · 칸마다 재질을 그때 찾기)과 같다
+        {
+            var s = ShipWorld.Create("Saetteul", 3);
+            var f = s.Get<Field>(); var o = s.Get<Outside>(); var lay = s.Layout; var t = s.Tables;
+            int wall = Enumerable.Range(1, lay.N - 2).First(c => lay.Kind[c] == CellKind.Wall && lay.X(c) > 0 && lay.X(c) < lay.W - 1 && lay.Kind[c - 1] == CellKind.Floor && lay.Kind[c + 1] == CellKind.Floor);
+            f.SetHole(wall, 2.5f);
+            s.Step();   // 처음 틱에 가림을 센다
+            double Old(int i, double dx, double dy)
+            {
+                double x = lay.X(i) + 0.5, y = lay.Y(i) + 0.5, sum = 0;
+                int last = i;
+                for (int st = 0; st < 400; st++)
+                {
+                    x += dx * 0.5; y += dy * 0.5;
+                    int ix = (int)Math.Floor(x), iy = (int)Math.Floor(y);
+                    if (!lay.In(ix, iy)) break;
+                    int c = lay.Index(ix, iy);
+                    if (c == last) continue;
+                    last = c;
+                    var kind = lay.Kind[c];
+                    if (kind == CellKind.Outside) break;
+                    var m = t.Materials[lay.Material[c]].Def;
+                    if (kind == CellKind.Wall) sum += m.Density * (lay.Hull[c] ? 0.010 : 0.004) * (f.Hole[c] >= 2 ? 0 : 1);
+                    if (lay.FurnitureAt[c] >= 0) sum += f.Cs[c] / 500.0;
+                    sum += f.Stored(t.sWater, c) * 0.018;
+                }
+                return sum;
+            }
+            double sx = Math.Cos(o.SunAngle), sy = Math.Sin(o.SunAngle);
+            int bad = 0, cells = 0;
+            for (int i = 0; i < lay.N; i++)
+            {
+                float shield = 0;
+                if (lay.IsSpace(i))
+                {
+                    cells++;
+                    double sun = Old(i, sx, sy), avg = (Old(i, 1, 0) + Old(i, -1, 0) + Old(i, 0, 1) + Old(i, 0, -1)) / 4;
+                    shield = (float)(0.5 * Math.Exp(-sun / 300) + 0.5 * Math.Exp(-avg / 300));
+                }
+                if ((float)(o.DoseOut * shield) != o.Dose[i]) bad++;
+            }
+            Check("방사선 가림: 벽을 크게 뚫은 새터호 — 칸마다 선량이 옛 셈(광선 다섯을 반 칸씩 · 칸마다 재질을 그때 찾기)과 같다",
+                bad == 0 && cells > 1000, $"칸 {cells} · 다름 {bad}");
+        }
+
         // 미리 보기 따라잡기: 벽에 금이 간 조짐에 연출이 앞선 세계를 복제하면 — 한 틱에 앞선 세계를 많아야 3틱 돌리고(한꺼번에 38틱 돌려 화면이 멈칫하지 않게) · 20틱 안에 1.5분 앞까지 따라잡아 그다음은 한 틱씩 · 다시 복제하지 않는다
         {
             var lay = Worlds.Ascii(Worlds.TwoRooms);

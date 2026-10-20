@@ -109,8 +109,31 @@ public static partial class Program
         long alloc0 = GC.GetTotalAllocatedBytes(true); int gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), gc2 = GC.CollectionCount(2);
         var pause0 = GC.GetTotalPauseDuration();
         var sw = Stopwatch.StartNew();
-        s.Run(ticks);
+        var each = new double[ticks];
+        var spikes = new List<(double ms, long tick, string why)>();   // 긴 틱마다 엔진별 몫 (재기를 켰을 때)
+        var before = new Dictionary<string, double>();
+        for (int k = 0; k < ticks; k++)
+        {
+            if (s.Measure)
+            {
+                before.Clear(); foreach (var kv in s.LastMs) before[kv.Key] = kv.Value;
+                if (laps) { foreach (var kv in Field.Prof!) before["장:" + kv.Key] = kv.Value; foreach (var kv in Network.Prof!) before["망:" + kv.Key] = kv.Value; foreach (var kv in Mind.Prof!) before["마음:" + kv.Key] = kv.Value; foreach (var kv in Prof.D!) before[kv.Key] = kv.Value; }
+            }
+            long q = Stopwatch.GetTimestamp();
+            s.Step();
+            each[k] = (Stopwatch.GetTimestamp() - q) * 1000.0 / Stopwatch.Frequency;
+            if (s.Measure && each[k] > 10)
+            {
+                var now = s.LastMs.Select(kv => (kv.Key, kv.Value)).ToList();
+                if (laps) { now.AddRange(Field.Prof!.Select(kv => ("장:" + kv.Key, kv.Value))); now.AddRange(Network.Prof!.Select(kv => ("망:" + kv.Key, kv.Value))); now.AddRange(Mind.Prof!.Select(kv => ("마음:" + kv.Key, kv.Value))); now.AddRange(Prof.D!.Select(kv => (kv.Key, kv.Value))); }
+                var d = now.Select(x => (x.Item1, d: x.Item2 - before.GetValueOrDefault(x.Item1))).Where(x => x.d > 0.5).OrderByDescending(x => x.d).ToList();
+                spikes.Add((each[k], s.Tick - 1, string.Join(" · ", d.Where(x => !x.Item1.Contains(':')).Take(3).Select(x => $"{x.Item1} {x.d:0.0}")) + " | " + string.Join(" · ", d.Where(x => x.Item1.Contains(':')).Take(4).Select(x => $"{x.Item1} {x.d:0.0}"))));
+            }
+        }
         double ms = sw.Elapsed.TotalMilliseconds / ticks;
+        var sorted = each.OrderBy(x => x).ToArray();
+        Console.WriteLine($"  틱 시간: 가운데 {sorted[ticks / 2]:0.00}ms · 99% {sorted[(int)(ticks * 0.99)]:0.00}ms · 가장 김 {sorted[^1]:0.0}ms · 10ms 넘은 틱 {each.Count(x => x > 10)}");
+        foreach (var p in spikes.OrderByDescending(x => x.ms).Take(6)) Console.WriteLine($"    {p.ms,5:0.0}ms 틱 {p.tick} ({Time.Clock(p.tick)}) — {p.why}");
         Console.WriteLine($"  할당 틱마다 {(GC.GetTotalAllocatedBytes(true) - alloc0) / (double)ticks / 1024:0.0}KB · 수거 {GC.CollectionCount(0) - gc0}/{GC.CollectionCount(1) - gc1}/{GC.CollectionCount(2) - gc2} · 멈춤 {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds / ticks:0.000}ms/틱");
         if (laps) {
         Console.WriteLine("  장 안: " + string.Join(" · ", Field.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));

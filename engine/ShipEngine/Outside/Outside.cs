@@ -159,15 +159,17 @@ public sealed partial class Outside : IEngine
             Distance = TransferDistance(VoyageFrom, VoyageTo, Missed != 0 ? frac : Math.Min(1, frac), Missed != 0);
             if (frac >= 1 && (VoyagePlanned == 0 || ArrivalDone != 0)) { Distance = VoyageTo; Arrive(sim, sim.Tick); VoyageTicks = 0; }
         }
-        MotionStep(sim, dt);
-        PlanStep(sim);
-        ZoneStep(sim);
-        ContactsStep(sim, dt);
+        long pt = Prof.Start();
+        MotionStep(sim, dt); pt = Prof.Lap("바깥:움직임", pt);
+        PlanStep(sim); pt = Prof.Lap("바깥:항로 계획", pt);
+        ZoneStep(sim); pt = Prof.Lap("바깥:위험 구간", pt);
+        ContactsStep(sim, dt); pt = Prof.Lap("바깥:다른 배", pt);
         Boundary(sim);
         FlareStep(sim, dt);
         CloudsStep(sim, dt);
-        RocksStep(sim, dt);
+        RocksStep(sim, dt); pt = Prof.Lap("바깥:경계 · 날씨 · 바위", pt);
         if (sim.Tick % 25 == 0 || double.IsNaN(_shieldAngle)) Radiation();
+        Prof.Lap("바깥:방사선", pt);
     }
 
     /// <summary>③ 장의 바깥 경계: 우주(진공 · 햇빛) 또는 행성 대기.</summary>
@@ -360,36 +362,83 @@ public sealed partial class Outside : IEngine
         {
             _shieldAngle = SunAngle;
             double sx = Math.Cos(SunAngle), sy = Math.Sin(SunAngle);
-            for (int i = 0; i < L.N; i++)
+            ArealTerms();
+            Par.Rows(L.H, (r0, r1) =>   // 칸마다 따로 (줄을 나눠 여러 코어에서 — 칸의 값은 같다)
             {
-                if (!L.IsSpace(i)) { _shield[i] = 0; continue; }
-                double sunSide = Areal(i, sx, sy);
-                double avg = (Areal(i, 1, 0) + Areal(i, -1, 0) + Areal(i, 0, 1) + Areal(i, 0, -1)) / 4;
-                _shield[i] = (float)(0.5 * Math.Exp(-sunSide / 300) + 0.5 * Math.Exp(-avg / 300));
-            }
+                for (int i = r0 * L.W; i < r1 * L.W; i++)
+                {
+                    if (!L.IsSpace(i)) { _shield[i] = 0; continue; }
+                    double sunSide = Areal(i, sx, sy);
+                    double avg = (AxisAreal(i, 1, 0) + AxisAreal(i, -1, 0) + AxisAreal(i, 0, 1) + AxisAreal(i, 0, -1)) / 4;
+                    _shield[i] = (float)(0.5 * Math.Exp(-sunSide / 300) + 0.5 * Math.Exp(-avg / 300));
+                }
+            });
         }
         for (int i = 0; i < L.N; i++) Dose[i] = (float)(DoseOut * _shield[i]);
     }
 
-    /// <summary>칸 i에서 (dx, dy) 쪽으로 바깥까지 지나는 면밀도 (kg/m²).</summary>
+    // 가림 셈의 칸마다 몫 — 다시 셀 때 한 번 세어 두고 광선마다 같은 차례로 더한다 (해 각이 돌 때마다 칸마다 광선 다섯 · 새터호 약 20ms였다)
+    private double[] _arWall = Array.Empty<double>(), _arFur = Array.Empty<double>(), _arWater = Array.Empty<double>();
+    private byte[] _arKind = Array.Empty<byte>();   // 0 바깥(멈춤) · 1 벽 · 2 그 밖 (+4: 설비가 있다)
+
+    private void ArealTerms()
+    {
+        if (_arKind.Length != L.N) { _arWall = new double[L.N]; _arFur = new double[L.N]; _arWater = new double[L.N]; _arKind = new byte[L.N]; }
+        for (int c = 0; c < L.N; c++)
+        {
+            var kind = L.Kind[c];
+            if (kind == CellKind.Outside) { _arKind[c] = 0; continue; }
+            var m = T.Materials[L.Material[c]].Def;
+            byte k = kind == CellKind.Wall ? (byte)1 : (byte)2;
+            if (kind == CellKind.Wall) _arWall[c] = m.Density * (L.Hull[c] ? 0.010 : 0.004) * (F.Hole[c] >= 2 ? 0 : 1);
+            if (L.FurnitureAt[c] >= 0) { k |= 4; _arFur[c] = F.Cs[c] / 500.0; } // 설비 질량 (열용량 ÷ 강철 비열 ≈ kg) 이 1m²에 있다고
+            _arWater[c] = F.Stored(T.sWater, c) * 0.018; // 고인 물
+            _arKind[c] = k;
+        }
+    }
+
+    /// <summary>칸 c를 지날 때 더하는 몫 (벽 · 설비 · 고인 물 차례로) — 바깥이면 false.</summary>
+    private bool ArealAdd(int c, ref double sum)
+    {
+        byte k = _arKind[c];
+        if (k == 0) return false;
+        if ((k & 3) == 1) sum += _arWall[c];
+        if ((k & 4) != 0) sum += _arFur[c];
+        sum += _arWater[c];
+        return true;
+    }
+
+    /// <summary>칸 i에서 (dx, dy) 쪽으로 바깥까지 지나는 면밀도 (kg/m²) — 반 칸씩 걷는다 (<see cref="ArealTerms"/> 다음에).</summary>
     private double Areal(int i, double dx, double dy)
     {
-        double x = L.X(i) + 0.5, y = L.Y(i) + 0.5, sum = 0;
-        int last = i;
+        double x = L.X(i) + 0.5, y = L.Y(i) + 0.5, sum = 0, hx = dx * 0.5, hy = dy * 0.5;
+        int last = i, w = L.W, h = L.H;
         for (int s = 0; s < 400; s++)
         {
-            x += dx * 0.5; y += dy * 0.5;
-            int ix = (int)Math.Floor(x), iy = (int)Math.Floor(y);
-            if (!L.In(ix, iy)) break;
-            int c = L.Index(ix, iy);
+            x += hx; y += hy;
+            if (x < 0 || y < 0) break;                 // 바닥 내림이 음수 = 도면 밖
+            int ix = (int)x, iy = (int)y;              // 0 이상이면 자르기 = 바닥 내림
+            if (ix >= w || iy >= h) break;
+            int c = iy * w + ix;
             if (c == last) continue;
             last = c;
-            var kind = L.Kind[c];
-            if (kind == CellKind.Outside) break;
-            var m = T.Materials[L.Material[c]].Def;
-            if (kind == CellKind.Wall) sum += m.Density * (L.Hull[c] ? 0.010 : 0.004) * (F.Hole[c] >= 2 ? 0 : 1);
-            if (L.FurnitureAt[c] >= 0) sum += F.Cs[c] / 500.0; // 설비 질량 (열용량 ÷ 강철 비열 ≈ kg) 이 1m²에 있다고
-            sum += F.Stored(T.sWater, c) * 0.018; // 고인 물
+            if (!ArealAdd(c, ref sum)) break;
+        }
+        return sum;
+    }
+
+    /// <summary>
+    /// 축 방향(±x · ±y) 면밀도: 반 칸씩 걸으면 400걸음 안에 이웃 칸부터 200칸을 차례로 지난다 — 그 칸들을 바로 걷는다 (같은 칸 · 같은 차례 · 같은 값).
+    /// </summary>
+    private double AxisAreal(int i, int dx, int dy)
+    {
+        int x = L.X(i), y = L.Y(i);
+        double sum = 0;
+        for (int k = 1; k <= 200; k++)
+        {
+            int ix = x + dx * k, iy = y + dy * k;
+            if (!L.In(ix, iy)) break;
+            if (!ArealAdd(L.Index(ix, iy), ref sum)) break;
         }
         return sum;
     }
