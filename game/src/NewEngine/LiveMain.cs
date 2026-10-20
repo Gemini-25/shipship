@@ -56,6 +56,7 @@ public partial class LiveMain : Node2D
     private ImageTexture? _facesTex;
     private int _facesVer = -1;
     private readonly List<(Rect2 R, int Id)> _crewHits = new();
+    private readonly List<(Rect2 R, int Cell)> _feedHits = new();
     private float _crewH;
 
     // ── 소리: 작업 스레드의 귀가 보낸 것을 메인 스레드의 섞개가 받아 그리고, Godot에는 다 섞인 소리만 밀어 넣는다 ──
@@ -71,6 +72,7 @@ public partial class LiveMain : Node2D
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
     private int _shotN, _picsTotal, _pick = -1;
     private PanelKind _openPanel;
+    private bool _ignite;                                      // --ignite: 감은 뒤 침대 하나에 불씨 (화면 사진용 — 사건 띠 · 불 연출)
     private double _skipHours;                                 // --skip=시간: 띄우기 전에 그만큼 앞으로 감는다 (화면 사진용)                              // --panel=L|T|J: 3초 뒤 그 판을 연다 (화면 사진용)
     private readonly System.Collections.Generic.List<double> _frameMs = new();
 
@@ -94,6 +96,7 @@ public partial class LiveMain : Node2D
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
+            else if (a == "--ignite") _ignite = true;
             else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
             else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
         }
@@ -136,6 +139,13 @@ public partial class LiveMain : Node2D
                 while (_cmds.TryDequeue(out _)) { }               // 옛 배에 내린 손은 버린다
                 _show = LiveShow.Crewed(want, _launchSeed);
                 if (_skipHours > 0) { _show.FastForward(Time.Hours(_skipHours)); _skipHours = 0; }
+                if (_ignite)
+                {
+                    _ignite = false;
+                    var w = _show.Sim;
+                    var bed = w.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                    if (bed != null) { int c = bed.Cells[0]; w.Get<ShipEngine.Chemistry>().Ignite(c, 3e6, w.Causes.Add(CauseKind.Setup, "침대 밑에서 불씨가 튀었다", w.Tick)); _show.LookAt(c); }
+                }
                 last = clock.Elapsed.TotalSeconds;
             }
             var show = _show;
@@ -340,6 +350,7 @@ public partial class LiveMain : Node2D
         }
 
         if (f.Card.Length > 0) DrawCard(f, vp);
+        DrawFeed(f, vp);
         if (f.PanelTitle.Length > 0) DrawPanel(f, vp);
         if (_meter) DrawString(_font, new Vector2(vp.X - 340, 60), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장 · 소리 {_mix.Voices}개", HorizontalAlignment.Right, 324, 14, new Color(0.6f, 0.9f, 0.6f));
         if (_help) DrawHelp(vp);
@@ -477,6 +488,33 @@ public partial class LiveMain : Node2D
     }
 
     /// <summary>고른 사람 · 로봇: 그려진 자리에 고리 · 왼쪽에 카드.</summary>
+    /// <summary>
+    /// 사건 띠 (UI U4 — 왼쪽 위 · 사람 카드가 있으면 그 아래): 주컴퓨터가 아는 지금의 사건 · 막 끝난 사건 다섯 줄까지.
+    /// 왼쪽 색 띠: 위험 빨강(깜빡임) · 조심 호박 · 알림 파랑 · 끝난 일은 옅게. 누르면 그 자리로.
+    /// </summary>
+    private void DrawFeed(LiveFrame f, Vector2 vp)
+    {
+        _feedHits.Clear();
+        if (f.Feed.Length == 0) return;
+        float w = 330, lh = 24, x = 16, y = TopUi + 12 + (f.Card.Length > 0 ? 20 + f.Card.Length * 25 + 6 + 8 : 0);
+        float pulse = 0.55f + 0.45f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau);
+        var mouse = GetViewport().GetMousePosition();
+        foreach (var it in f.Feed)
+        {
+            var r = new Rect2(x, y, w, lh - 2);
+            bool hover = r.HasPoint(mouse) && it.Cell >= 0;
+            DrawRect(r, new Color(0.03f, 0.04f, 0.07f, it.Active ? 0.86f : 0.6f));
+            var tone = it.Level switch { 2 => new Color(1f, 0.35f, 0.3f, it.Active ? pulse : 0.5f), 1 => new Color(1f, 0.76f, 0.32f, it.Active ? 1 : 0.5f), _ => new Color(0.5f, 0.68f, 0.95f, it.Active ? 1 : 0.5f) };
+            DrawRect(new Rect2(x, y, 4, lh - 2), tone);
+            var text = it.Active ? new Color(0.92f, 0.94f, 0.98f) : new Color(0.6f, 0.64f, 0.72f);
+            DrawString(_font, new Vector2(x + 10, y + 16), it.Time, HorizontalAlignment.Left, -1, 13, new Color(0.6f, 0.66f, 0.76f));
+            DrawString(it.Active && it.Level == 2 ? _bold : _font, new Vector2(x + 56, y + 16), it.Text, HorizontalAlignment.Left, w - 64, 14, text);
+            if (hover) DrawRect(r, new Color(0.6f, 0.75f, 1f, 0.8f), false, 1);
+            if (it.Cell >= 0) _feedHits.Add((r, it.Cell));
+            y += lh;
+        }
+    }
+
     private void DrawCard(LiveFrame f, Vector2 vp)
     {
         if (!double.IsNaN(f.SelX))
@@ -660,9 +698,11 @@ public partial class LiveMain : Node2D
                 else
                 {
                     _dragging = false;
-                    int hitId = -1;
+                    int hitId = -1, hitCell = -1;
                     foreach (var (r, id) in _crewHits) if (r.HasPoint(mb.Position)) { hitId = id; break; }
+                    foreach (var (r, cell) in _feedHits) if (r.HasPoint(mb.Position)) { hitCell = cell; break; }
                     if (_dragDist < 6 && hitId >= 0) { int id = hitId; _cmds.Enqueue(s => s.SelectAgent(id)); }   // 사람 줄: 그를 고르고 따라간다
+                    else if (_dragDist < 6 && hitCell >= 0) { int cell = hitCell; _cmds.Enqueue(s => s.LookAt(cell)); }   // 사건 띠: 그 자리로
                     else if (_dragDist < 6 && _shown != null)
                     {
                         // 누름: 그 자리의 사람 · 로봇을 고른다 (없으면 놓는다)

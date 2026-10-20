@@ -33,7 +33,12 @@ public sealed class LiveFrame
     public Img? Faces;
     public int FacesVersion, FacesPerRow = LiveShow.FacesPerRow;
     public int Selected = -1;
+    /// <summary>사건 띠 (UI U4): 주컴퓨터가 아는 지금의 사건 · 막 끝난 사건 (누르면 그 자리로).</summary>
+    public FeedItem[] Feed = Array.Empty<FeedItem>();
 }
+
+/// <summary>사건 띠의 한 줄: 때 · 글 · 단계 (0 알림 · 1 조심 · 2 위험) · 자리 칸 (-1 없음) · 아직인가.</summary>
+public readonly record struct FeedItem(string Time, string Text, int Level, int Cell, bool Active);
 
 /// <summary>배 상태 띠의 한 칸 (늘 보인다 — 세계의 값을 읽기만 한다): 그림 열쇠 · 이름 · 값 · 단계 (0 괜찮다 · 1 살펴볼 것 · 2 위험).</summary>
 public readonly record struct Gauge(string Icon, string Name, string Value, int Level);
@@ -41,8 +46,7 @@ public readonly record struct Gauge(string Icon, string Name, string Value, int 
 /// <summary>사람 줄의 한 사람 (UI U2): 얼굴은 Faces 그림의 Slot번째 칸 · 단계 (0 괜찮다 · 1 다침 · 지침 · 2 쓰러짐 · 위험 · 3 숨졌다).</summary>
 public readonly record struct CrewFace(int Id, string Name, string State, int Level, int Slot);
 
-/// <summary>판 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등).</summary>
-/// <summary>판의 한 줄: 제목 · 아래 글 · 강조 — 사람 판은 얼굴(사람 줄 얼굴 그림의 칸)과 상태 막대도.</summary>
+/// <summary>판의 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등) — 사람 판은 얼굴(사람 줄 얼굴 그림의 칸)과 상태 막대도.</summary>
 public readonly record struct PanelRow(string Main, string Sub, bool On, int Face = -1, PanelBar[]? Bars = null);
 /// <summary>판 줄의 막대 하나 (UI U3): 이름 · 0~1 · 단계 (0 괜찮다 · 1 조심 · 2 위험).</summary>
 public readonly record struct PanelBar(string Name, float Value, int Level);
@@ -549,6 +553,7 @@ public sealed class LiveShow
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
             Vitals = Vitals(),
             Crew = CrewBar(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
+            Feed = Feed(),
         };
     }
 
@@ -955,6 +960,35 @@ public sealed class LiveShow
         o.Add(new Gauge("supply", "물자", $"식량 {Days(food)} · 물 {Days(water)}", least < 7 ? 2 : least < 20 ? 1 : 0));
         int burning = chem?.BurningCount ?? 0;
         o.Add(new Gauge("fire", "불", burning > 0 ? $"{burning}칸이 탄다" : "없다", burning > 0 ? 2 : 0));
+        return o.ToArray();
+    }
+
+    /// <summary>
+    /// 사건 띠 (UI U4): 주컴퓨터의 사건 목록에서 — 아직인 것(최근 것부터) · 그다음 30분 안에 끝난 것 · 다섯 줄까지.
+    /// 주컴퓨터가 아는 것만 (못 보는 방의 일은 띠에도 없다 — 세계의 진실이 아니라 배가 아는 것).
+    /// </summary>
+    public FeedItem[] Feed()
+    {
+        var sm = World.Find<ShipMind>();
+        if (sm == null) return Array.Empty<FeedItem>();
+        long now = World.Tick;
+        static int LevelOf(IncidentKind k) => k switch
+        {
+            IncidentKind.Fire or IncidentKind.Vacuum or IncidentKind.PersonDown or IncidentKind.Arrest or IncidentKind.Toxic or IncidentKind.CO or IncidentKind.ReactorScram or IncidentKind.Flammable => 2,
+            IncidentKind.Leak or IncidentKind.Hot or IncidentKind.BadAir or IncidentKind.ElectricFault or IncidentKind.PowerShort or IncidentKind.PowerLost or IncidentKind.Injured
+                or IncidentKind.Strain or IncidentKind.DoorJam or IncidentKind.O2Rich or IncidentKind.Surgery => 1,
+            _ => 0,
+        };
+        static string Hm(long t) { long m = t % Time.TicksPerDay * 60 / Time.TicksPerHour; return $"{m / 60:00}:{m % 60:00}"; }
+        FeedItem Item(in Incident x) => new(Hm(x.Active != 0 ? x.Since : x.Ended),
+            $"{(x.Room >= 0 ? sm.RoomName(x.Room) : "배 전체")} · {ShipMind.KindName(x.Kind)}{(x.Active != 0 ? "" : " — 끝")}", LevelOf(x.Kind), x.Cell, x.Active != 0);
+        var o = new List<FeedItem>(5);
+        for (int i = sm.Incidents.Count - 1; i >= 0 && o.Count < 5; i--) if (sm.Incidents[i].Active != 0) o.Add(Item(sm.Incidents[i]));
+        for (int i = sm.Incidents.Count - 1; i >= 0 && o.Count < 5; i--)
+        {
+            var x = sm.Incidents[i];
+            if (x.Active == 0 && now - x.Ended < Time.Minutes(30)) o.Add(Item(x));
+        }
         return o.ToArray();
     }
 

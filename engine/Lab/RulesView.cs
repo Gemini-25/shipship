@@ -228,6 +228,30 @@ public static partial class Program
                 $"평소 {calm} · 불 {fire} ({Val("fire")}) · 선체 {hole} ({Val("hull")}) · 사람 {down} ({Val("crew")}) · 공기 {Val("air")} · 전력 {Val("power")} · 물자 {Val("supply")}");
         }
 
+        // ── 사건 띠 (UI U4): 주컴퓨터가 불을 알면 띠에 '불'이 위험 단계로 (자리 칸과 함께) · 누르면 그 자리로 · 꺼지면 '끝'으로 남는다 ──
+        {
+            var fs = new LiveShow(Worlds.Full(lay, 3), "시험호");
+            var w = fs.Sim;
+            w.Run(5);
+            bool calm = fs.Feed().Length == 0;
+            int spot = At(3, 5);
+            w.Get<Chemistry>().Ignite(spot, 3e6, w.Causes.Add(CauseKind.Setup, "침대 불씨", w.Tick));
+            FeedItem fire = default;
+            for (int k = 0; k < 40 && fire.Text == null; k++) { w.Step(); fire = fs.Feed().FirstOrDefault(x => x.Active && x.Text.Contains("불")); }
+            bool looked = false;
+            if (fire.Text != null) { fs.LookAt(fire.Cell); var (cx, cy) = (fs.CamX, fs.CamY); looked = Math.Abs(cx - (lay.X(fire.Cell) + 0.5)) < 3 && Math.Abs(cy - (lay.Y(fire.Cell) + 0.5)) < 3; }
+            var ch = w.Get<Chemistry>();
+            for (int k = 0; k < Time.Minutes(30) && fs.Feed().Any(x => x.Active && x.Text.Contains("불")); k++)
+            {
+                for (int c = 0; c < lay.N; c++) if (ch.Burning[c] != 0) ch.Douse(c, Extinguishant.Water, 50);   // 끈다
+                w.Step();
+            }
+            var ended = fs.Feed().FirstOrDefault(x => !x.Active && x.Text.Contains("불"));
+            Check("사건 띠: 평소엔 비었다 · 불이 나면 주컴퓨터가 알자 '불'이 위험 단계로 (자리 칸 · 누르면 카메라가 그리로) · 꺼지면 '끝'으로 남는다",
+                calm && fire.Text != null && fire.Level == 2 && fire.Cell >= 0 && looked && ended.Text != null && ended.Text.EndsWith("끝"),
+                $"평소 {calm} · 불 \"{fire.Time} {fire.Text}\" 단계 {fire.Level} · 칸 {fire.Cell} · 카메라 {looked} · 끝 \"{ended.Time} {ended.Text}\"");
+        }
+
         // ── 사슬 판 (C) · 사슬 선: 지금 장면의 원인 사슬을 뿌리부터 차례로 · 갈래 이름 · 골라 Enter면 그 자리로 · 사슬 선이 그 자리들을 잇는다 ──
         {
             var cs = new LiveShow(Worlds.Full(lay, 3), "시험호");
