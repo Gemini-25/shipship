@@ -10,14 +10,15 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int dev = st.Target;
-        if (_net == null || dev < 0 || dev >= _net.Loose.Length || _net.Loose[dev] < 1) { JobDone(a, t); return; }   // 와 보니 이미 조였다
+        if (_net == null || dev < 0 || dev >= _net.Loose.Length || _net.Loose[dev] < Network.LooseFelt) { JobDone(a, t); return; }   // 와서 렌치를 대 보니 이미 조였다
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         WorkNoise(sim, a, SoundKind.Tool, 72);   // 볼트 조이기: 렌치
         if (t - c.StepStart < Time.Minutes(a.IsPerson ? TightenPersonMin : TightenRobotMin)) return;
         int parent = _net.LooseCause[dev];
+        string how = _net.Loose[dev] >= 1 ? "덜컹거리던" : "풀려 가던";   // 진동 센서가 일찍 잡으면 덜컹거리기 전에
         _net.Tighten(dev);
-        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 덜컹거리던 {_net.Devices[dev].Name}의 볼트를 조였다", t, _net.Devices[dev].Cell, parent, 0, a.Id);
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {how} {_net.Devices[dev].Name}의 볼트를 조였다", t, _net.Devices[dev].Cell, parent, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, 10, cause, a.Id, dev);
         if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.002f * Practice(c, "고치기") * UseSkill(a, 0, t));
         JobDone(a, t);

@@ -87,6 +87,15 @@ public sealed partial class Network
         return sum;
     }
 
+    /// <summary>그 방 관에 모르는 샘이 있나 (그 갈래 — 누출 센서가 바닥의 물기로 잡는다).</summary>
+    public bool UnknownLeakIn(LineKind k, int room)
+    {
+        int s = Slot(k);
+        foreach (int c in _leakCells)
+            if (PipeLeak[c * 2 + s] > 0 && LeakKnown[c * 2 + s] == 0 && _lineRoom[c] == room) return true;
+        return false;
+    }
+
     /// <summary>그 관 칸에서 지금 새는 빠르기 (몰/초 — 압력이 걸렸으면 다 · 아니면 스미는 만큼).</summary>
     public double LeakFlow(int c, LineKind k)
     {

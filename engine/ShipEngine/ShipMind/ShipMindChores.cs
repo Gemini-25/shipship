@@ -58,11 +58,11 @@ public sealed partial class ShipMind
                     if (!SpareKnown(p)) continue; // 갈아 끼울 그 갈래 부품이 없다 (⑪ 공급 사슬)
                     Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);
                 }
-        // ④ 진동 센서: 볼트가 풀려 덜컹거리는 장치 — 조이기 (로봇 먼저 · 사람은 고치는 솜씨가 조금 있으면)
+        // ④ 볼트가 풀려 덜컹거리는 장치 (소리) · 그 방에 진동 센서가 있으면 반쯤 풀렸을 때부터 — 조이기 (로봇 먼저 · 사람은 고치는 솜씨가 조금 있으면)
         if (_net != null)
             for (int d = 0; d < _net.Loose.Length; d++)
             {
-                if (_net.Loose[d] < 1 || Jobs.Any(j => j.Kind == GoalKind.Tighten && j.Target == d)) continue;
+                if (_net.Loose[d] < Network.LooseSensed || _net.Loose[d] < LooseKnownAt(d) || Jobs.Any(j => j.Kind == GoalKind.Tighten && j.Target == d)) continue;
                 Post(sim, new Job { Kind = GoalKind.Tighten, Target = d }, _net.Devices[d].Cell, person => person.C.SkRepair >= 0.3f);
             }
         // 사람이 알린 이상한 기계 소리 (⑧이 남긴 알림을 읽는다 — 배 안 통신): 아직 끽끽거리면 그 장치의 기계 부품을 미리 간다 (로봇 먼저)
@@ -119,7 +119,7 @@ public sealed partial class ShipMind
         GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < Work.HarvestAt * 0.5f * _life.CropArea(_net, j.Target),
         GoalKind.Restock => _work!.FoodAt(j.Target) >= Work.RestockBelow * 2 || _work.FoodAt(j.Arg) < 1,
         GoalKind.Haul => HaulDone(j.Arg, j.Agent),
-        GoalKind.Tighten => _net == null || j.Target >= _net.Loose.Length || _net.Loose[j.Target] < 1,
+        GoalKind.Tighten => _net == null || j.Target >= _net.Loose.Length || _net.Loose[j.Target] < Network.LooseFelt,
         _ => true,
     };
 

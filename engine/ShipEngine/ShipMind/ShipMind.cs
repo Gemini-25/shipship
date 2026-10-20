@@ -401,6 +401,7 @@ public sealed partial class ShipMind : IEngine
         // 자리를 모르는 관 샘 (⑥ 바퀴 3 (라)): 밸브로 좁히고 그 방으로 로봇을 보낸다
         PipeHunt(sim, (k, r, sub) => Mark(k, r, sub));
         var leaking = new List<(int room, float drop)>();
+        var eyes = Eyes();
         for (int r = 0; r < L.Rooms.Count; r++)
         {
             if (RoomSeen[r] == 0) continue;
@@ -408,6 +409,12 @@ public sealed partial class ShipMind : IEngine
             // 불: 연기가 늘고 있거나 · 불꽃만큼 뜨거우면(420K) — 꺼진 뒤 남은 연기만으로는 아니고, 냉각이 끊겨 더운 방도 아니다
             if (RoomTemp[r] > 420 && RoomO2[r] > 5 || RoomSoot[r] > 15 && RoomSoot[r] > RoomSootPrev[r] * 1.05f + 1) { Raise(sim, IncidentKind.Fire, r, RoomHot[r], RoomTemp[r], -1, FireCause(RoomHot[r]) is int fc && fc != 0 ? fc : NearFireCause(r)); Mark(IncidentKind.Fire, r); }
             else if (RoomAirT[r] > 318) { Raise(sim, IncidentKind.Hot, r, RoomHot[r], RoomTemp[r], -1, NearFireCause(r) is int hc && hc != 0 ? hc : _chem?.HeatCauseAt(RoomHot[r]) ?? 0); Mark(IncidentKind.Hot, r); }
+            // 꾸밈의 열화상 카메라: 공기가 데워지기 전에 겉면 · 배터리 셀의 뜨거운 자리 — 로봇을 보내 살핀다
+            else if ((eyes[r] & EyeHeat) != 0 && HotSpot(r, out int spot, out double spotK))
+            {
+                Raise(sim, IncidentKind.Hot, r, spot, (float)spotK, 1, _chem?.HeatCauseAt(spot) ?? 0, $"열화상 카메라에 뜨거운 자리 ({spotK - 273.15:0}℃)");
+                Mark(IncidentKind.Hot, r, 1);
+            }
             float dp = RoomKPa[r] - RoomKPaPrev[r];
             if (IsolatedAirlock(r) || Deliberate(r)) { }   // 안쪽 문이 모두 닫힌 에어락은 비어 있어도 된다 (순환 중) · 지어낸 계획이 일부러 비우는 방 (임시 에어락)
             else if (RoomKPa[r] < 40) { Raise(sim, IncidentKind.Vacuum, r, _roomVent[r], RoomKPa[r], -1, LeakCause(r)); Mark(IncidentKind.Vacuum, r); }
@@ -1054,6 +1061,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.PipeHunt: g = GoalKind.Investigate; target = x.Cell; drone = false; break;   // 새는 관을 따라 칸마다 살핀다
             case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
             case IncidentKind.Heard: g = GoalKind.Investigate; target = x.Cell; drone = true; break;     // 소리 단계 S4: 큰 소리가 난 자리로 가서 본다
+            case IncidentKind.Hot when x.Subject == 1: g = GoalKind.Investigate; target = x.Cell; drone = true; break;   // 열화상의 뜨거운 자리로 가서 본다 (방 공기가 더운 것은 공조의 몫)
             default: return;
         }
         int need = x.Kind is IncidentKind.Fire or IncidentKind.Arrest ? 2 : 1;

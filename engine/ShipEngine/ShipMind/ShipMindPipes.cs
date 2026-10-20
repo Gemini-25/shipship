@@ -27,22 +27,30 @@ public sealed partial class ShipMind
     private void PipeHunt(Sim sim, Action<IncidentKind, int, int> mark)
     {
         if (_net == null) return;
+        var eyes = Eyes();
         for (int s = 0; s < 2; s++)
         {
             var h = _hunt[s];
             var k = HuntKind(s);
             double rate = _net.UnknownLeakRate(k);
+            int sensed = SensedLeakRoom(k, eyes);   // 꾸밈의 누출 센서: 그 방 바닥의 물기 — 흐름 계량이 못 잡는 작은 샘도 · 자리(방)까지
             if (h.Active == 0)
             {
-                if (rate < HuntMolPerSec) continue;
+                if (rate < HuntMolPerSec && sensed < 0) continue;
                 h.Active = 1; h.Since = sim.Tick; h.Test = -1; h.Found = -1; h.Next = -1; h.Visited.Clear();
                 h.Cand = _net.PipeRooms(k);
                 HuntsStarted++;
-                Say(sim, $"{PipeName(s)} 어딘가가 샌다 (시간에 {rate * 3600 * (s == 0 ? 0.017 : 0.018):0.0}{(s == 0 ? "kg" : "L")}) — 자리를 모른다 · 밸브를 잠가 가며 좁힌다 (방 {h.Cand.Count}개)");
+                if (sensed < 0) Say(sim, $"{PipeName(s)} 어딘가가 샌다 (시간에 {rate * 3600 * (s == 0 ? 0.017 : 0.018):0.0}{(s == 0 ? "kg" : "L")}) — 자리를 모른다 · 밸브를 잠가 가며 좁힌다 (방 {h.Cand.Count}개)");
+            }
+            if (h.Found < 0 && sensed >= 0)
+            {
+                if (h.Test >= 0) { _net.SetValve(h.Test, k, false); h.Test = -1; }
+                h.Found = sensed; h.Cand = new List<int> { sensed };
+                Say(sim, $"{RoomName(sensed)} 누출 센서에 물기가 잡혔다 — {PipeName(s)} 샘은 {RoomName(sensed)}에 있다 · 로봇을 보내 관을 따라 찾는다");
             }
             // 찾았다 (그 칸을 누가 알아봤다 — 이제 아는 샘이라 '선이 끊겼다'로 죈다) · 또는 저절로 멎었다
-            // (밸브를 잠가 보는 동안 준 것은 멎은 것이 아니다 — 시험이 끝나야 읽는다)
-            if (h.Test < 0 && rate < HuntMolPerSec * 0.5)
+            // (밸브를 잠가 보는 동안 준 것은 멎은 것이 아니다 — 시험이 끝나야 읽는다 · 누출 센서가 아직 물기를 잡으면 멎은 것이 아니다)
+            if (h.Test < 0 && rate < HuntMolPerSec * 0.5 && sensed < 0)
             {
                 if (h.Test >= 0) _net.SetValve(h.Test, k, false);
                 Say(sim, h.Found >= 0 ? $"{PipeName(s)} 새는 자리를 찾았다 — {RoomName(h.Found)}" : $"{PipeName(s)} 샘이 멎었다");

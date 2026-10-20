@@ -9,6 +9,8 @@ namespace ShipEngine;
 public sealed partial class Network
 {
     public const double VibBaseMPa = 4, VibHz = 25, LooseHours = 200;
+    /// <summary>진동 센서가 잡는 풀림 (떨림의 결이 바뀐다 — 덜컹거리기 전) · 손으로 만져 느끼는 풀림 (조이러 온 이가 렌치를 댄다).</summary>
+    public const float LooseSensed = 0.6f, LooseFelt = 0.3f;
     public float[] Loose = Array.Empty<float>();
     public int[] LooseCause = Array.Empty<int>();
     public long Rattles, Tightened;
