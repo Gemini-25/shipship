@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -51,6 +52,11 @@ public partial class LiveMain : Node2D
     private Vector2 _lastSize;
     private bool _dragging;
     private Vector2 _pressAt; private float _dragDist;
+    // 사람 줄 (UI U2): 얼굴 그림 텍스처 (바뀔 때만 다시 올린다) · 누를 자리
+    private ImageTexture? _facesTex;
+    private int _facesVer = -1;
+    private readonly List<(Rect2 R, int Id)> _crewHits = new();
+    private float _crewH;
 
     // ── 소리: 작업 스레드의 귀가 보낸 것을 메인 스레드의 섞개가 받아 그리고, Godot에는 다 섞인 소리만 밀어 넣는다 ──
     private readonly Mixer _mix = new();
@@ -187,6 +193,13 @@ public partial class LiveMain : Node2D
             _show?.Recycle(img);                                  // 텍스처로 옮겼다 — 다음 장에 다시 쓴다
             if (_shown == null || _shown.Ship != f.Ship) DisplayServer.WindowSetTitle($"ShipSim · 새 엔진 판 — {f.Ship}");
             _shown = f;
+            if (f.Faces != null && f.FacesVersion != _facesVer)
+            {
+                var fi = Image.CreateFromData(f.Faces.W, f.Faces.H, false, Image.Format.Rgba8, f.Faces.Px);
+                if (_facesTex != null && _facesTex.GetWidth() == fi.GetWidth() && _facesTex.GetHeight() == fi.GetHeight()) _facesTex.Update(fi);
+                else _facesTex = ImageTexture.CreateFromImage(fi);
+                _facesVer = f.FacesVersion;
+            }
             if (f.Cut) _cutDip = CutDipSec;   // 카메라가 끊어 넘긴 장: 짧게 어두워졌다 밝아진다
             _gotFrames++; _picsTotal++;
         }
@@ -269,12 +282,13 @@ public partial class LiveMain : Node2D
         }
         string hint = _speedAt == 0 ? "빠르기: 연출" : $"빠르기: ×{GameSecPerSec[_speedAt]:0} (손)";
         DrawString(_font, new Vector2(vp.X - 230, 27), hint + " · H 도움말", HorizontalAlignment.Right, 214, 15, new Color(0.65f, 0.7f, 0.8f));
+        DrawVitals(f, vp);
 
         // 함장이 항로를 골랐다 (몇 초)
         if (f.Notice.Length > 0)
         {
             var sz = _font.GetStringSize(f.Notice, HorizontalAlignment.Left, -1, 17);
-            var r = new Rect2(vp.X - sz.X - 40, 48, sz.X + 24, 32);
+            var r = new Rect2(vp.X - sz.X - 40, TopUi + 6, sz.X + 24, 32);
             DrawRect(r, new Color(0.04f, 0.06f, 0.1f, 0.9f));
             DrawRect(r, new Color(0.5f, 0.65f, 0.9f, 0.9f), false, 1);
             DrawString(_font, new Vector2(r.Position.X + 12, r.Position.Y + 22), f.Notice, HorizontalAlignment.Left, -1, 17, new Color(0.85f, 0.9f, 1f));
@@ -284,7 +298,7 @@ public partial class LiveMain : Node2D
         if (f.Banner.Length > 0 && f.BannerAlpha > 0)
         {
             var sz = _bold.GetStringSize("★ " + f.Banner, HorizontalAlignment.Left, -1, 24);
-            var r = new Rect2(vp.X / 2 - sz.X / 2 - 20, 58, sz.X + 40, 46);
+            var r = new Rect2(vp.X / 2 - sz.X / 2 - 20, TopUi + 14, sz.X + 40, 46);
             DrawRect(r, new Color(0.08f, 0.05f, 0.03f, 0.85f * f.BannerAlpha));
             DrawRect(r, new Color(1f, 0.72f, 0.3f, 0.9f * f.BannerAlpha), false, 2);
             DrawString(_bold, new Vector2(r.Position.X + 20, r.Position.Y + 31), "★ " + f.Banner, HorizontalAlignment.Left, -1, 24, new Color(1f, 0.86f, 0.6f, f.BannerAlpha));
@@ -308,10 +322,12 @@ public partial class LiveMain : Node2D
             DrawMultilineString(_font, new Vector2(r.Position.X + 20, r.Position.Y + 28), f.Broadcast, HorizontalAlignment.Left, bw - 40, 17, 3, new Color(0.8f, 0.96f, 1f, f.BroadcastAlpha));
         }
 
+        DrawCrew(f, vp);
+
         // 소리 자막 (U로 켜고 끈다 — 소리 단계 S6): 무엇이 · 어느 쪽에서 (화살표 · 곁)
         if (f.Captions.Length > 0)
         {
-            float y = vp.Y - (f.Story.Length > 0 ? 74 : 14) - f.Captions.Length * 26;
+            float y = vp.Y - (f.Story.Length > 0 ? 74 : 14) - _crewH - f.Captions.Length * 26;
             foreach (var c in f.Captions)
             {
                 float a = (float)Math.Clamp(c.Left / 0.4, 0, 1);
@@ -329,6 +345,137 @@ public partial class LiveMain : Node2D
         if (_help) DrawHelp(vp);
     }
 
+    /// <summary>위 줄과 배 상태 띠가 차지하는 높이 (그 아래에 카드 · 판 · 알림).</summary>
+    private const float TopUi = 76;
+
+    /// <summary>
+    /// 배 상태 띠 (UI U1 — 늘 보인다): 위 줄 아래에 알약 여섯 — 그림 · 이름 · 값 (세계의 값 — LiveShow.Vitals).
+    /// 단계마다 왼쪽 띠 색: 괜찮다 청록 · 살펴볼 것 호박 · 위험 빨강 (천천히 깜빡인다).
+    /// </summary>
+    private void DrawVitals(LiveFrame f, Vector2 vp)
+    {
+        if (f.Vitals.Length == 0) return;
+        float x = 12, y = 46, h = 26;
+        float pulse = 0.65f + 0.35f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau * 0.8f);
+        foreach (var g in f.Vitals)
+        {
+            var col = g.Level switch { 2 => new Color(1f, 0.36f, 0.3f), 1 => new Color(1f, 0.76f, 0.32f), _ => new Color(0.5f, 0.86f, 0.76f) };
+            string text = g.Value;
+            float tw = _font.GetStringSize(text, HorizontalAlignment.Left, -1, 14).X;
+            float nw = _bold.GetStringSize(g.Name, HorizontalAlignment.Left, -1, 13).X;
+            float w = 30 + nw + 8 + tw + 12;
+            if (x + w > vp.X - 12) break;   // 좁은 화면: 들어가는 만큼
+            var r = new Rect2(x, y, w, h);
+            DrawRect(r, new Color(0.03f, 0.04f, 0.07f, 0.8f));
+            DrawRect(new Rect2(x, y, 3, h), g.Level == 2 ? new Color(col, pulse) : col);
+            if (g.Level == 2) DrawRect(r, new Color(col, 0.55f * pulse), false, 1);
+            DrawIcon(g.Icon, new Vector2(x + 17, y + h / 2), 8, g.Level == 0 ? new Color(0.78f, 0.86f, 0.92f) : col);
+            DrawString(_bold, new Vector2(x + 30, y + 18), g.Name, HorizontalAlignment.Left, -1, 13, new Color(0.62f, 0.68f, 0.78f));
+            DrawString(_font, new Vector2(x + 30 + nw + 8, y + 18), text, HorizontalAlignment.Left, -1, 14, g.Level == 0 ? new Color(0.9f, 0.93f, 0.97f) : col);
+            x += w + 6;
+        }
+    }
+
+    /// <summary>
+    /// 사람 줄 (UI U2 — 아래 줄 위): 사람마다 얼굴(지금 표정 · 다친 자국)과 이름 — 쓰러진 이 · 위험한 이가 앞에.
+    /// 테두리: 괜찮다 옅은 파랑 · 다침 호박 · 쓰러짐 · 위험 빨강(깜빡임) · 숨졌다 어둡게 · 고른 이 금빛. 누르면 그를 따라간다.
+    /// 많으면 얼굴을 작게 · 두 줄로 · 그래도 넘치면 앞에서부터 들어가는 만큼 (+ 남은 수).
+    /// </summary>
+    private void DrawCrew(LiveFrame f, Vector2 vp)
+    {
+        _crewHits.Clear(); _crewH = 0;
+        if (_facesTex == null || f.Crew.Length == 0) return;
+        float avail = vp.X - 32, bottom = vp.Y - (f.Story.Length > 0 ? 64 : 0) - 8;
+        int n = f.Crew.Length;
+        // 한 줄에 이름까지 (×2) → 두 줄 ×1.5 → 두 줄 ×1 → 넘치면 앞에서부터
+        float scale = 2; bool names = true; int rows = 1;
+        if (n * (Painter.FaceW * 2 + 14) > avail) { scale = 1.5f; names = false; rows = n * (Painter.FaceW * 1.5f + 4) > avail ? 2 : 1; }
+        if (n * (Painter.FaceW * 1.5f + 4) > avail * 2) scale = 1;
+        float fw = Painter.FaceW * scale, fh = Painter.FaceH * scale, slot = fw + (names ? 14 : 4), boxH = fh + (names ? 18 : 4);
+        int perRow = (int)((avail - 40) / slot);
+        int fit = Math.Min(n, perRow * rows);
+        if (rows == 2 && fit <= perRow) rows = 1;
+        if (rows == 2) perRow = (fit + 1) / 2;   // 두 줄은 고르게
+        float x0 = 16, y0 = bottom - boxH * rows - (rows - 1) * 4;
+        _crewH = boxH * rows + (rows - 1) * 4 + 8;
+        float pulse = 0.6f + 0.4f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau * 0.8f);
+        float x = x0, y = y0;
+        for (int i = 0; i < fit; i++)
+        {
+            if (i > 0 && i % perRow == 0) { x = x0; y += boxH + 4; }
+            var c = f.Crew[i];
+            var r = new Rect2(x, y, slot - 4, boxH);
+            DrawRect(r, new Color(0.03f, 0.04f, 0.07f, 0.82f));
+            var src = new Rect2(c.Slot % f.FacesPerRow * Painter.FaceW, c.Slot / f.FacesPerRow * Painter.FaceH, Painter.FaceW, Painter.FaceH);
+            var dst = new Rect2(x + (slot - 4 - fw) / 2, y + 2, fw, fh);
+            DrawTextureRectRegion(_facesTex, dst, src, c.Level == 3 ? new Color(0.45f, 0.45f, 0.5f, 0.8f) : Colors.White);
+            var edge = c.Id == f.Selected ? new Color(1f, 0.86f, 0.4f)
+                : c.Level switch { 3 => new Color(0.3f, 0.3f, 0.34f), 2 => new Color(1f, 0.35f, 0.3f, pulse), 1 => new Color(1f, 0.76f, 0.32f), _ => new Color(0.4f, 0.52f, 0.7f, 0.7f) };
+            DrawRect(r, edge, false, c.Id == f.Selected || c.Level == 2 ? 2 : 1);
+            if (names)
+            {
+                string nm = c.Name.Length > 4 ? c.Name[..4] : c.Name;
+                DrawString(_font, new Vector2(x + 2, y + boxH - 4), nm, HorizontalAlignment.Center, slot - 8, 11, c.Level == 3 ? new Color(0.5f, 0.5f, 0.55f) : new Color(0.86f, 0.9f, 0.96f));
+            }
+            _crewHits.Add((r, c.Id));
+            x += slot;
+        }
+        if (fit < n) DrawString(_bold, new Vector2(x + 4, y + boxH / 2 + 6), $"+{n - fit}", HorizontalAlignment.Left, -1, 14, new Color(0.7f, 0.76f, 0.86f));
+        // 마우스를 올린 사람: 이름 · 하는 일
+        var mouse = GetViewport().GetMousePosition();
+        foreach (var (r, id) in _crewHits)
+        {
+            if (!r.HasPoint(mouse)) continue;
+            var c = f.Crew.First(k => k.Id == id);
+            string tip = $"{c.Name} — {c.State}";
+            var sz = _font.GetStringSize(tip, HorizontalAlignment.Left, -1, 14);
+            var tr = new Rect2(Math.Min(r.Position.X, vp.X - sz.X - 30), r.Position.Y - 30, sz.X + 20, 26);
+            DrawRect(tr, new Color(0.03f, 0.04f, 0.07f, 0.92f));
+            DrawRect(tr, new Color(0.55f, 0.7f, 0.95f, 0.8f), false, 1);
+            DrawString(_font, new Vector2(tr.Position.X + 10, tr.Position.Y + 18), tip, HorizontalAlignment.Left, -1, 14, new Color(0.9f, 0.93f, 0.98f));
+            break;
+        }
+    }
+
+    /// <summary>띠의 작은 그림 (도형으로 — 가운데 c · 반지름 s).</summary>
+    private void DrawIcon(string key, Vector2 c, float s, Color col)
+    {
+        switch (key)
+        {
+            case "air":   // 공기: 동그라미 속 거품 둘
+                DrawArc(c, s, 0, Mathf.Tau, 20, col, 1.5f);
+                DrawCircle(c + new Vector2(-s * 0.3f, s * 0.15f), s * 0.28f, col);
+                DrawCircle(c + new Vector2(s * 0.3f, -s * 0.25f), s * 0.2f, col);
+                break;
+            case "crew":  // 사람: 머리와 어깨
+                DrawCircle(c + new Vector2(0, -s * 0.35f), s * 0.38f, col);
+                DrawArc(c + new Vector2(0, s * 0.95f), s * 0.75f, Mathf.Pi * 1.08f, Mathf.Pi * 1.92f, 12, col, 2f);
+                break;
+            case "power": // 전력: 번개
+                DrawColoredPolygon(new[] { c + new Vector2(s * 0.2f, -s), c + new Vector2(-s * 0.55f, s * 0.15f), c + new Vector2(-s * 0.05f, s * 0.15f),
+                    c + new Vector2(-s * 0.25f, s), c + new Vector2(s * 0.55f, -s * 0.2f), c + new Vector2(s * 0.05f, -s * 0.2f) }, col);
+                break;
+            case "hull":  // 선체: 육각 판
+            {
+                var pts = new Vector2[7];
+                for (int i = 0; i < 7; i++) { float a = Mathf.Pi / 6 + i * Mathf.Pi / 3; pts[i] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * s; }
+                DrawPolyline(pts, col, 1.5f);
+                break;
+            }
+            case "supply": // 물자: 상자
+                DrawRect(new Rect2(c.X - s * 0.85f, c.Y - s * 0.6f, s * 1.7f, s * 1.4f), col, false, 1.5f);
+                DrawLine(c + new Vector2(-s * 0.85f, -s * 0.15f), c + new Vector2(s * 0.85f, -s * 0.15f), col, 1.5f);
+                break;
+            case "fire":  // 불: 불꽃
+                DrawColoredPolygon(new[] { c + new Vector2(0, -s), c + new Vector2(s * 0.55f, -s * 0.1f), c + new Vector2(s * 0.6f, s * 0.45f), c + new Vector2(0, s),
+                    c + new Vector2(-s * 0.6f, s * 0.45f), c + new Vector2(-s * 0.45f, -s * 0.2f), c + new Vector2(-s * 0.15f, s * 0.05f) }, col);
+                break;
+            default:
+                DrawCircle(c, s * 0.5f, col);
+                break;
+        }
+    }
+
     /// <summary>고른 사람 · 로봇: 그려진 자리에 고리 · 왼쪽에 카드.</summary>
     private void DrawCard(LiveFrame f, Vector2 vp)
     {
@@ -339,7 +486,7 @@ public partial class LiveMain : Node2D
             DrawArc(new Vector2(px, py), r, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.45f, 0.9f), 2.5f);
         }
         float w = 430, lh = 25, h = 20 + f.Card.Length * lh + 6;
-        var box = new Rect2(16, 56, w, h);
+        var box = new Rect2(16, TopUi + 12, w, h);
         DrawRect(box, new Color(0.03f, 0.04f, 0.07f, 0.88f));
         DrawRect(box, new Color(1f, 0.9f, 0.45f, 0.7f), false, 1.5f);
         for (int i = 0; i < f.Card.Length; i++)
@@ -353,7 +500,7 @@ public partial class LiveMain : Node2D
     /// <summary>판 (하이라이트 목록 · 항로 · 일지): 오른쪽에 · 고른 줄이 늘 보이게 내려 보인다.</summary>
     private void DrawPanel(LiveFrame f, Vector2 vp)
     {
-        float w = Math.Min(640, Math.Max(380, vp.X * 0.42f)), top = 52, bottom = vp.Y - 76;
+        float w = Math.Min(640, Math.Max(380, vp.X * 0.42f)), top = TopUi + 8, bottom = vp.Y - 76;
         float inner = w - 36;
         var heights = f.PanelRows.Select(r => 26f + (r.Sub.Length > 0 ? _font.GetMultilineStringSize(r.Sub, HorizontalAlignment.Left, inner, 14, 8).Y + 4 : 0)).ToArray();
         float room = bottom - top - 50 - 34;
@@ -484,7 +631,10 @@ public partial class LiveMain : Node2D
                 else
                 {
                     _dragging = false;
-                    if (_dragDist < 6 && _shown != null)
+                    int hitId = -1;
+                    foreach (var (r, id) in _crewHits) if (r.HasPoint(mb.Position)) { hitId = id; break; }
+                    if (_dragDist < 6 && hitId >= 0) { int id = hitId; _cmds.Enqueue(s => s.SelectAgent(id)); }   // 사람 줄: 그를 고르고 따라간다
+                    else if (_dragDist < 6 && _shown != null)
                     {
                         // 누름: 그 자리의 사람 · 로봇을 고른다 (없으면 놓는다)
                         var vp = GetViewportRect().Size; var f = _shown;

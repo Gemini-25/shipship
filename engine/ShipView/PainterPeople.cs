@@ -55,6 +55,33 @@ public sealed partial class Painter
         l.Pattern = (int)((u >> 13) % 9) switch { 0 => 1, 1 => 2, 2 => 3, 3 => 4, 4 => 5, _ => 0 };
     }
 
+    /// <summary>얼굴 칸 크기 (UI U2 사람 줄 — 서서 앞을 보는 그림의 머리 · 어깨).</summary>
+    public const int FaceW = DotPeople.FW, FaceH = 20, FaceTop = 6;
+
+    /// <summary>
+    /// 얼굴 (UI U2 사람 줄): 서서 앞을 보는 그림에서 머리 · 어깨를 잘라 into의 (x, y)에 찍는다 — 지금 표정 · 다친 자국 · 우주복 · 감은 눈 (세계의 값).
+    /// 돌려주는 열쇠가 같으면 그림도 같다 (바뀐 사람만 다시 찍게).
+    /// </summary>
+    public long Portrait(Sim s, int agentId, Img into, int x, int y)
+    {
+        var mind = s.Get<Mind>(); var life = s.Get<Life>();
+        var a = mind.Agents[agentId];
+        ref var c = ref a.C;
+        var b = life.Bodies[c.Body];
+        var l = LookOf(mind, a);
+        l.Suit = b.Suit != 0; l.Dead = b.Alive == 0;
+        bool closed = b.Alive == 0 || b.Conscious == 0 || b.Asleep != 0;
+        l.EyesClosed = closed; l.Hurt = HurtOf(b); l.Face = closed ? DotFace.Calm : FaceOf(c, b);
+        var (held, motion, cycle) = (l.Held, l.Motion, l.Cycle8);   // 화면의 사람 그림이 쓰는 몫은 그린 뒤 되돌린다
+        l.Held = DotHeld.None; l.Motion = DotMotion.None; l.Cycle8 = false;
+        long key = (long)l.Face | (long)l.Hurt << 4 | (l.Suit ? 1L << 40 : 0) | (l.Dead ? 1L << 41 : 0) | (closed ? 1L << 42 : 0);
+        var img = PersonImg(a.Id, l, DotFacing.S, DotPose.Stand, 0, false, false);
+        for (int yy = 0; yy < FaceH && FaceTop + yy < img.H; yy++)
+            Array.Copy(img.Px, ((FaceTop + yy) * img.W) * 4, into.Px, ((y + yy) * into.W + x) * 4, Math.Min(FaceW, img.W) * 4);
+        (l.Held, l.Motion, l.Cycle8) = (held, motion, cycle);
+        return key;
+    }
+
     private readonly Dictionary<(int id, long key), Img> _people = new();
 
     /// <summary>사람 그림 (같은 사람 · 자세 · 방향 · 장 · 상태면 다시 쓴다).</summary>

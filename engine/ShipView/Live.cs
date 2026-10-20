@@ -26,7 +26,20 @@ public sealed class LiveFrame
     public string PanelTitle = "", PanelFoot = "";
     public PanelRow[] PanelRows = Array.Empty<PanelRow>();
     public int PanelPick = -1;
+    /// <summary>배 상태 띠 (UI U1): 공기 · 전력 · 선체 · 물자 · 사람 · 불.</summary>
+    public Gauge[] Vitals = Array.Empty<Gauge>();
+    /// <summary>사람 줄 (UI U2): 사람마다 얼굴 · 이름 · 하는 일 · 단계 — 얼굴은 Faces (칸 Painter.FaceW × FaceH · 한 줄에 FacesPerRow) · 바뀌면 FacesVersion이 오른다.</summary>
+    public CrewFace[] Crew = Array.Empty<CrewFace>();
+    public Img? Faces;
+    public int FacesVersion, FacesPerRow = LiveShow.FacesPerRow;
+    public int Selected = -1;
 }
+
+/// <summary>배 상태 띠의 한 칸 (늘 보인다 — 세계의 값을 읽기만 한다): 그림 열쇠 · 이름 · 값 · 단계 (0 괜찮다 · 1 살펴볼 것 · 2 위험).</summary>
+public readonly record struct Gauge(string Icon, string Name, string Value, int Level);
+
+/// <summary>사람 줄의 한 사람 (UI U2): 얼굴은 Faces 그림의 Slot번째 칸 · 단계 (0 괜찮다 · 1 다침 · 지침 · 2 쓰러짐 · 위험 · 3 숨졌다).</summary>
+public readonly record struct CrewFace(int Id, string Name, string State, int Level, int Slot);
 
 /// <summary>판 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등).</summary>
 public readonly record struct PanelRow(string Main, string Sub, bool On);
@@ -531,6 +544,8 @@ public sealed class LiveShow
             Captions = Ears.Captions ? Ears.CaptionsNow() : Array.Empty<ShipView.Audio.SoundCaption>(),
             PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows(), PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
+            Vitals = Vitals(),
+            Crew = CrewBar(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
         };
     }
 
@@ -877,6 +892,103 @@ public sealed class LiveShow
         string speed = Paused ? "멈춤" : $"×{Speed * Time.SecondsPerTick:0}";
         return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}";
     }
+
+    /// <summary>
+    /// 배 상태 띠 (UI U1 — 늘 보인다 · 세계의 값을 읽기만 한다): 공기(사람이 있는 칸의 가장 낮은 산소 · 가장 높은 이산화탄소) · 전력(내는 것 / 쓰려는 것) ·
+    /// 선체(구멍 난 칸 · 공기가 빠진 방) · 물자(식량 · 물이 남은 날) · 사람(산 이 · 쓰러진 이 · 다친 이) · 불(타는 칸).
+    /// 단계 문턱: 산소 18.5 / 16kPa · 이산화탄소 1 / 3kPa · 전력 모자람 / 원자로 멈춤 · 구멍 / 빈 방 · 남은 날 20 / 7 · 다침 / 쓰러짐 · 불.
+    /// </summary>
+    public Gauge[] Vitals()
+    {
+        var w = World; var L = w.Layout;
+        var f = w.Find<Field>(); var life = w.Find<Life>(); var mind = w.Find<Mind>(); var net = w.Find<Network>(); var chem = w.Find<Chemistry>();
+        var o = new List<Gauge>(6);
+        if (f != null && life != null && mind != null)
+        {
+            double minO2 = double.MaxValue, maxCO2 = 0;
+            int all = 0, alive = 0, down = 0, hurt = 0;
+            foreach (var a in mind.Agents)
+            {
+                if (!a.IsPerson) continue;
+                all++;
+                var b = life.Bodies[a.C.Body];
+                if (b.Alive == 0) continue;
+                alive++;
+                if (b.Conscious == 0) down++;
+                else if (b.Bleed > 0 || b.Burn > 0.2f || b.Pain > 0.5f || b.Infect > 0.3f) hurt++;
+                if (b.Suit != 0 || (uint)b.Cell >= (uint)L.N) continue;
+                minO2 = Math.Min(minO2, f.Partial(f.T.gO2, b.Cell));
+                maxCO2 = Math.Max(maxCO2, f.Partial(f.T.gCO2, b.Cell));
+            }
+            if (minO2 == double.MaxValue) minO2 = 21;
+            o.Add(new Gauge("air", "공기", $"산소 {minO2:0.0}kPa" + (maxCO2 >= 0.5 ? $" · 이산화탄소 {maxCO2:0.0}" : ""),
+                minO2 < 16 || maxCO2 > 3 ? 2 : minO2 < 18.5 || maxCO2 > 1 ? 1 : 0));
+            o.Add(new Gauge("crew", "사람", $"{alive}/{all}" + (down > 0 ? $" · 쓰러짐 {down}" : "") + (hurt > 0 ? $" · 다침 {hurt}" : ""),
+                down > 0 ? 2 : hurt > 0 ? 1 : 0));
+        }
+        if (net != null)
+            o.Add(new Gauge("power", "전력", $"{net.Supplied:0}/{net.Demanded:0}kW", net.ReactorScram ? 2 : net.Supplied < net.Demanded * 0.97 ? 1 : 0));
+        if (f != null)
+        {
+            int holes = 0, vac = 0;
+            for (int c = 0; c < L.N; c++) if (f.Hole[c] > 0) holes++;
+            foreach (var r in L.Rooms) if (r.Cells.Length > 0 && f.Pressure(r.Cells[0]) < 30) vac++;
+            o.Add(new Gauge("hull", "선체", holes == 0 && vac == 0 ? "멀쩡하다" : $"구멍 {holes}" + (vac > 0 ? $" · 빈 방 {vac}" : ""), vac > 0 ? 2 : holes > 0 ? 1 : 0));
+        }
+        double food = w.Book.DaysLeft((int)Res.Food, w.Tick), water = w.Book.DaysLeft((int)Res.Water, w.Tick);
+        static string Days(double d) => double.IsInfinity(d) || d > 999 ? "넉넉" : $"{d:0}일";
+        double least = Math.Min(food, water);
+        o.Add(new Gauge("supply", "물자", $"식량 {Days(food)} · 물 {Days(water)}", least < 7 ? 2 : least < 20 ? 1 : 0));
+        int burning = chem?.BurningCount ?? 0;
+        o.Add(new Gauge("fire", "불", burning > 0 ? $"{burning}칸이 탄다" : "없다", burning > 0 ? 2 : 0));
+        return o.ToArray();
+    }
+
+    public const int FacesPerRow = 16;
+    private Img? _faces;
+    private int _facesVersion;
+    private long[] _faceKeys = Array.Empty<long>();
+
+    /// <summary>
+    /// 사람 줄 (UI U2): 사람마다 얼굴(지금 표정 · 다친 자국)과 하는 일 · 단계 — 쓰러진 이 · 위험한 이가 앞에 (그다음 다친 이 · 나머지는 차례대로).
+    /// 얼굴 그림은 바뀐 사람만 다시 찍고 판 번호를 올린다 (화면이 바뀔 때만 텍스처를 다시 올린다).
+    /// </summary>
+    public CrewFace[] CrewBar()
+    {
+        var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>();
+        if (mind == null || life == null) return Array.Empty<CrewFace>();
+        var people = mind.Agents.Where(a => a.IsPerson).ToList();
+        int rows = Math.Max(1, (people.Count + FacesPerRow - 1) / FacesPerRow);
+        if (_faces == null || _faces.H != rows * Painter.FaceH) { _faces = new Img(FacesPerRow * Painter.FaceW, rows * Painter.FaceH); _faceKeys = Enumerable.Repeat(-1L, people.Count).ToArray(); }
+        if (_faceKeys.Length != people.Count) _faceKeys = Enumerable.Repeat(-1L, people.Count).ToArray();
+        var o = new List<CrewFace>(people.Count);
+        bool changed = false;
+        for (int i = 0; i < people.Count; i++)
+        {
+            var a = people[i];
+            var b = life.Bodies[a.C.Body];
+            int slot = i, sx = slot % FacesPerRow * Painter.FaceW, sy = slot / FacesPerRow * Painter.FaceH;
+            // 얼굴: 상태 열쇠가 바뀐 사람만 다시 찍는다 (먼저 칸을 비운다)
+            var tmp = _scratchFace ??= new Img(Painter.FaceW, Painter.FaceH);
+            Array.Clear(tmp.Px);
+            long key = Painter.Portrait(w, a.Id, tmp, 0, 0);
+            if (key != _faceKeys[i])
+            {
+                for (int yy = 0; yy < Painter.FaceH; yy++) Array.Copy(tmp.Px, yy * Painter.FaceW * 4, _faces.Px, ((sy + yy) * _faces.W + sx) * 4, Painter.FaceW * 4);
+                _faceKeys[i] = key; changed = true;
+            }
+            int level = b.Alive == 0 ? 3 : b.Conscious == 0 || b.SpO2 < 0.85f || a.C.Mode is 1 or 2 ? 2
+                : b.Bleed > 0 || b.Burn > 0.2f || b.Pain > 0.5f || b.Infect > 0.3f || b.Ill == 2 ? 1 : 0;
+            string state = b.Alive == 0 ? "숨졌다" : b.Conscious == 0 ? "쓰러졌다" : b.Asleep != 0 ? "잔다" : Mind.GoalName(a.C.Goal);
+            o.Add(new CrewFace(a.Id, mind.NameOf(a.Id), state, level, slot));
+        }
+        if (changed) { _facesVersion++; _facesShown = new Img(_faces.W, _faces.H); Array.Copy(_faces.Px, _facesShown.Px, _faces.Px.Length); }   // 화면 스레드에는 사본 (바뀔 때만)
+        return o.OrderByDescending(f => f.Level == 3 ? -1 : f.Level).ThenBy(f => f.Id).ToArray();
+    }
+    private Img? _scratchFace, _facesShown;
+
+    /// <summary>사람 줄에서 누른 사람을 고른다 (그를 따라간다).</summary>
+    public void SelectAgent(int id) { Selected = id; FollowSelected = id >= 0; Overview = false; }
 
     /// <summary>아래 줄: 지금 장면의 원인 사슬 (가장 최근 하이라이트가 아직 이어지면) — 아니면 연출 자막.</summary>
     public string Story()

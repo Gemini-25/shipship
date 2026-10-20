@@ -205,6 +205,29 @@ public static partial class Program
     {
         int At(int x, int y) => Worlds.At(lay, x, y);
 
+        // ── 배 상태 띠 (UI U1): 평소엔 모두 괜찮다 → 불을 놓으면 '불' 위험 · 외판에 구멍을 내면 '선체' · 사람이 쓰러지면 '사람' 위험 — 세계의 값을 그대로 읽는다 ──
+        {
+            var vs = new LiveShow(Worlds.Full(lay, 3), "시험호");
+            var w = vs.Sim;
+            int p = w.Get<Mind>().AddPerson(w, At(15, 2));
+            w.Run(5);
+            int Lv(string icon) => vs.Vitals().FirstOrDefault(g => g.Icon == icon).Level;
+            string Val(string icon) => vs.Vitals().FirstOrDefault(g => g.Icon == icon).Value;
+            bool calm = Lv("fire") == 0 && Lv("hull") == 0 && Lv("crew") == 0 && Lv("air") == 0;
+            w.Get<Chemistry>().Ignite(At(3, 5), 3e6, w.Causes.Add(CauseKind.Setup, "침대 불씨", w.Tick));
+            w.Run(2);
+            int fire = Lv("fire");
+            int hull = Enumerable.Range(0, lay.N).First(c => lay.Hull[c] && lay.Kind[c] == CellKind.Wall);
+            w.Get<Field>().SetHole(hull, 0.05f);
+            int hole = Lv("hull");
+            var life = w.Get<Life>();
+            life[w.Get<Mind>().Agents[p].C.Body].Conscious = 0;
+            int down = Lv("crew");
+            Check("배 상태 띠: 평소엔 모두 괜찮다 · 불을 놓으면 '불' 위험 · 외판에 구멍을 내면 '선체'가 살펴볼 것 · 사람이 쓰러지면 '사람' 위험 (세계의 값을 그대로)",
+                calm && fire == 2 && hole >= 1 && down == 2,
+                $"평소 {calm} · 불 {fire} ({Val("fire")}) · 선체 {hole} ({Val("hull")}) · 사람 {down} ({Val("crew")}) · 공기 {Val("air")} · 전력 {Val("power")} · 물자 {Val("supply")}");
+        }
+
         // ── 사슬 판 (C) · 사슬 선: 지금 장면의 원인 사슬을 뿌리부터 차례로 · 갈래 이름 · 골라 Enter면 그 자리로 · 사슬 선이 그 자리들을 잇는다 ──
         {
             var cs = new LiveShow(Worlds.Full(lay, 3), "시험호");
