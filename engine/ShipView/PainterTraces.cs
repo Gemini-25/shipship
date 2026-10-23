@@ -27,19 +27,22 @@ public sealed partial class Painter
                 {
                     // 윗면: 녹 얼룩 (2×2 점 — 많이 먹을수록 짙고 넓게)
                     float a = Math.Min(0.85f, 0.25f + cor);
+                    bool faceBelow = L.In(x, y + 1) && L.Kind[L.Index(x, y + 1)] == CellKind.Floor;
+                    int capRows = faceBelow ? ArtWalls.CapH - 2 : T - 2;   // 얼룩은 뚜껑에 (앞면엔 흘러내린 자국)
                     if (y >= y0)
                         for (int k = 0; k < (int)(6 + cor * 40); k++)
                         {
                             uint u = DotHash.U(c, k, 61);
-                            img.Fill(px + (int)(u % (T - 2)), py + (int)((u >> 8) % (T - 2)), 2, 2, (u >> 16) % 3 == 0 ? rustDark : rust, a * (0.6f + 0.4f * ((u >> 20) % 4) / 3f));
+                            img.Fill(px + (int)(u % (T - 2)), py + (int)((u >> 8) % (uint)capRows), 2, 2, (u >> 16) % 3 == 0 ? rustDark : rust, a * (0.6f + 0.4f * ((u >> 20) % 4) / 3f));
                         }
                     // 앞면 (아래가 바닥이면): 흘러내린 녹 자국
                     if (L.In(x, y + 1) && L.Kind[L.Index(x, y + 1)] == CellKind.Floor)
                         for (int k = 0; k < (int)(2 + cor * 10); k++)
                         {
                             uint u = DotHash.U(c, k, 67);
-                            int sx = px + 2 + (int)(u % (T - 4)), len = 3 + (int)((u >> 8) % (uint)(DotTiles.Face - 2));
-                            for (int i = 0; i < len; i++) img.Blend(sx, py + T + i, i < 2 ? rustDark : rust, a * (1 - i / (float)(len + 2)));
+                            int sx = px + 2 + (int)(u % (T - 4)), len = 5 + (int)((u >> 8) % (uint)(ArtWalls.FaceH - 8));
+                            for (int i = 0; i < len; i++) img.Blend(sx, py + ArtWalls.CapH + 2 + i, i < 2 ? rustDark : rust, a * (1 - i / (float)(len + 2)));
+                            img.Blend(sx - 1, py + ArtWalls.CapH + ArtWalls.FaceH - 3, rust, a * 0.5f); img.Blend(sx + 1, py + ArtWalls.CapH + ArtWalls.FaceH - 3, rust, a * 0.5f);   // 굽도리에 고인다
                         }
                 }
                 if (fat >= CrackMin && y >= y0)

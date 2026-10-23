@@ -36,8 +36,8 @@ public static partial class Program
                 var c = img.Get(x, y);
                 if (c.R > 200 && c.G > 80 && c.B < 90) fire++;
             }
-        // 같은 바닥(보통 방)끼리 견준다: 빠진 오른쪽 방 · 멀쩡한 아래 통로 — 칸 안쪽의 평균 파란 값
-        double Blue(int cell) { double b = 0; int n = 0; for (int y = 6; y < 26; y++) for (int x = 6; x < 26; x++) { b += img.Get(lay.X(cell) * Painter.T + x, lay.Y(cell) * Painter.T + y).B; n++; } return b / n; }
+        // 같은 바닥(보통 방)끼리 견준다: 빠진 오른쪽 방 · 멀쩡한 아래 통로 — 칸 안쪽의 평균 푸른 기 (파랑 − 빨강 · 초록 평균: 강철 바닥은 본디 조금 푸르다)
+        double Blue(int cell) { double b = 0; int n = 0; for (int y = 12; y < 26; y++) for (int x = 6; x < 26; x++) { var q = img.Get(lay.X(cell) * Painter.T + x, lay.Y(cell) * Painter.T + y); b += q.B - (q.R + q.G) / 2.0; n++; } return b / n; }
         double vac = Blue(At(19, 4)), ok = Blue(At(19, 8));
         if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
         {
@@ -45,8 +45,8 @@ public static partial class Program
             for (int c = 0; c < lay.N; c++) if (ch.Burning[c] != 0) Console.WriteLine($"    불 ({lay.X(c)},{lay.Y(c)}) {ch.Hrr[c]:0}kW");
             Png.WriteRgba("build/shots/rule-view.png", img.W, img.H, img.Px);
         }
-        Check("새 화면: 그리기는 세계를 바꾸지 않는다 (그리기 전후 바이트까지 같다) · 불 칸에 불꽃 · 빠진 방은 서리 빛", same && burning >= 0 && fire > 15 && vac > ok + 15,
-            $"같음 {same} · 불꽃 도트 {fire} · 파란 값 빠진 방 {vac:0} / 통로 {ok:0} · {img.W}×{img.H}");
+        Check("새 화면: 그리기는 세계를 바꾸지 않는다 (그리기 전후 바이트까지 같다) · 불 칸에 불꽃 · 빠진 방은 서리 빛", same && burning >= 0 && fire > 15 && vac > ok + 8,
+            $"같음 {same} · 불꽃 도트 {fire} · 푸른 기 빠진 방 {vac:0} / 통로 {ok:0} · {img.W}×{img.H}");
 
         LiveRules(lay);
     }

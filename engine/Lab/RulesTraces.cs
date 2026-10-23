@@ -20,10 +20,11 @@ public static partial class Program
             int wall = room.Cells.Where(c => L.FurnitureAt[c] < 0).Select(c => c - L.W).First(j => j >= 0 && L.Kind[j] == CellKind.Wall && !L.Hull[j]);
             int floor = room.Cells.First(c => L.FurnitureAt[c] < 0 && L.Kind[c] == CellKind.Floor && c - L.W != wall);
             int x0 = Math.Max(0, Math.Min(L.X(wall), L.X(floor)) - 2), y0 = Math.Max(0, Math.Min(L.Y(wall), L.Y(floor)) - 2);
+            // dy 0: 벽 뚜껑 (위 18줄) · dy 1: 앞면 (벽 칸 아래 14줄 + 바닥 칸 위 10줄 — 텍스처 T3)
             int Count(Img img, int c, int dy, Func<Rgba, bool> pick)
             {
-                int n = 0;
-                for (int yy = 0; yy < Painter.T; yy++) for (int xx = 0; xx < Painter.T; xx++) if (pick(img.Get((L.X(c) - x0) * Painter.T + xx, (L.Y(c) - y0 + dy) * Painter.T + yy))) n++;
+                int n = 0, from = dy == 0 ? 0 : ArtWalls.CapH, to = dy == 0 ? ArtWalls.CapH : ArtWalls.CapH + ArtWalls.FaceH;
+                for (int yy = from; yy < to; yy++) for (int xx = 0; xx < Painter.T; xx++) if (pick(img.Get((L.X(c) - x0) * Painter.T + xx, (L.Y(c) - y0) * Painter.T + yy))) n++;
                 return n;
             }
             static bool Rusty(Rgba q) => q.R > q.G + 25 && q.G > q.B && q.R > 60;

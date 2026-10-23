@@ -260,8 +260,15 @@ public sealed partial class Painter
                     else { a = mi; b = mi; vertical = true; }   // 모서리 벽: 제 빛 (대각선 · 이웃 벽에서)
                     float ra = ar + keep * _lr[a], ga = ag + keep * _lg[a], ba = ab + keep * _lb[a];
                     float rb = ar + keep * _lr[b], gb = ag + keep * _lg[b], bb = ab + keep * _lb[b];
+                    bool face = _lk[iS] == 1;   // 앞면 (뚜껑 아래 14줄)은 마주한 남쪽 방의 빛 — 그 바닥 칸 위 모서리 빛을 잇는다 (벽 너머 방의 빛이 새지 않게)
+                    int gS0 = (vy + 1) * gw + vx, gS1 = gS0 + 1;
                     for (int yy = 0; yy < T; yy++)
                     {
+                        if (face && yy >= ArtWalls.CapH)
+                        {
+                            Row(d, (py0 + yy) * W + px0, ar + keep * cr[gS0], ag + keep * cg[gS0], ab + keep * cb[gS0], ar + keep * cr[gS1], ag + keep * cg[gS1], ab + keep * cb[gS1], 0, false, false);
+                            continue;
+                        }
                         if (vertical)
                         {
                             float t = (yy + 0.5f) / T;
@@ -327,7 +334,7 @@ public sealed partial class Painter
         }
     }
 
-    /// <summary>벽 앞면 띠 조명: 방 조명이 켜졌으면 그 빛깔로 · 비상등이면 붉게 빛난다 (곱한 뒤에 — 스스로 빛나는 것).</summary>
+    /// <summary>벽 앞면 띠 조명 (py = 앞면 위 끝 · 띠등은 16째 줄): 방 조명이 켜졌으면 그 빛깔로 · 비상등이면 붉게 빛난다 (곱한 뒤에 — 스스로 빛나는 것).</summary>
     private void FaceLamp(int px, int py, int room, Network? net, Light? light)
     {
         if (room < 0) return;
@@ -339,8 +346,9 @@ public sealed partial class Painter
         float k = Math.Min(1f, 0.35f + 0.65f * m);
         _emissive.Add(img =>
         {
-            img.Fill(px + 9, py + 4, 14, 2, core, k);
-            img.Glow(px + 16, py + 6, 7, core, 0.18f * k);
+            img.Fill(px + 8, py + 16, 16, 1, core, k);
+            img.Fill(px + 9, py + 15, 14, 1, core, 0.5f * k);
+            img.Glow(px + 16, py + 17, 8, core, 0.2f * k);
         });
     }
 }

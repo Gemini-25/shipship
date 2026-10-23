@@ -206,7 +206,7 @@ public sealed partial class Painter
                 {
                     uint u = DotHash.U(c, frame, k + 101);
                     int px = (x - x0) * T + (int)(u >> 4) % T, py = (y - y0) * T + (int)(u >> 12) % T;
-                    img.Blend(px, py, dot, 0.9f);
+                    img.Blend(px, py, dot, 1f);   // 한가운데는 온전히 하얗게 (어두운 바닥에서도 읽힌다)
                     if (u % 5 == 0) img.Blend(px + 1, py + 1, dot, 0.6f);   // 비스듬히 지나간 자국
                 }
             }

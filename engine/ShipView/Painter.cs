@@ -22,7 +22,8 @@ public sealed partial class Painter
     public IReadOnlyList<int>? ChainCells;
 
     private readonly Layout L;
-    private readonly DotFloor[] _roomFloor;
+    private readonly Finish[] _finish;
+    private int[]? _drain;
     /// <summary>새 설비 → 닮은 옛 도트 그림 (제 그림이 생기기 전까지).</summary>
     private static readonly Dictionary<string, string> Look = new()
     {
@@ -31,6 +32,8 @@ public sealed partial class Painter
     };
     private readonly FurnitureType?[] _fixType;
     private readonly byte[] _washKind;   // 화장실 · 샤워실 설비의 제 그림 (PainterWash.cs)
+    private readonly bool[] _newArt;     // 새 가구 그림 (ArtFurniture — 상위 15종)
+    private readonly Facing[] _facing;   // 가구가 보는 쪽 (벽에 닿은 쪽이 뒤 — 도면에서 한 번)
     private readonly (int x, int y, int w, int h)[] _fixBox;
     private readonly Dictionary<long, Img> _cache = new();
     private int[]? _fixOrder;
@@ -42,9 +45,11 @@ public sealed partial class Painter
     public Painter(Layout layout)
     {
         L = layout;
-        _roomFloor = L.Rooms.Select(r => FloorFor(r.Type)).ToArray();
+        _finish = L.Rooms.Select(r => ArtFloors.FinishFor(r.Type)).ToArray();
         _fixType = new FurnitureType?[L.Furniture.Count];
         _washKind = L.Furniture.Select(f => (byte)WashKind(f.Type)).ToArray();
+        _newArt = L.Furniture.Select(f => ArtFurniture.Has(f.Type)).ToArray();
+        _facing = new Facing[L.Furniture.Count];
         _fixBox = new (int, int, int, int)[L.Furniture.Count];
         for (int i = 0; i < L.Furniture.Count; i++)
         {
@@ -53,6 +58,7 @@ public sealed partial class Painter
             if (fu.Cells.Length == 0) continue;
             int x0 = fu.Cells.Min(L.X), y0 = fu.Cells.Min(L.Y), x1 = fu.Cells.Max(L.X), y1 = fu.Cells.Max(L.Y);
             _fixBox[i] = (x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+            _facing[i] = FacingOfBox(x0, y0, x1, y1);
         }
     }
 
@@ -156,6 +162,105 @@ public sealed partial class Painter
         return rooms >= 2 ? DotWall.Partition : DotWall.Panel;
     }
 
+    /// <summary>가구가 보는 쪽: 북쪽이 벽이면 앞면이 보이고 (S) · 남쪽이 벽이면 뒷판 (N) · 세로로 길면 벽 반대쪽을 보는 옆 (E · W) · 아니면 앞면.</summary>
+    private Facing FacingOfBox(int x0, int y0, int x1, int y1)
+    {
+        bool Wall(int x, int y) => !L.In(x, y) || L.Kind[L.Index(x, y)] is CellKind.Wall or CellKind.Door;
+        bool Side(int ax, int ay, int bx, int by) { for (int y = ay; y <= by; y++) for (int x = ax; x <= bx; x++) if (!Wall(x, y)) return false; return true; }
+        if (Side(x0, y0 - 1, x1, y0 - 1)) return Facing.S;
+        if (Side(x0, y1 + 1, x1, y1 + 1)) return Facing.N;
+        if (y1 - y0 > x1 - x0) return Side(x0 - 1, y0, x0 - 1, y1) ? Facing.E : Facing.W;
+        return Facing.S;
+    }
+
+    private int _iExt = -2, _iSeal, _iSuit, _iMask;
+    private int[]? _bedOwner; private long _bedOwnerAt = long.MinValue;
+    /// <summary>가구 그림에 넘기는 세계 값: 물건 수 (Mind.Stock) · 담요 주인 (그 침대 칸을 제 침대로 둔 사람).</summary>
+    private FurnFill FillOf(int fu, Mind? mind)
+    {
+        var o = new FurnFill { Owner = -1 };
+        if (mind == null) return o;
+        if (_iExt == -2) { var n = mind.ItemNames; _iExt = Array.IndexOf(n, "소화기"); _iSeal = Array.IndexOf(n, "봉합 꾸러미"); _iSuit = Array.IndexOf(n, "우주복"); _iMask = Array.IndexOf(n, "산소 마스크"); }
+        int b = fu * mind.ItemCount;
+        byte S(int item, int cap) => item < 0 ? (byte)0 : (byte)Math.Clamp(mind.Stock[b + item], 0, cap);
+        o.Ext = S(_iExt, 7); o.Seal = S(_iSeal, 7); o.Suits = S(_iSuit, 7); o.Masks = S(_iMask, 15);
+        if (L.Furniture[fu].Type == "Bed")
+        {
+            if (_bedOwner == null || _bedOwnerAt != _frames)   // 장마다 한 번 (같은 틱에 주인을 바꿔도 따라간다)
+            {
+                _bedOwner ??= new int[L.Furniture.Count];
+                Array.Fill(_bedOwner, -1);
+                foreach (var a in mind.Agents) if (a.IsPerson && a.C.Bed >= 0 && a.C.Bed < L.N && L.FurnitureAt[a.C.Bed] >= 0) _bedOwner[L.FurnitureAt[a.C.Bed]] = a.C.Name;
+                _bedOwnerAt = _frames;
+            }
+            o.Owner = _bedOwner[fu];
+        }
+        return o;
+    }
+
+    /// <summary>바깥(우주)인 이웃 여덟 (1 북 · 2 북동 · 4 동 · 8 남동 · 16 남 · 32 남서 · 64 서 · 128 북서 — 도면 밖도 바깥).</summary>
+    private int Out8(int x, int y)
+    {
+        int m = 0, bit = 1;
+        foreach (var (dx, dy) in Dirs8)
+        {
+            if (!L.In(x + dx, y + dy) || L.Kind[L.Index(x + dx, y + dy)] == CellKind.Outside) m |= bit;
+            bit <<= 1;
+        }
+        return m;
+    }
+    private static readonly (int dx, int dy)[] Dirs8 = { (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1) };
+
+    /// <summary>방 둘레: 1 북 · 2 동 · 4 남 · 8 서 — 그쪽 이웃이 같은 방 바닥이 아니다.</summary>
+    private int EdgeMask(int x, int y, int room)
+    {
+        int m = 0, bit = 1;
+        foreach (var (dx, dy) in Dirs4)
+        {
+            int nx = x + dx, ny = y + dy;
+            if (!L.In(nx, ny) || L.Kind[L.Index(nx, ny)] != CellKind.Floor || L.Room[L.Index(nx, ny)] != room) m |= bit;
+            bit <<= 1;
+        }
+        return m;
+    }
+    private static readonly (int dx, int dy)[] Dirs4 = { (0, -1), (1, 0), (0, 1), (-1, 0) };
+
+    /// <summary>타일 방의 배수구 자리 (방마다 하나 — 설비가 없는 칸 가운데 해시가 가장 작은 칸 · 고정 꾸밈).</summary>
+    private int DrainOf(int room)
+    {
+        if (_drain == null)
+        {
+            _drain = Enumerable.Repeat(-1, L.Rooms.Count).ToArray();
+            for (int r = 0; r < L.Rooms.Count; r++)
+            {
+                if (_finish[r] is not (Finish.TileWarm or Finish.TileCool)) continue;
+                uint best = uint.MaxValue;
+                foreach (int c in L.Rooms[r].Cells)
+                {
+                    if (L.Kind[c] != CellKind.Floor || L.FurnitureAt[c] >= 0) continue;
+                    uint u = DotHash.U(c, r, 59);
+                    if (u < best) { best = u; _drain[r] = c; }
+                }
+            }
+        }
+        return _drain[room];
+    }
+
+    private int[]? _band;
+    private int BandOfRoom(int room) => (_band ??= L.Rooms.Select(r => ArtWalls.BandOf(r.Type)).ToArray())[room];
+
+    /// <summary>앞면 꾸밈 (고정 꾸밈 — 칸 자리 해시): 방마다 북쪽 벽 4칸에 띠등 하나 · 기관 · 생명 유지 방엔 관 · 함교 · 서버엔 전선 · 가끔 환기구 (외판 안쪽은 등 없이 늑골).</summary>
+    private int FaceDeco(int x, int y, DotWall wk, int room)
+    {
+        int band = room >= 0 ? BandOfRoom(room) : 0;
+        uint u = DotHash.U(x, y, 5);
+        if (wk != DotWall.Hull && room >= 0 && (x + room * 3) % 4 == 0) return 1;
+        if (band is 5 or 7 && u % 3 == 0) return 2;
+        if (band is 4 or 9 && u % 3 == 0) return 3;
+        if (u % 7 == 0) return 4;
+        return 0;
+    }
+
     private double _skyTh, _skyX, _skyY;
     /// <summary>관전 화면이 틱 사이를 메운 몸마다의 배 틀 자세 (없으면 지금 자세) · 배의 자세 (별 — NaN이면 지금).</summary>
     public (double cs, double sn, double tx, double ty)[]? Poses;
@@ -163,9 +268,10 @@ public sealed partial class Painter
 
     /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.
     /// into: 다시 쓸 그림 (w × h 칸이 들어가면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다 · 남는 곳은 우주색).</summary>
+    private long _frames;
     public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
-        _tick = s.Tick;
+        _tick = s.Tick; _frames++;
         var st = s.Find<Structure>();
         // 배가 돌면 별도 돈다 (화면은 배를 따라 돈다 — 별은 무한히 멀어 배의 자세만큼만 거꾸로 돈다 · 배의 무게중심을 축으로)
         (_skyTh, _skyX, _skyY) = st != null && st.Bodies.Count > 0 ? (double.IsNaN(SkyTh) ? st.Bodies[0].Th : SkyTh, st.Bodies[0].Lx, st.Bodies[0].Ly) : (0, 0, 0);
@@ -319,24 +425,34 @@ public sealed partial class Painter
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (!Mine(c)) continue;
-                int variant = (int)(DotHash.U(x, y, 41) % DotTiles.Variants);
                 switch (L.Kind[c])
                 {
                     case CellKind.Floor:
                     {
-                        var fl = L.Room[c] >= 0 ? _roomFloor[L.Room[c]] : DotFloor.Metal;
-                        tile = Cached(Key(1, (int)fl, variant), (fl, variant), static q => DotTiles.Floor(q.fl, q.variant));
+                        int room = L.Room[c];
+                        var fin = room >= 0 ? _finish[room] : Finish.Metal;
+                        int edge = EdgeMask(x, y, room);
+                        bool drain = room >= 0 && DrainOf(room) == c;
+                        tile = Cached(Key(1, (int)fin, (x & 7) | (y & 7) << 3 | edge << 6 | (drain ? 1 : 0) << 10), (fin, x, y, edge, drain), static q => ArtFloors.Floor(q.fin, q.x, q.y, q.edge, q.drain));
                         break;
                     }
                     case CellKind.Door:
-                        tile = Cached(Key(1, (int)DotFloor.Metal, variant), variant, static v => DotTiles.Floor(DotFloor.Metal, v));
+                    {
+                        int did = L.DoorAt[c];
+                        bool across = did >= 0 && L.Doors[did].Vertical;
+                        int dk = did < 0 ? 0 : L.Doors[did].External ? 1 : L.Doors[did].Kind == "normal" ? 0 : 2;
+                        tile = Cached(Key(1, 100 + dk, across ? 1 : 0), (across, dk), static q => ArtFloors.Threshold(q.across, q.dk));
                         break;
+                    }
                     case CellKind.Wall:
                     {
                         if (F(f, c).hole >= 2f && (st == null || st.Sub[c] == 0)) break; // 통째로 뚫린 벽 — 우주가 보인다 (남은 테두리 잔칸은 아래에서 가린다)
                         var wk = WallOf(c);
                         int mask = (Solid(x, y - 1) ? 1 : 0) | (Solid(x + 1, y) ? 2 : 0) | (Solid(x, y + 1) ? 4 : 0) | (Solid(x - 1, y) ? 8 : 0);
-                        tile = Cached(Key(2, (int)wk, mask), (wk, mask), static q => DotTiles.WallTop(q.wk, q.mask));
+                        bool faceBelow = KindAt(x, y + 1) == CellKind.Floor;
+                        int out8 = wk == DotWall.Hull ? Out8(x, y) : 0;
+                        int wv = (int)(DotHash.U(x, y, 43) & 7);
+                        tile = Cached(Key(2, (int)wk, mask | (faceBelow ? 16 : 0) | wv << 5, out8), (wk, mask, faceBelow, out8, wv), static q => ArtWalls.Cap(q.wk, q.mask, q.faceBelow, q.out8, q.wv));
                         break;
                     }
                 }
@@ -366,7 +482,7 @@ public sealed partial class Painter
                 }
         lt = Lap("잔칸", lt);
 
-        // 벽 남쪽 앞면: 아래 칸이 바닥이면 그 칸 위쪽에
+        // 벽 남쪽 앞면 (24도트 — 벽 칸 아래 14 + 바닥 칸 위 10): 아래 칸이 바닥이면
         for (int y = y0 - 1; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
             {
@@ -376,10 +492,25 @@ public sealed partial class Painter
                 var wk = WallOf(c);
                 bool openW = !Solid(x - 1, y) || KindAt(x - 1, y + 1) != CellKind.Floor;
                 bool openE = !Solid(x + 1, y) || KindAt(x + 1, y + 1) != CellKind.Floor;
-                bool lamp = DotHash.U(x, y, 5) % 7 == 0;
-                Put(img, Cached(Key(3, (int)wk, openW ? 1 : 0, openE ? 1 : 0, lamp ? 1 : 0), (wk, openW, openE, lamp), static q => DotTiles.WallFace(q.wk, q.openW, q.openE, q.lamp)), Px(x), Py(y + 1));
-                if (lamp && Lighting && wk != DotWall.Hull && wk != DotWall.Partition) FaceLamp(Px(x), Py(y + 1), L.Room[L.Index(x, y + 1)], net, light);
+                int below = L.Index(x, y + 1), room = L.Room[below];
+                int deco = FaceDeco(x, y, wk, room), band = room >= 0 ? BandOfRoom(room) : 0;
+                int seam = (x % 3 + 3) % 3 switch { 0 => 0, 1 => 16, _ => -1 };   // 48도트 판 — 칸 자리로 이어진다
+                int fv = (int)(DotHash.U(x, y, 47) & 3);
+                Put(img, Cached(Key(3, (int)wk, (openW ? 1 : 0) | (openE ? 2 : 0) | deco << 2 | (seam + 1) << 6, band, fv), (wk, openW, openE, deco, band, seam, fv), static q => ArtWalls.Face(q.wk, q.openW, q.openE, q.deco, q.band, q.seam, q.fv)), Px(x), Py(y) + ArtWalls.CapH);
+                if (deco == 1 && Lighting) FaceLamp(Px(x), Py(y) + ArtWalls.CapH, room, net, light);
             }
+        // 선체 바깥 면: 아래가 우주인 외판 칸 아래에 (볼록 모서리 쪽은 깎인 만큼 짧게)
+        if (!part)
+            for (int y = y0 - 1; y < y0 + h; y++)
+                for (int x = x0; x < x0 + w; x++)
+                {
+                    if (KindAt(x, y) != CellKind.Wall || !L.In(x, y + 1) || L.Kind[L.Index(x, y + 1)] != CellKind.Outside) continue;
+                    int c = L.Index(x, y);
+                    if (!L.Hull[c] || F(f, c).hole >= 2f || !Mine(c)) continue;
+                    int o8 = Out8(x, y);
+                    bool cutW = (o8 & 64) != 0, cutE = (o8 & 4) != 0;
+                    Put(img, Cached(Key(11, cutW ? 1 : 0, cutE ? 1 : 0), (cutW, cutE), static q => ArtWalls.HullSkin(q.cutW, q.cutE)), Px(x), Py(y + 1));
+                }
         lt = Lap("벽 앞면", lt);
         // 벽에 묻은 그을음 (② — 불 곁의 벽이 검게): 윗면 · 남쪽 앞면
         for (int y = y0 - 1; y < y0 + h; y++)
@@ -389,8 +520,9 @@ public sealed partial class Painter
                 int c = L.Index(x, y);
                 double sg = f.SootGPerM2(c);
                 if (sg <= 0.05 || F(f, c).hole >= 2f || !Mine(c)) continue;
-                if (y >= y0) SootStain(img, Px(x), Py(y), T, T, sg, c);
-                if (KindAt(x, y + 1) == CellKind.Floor) SootStain(img, Px(x), Py(y + 1), T, DotTiles.Face, sg, c + 7);
+                bool face = KindAt(x, y + 1) == CellKind.Floor;
+                if (y >= y0) SootStain(img, Px(x), Py(y), T, face ? ArtWalls.CapH : T, sg, c);
+                if (face) SootStain(img, Px(x), Py(y) + ArtWalls.CapH, T, ArtWalls.FaceH, sg, c + 7);
             }
         lt = Lap("벽 그을음", lt);
         if (st != null) WallTraces(img, st, x0, y0, w, h);   // 녹 · 실금 (④ 부식 · 피로)
@@ -404,7 +536,7 @@ public sealed partial class Painter
             int kind = d.External ? 1 : d.Kind == "normal" ? 0 : 2;
             bool jam = st != null && st.DoorJam[d.Id] != 0;
             int lightKind = st != null && st.DoorPowered[d.Id] == 0 ? 2 : jam ? 3 : open > 0.05f ? 1 : 0;
-            Put(img, Cached(Key(4, d.Vertical ? 1 : 0, step, kind, lightKind), (d.Vertical, step, kind, lightKind), static q => DotTiles.Door(q.Vertical, q.step, q.kind, q.lightKind)), Px(x), Py(y));
+            Put(img, Cached(Key(4, d.Vertical ? 1 : 0, step, kind, lightKind), (d.Vertical, step, kind, lightKind), static q => ArtWalls.Door(q.Vertical, q.step, q.kind, q.lightKind, 0)), Px(x), Py(y));
             if (f.DoorBleed[d.Id] != 0) Hiss(img, Px(x) + T / 2, Py(y) + T / 2, frame); // 압력 맞춤 밸브
         }
 
@@ -472,6 +604,26 @@ public sealed partial class Painter
                 else GravGlow(img, gx, gy, gbw, gbh, field, gs, frame);
                 continue;
             }
+            if (_newArt[i])   // 새 가구 그림 (T6 — 상위 15종 · 세계 값: 선반 · 로커 · 함의 물건 수 · 담요 주인)
+            {
+                string type = L.Furniture[i].Type;
+                var face = _facing[i];
+                var fill = FillOf(i, mind);
+                int nrise = ArtFurniture.Rise(type, bw, bh, face);
+                long key = (12L << 56) ^ ((long)i << 36) ^ (fill.Key << 8) ^ ((long)face << 4);
+                Put(img, Cached(key, (type, bw, bh, face, fill, i), static q => Shadowed(ArtFurniture.Body(q.type, q.bw, q.bh, q.face, q.fill, q.i), Math.Max(1, ArtFurniture.Rise(q.type, q.bw, q.bh, q.face)))), Px(bx), Py(by) - nrise);
+                int ndev = DeviceOf(net, i);
+                var nst = ndev < 0 ? FixState.On : net!.IsBroken(ndev, Part.Electric) || net.IsBroken(ndev, Part.Mechanical) ? FixState.Broken : net.Working(ndev) ? FixState.On : FixState.Off;
+                int stIdx = nst == FixState.Off ? 0 : nst == FixState.Broken ? 2 : 1;
+                if (stIdx != 0)
+                {
+                    long gkey = (13L << 56) ^ ((long)(type.GetHashCode() & 0xFFFF) << 32) ^ ((long)bw << 24) ^ ((long)bh << 20) ^ ((long)face << 16) ^ ((long)stIdx << 12) ^ (frame & 15);
+                    var g = Cached(gkey, (type, bw, bh, face, stIdx, f16: frame & 15), static q => ArtFurniture.Glow(q.type, q.bw, q.bh, q.face, q.stIdx, q.f16) ?? new Img(1, 1));
+                    if (g.W > 1) { int gx = Px(bx), gy = Py(by) - nrise; if (Lighting) _emissive.Add(im => Put(im, g, gx, gy)); else Put(img, g, gx, gy); }
+                }
+                else if (ndev >= 0) img.Fill(Px(bx), Py(by) - nrise, bw * T, bh * T + nrise, Rgba.Hex("#000308"), 0.3f);
+                continue;
+            }
             if (_washKind[i] != 0)
             {
                 int wk = _washKind[i], wr = WashRise(wk);
@@ -525,8 +677,9 @@ public sealed partial class Painter
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2) Put(img, Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
+                if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다 (기압 0으로 읽혀 늘 서리로 덮였다 — 하늘색 문)
                 double kpa = f.Pressure(c);
-                if (kpa < 40) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#8fd0ff"), (float)(0.36 * (1 - kpa / 40))); // 진공: 서리
+                if (kpa < 40) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#8fd0ff"), (float)(0.42 * (1 - kpa / 40))); // 진공: 서리 (어두워진 새 바닥에서도 읽히게 0.36 → 0.42)
                 double temp = f.Temp(c);
                 if (temp > 330 && kpa > 5) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#ff5a1e"), (float)Math.Min(0.35, (temp - 330) / 400));
                 float dark = 0;
