@@ -32,6 +32,9 @@ public struct Incident
     public long SnagTick, SentAt;
     public byte Snagged;         // 막힌 채 다시 보낸 번 (같은 까닭)
     public int Id;               // 사건 번호 (해 본 방법 · 지어낸 계획이 가리킨다 — 목록에서 지워져도 그대로)
+    // 막힌 로봇 풀기 (docs/MIND.md 3단): 이 일에서 놓아준 로봇 · 때 (한동안 다시 보내지 않는다 — 다른 로봇이 간다)
+    public int Dropped;
+    public long DroppedAt;
 }
 
 /// <summary>주컴퓨터가 돌려 본 미래 하나 (안 하나의 결과).</summary>
@@ -368,7 +371,7 @@ public sealed partial class ShipMind : IEngine
                 return;
             }
         }
-        Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2 });
+        Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2, Dropped = -1 });
         Say(sim, detail == null ? $"{RoomName(room)}: {KindName(k)}" : $"{RoomName(room)}: {KindName(k)} — {detail}");
     }
 
@@ -1083,6 +1086,8 @@ public sealed partial class ShipMind : IEngine
         }
         int need = x.Kind is IncidentKind.Fire or IncidentKind.Arrest ? 2 : 1;
         bool Busy(int rb) => rb >= 0 && _mind.Agents[rb].C.Up != 0 && _mind.Agents[rb].C.AssignedUntil > sim.Tick;
+        // 막힌 로봇 풀기: 맡긴 로봇이 그 일을 할 몸이 아니거나 (팔 · 다리) · 막힌 뒤 3분 넘게 다른 것을 하면 이 일에서 놓아주고 다른 로봇을 보낸다 (예전엔 30분 동안 '맡은 이 있음')
+        ReleaseStuck(sim, ref x, g, x.RobotA); ReleaseStuck(sim, ref x, g, x.RobotB);
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
         while (have < need)
         {
@@ -1098,7 +1103,8 @@ public sealed partial class ShipMind : IEngine
                     if (from < 0 || Rank(Incidents[from].Kind) <= Rank(x.Kind)) continue;
                 }
                 if (a.Id == x.RobotA && Busy(x.RobotA) || a.Id == x.RobotB && Busy(x.RobotB)) continue; // 이 사건에 가 있는 로봇 (일을 마쳤으면 다시 보낼 수 있다)
-                int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + (from >= 0 ? 100000 : 0);
+                if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10)) continue;            // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다
+                int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + HandCost(a, g) + (from >= 0 ? 100000 : 0);   // 길 거리 (벽 너머 직선이 아니라 문을 돌아) + 손에 든 것
                 if (d < bd) { bd = d; best = a.Id; bestFrom = from; }
             }
             if (best < 0) break;
@@ -1125,6 +1131,39 @@ public sealed partial class ShipMind : IEngine
         // 로봇이 모자라면 사람에게 부탁한다 (함장 방침 — 기본은 로봇이 하나도 없을 때 1분 기다린 뒤)
         if (have < need && Policy.AskPeople != 0 && (Policy.AskPeople == 2 || have == 0)) AskPerson(sim, ref x, g, target);
     }
+
+    /// <summary>
+    /// 손에 든 것의 값 (걸음 수로): 그 일에 맞는 것을 들었으면 덜고 (불에 쓸 만한 소화기 · 받치기에 수리 꾸러미) · 손일인데 다른 것을 들었으면 내려놓는 몫을 더한다.
+    /// 로봇이 보낸 상태(든 것 · 남은 양)로 셈한다 — 주컴퓨터가 로봇 속을 읽지 않는다.
+    /// </summary>
+    private int HandCost(Agent a, GoalKind g)
+    {
+        byte h = a.C.Holding;
+        if (h == 255 || _mind == null) return 0;
+        if (g == GoalKind.FightFire && (h == _mind.iExt || h == _mind.iCO2) && a.C.HoldCharge >= 20) return -15;
+        if (g is GoalKind.Brace or GoalKind.Repair && h == _mind.iRepair) return -5;
+        if (g == GoalKind.Treat && h == _mind.iMedkit) return -5;
+        return Mind.HandGoal(g) ? 4 : 0;
+    }
+
+    /// <summary>막힌 로봇 풀기: 몸이 그 일을 못 하거나 (팔 · 다리) · 막힌 뒤 3분 넘게 그 일을 하지 않으면 놓아준다 — 맡김을 거두고 사건에서 뺀다 (일지에 까닭).</summary>
+    private void ReleaseStuck(Sim sim, ref Incident x, GoalKind g, int rb)
+    {
+        if (_mind == null || rb < 0 || rb >= _mind.Agents.Count) return;
+        var a = _mind.Agents[rb];
+        ref var c = ref a.C;
+        if (c.AssignedUntil <= sim.Tick || c.AssignedGoal != g) return;
+        bool body = c.Up != 0 && !_mind.RobotCan(a, g);
+        bool idle = c.Goal != g && c.SnagTick >= x.SentAt && c.Snag != SnagKind.None && sim.Tick - c.SnagTick > Time.Minutes(3) && c.Battery >= 0.15f;
+        if (!body && !idle) return;
+        c.AssignedUntil = sim.Tick;
+        if (x.RobotA == rb) x.RobotA = -1; else if (x.RobotB == rb) x.RobotB = -1;
+        x.Dropped = rb; x.DroppedAt = sim.Tick;
+        Released++;
+        Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일에서 놓아준다 — {(body ? (_mind.LegsOk(a) ? Mind.SnagText(SnagKind.NoHands) : Mind.SnagText(SnagKind.NoLegs)) : Mind.SnagText(c.Snag))} → 다른 로봇");
+    }
+
+    public long Released;
 
     /// <summary>
     /// ⑩ 판단 엔진: 맡긴 로봇이 막혔나 — 로봇이 남긴 막힘(까닭 · 자리 · 대상)을 사건에 옮겨 적고 일지에 쓴다 (보낸 뒤의 문 · 길 · 물건 막힘만).
@@ -1165,7 +1204,7 @@ public sealed partial class ShipMind : IEngine
                 if (from < 0 || Rank(Incidents[from].Kind) <= Rank(x.Kind)) continue;
             }
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
-            int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) - (mine ? 1000 : 0) + (from >= 0 ? 100000 : 0);
+            int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) - (mine ? 1000 : 0) + (from >= 0 ? 100000 : 0);
             if (d < bd) { bd = d; best = a.Id; bestFrom = from; }
         }
         if (best >= 0 && bestFrom >= 0)

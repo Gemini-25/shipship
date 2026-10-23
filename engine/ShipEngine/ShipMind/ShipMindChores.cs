@@ -41,8 +41,16 @@ public sealed partial class ShipMind
     {
         var mind = _mind!;
         long now = sim.Tick;
-        // 끝났거나 기한이 지난 일은 내린다
-        Jobs.RemoveAll(j => j.Until < now || Done(j));
+        // 끝난 일은 내린다 · 끝나지 않은 채 기한을 넘겼거나 맡은 이가 막혀 손을 놓았으면 누가 · 왜를 적고 내린다 (일감 결과 기억 — 다음엔 다른 이에게)
+        for (int i = Jobs.Count - 1; i >= 0; i--)
+        {
+            var j = Jobs[i];
+            if (Done(j)) { Jobs.RemoveAt(i); continue; }
+            var why = GaveUp(j, now, out bool gave);
+            if (j.Until >= now && !gave) continue;
+            NoteJobFail(sim, j, why);
+            Jobs.RemoveAt(i);
+        }
         // 모자란 물건 만들기 — 원료가 모자라면 무엇을 먼저 만들지 고른다 (⑪ 공급 사슬 (라))
         PlanCrafts(sim);
         // 예방 정비: 표준 수명의 80%를 쓴 부품 (숨은 한계는 모른다)
@@ -164,6 +172,100 @@ public sealed partial class ShipMind
         return agent < 0 || agent >= mind.Agents.Count || mind.Agents[agent].C.Holding != item;
     }
 
+    public List<JobFail> JobFails = new();
+    public long JobsFailed, JobsStuck;
+    public const int JobFailHours = 6;
+
+    /// <summary>맡은 이가 손을 놓았나: 그 일을 할 몸이 아니다 (팔 · 다리) · 맡은 뒤 그 일에서 막혀 3분 넘게 다른 것을 한다 — 그때의 까닭 (기한을 넘긴 것이면 그 일에서 남긴 막힘 · 없으면 None).</summary>
+    private SnagKind GaveUp(in Job j, long now, out bool gave)
+    {
+        gave = false;
+        var mind = _mind!;
+        if (j.Agent < 0 || j.Agent >= mind.Agents.Count) return SnagKind.None;
+        var a = mind.Agents[j.Agent];
+        ref var c = ref a.C;
+        long posted = j.Until - Time.Hours(2);
+        if (!a.IsPerson && !mind.RobotCan(a, j.Kind)) { gave = true; return mind.LegsOk(a) ? SnagKind.NoHands : SnagKind.NoLegs; }
+        bool snagged = c.SnagTick >= posted && c.SnagGoal == j.Kind && c.Snag != SnagKind.None;
+        if (snagged && Mind.Telling(c.Snag) && c.Goal != j.Kind && now - c.SnagTick > Time.Minutes(3)) gave = true;
+        return snagged ? c.Snag : SnagKind.None;
+    }
+
+    /// <summary>일감이 끝나지 않았다: 적고 (여섯 시간 기억) · 맡김을 거두고 · 일지에 '누가 · 왜 → 다른 이에게'.</summary>
+    private void NoteJobFail(Sim sim, in Job j, SnagKind why)
+    {
+        var mind = _mind!;
+        if (JobFails.Count >= 64) JobFails.RemoveAt(0);
+        JobFails.Add(new JobFail { Kind = j.Kind, Target = j.Target, Arg = j.Arg, Agent = j.Agent, Snag = why, Tick = sim.Tick });
+        JobsFailed++;
+        if (j.Agent >= 0 && j.Agent < mind.Agents.Count)
+        {
+            ref var c = ref mind.Agents[j.Agent].C;
+            if (c.AssignedGoal == j.Kind && c.AssignedTarget == j.Target) c.AssignedUntil = sim.Tick;
+        }
+        string who = j.Agent >= 0 && j.Agent < mind.Agents.Count ? mind.NameOf(j.Agent) : "맡은 이";
+        Say(sim, $"일감 {JobTitle(j)} — {who}: {(why == SnagKind.None ? "기한을 넘겼다" : Mind.SnagText(why))} → 다른 이에게");
+    }
+
+    /// <summary>그 일감을 그 이가 여섯 시간 안에 못 했나.</summary>
+    private bool FailedBy(in Job j, int agent, long now)
+    {
+        foreach (var f in JobFails) if (f.Kind == j.Kind && f.Target == j.Target && f.Agent == agent && now - f.Tick < Time.Hours(JobFailHours)) return true;
+        return false;
+    }
+
+    /// <summary>그 일감을 여섯 시간 안에 못 한 번 (로봇 · 사람).</summary>
+    private int FailsOf(in Job j, long now, bool robotsOnly = false)
+    {
+        int n = 0;
+        foreach (var f in JobFails)
+            if (f.Kind == j.Kind && f.Target == j.Target && f.Agent >= 0 && now - f.Tick < Time.Hours(JobFailHours) && (!robotsOnly || f.Agent < _mind!.Agents.Count && !_mind.Agents[f.Agent].IsPerson)) n++;
+        return n;
+    }
+
+    /// <summary>맡을 이가 없다 — 둘 넘게 못 했으면 '막힌 곳'으로 한 번 방송한다 (여섯 시간에 한 번 · 막힌 곳 목록에 남는다).</summary>
+    private void StuckJob(Sim sim, in Job j, long now)
+    {
+        if (FailsOf(j, now) < 2) return;
+        foreach (var f in JobFails) if (f.Kind == j.Kind && f.Target == j.Target && f.Agent == -2 && now - f.Tick < Time.Hours(JobFailHours)) return;
+        SnagKind last = SnagKind.None;
+        foreach (var f in JobFails) if (f.Kind == j.Kind && f.Target == j.Target && f.Agent >= 0) last = f.Snag;
+        if (JobFails.Count >= 64) JobFails.RemoveAt(0);
+        JobFails.Add(new JobFail { Kind = j.Kind, Target = j.Target, Arg = j.Arg, Agent = -2, Snag = last, Tick = now });
+        JobsStuck++;
+        Say(sim, $"막힌 곳: {JobTitle(j)} — {(last == SnagKind.None ? "맡은 이마다 기한을 넘겼다" : Mind.SnagText(last))} (로봇 · 사람 모두 못 했다)");
+    }
+
+    /// <summary>일감의 이름 (일지 · 막힌 곳 줄): 무엇 (어디).</summary>
+    private string JobTitle(in Job j)
+    {
+        int cell = JobCell(j);
+        string what = j.Kind switch
+        {
+            GoalKind.Craft => $"{Ko.I(_mind!.ItemNames[Math.Clamp(j.Arg, 0, _mind.ItemCount - 1)])} 만들기", GoalKind.Maintain => "미리 갈기", GoalKind.Clean => "청소", GoalKind.Harvest => "거두기",
+            GoalKind.Restock => "식량 나르기", GoalKind.Haul => "헌 부품 나르기", GoalKind.Tighten => "볼트 조이기", GoalKind.ToiletCare => "변기 손질",
+            GoalKind.Refill => "쓴 것 채우기", GoalKind.Gather => "떨어진 것 줍기", _ => Mind.GoalName(j.Kind),
+        };
+        return cell >= 0 && cell < L.N && L.Room[cell] >= 0 ? $"{what} ({RoomName(L.Room[cell])})" : what;
+    }
+
+    /// <summary>일감의 자리 (칸 · −1).</summary>
+    private int JobCell(in Job j)
+    {
+        int F(int fu) => fu >= 0 && fu < L.Furniture.Count && L.Furniture[fu].Cells.Length > 0 ? L.Furniture[fu].Cells[0] : -1;
+        return j.Kind switch
+        {
+            GoalKind.Craft or GoalKind.Refill => F(j.Target),
+            GoalKind.Maintain => _net != null && j.Target / 4 < _net.Devices.Count ? _net.Devices[j.Target / 4].Cell : -1,
+            GoalKind.Tighten => _net != null && j.Target < _net.Devices.Count ? _net.Devices[j.Target].Cell : -1,
+            GoalKind.Harvest => _life != null && j.Target < _life.Crops.Count ? _life.Crops[j.Target].Cell : -1,
+            GoalKind.Restock => F(j.Arg),
+            GoalKind.Haul => F(j.Arg / 256),
+            GoalKind.ToiletCare => j.Arg == 3 ? j.Target : F(j.Target),
+            _ => j.Target,
+        };
+    }
+
     /// <summary>나르기 끝: 놓인 곳에 헌 부품이 없고 맡은 이도 들고 있지 않다.</summary>
     private bool HaulDone(int arg, int agent)
     {
@@ -179,17 +281,19 @@ public sealed partial class ShipMind
     {
         var mind = _mind!;
         int best = -1, bd = int.MaxValue;
+        bool robotsTried = FailsOf(j, sim.Tick, robotsOnly: true) > 0;   // 로봇이 못 했으면 깨어 있는 사람에게도 (일하는 시간 밖이어도 쉬고 있으면)
         foreach (var a in mind.Agents)
         {
             bool waitingPart = stalled && !a.IsPerson && a.C.AssignedGoal is GoalKind.Repair or GoalKind.Maintain && a.C.Goal != a.C.AssignedGoal;
             if (a.C.Up == 0 || a.C.AssignedUntil > sim.Tick && !waitingPart || a.C.Kind == AgentKind.Drone) continue;
             if (ChoreBusy(a.C.Goal)) continue;
+            if (FailedBy(j, a.Id, sim.Tick)) continue;   // 이 일을 못 한 이에게 다시 맡기지 않는다 (같은 실패를 되풀이하지 않는다)
             if (!a.IsPerson && (a.C.Battery < 0.4f || !mind.RobotCan(a, j.Kind))) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
-            if (a.IsPerson && (!canPerson(a) || a.C.Goal != GoalKind.Work)) continue; // 사람은 일하는 시간에만
-            int d = mind.Dist(a.C.Cell, cell) + (a.IsPerson ? 1000 : 0); // 로봇 먼저
+            if (a.IsPerson && (!canPerson(a) || !(a.C.Goal == GoalKind.Work || robotsTried && a.C.Goal is GoalKind.Idle or GoalKind.Relax))) continue; // 사람은 일하는 시간에만 (로봇이 못 했으면 쉬는 이도)
+            int d = mind.PathDist(a.C.Cell, cell) + (a.C.Holding != 255 && Mind.HandGoal(j.Kind) ? 10 : 0) + (a.IsPerson ? 1000 : 0); // 길 거리 + 손에 든 것을 먼저 둘 몫 · 로봇 먼저
             if (d < bd) { bd = d; best = a.Id; }
         }
-        if (best < 0) return false;
+        if (best < 0) { StuckJob(sim, j, sim.Tick); return false; }
         j.Agent = best; j.Until = sim.Tick + Time.Hours(2);
         mind.AssignJob(best, j.Kind, j.Target, j.Arg, j.Until);
         Jobs.Add(j);
@@ -238,6 +342,10 @@ public sealed partial class ShipMind
             if (why == null && !mind.Agents.Any(a => a.C.Up != 0 && (!a.IsPerson && a.C.Kind != AgentKind.Drone || a.IsPerson && a.C.SkRepair >= 0.4f))) why = "만들 솜씨가 있는 이가 없다";
             if (why != null) Add($"{name} ← {why}");
         }
+        // 일감: 로봇 · 사람 모두 못 해 방송한 것 (여섯 시간 안 — docs/MIND.md 3단 일감 결과 기억)
+        foreach (var f in JobFails)
+            if (f.Agent == -2 && sim.Tick - f.Tick < Time.Hours(JobFailHours))
+                Add($"{JobTitle(new Job { Kind = f.Kind, Target = f.Target, Arg = f.Arg })} ← {(f.Snag == SnagKind.None ? "맡은 이마다 기한을 넘겼다" : Mind.SnagText(f.Snag))}");
         // 마실 물 · 식량 · 산소: 만드는 것까지 쳐서 30일을 못 버틴다
         var (wd, _) = _work!.DaysLeft(sim, (int)Res.Water);
         if (wd < 30) Add($"마실 물 {wd:0}일 치 ← {WaterWhy()}");
@@ -312,12 +420,12 @@ public sealed partial class ShipMind
 
     private void SaveChores(StateWriter w)
     {
-        w.List(Jobs);
+        w.List(Jobs); w.List(JobFails); w.I64(JobsFailed); w.I64(JobsStuck);
         w.I32(Blocks.Count); foreach (var b in Blocks) w.Str(b); w.Arr(BlockCauses.ToArray()); w.Arr(_powerFirst.OrderBy(x => x).ToArray());
     }
     private void LoadChores(StateReader r)
     {
-        Jobs = r.List<Job>();
+        Jobs = r.List<Job>(); JobFails = r.List<JobFail>(); JobsFailed = r.I64(); JobsStuck = r.I64();
         Blocks.Clear(); int nb = r.I32(); for (int i = 0; i < nb; i++) Blocks.Add(r.Str() ?? ""); BlockCauses.Clear(); BlockCauses.AddRange(r.Arr<int>()); _powerFirst.Clear(); foreach (int x in r.Arr<int>()) _powerFirst.Add(x);
     }
 }

@@ -10,8 +10,16 @@ public sealed partial class Mind
     private int[]? _doorDist;                 // [문 × 문] 걸음 수 (못 닿으면 큰 값)
     private int[][]? _roomDoorsDist;              // [방] 그 방에 닿은 문들
     private const int FarAway = 1 << 20;
+    /// <summary>도면마다 한 번 (복제 · 미리 보는 세계 · 상상이 같은 도면이면 같은 표를 쓴다 — 읽기만 · 여러 코어에서 함께 읽어도 된다).</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Layout, Tuple<int[], int[][]>> DoorDistOf = new();
 
     private void BuildDoorDist()
+    {
+        var t = DoorDistOf.GetValue(L, l => { BuildDoorDist(l, out var dd, out var rd); return Tuple.Create(dd, rd); });
+        _doorDist = t.Item1; _roomDoorsDist = t.Item2;
+    }
+
+    private static void BuildDoorDist(Layout L, out int[] _doorDist, out int[][] _roomDoorsDist)
     {
         int nd = L.Doors.Count;
         _doorDist = new int[nd * nd];

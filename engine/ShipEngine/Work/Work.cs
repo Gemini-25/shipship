@@ -11,6 +11,16 @@ public struct Job
     public long Until;      // 맡긴 기한
 }
 
+/// <summary>일감 결과 기억 (docs/MIND.md 3단 — 주컴퓨터): 끝나지 않은 일감 — 누가 · 왜 · 때 (Agent −2: '막힌 곳'으로 방송했다).</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
+public struct JobFail
+{
+    public GoalKind Kind;
+    public int Target, Arg, Agent;
+    public SnagKind Snag;   // None: 기한을 넘겼다
+    public long Tick;
+}
+
 /// <summary>
 /// ⑪ 일과 물자 (docs/ENGINE.md §4 ⑪) — 월드 엔진: 켜진 설비(정제기 · 수집기)가 전기를 먹고 원료를 조금씩 만들고 · 물자 장부(재고 · 흐름 · 며칠 버티나)를 적는다.
 /// 일감판 · 막힌 곳 찾기 · 설비 켜고 끄기는 주컴퓨터의 살림이다 (⑩ <see cref="ShipMind"/> — 판단 이관 (아)).

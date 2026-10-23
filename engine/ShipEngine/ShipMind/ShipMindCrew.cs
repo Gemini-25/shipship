@@ -38,7 +38,8 @@ public sealed partial class ShipMind
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
             if (g is GoalKind.Treat or GoalKind.Surgery or GoalKind.Counsel && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
             float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat or GoalKind.Surgery => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, GoalKind.Counsel => CounselFit(sim, a, x.Subject), _ => a.C.SkSeal };
-            double cost = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) * (1.5 - skill) + (b.Asleep != 0 ? 30 : 0);
+            int path = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell);   // 길 거리 (벽 너머 직선이 아니라)
+            double cost = (g == GoalKind.Counsel ? path * 0.3 + (1 - skill) * 30 : path * (1.5 - skill)) + (b.Asleep != 0 ? 30 : 0);   // 마음 돌봄은 가까운 이보다 맞는 이 (급하지 않다)
             if (cost < bc) { bc = cost; best = a.Id; }
         }
         if (best < 0) return;

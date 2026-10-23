@@ -18,12 +18,13 @@ public sealed partial class Mind
     {
         SnagKind.Far => "멀다", SnagKind.NoPath => "갈 길이 없다", SnagKind.DoorJammed => "문이 끼었다", SnagKind.DoorUnpowered => "문에 전기가 없어 기압 차를 이기지 못한다",
         SnagKind.DoorHeld => "주컴퓨터가 문의 압력 맞춤 밸브를 잠가 두었다", SnagKind.DoorVacuum => "문 너머가 우주로 트여 기압을 맞출 수 없다",
-        SnagKind.DoorPressure => "기압 차로 문이 열리지 않는다", SnagKind.DoorStuckBefore => "지난번에 안 열린 문밖에 길이 없다", SnagKind.NoWayOut => "바깥으로 나갈 문이 없다", SnagKind.NoItem => "쓸 물건이 없다", SnagKind.Taken => "남이 먼저 했다", SnagKind.DoorLocked => "주컴퓨터가 문을 잠가 두었다", SnagKind.DrivenBack => "연기 · 열 · 나쁜 공기에 밀려났다", _ => "일이 틀어졌다",
+        SnagKind.DoorPressure => "기압 차로 문이 열리지 않는다", SnagKind.DoorStuckBefore => "지난번에 안 열린 문밖에 길이 없다", SnagKind.NoWayOut => "바깥으로 나갈 문이 없다", SnagKind.NoItem => "쓸 물건이 없다", SnagKind.Taken => "남이 먼저 했다", SnagKind.DoorLocked => "주컴퓨터가 문을 잠가 두었다", SnagKind.DrivenBack => "연기 · 열 · 나쁜 공기에 밀려났다",
+        SnagKind.NoHands => "팔이 상해 손을 쓸 수 없다", SnagKind.NoLegs => "다리가 망가져 걸을 수 없다", _ => "일이 틀어졌다",
     };
 
     /// <summary>문 · 길 · 물건의 막힘인가 (원인 마디 · 사실로 남길 만한).</summary>
     public static bool Telling(SnagKind k) => k is SnagKind.NoPath or SnagKind.DoorJammed or SnagKind.DoorUnpowered or SnagKind.DoorHeld or SnagKind.DoorVacuum or SnagKind.DoorPressure
-        or SnagKind.DoorStuckBefore or SnagKind.NoWayOut or SnagKind.NoItem or SnagKind.DoorLocked or SnagKind.DrivenBack;
+        or SnagKind.DoorStuckBefore or SnagKind.NoWayOut or SnagKind.NoItem or SnagKind.DoorLocked or SnagKind.DrivenBack or SnagKind.NoHands or SnagKind.NoLegs;
 
     public static bool DoorSnag(SnagKind k) => k is SnagKind.DoorJammed or SnagKind.DoorUnpowered or SnagKind.DoorHeld or SnagKind.DoorVacuum or SnagKind.DoorPressure or SnagKind.DoorLocked;
 
