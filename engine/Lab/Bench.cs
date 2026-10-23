@@ -102,6 +102,23 @@ public static partial class Program
         var over = per.Where(kv => kv.Value > share.GetValueOrDefault(kv.Key, Other)).Select(kv => $"{kv.Key} {kv.Value:0.00}ms > {share.GetValueOrDefault(kv.Key, Other):0.00}").ToList();
         Check("시간 예산: 새터호 40명 · 로봇 10 — 한 틱 4ms 안 (60프레임에 넉넉히)", t <= 4.0, $"{t:0.00}ms/틱 (하루 = {t * Time.TicksPerDay / 1000:0}초)");
         Check("시간 예산: 엔진마다 제 몫 안 (장 1.8 · 마음 1.0 · 망 0.6 · 구조 · 화학 · 주컴퓨터 0.4 · 나머지 0.15ms)", over.Count == 0, over.Count == 0 ? "모두 안" : string.Join(" · ", over));
+        // 판단 깊이의 잣대 (docs/MIND.md 성능 예산): 사람 한 명이 쓰는 마음 몫 · 위기 틱의 마음 — 판단 층을 더할 때마다 이 줄로 값을 치른다
+        double perPerson = per.GetValueOrDefault("마음") / 40;
+        Check("시간 예산: 새터호 조용한 틱 — 마음 ÷ 사람 수 ≤ 0.012ms (판단 층을 더해도 사람 한 명 몫)", perPerson <= 0.012, $"{perPerson * 1000:0.0}µs/사람 (마음 {per.GetValueOrDefault("마음"):0.000}ms · 40명)");
+        {
+            var s = ShipWorld.Crewed("Saetteul", 7, 40, 10);
+            s.Run(300);
+            var room = s.Layout.Rooms.Where(r => r.Cells.Length > 30 && r.Type != "Corridor").OrderByDescending(r => r.Cells.Length).First();
+            var chem = s.Get<Chemistry>();
+            foreach (int c in room.Cells.Where((c, i) => i % 9 == 0).Take(4)) chem.Ignite(c, 3e6, s.Causes.Add(CauseKind.Setup, "시험 불", s.Tick, c));
+            var mindMs = new List<double>();
+            s.Measure = true;
+            for (int k = 0; k < 400; k++) { s.LastMs.Clear(); s.Step(); mindMs.Add(s.LastMs.GetValueOrDefault("마음")); }
+            s.Measure = false;
+            mindMs.Sort();
+            double p99 = mindMs[(int)(mindMs.Count * 0.99)], max = mindMs[^1];
+            Check($"시간 예산: 위기 틱 (새터호 {room.Name} 불 넷 · 40명이 달아나고 · 끄고 · 구하고) — 마음 ≤ 2ms (99번째 백분위)", p99 <= 2.0, $"99% {p99:0.00}ms · 가장 긴 틱 {max:0.00}ms · 가운데 {mindMs[mindMs.Count / 2]:0.000}ms");
+        }
         var (th, _) = Measure("Hannuri", 100, 30, 150);
         Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");
     }
