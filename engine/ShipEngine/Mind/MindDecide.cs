@@ -243,8 +243,10 @@ public sealed partial class Mind
         else
         {
             float low = c.Battery < 0.1f ? 8 : c.Battery < 0.3f ? 4 : c.Battery < 0.95f && c.Goal == GoalKind.Charge ? 1.5f : 0.4f;
-            Add(GoalKind.Charge, c.Dock, c.Dock, low);
+            int dock = ChargeDock(a);   // 죽은 독은 피한다 (docs/MIND.md 3단 덧붙임)
+            Add(GoalKind.Charge, dock, dock, low);
             if (!drone) { JobOption(a); StashOption(a, here); GatherOption(a, here); }   // 돌려놓기 · 줍기 (docs/MIND.md 3단)
+            else AssignedLook(a);   // 드론: 주컴퓨터가 맡긴 살피기 (쾅 소리 · 뜨거운 자리 · 진공이 된 방 — 예전엔 맡김을 쥐고만 있었다)
         }
 
         float caution = person ? 1 - c.Fear * (1 - c.Brave) : 1;
@@ -513,8 +515,8 @@ public sealed partial class Mind
             }
             case GoalKind.Charge:
             {
-                if (c.Dock < 0) return false;
-                plan.Add(Go(c.Dock));
+                if (o.Target < 0) return false;
+                plan.Add(Go(o.Target));
                 plan.Add(Use(UseKind.Charge, Time.Hours(3)));
                 return true;
             }
@@ -937,11 +939,18 @@ public sealed partial class Mind
         return best;
     }
 
+    /// <summary>주컴퓨터가 로봇 · 드론에게 맡긴 살피기 (빠진 방 · 외판 둘러보기 · 쾅 소리 · 뜨거운 자리).</summary>
+    private void AssignedLook(Agent a)
+    {
+        ref var c = ref a.C;
+        if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
+    }
+
     /// <summary>⑪ 일감판이 맡긴 일 (만들기 · 정비 · 청소) — 맡긴 보너스(+3)가 붙는다. 주컴퓨터가 로봇에게 맡긴 살피기(빠진 방 · 외판 둘러보기)도.</summary>
     private void JobOption(Agent a)
     {
         ref var c = ref a.C;
-        if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        AssignedLook(a);
         // ⑩ 판단 엔진: 지어낸 계획이 '이 문틈을 막아라' (아직 기압 차가 없어 새지 않아도 — 공기를 빼기 전에)
         if (c.AssignedGoal == GoalKind.Patch && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && TapeAssigned(a, c.AssignedTarget)) Add(GoalKind.Patch, c.AssignedTarget, c.AssignedTarget, a.IsPerson ? 2.2f : 1.2f);
         // ⑩ 판단 엔진: 지어낸 계획이 '여기서 기다려라' — 주컴퓨터가 그 방을 비우는 동안 제 판단으로 문에 가지 않는다 (다친 이를 구하는 일은 앞선다)

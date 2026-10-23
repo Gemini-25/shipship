@@ -58,6 +58,13 @@ public sealed class Sensors : IEngine
         return false;
     }
 
+    /// <summary>처음 잡은 때 (-1: 안 잡힘).</summary>
+    public long FirstOf(TrackKind k, int id)
+    {
+        foreach (var t in Tracks) if (t.Kind == k && t.Id == id) return t.First;
+        return -1;
+    }
+
     public int CauseOf(TrackKind k, int id)
     {
         foreach (var t in Tracks) if (t.Kind == k && t.Id == id) return t.Cause;

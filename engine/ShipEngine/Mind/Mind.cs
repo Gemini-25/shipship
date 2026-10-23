@@ -606,7 +606,7 @@ public sealed partial class Mind : IEngine
                 ref var rb = ref _net.Robot(c.Mech);
                 rb.Cell = c.Cell;
                 rb.Load = (byte)(c.Up != 0 && (c.Speed > 0.1f || c.Goal is GoalKind.FightFire or GoalKind.Patch or GoalKind.Repair or GoalKind.Rescue) ? 1 : 0);
-                rb.Docked = (byte)(c.Up != 0 && c.Goal == GoalKind.Charge && c.Cell == c.Dock ? 1 : 0);
+                rb.Docked = (byte)(c.Up != 0 && c.Goal == GoalKind.Charge && c.Cell == c.GoalTarget ? 1 : 0);
             }
             return;
         }

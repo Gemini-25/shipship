@@ -15,6 +15,7 @@ public sealed partial class ShipMind
     public int ShelterRoomAt = -1;
     public long ShelterFrom, ShelterCalm, Shelters, ShelterDoorsShut;
     private int _shelterCause;
+    private int _flareMeasured;   // 선량계가 폭풍을 잰 조짐 (그 뒤로는 선량이 정한다)
 
     private void Weather(Sim sim)
     {
@@ -33,12 +34,16 @@ public sealed partial class ShipMind
             break;
         }
         // 양성자 폭풍: X선 감시가 조짐을 잡았거나(⑥) · 배 안 선량계가 바깥 방사선이 평소의 두 배를 넘은 것을 잰다 (조짐을 못 잡았으면 폭풍이 와서야)
-        bool warned = _sense != null && _out.FlareCause != 0 && _sense.Tracked(TrackKind.Flare, _out.FlareCause);
-        bool storm = _out.FlareStart >= 0 && sim.Tick < _out.FlareEnd && _out.DoseOut > 2 * _out.CalmDose + 0.05;
+        // 끝은 선량계로만 (docs/MIND.md 3단 덧붙임 — 끝나는 때를 미리 알지 않는다): 폭풍을 한 번 잰 뒤로는 조짐이 아니라 선량이 정한다 · 조짐만 잡고 폭풍이 오지 않으면 조짐 뒤 (앞섬 + 30분)에 거둔다
+        bool storm = _out.DoseOut > 2 * _out.CalmDose + 0.05;
+        long first = _sense != null && _out.FlareCause != 0 ? _sense.FirstOf(TrackKind.Flare, _out.FlareCause) : -1;
+        if (storm && first >= 0) _flareMeasured = _out.FlareCause;
+        double lead = _out.StarDef.WarnMin * 60;
+        bool warned = first >= 0 && _flareMeasured != _out.FlareCause && (sim.Tick - first) * Time.SecondsPerTick < lead + 30 * 60;
         if (kind == 0 && (warned || storm))
         {
             kind = 2; cause = warned ? _sense!.CauseOf(TrackKind.Flare, _out.FlareCause) : _out.FlareCause;
-            eta = _out.FlareStart >= 0 ? 0 : Math.Max(0, _out.NextFlare - sim.Tick) * Time.SecondsPerTick;
+            eta = storm ? 0 : Math.Max(0, lead - (sim.Tick - first) * Time.SecondsPerTick);   // 조짐에서 폭풍까지 흔히 걸리는 앞섬 (X선 → 양성자)
         }
 
         if (kind != 0)
@@ -167,10 +172,10 @@ public sealed partial class ShipMind
 
     private void SaveWeather(StateWriter w)
     {
-        w.Byte(ShelterOn); w.I32(ShelterRoomAt); w.I64(ShelterFrom); w.I64(ShelterCalm); w.I64(Shelters); w.I64(ShelterDoorsShut); w.I32(_shelterCause);
+        w.Byte(ShelterOn); w.I32(ShelterRoomAt); w.I64(ShelterFrom); w.I64(ShelterCalm); w.I64(Shelters); w.I64(ShelterDoorsShut); w.I32(_shelterCause); w.I32(_flareMeasured);
     }
     private void LoadWeather(StateReader r)
     {
-        ShelterOn = r.Byte(); ShelterRoomAt = r.I32(); ShelterFrom = r.I64(); ShelterCalm = r.I64(); Shelters = r.I64(); ShelterDoorsShut = r.I64(); _shelterCause = r.I32();
+        ShelterOn = r.Byte(); ShelterRoomAt = r.I32(); ShelterFrom = r.I64(); ShelterCalm = r.I64(); Shelters = r.I64(); ShelterDoorsShut = r.I64(); _shelterCause = r.I32(); _flareMeasured = r.I32();
     }
 }

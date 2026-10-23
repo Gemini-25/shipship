@@ -265,6 +265,11 @@ public struct AgentCore
     /// <summary>손 (docs/MIND.md 3단): 지금 든 물건 · 그것을 든 때 (방금 가져온 것은 한동안 돌려놓지 않는다).</summary>
     public byte HeldItem;
     public long HeldSince;
+    // 죽은 충전독 (docs/MIND.md 3단 덧붙임): 6분 동안 전지가 오르지 않은 독 (독 번호마다 한 비트 · 2시간 피한다) · 그 때 · 독에서 잰 전지의 바닥 · 그때부터 잰 때
+    public ulong DeadDocks;
+    public long DeadDocksAt;
+    public float ChargeFrom;
+    public long ChargeAt;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

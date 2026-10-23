@@ -33,8 +33,8 @@ public struct Incident
     public byte Snagged;         // 막힌 채 다시 보낸 번 (같은 까닭)
     public int Id;               // 사건 번호 (해 본 방법 · 지어낸 계획이 가리킨다 — 목록에서 지워져도 그대로)
     // 막힌 로봇 풀기 (docs/MIND.md 3단): 이 일에서 놓아준 로봇 · 때 (한동안 다시 보내지 않는다 — 다른 로봇이 간다)
-    public int Dropped;
-    public long DroppedAt;
+    public int Dropped, Dropped2;
+    public long DroppedAt, DroppedAt2;
 }
 
 /// <summary>주컴퓨터가 돌려 본 미래 하나 (안 하나의 결과).</summary>
@@ -105,6 +105,10 @@ public sealed partial class ShipMind : IEngine
     public float[] RoomHCN, RoomHCl;            // ② 사고 화학: 방에서 가장 짙은 시안화수소 · 염화수소 (ppm — ISS의 CSA-CP처럼 공기 센서 묶음이 잰다)
     /// <summary>② (마): 방에서 가장 짙은 산소 비율 (%) · 불붙는 기체의 폭발 하한 몫 (%LEL = 수소/4% + 메탄/5%) · 수소 · 메탄 (ppm) · 그 칸.</summary>
     public float[] RoomO2Pct = Array.Empty<float>(), RoomLel = Array.Empty<float>(), RoomH2 = Array.Empty<float>(), RoomCH4 = Array.Empty<float>();
+    /// <summary>방마다 산소 분압 평균 (기압 50kPa 넘는 칸 · kPa) · 그 칸 수 — 산소 발생기 조절 센서 값과 견준다 (docs/MIND.md 3단 덧붙임).</summary>
+    public float[] RoomPpO2 = Array.Empty<float>();
+    public int[] RoomPpN = Array.Empty<int>();
+    private long _o2Off;   // 조절 센서가 제 센서들의 평균보다 10% 넘게 낮게 읽기 시작한 때 (0: 아님)
     public int[] RoomLelCell = Array.Empty<int>();
     public int[] RoomToxCell;                   // 독한 기체가 가장 짙은 칸
     private long _tick;
@@ -149,7 +153,7 @@ public sealed partial class ShipMind : IEngine
         F = f; L = f.L; T = f.T;
         int nr = L.Rooms.Count;
         RoomKPa = new float[nr]; RoomKPaPrev = new float[nr]; RoomO2 = new float[nr]; RoomSoot = new float[nr]; RoomSootPrev = new float[nr]; RoomCO = new float[nr]; RoomCO2 = new float[nr]; RoomTemp = new float[nr]; RoomCO2Hold = new byte[nr];
-        RoomHot = new int[nr]; RoomAirT = new float[nr]; GaveAirAt = Enumerable.Repeat(-100, nr).ToArray(); DoorWasOpen = new byte[L.Doors.Count]; RoomNH3 = new float[nr]; RoomO3 = new float[nr]; RoomHCN = new float[nr]; RoomHCl = new float[nr]; RoomToxCell = new int[nr]; RoomO2Pct = new float[nr]; RoomLel = new float[nr]; RoomH2 = new float[nr]; RoomCH4 = new float[nr]; RoomLelCell = new int[nr]; RoomSeen = new byte[nr]; _stale = new byte[nr]; RoomMoles = new float[nr * 6];
+        RoomHot = new int[nr]; RoomAirT = new float[nr]; GaveAirAt = Enumerable.Repeat(-100, nr).ToArray(); DoorWasOpen = new byte[L.Doors.Count]; RoomNH3 = new float[nr]; RoomO3 = new float[nr]; RoomHCN = new float[nr]; RoomHCl = new float[nr]; RoomToxCell = new int[nr]; RoomO2Pct = new float[nr]; RoomPpO2 = new float[nr]; RoomPpN = new int[nr]; RoomLel = new float[nr]; RoomH2 = new float[nr]; RoomCH4 = new float[nr]; RoomLelCell = new int[nr]; RoomSeen = new byte[nr]; _stale = new byte[nr]; RoomMoles = new float[nr * 6];
         _roomDoors = new int[nr][];
         _roomVent = new int[nr];
         Span<int> nb = stackalloc int[4];
@@ -272,7 +276,8 @@ public sealed partial class ShipMind : IEngine
             RoomSeen[r] = link;
             _stale[r] = (byte)(fresh ? 0 : 1);
             if (!fresh) { RoomMoles[r * 6 + _reads % 6] = RoomMoles[r * 6 + (_reads + 5) % 6]; continue; }
-            double p = 0, o2 = double.MaxValue, soot = 0, co = 0, co2 = 0, temp = 0, nh3 = 0, o3 = 0, hcn = 0, hcl = 0, worst = 0, o2pct = 0, lel = 0, h2 = 0, ch4 = 0;
+            double p = 0, o2 = double.MaxValue, soot = 0, co = 0, co2 = 0, temp = 0, nh3 = 0, o3 = 0, hcn = 0, hcl = 0, worst = 0, o2pct = 0, lel = 0, h2 = 0, ch4 = 0, ppo2 = 0;
+            int ppn = 0;
             int hot = cells[0], tox = cells[0], lelCell = cells[0];
             double n = 0, nt = 0, na = 0;
             foreach (int c in cells)
@@ -289,6 +294,7 @@ public sealed partial class ShipMind : IEngine
                 double bad = Tox(a, oz, cn, cl);
                 if (bad > worst) { worst = bad; tox = c; }
                 if (pc > 40) o2pct = Math.Max(o2pct, Ppm(T.gO2) / 1e4);
+                if (pc > 50) { ppo2 += m > 1e-12 ? pc * F.Gas(T.gO2, c) / m : 0; ppn++; }
                 double hh = Ppm(T.gH2), me = Ppm(T.gCH4), le = hh / 400 + me / 500;
                 h2 = Math.Max(h2, hh); ch4 = Math.Max(ch4, me);
                 if (le > lel) { lel = le; lelCell = c; }
@@ -303,7 +309,7 @@ public sealed partial class ShipMind : IEngine
             // 이산화탄소가 5000ppm(ISS 행동 한계 약 4mmHg)을 넘어 머문 읽기 수 — 4000 아래로 내려가야 풀린다 (달리는 사람 곁에서 잠깐 짙어졌다 옅어지는 것으로 경보가 깜빡이지 않게)
             if (RoomCO2[r] > 5000) { if (RoomCO2Hold[r] < 255) RoomCO2Hold[r]++; } else if (RoomCO2[r] < 4000) RoomCO2Hold[r] = 0;
             RoomHot[r] = hot; RoomNH3[r] = (float)nh3; RoomO3[r] = (float)o3; RoomHCN[r] = (float)hcn; RoomHCl[r] = (float)hcl; RoomToxCell[r] = tox;
-            RoomO2Pct[r] = (float)o2pct; RoomLel[r] = (float)lel; RoomH2[r] = (float)h2; RoomCH4[r] = (float)ch4; RoomLelCell[r] = lelCell;
+            RoomO2Pct[r] = (float)o2pct; RoomPpO2[r] = ppn > 0 ? (float)(ppo2 / ppn) : 0; RoomPpN[r] = ppn; RoomLel[r] = (float)lel; RoomH2[r] = (float)h2; RoomCH4[r] = (float)ch4; RoomLelCell[r] = lelCell;
         }
         // 열린 문 · 압력 맞춤 밸브로 더 낮은 방과 이어진 방: 공기를 그리로 주는 중 (새는 방의 문을 열면 옆 방 기압이 한꺼번에 떨어진다 — 그 방의 구멍이 아니다)
         Span<int> nb = stackalloc int[4];
@@ -371,7 +377,7 @@ public sealed partial class ShipMind : IEngine
                 return;
             }
         }
-        Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2, Dropped = -1 });
+        Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2, Dropped = -1, Dropped2 = -1 });
         Say(sim, detail == null ? $"{RoomName(room)}: {KindName(k)}" : $"{RoomName(room)}: {KindName(k)} — {detail}");
     }
 
@@ -462,13 +468,27 @@ public sealed partial class ShipMind : IEngine
                 bool fresh = Find(IncidentKind.O2Rich, rich) < 0;
                 Raise(sim, IncidentKind.O2Rich, rich, _roomVent[rich], most, -1, _net?.O2DriftCause ?? 0, $"산소 {most:0.0}% — 불꽃 · 조리를 멈추세요");
                 Mark(IncidentKind.O2Rich, rich);
-                if (_net != null && _net.O2Gain < 0.98 && !Imagining)
+                double own = ShipO2Own();
+                if (_net != null && own > 0 && _net.O2Reading < 0.95 * own && !Imagining)   // 두 읽기가 어긋난다 (숨은 고장값은 모른다 — 제 센서들의 평균과 조절 센서가 보낸 값을 견준다)
                 {
-                    int saw = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터 센서가 {RoomName(rich)}의 산소 {most:0.0}%를 읽었다 — 산소 발생기 조절 센서는 {_net.O2Reading:0.0}kPa로 읽고 있었다", sim.Tick);
-                    _net.CalibrateO2(sim, saw);
+                    int saw = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터 센서가 {RoomName(rich)}의 산소 {most:0.0}%를 읽었다 — 제 센서들의 평균 산소 분압 {own:0.0}kPa · 산소 발생기 조절 센서는 {_net.O2Reading:0.0}kPa로 읽고 있었다", sim.Tick);
+                    _net.CalibrateO2(sim, saw); _o2Off = 0;
                     Say(sim, "산소 발생기 조절 센서가 낮게 읽고 있었다 — 제 센서에 맞춰 다시 맞췄다");
                 }
-                else if (fresh && _net != null && _net.O2Gain >= 0.98) { }   // 센서는 바르다 — 다른 까닭 (묻는 일은 판단 엔진에)
+                else if (fresh) { }   // 두 읽기가 맞다 — 다른 까닭 (묻는 일은 판단 엔진에)
+            }
+        }
+        // 산소 센서 견주기 (docs/MIND.md 3단 덧붙임): 조절 센서가 제 센서들의 평균보다 10% 넘게 낮게 10분 내내 읽으면 — 방이 짙어지기 전에 다시 맞춘다
+        if (_net != null && !Imagining)
+        {
+            double own = ShipO2Own();
+            if (own > 5 && _net.O2Reading < 0.9 * own) { if (_o2Off == 0) _o2Off = sim.Tick; }
+            else _o2Off = 0;
+            if (_o2Off != 0 && sim.Tick - _o2Off >= Time.Minutes(10))
+            {
+                int saw = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터 센서들의 평균 산소 분압 {own:0.0}kPa — 산소 발생기 조절 센서는 10분 내내 {_net.O2Reading:0.0}kPa로 낮게 읽었다", sim.Tick);
+                _net.CalibrateO2(sim, saw); _o2Off = 0;
+                Say(sim, "산소 발생기 조절 센서가 제 센서들보다 낮게 읽는다 — 짙어지기 전에 다시 맞췄다");
             }
         }
         // 샘: 문(열렸거나 · 닫힌 문의 틈)으로 이어진 새는 방들은 한 구멍으로 함께 빠지는 것 — 그중 기압이 가장 낮은 방(구멍에 가장 가깝다) 하나만 사건으로 (방마다 봉쇄 · 로봇을 보내지 않게)
@@ -1103,7 +1123,7 @@ public sealed partial class ShipMind : IEngine
                     if (from < 0 || Rank(Incidents[from].Kind) <= Rank(x.Kind)) continue;
                 }
                 if (a.Id == x.RobotA && Busy(x.RobotA) || a.Id == x.RobotB && Busy(x.RobotB)) continue; // 이 사건에 가 있는 로봇 (일을 마쳤으면 다시 보낼 수 있다)
-                if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10)) continue;            // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다
+                if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10) || a.Id == x.Dropped2 && sim.Tick - x.DroppedAt2 < Time.Minutes(10)) continue;   // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다 (둘까지 — A → B → A가 되지 않게)
                 int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + HandCost(a, g) + (from >= 0 ? 100000 : 0);   // 길 거리 (벽 너머 직선이 아니라 문을 돌아) + 손에 든 것
                 if (d < bd) { bd = d; best = a.Id; bestFrom = from; }
             }
@@ -1147,6 +1167,14 @@ public sealed partial class ShipMind : IEngine
     }
 
     /// <summary>막힌 로봇 풀기: 몸이 그 일을 못 하거나 (팔 · 다리) · 막힌 뒤 3분 넘게 그 일을 하지 않으면 놓아준다 — 맡김을 거두고 사건에서 뺀다 (일지에 까닭).</summary>
+    /// <summary>제 센서들이 읽은 배의 평균 산소 분압 (보이는 방 · 기압 50kPa 넘는 칸 — 칸 수로 가중 · 0: 읽은 것 없음).</summary>
+    public double ShipO2Own()
+    {
+        double sum = 0; int n = 0;
+        for (int r = 0; r < RoomPpN.Length; r++) if (RoomSeen[r] != 0 && RoomPpN[r] > 0) { sum += RoomPpO2[r] * RoomPpN[r]; n += RoomPpN[r]; }
+        return n > 0 ? sum / n : 0;
+    }
+
     private void ReleaseStuck(Sim sim, ref Incident x, GoalKind g, int rb)
     {
         if (_mind == null || rb < 0 || rb >= _mind.Agents.Count) return;
@@ -1158,6 +1186,7 @@ public sealed partial class ShipMind : IEngine
         if (!body && !idle) return;
         c.AssignedUntil = sim.Tick;
         if (x.RobotA == rb) x.RobotA = -1; else if (x.RobotB == rb) x.RobotB = -1;
+        x.Dropped2 = x.Dropped; x.DroppedAt2 = x.DroppedAt;   // 앞서 놓아준 로봇도 기억한다
         x.Dropped = rb; x.DroppedAt = sim.Tick;
         Released++;
         Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일에서 놓아준다 — {(body ? (_mind.LegsOk(a) ? Mind.SnagText(SnagKind.NoHands) : Mind.SnagText(SnagKind.NoLegs)) : Mind.SnagText(c.Snag))} → 다른 로봇");
@@ -1514,7 +1543,7 @@ public sealed partial class ShipMind : IEngine
         w.List(Incidents);
         w.I32(Log.Count); foreach (var (t, s) in Log) { w.I64(t); w.Str(s); }
         w.Bool(Online);
-        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomHCN); w.Arr(RoomHCl); w.Arr(RoomToxCell); w.Arr(RoomO2Pct); w.Arr(RoomLel); w.Arr(RoomH2); w.Arr(RoomCH4); w.Arr(RoomLelCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
+        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomHCN); w.Arr(RoomHCl); w.Arr(RoomToxCell); w.Arr(RoomO2Pct); w.Arr(RoomLel); w.Arr(RoomH2); w.Arr(RoomCH4); w.Arr(RoomLelCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince); w.Arr(RoomPpO2); w.Arr(RoomPpN); w.I64(_o2Off);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w); SaveParts(w); SaveComms(w); SaveVoyage(w); SaveCalendar(w); SaveWash(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
@@ -1528,7 +1557,7 @@ public sealed partial class ShipMind : IEngine
         Incidents = r.List<Incident>();
         Log.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); Log.Add((t, r.Str() ?? "")); }
         Online = r.Bool();
-        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomHCN); r.ArrInto(RoomHCl); r.ArrInto(RoomToxCell); r.ArrInto(RoomO2Pct); r.ArrInto(RoomLel); r.ArrInto(RoomH2); r.ArrInto(RoomCH4); r.ArrInto(RoomLelCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
+        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomHCN); r.ArrInto(RoomHCl); r.ArrInto(RoomToxCell); r.ArrInto(RoomO2Pct); r.ArrInto(RoomLel); r.ArrInto(RoomH2); r.ArrInto(RoomCH4); r.ArrInto(RoomLelCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>(); r.ArrInto(RoomPpO2); r.ArrInto(RoomPpN); _o2Off = r.I64();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r); LoadParts(r); LoadComms(r); LoadVoyage(r); LoadCalendar(r); LoadWash(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }

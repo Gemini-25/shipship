@@ -224,7 +224,13 @@ public sealed partial class Mind
         {
             // 한번 누우면 다섯 시간은 잔다 · 목이 몹시 마르면 깬다 (마실 것이 없어도 30분은 눈을 붙인다)
             case UseKind.Sleep: done |= c.Sleepy < 0.03f && t - c.StepStart >= Time.Hours(5) || a.IsPerson && (c.Thirst > WakeThirst || Urge(a) > 0.85f) && t - c.StepStart >= Time.Minutes(30); break;   // 목이 마르거나 마려우면 깬다
-            case UseKind.Charge: done |= c.Battery >= 0.98f && t - c.StepStart >= Time.Minutes(10); break; // 다 차면 독에서 10분씩 기다린다
+            case UseKind.Charge:
+                // 전지가 오르는지 잰다: 1% 오르면 다시 재기 시작 · 줄면 바닥을 낮춘다 — 바닥에서 6분 동안 1%도 오르지 않으면 죽은 독
+                if (t <= c.StepStart || c.Battery >= c.ChargeFrom + 0.01f) { c.ChargeFrom = c.Battery; c.ChargeAt = t; }
+                else if (c.Battery < c.ChargeFrom) c.ChargeFrom = c.Battery;
+                done |= c.Battery >= 0.98f && t - c.StepStart >= Time.Minutes(10);   // 다 차면 독에서 10분씩 기다린다
+                if (!done && t - c.ChargeAt >= Time.Minutes(6) && c.Battery < 0.9f && DockDied(sim, a)) return;
+                break;
             case UseKind.Work: done |= !InWindow(Time.HourOfDay(t), c.ShiftHour, 8); break;
         }
         if (use == UseKind.Cook) CookStep(sim, a, st, done);

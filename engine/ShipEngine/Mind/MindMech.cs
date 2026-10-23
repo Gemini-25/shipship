@@ -43,4 +43,46 @@ public sealed partial class Mind
         if ((fresh & 1) != 0 && a.Plan.Count > 0) Fail(sim, a, "다리가 망가져 걸을 수 없다", SnagKind.NoLegs);
         else if ((fresh & 2) != 0 && (planHands || HandGoal(c.Goal))) Fail(sim, a, "팔이 상해 손을 쓸 수 없다", SnagKind.NoHands);
     }
+
+    /// <summary>
+    /// 충전할 독 (docs/MIND.md 3단 덧붙임 — 죽은 충전독): 제 독이 죽지 않았으면 제 독 · 아니면 죽지 않은 가장 가까운 독 (남이 차고 있는 독은 뒤로) ·
+    /// 다 죽었으면 지금 자리에서 가장 가까운 독에서 기다린다 (전원이 돌아오면 그 자리에서 찬다). 죽은 독의 기억은 2시간 — 그 뒤엔 다시 믿어 본다.
+    /// </summary>
+    private int ChargeDock(Agent a)
+    {
+        ref var c = ref a.C;
+        if (c.DeadDocks != 0 && _nowTick - c.DeadDocksAt > Time.Hours(2)) c.DeadDocks = 0;
+        if (c.DeadDocks == 0) return c.Dock;
+        var docks = c.Kind == AgentKind.Drone ? _droneDocks : _docks;
+        int own = DockIndex(docks, c.Dock);
+        if (own < 0 || (c.DeadDocks & (1UL << own)) == 0) return c.Dock;
+        int best = -1, bd = int.MaxValue, near = -1, nd = int.MaxValue;
+        for (int k = 0; k < docks.Length && k < 64; k++)
+        {
+            int cell = L.Furniture[docks[k]].Cells[0];
+            int d = PathDist(c.Cell, cell);
+            if (d < nd) { nd = d; near = cell; }
+            if ((c.DeadDocks & (1UL << k)) != 0) continue;
+            foreach (var o in Agents) if (o != a && o.C.Up != 0 && o.C.Goal == GoalKind.Charge && o.C.GoalTarget == cell) { d += 40; break; }
+            if (d < bd) { bd = d; best = cell; }
+        }
+        return best >= 0 ? best : near >= 0 ? near : c.Dock;
+    }
+
+    private int DockIndex(int[] docks, int cell)
+    {
+        for (int k = 0; k < docks.Length && k < 64; k++) if (L.Furniture[docks[k]].Cells[0] == cell) return k;
+        return -1;
+    }
+
+    /// <summary>붙은 독이 6분 동안 전지를 채우지 않았다 — 처음 겪는 독이면 죽은 독으로 적고 (막힘 · 원인 마디) 다른 독을 찾는다 · 이미 아는 죽은 독이면 (다 죽어 기다리는 중) 그대로 기다린다.</summary>
+    private bool DockDied(Sim sim, Agent a)
+    {
+        ref var c = ref a.C;
+        int k = DockIndex(c.Kind == AgentKind.Drone ? _droneDocks : _docks, c.Cell);
+        if (k < 0 || (c.DeadDocks & (1UL << k)) != 0) return false;
+        c.DeadDocks |= 1UL << k; c.DeadDocksAt = sim.Tick;
+        Fail(sim, a, "충전독이 전지를 채우지 않는다", SnagKind.DockDead, c.Cell, L.FurnitureAt[c.Cell]);
+        return true;
+    }
 }
