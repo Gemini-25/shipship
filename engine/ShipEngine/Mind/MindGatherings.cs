@@ -307,7 +307,7 @@ public sealed partial class Mind
             if (m.Owner == accuser && m.About == best && m.Topic is Topic.Blame or Topic.Fight or Topic.Gossip or Topic.Hurt or Topic.Death && m.Tick > rt) { rt = m.Tick; root = m.Cause; }
         int caller = soc.Rep >= 0 && PersonAlive(soc.Rep) && soc.Rep != best ? soc.Rep : accuser;
         return Call(sim, CouncilKind.Trial, caller, best, accuser,
-            $"{Ko.I(NameOf(caller))} 회의를 소집했다 — {Ko.I(NameOf(accuser))} {Ko.Eul(NameOf(best))} 고발했다 (모두의 원망 {bs:0.0})", root) == null;
+            $"{Ko.I(NameOf(caller))} 회의를 소집했다 — {Ko.I(NameOf(accuser))} {Ko.Eul(NameOf(best))} 고발했다", root) == null;
     }
 
     /// <summary>배급 반란: 배급 중 이틀 넘게 다들 배고프다 — 대표나 가장 배고픈 이가 부른다 (이미 배급을 거부하는 이가 있으면 아니다).</summary>

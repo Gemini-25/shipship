@@ -30,6 +30,11 @@ public sealed partial class Director
     public const int SpotRadius = 8;
     public const double HoldScreenSec = 8;      // 한 장면에 적어도 (화면 초)
     public const double CalmSpeed = 60, OmenSpeed = 8, DangerSpeed = 2, CriticalSpeed = 0.5; // 화면 1초에 틱
+    /// <summary>함장이 고른 하루 길이 (화면 분 · 0이면 예전 고정 빠르기). 고르면 조용함의 빠르기를 그때그때 셈한다 (남은 조용한 틱 ÷ 남은 화면 시간) ·
+    /// 조짐 · 위험의 느린 시간은 하루 예산(목표의 4할)에서 꺼내 쓰고 · 다 쓰면 무거운 조짐(다툼 · 탓 · 감지)만 1분 늦춘다 · 결정적 순간은 예산 밖 (docs/REVIEW.md ① · 함장 결정).</summary>
+    public double DayMinutes;
+    public const double SlowShare = 0.4, CalmFloor = 20, CalmCeiling = 20_000;
+
     public const int RingEvery = 50, RingSize = 30;   // 2분마다 · 1시간치
     public const float HighlightAt = 80;
 
@@ -58,7 +63,12 @@ public sealed partial class Director
     private bool _resting;                      // 볼 것이 없어 사람들의 일상(없으면 배 가운데)을 보고 있다 (첫 일에 바로 간다)
     private double _sinceSwitch;
     private double _criticalLeft;               // 아주 느리게 남은 화면 초
-    private long _lastOmen = long.MinValue / 2, _lastDanger = long.MinValue / 2;
+    private long _lastOmen = long.MinValue / 2, _lastDanger = long.MinValue / 2, _lastHeavyOmen = long.MinValue / 2;
+    private int _omenRoot;                      // 지금 열린 조짐 장면의 뿌리 (같은 뿌리의 조짐은 다시 늘리지 않는다)
+    private long _budgetDay = -1;
+    private double _screenToday, _slowToday;    // 오늘 쓴 화면 초 · 그 가운데 조짐 · 위험에 쓴 초
+    public double ScreenTodaySec => _screenToday;
+    public double SlowTodaySec => _slowToday;
     private readonly Dictionary<int, byte> _wasInDanger = new();
     private readonly Dictionary<int, long> _lastNear = new(); // 한 사람의 간발의 차는 30분에 한 번만 (쓰러졌다 깨기를 되풀이해도 한 번)
 
@@ -141,7 +151,7 @@ public sealed partial class Director
             DayNote(sim, f, w, cell, AgentOf(mind, f), rec);   // ⑬ 이야기 편집 — 오늘의 장
             if (w >= ChainFactAt && cell >= 0) Recent(cell, root, AgentOf(mind, f), score, t);
             if (cell >= 0 && cell < Heat.Length) Heat[cell] += score;
-            if (Omen(f)) _lastOmen = t;
+            if (Omen(f)) OmenSeen(f, w, root, t);
             if (Critical(f.Kind)) { _criticalLeft = 3; _lastDanger = t; }
             if (score > bestScore && cell >= 0) { bestScore = score; best = f; best.Cell = cell; }
         }
@@ -290,12 +300,39 @@ public sealed partial class Director
 
     // ───────────────────────── 시간 ─────────────────────────
 
+    /// <summary>조짐은 장면 단위: 가벼운 알아챔 · 외침은 카메라만 (관심은 이미 더했다 — 큰 배에서 하나마다 3분씩 늦어 하루가 72~131분이던 것) ·
+    /// 같은 뿌리는 열린 창을 다시 늘리지 않는다.</summary>
+    private void OmenSeen(in Fact f, float w, int root, long t)
+    {
+        if (f.Kind is FactKind.Noticed or FactKind.Warned) return;
+        if (Heavy(f)) _lastHeavyOmen = t;
+        if (root != 0 && root == _omenRoot && t - _lastOmen < Time.Minutes(3)) return;
+        _lastOmen = t; _omenRoot = root;
+    }
+    private static bool Heavy(in Fact f) => f.Kind is FactKind.Blamed or FactKind.Sensed or FactKind.ComputerAlarm or FactKind.WallCrack or FactKind.Flare or FactKind.DebrisNear
+        || f.Kind == FactKind.Talk && (TalkEnd)(int)f.Size == TalkEnd.Argue;
+
     private void Pace(long t, double screen)
     {
-        if (_criticalLeft > 0) { _criticalLeft -= screen; Speed = CriticalSpeed; Mood = "결정적 순간"; CriticalScreenSec += screen; return; }
-        if (t - _lastDanger < Time.Minutes(1)) { Speed = DangerSpeed; Mood = "위험"; DangerScreenSec += screen; return; }
-        if (t - _lastOmen < Time.Minutes(3)) { Speed = OmenSpeed; Mood = "조짐"; OmenScreenSec += screen; return; }
-        Speed = CalmSpeed; Mood = "조용함"; CalmScreenSec += screen;
+        if (DayMinutes > 0)
+        {
+            long day = t / Time.TicksPerDay;
+            if (day != _budgetDay) { _budgetDay = day; _screenToday = 0; _slowToday = 0; }
+            _screenToday += screen;
+        }
+        if (_criticalLeft > 0) { _criticalLeft -= screen; Speed = CriticalSpeed; Mood = "결정적 순간"; CriticalScreenSec += screen; return; }   // 예산 밖
+        bool budgetLeft = DayMinutes <= 0 || _slowToday < SlowShare * DayMinutes * 60;
+        if (t - _lastDanger < Time.Minutes(1)) { Speed = DangerSpeed; Mood = "위험"; DangerScreenSec += screen; _slowToday += screen; return; }
+        if (t - _lastOmen < Time.Minutes(3) && (budgetLeft || t - _lastHeavyOmen < Time.Minutes(1))) { Speed = OmenSpeed; Mood = "조짐"; OmenScreenSec += screen; _slowToday += screen; return; }
+        Speed = DayMinutes > 0 ? CalmNow(t) : CalmSpeed; Mood = "조용함"; CalmScreenSec += screen;
+    }
+
+    /// <summary>하루 예산의 조용함 빠르기: 남은 틱 ÷ 남은 화면 초 — 조용한 날은 꼭 목표만큼 · 조짐 · 위험에 쓴 만큼 남은 조용함이 빨라진다 (기계가 못 따라가면 넘는다 — 위 줄이 정직하게 보인다).</summary>
+    private double CalmNow(long t)
+    {
+        long left = (_budgetDay + 1) * Time.TicksPerDay - t;
+        double screenLeft = Math.Max(1, DayMinutes * 60 - _screenToday);
+        return Math.Clamp(left / screenLeft, CalmFloor, CalmCeiling);
     }
 
     // ───────────────────────── 하이라이트 ─────────────────────────

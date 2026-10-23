@@ -89,7 +89,20 @@ public sealed class LiveShow
 
     // ── 함장의 손 (화면 쪽에서 바꾼다 — Godot은 명령 줄로 작업 스레드에 넘긴다) ──
     public bool Paused;
-    public double SpeedOverride;          // 0: 연출이 정한 빠르기 · 그 밖: 화면 1초에 틱
+    public double SpeedOverride;          // 0: 연출이 정한 빠르기 · 그 밖: 브레이크 없는 고정 빠르기 (화면 1초에 틱 — Shift+숫자)
+    /// <summary>하루 길이 목표 (화면 분 · 0이면 연출의 예전 고정 빠르기) — 단추는 이것을 고른다: 조용할 때의 상한일 뿐 · 조짐 · 위험 · 결정적 순간엔 연출이 늘 늦춘다.</summary>
+    public double DayMinutes { get => Dir.DayMinutes; set => Dir.DayMinutes = value; }
+    public const double DefaultDayMinutes = 3;   // 함장 결정 (docs/REVIEW.md ① 질문 2 — 기본 하루 3분 · 게임과 --live가 띄울 때 고른다 · 0이면 예전 고정 빠르기)
+    /// <summary>한 장에 세계를 돌리는 시간 (ms) — 넘으면 남은 틱은 버린다 (그림이 끊기지 않게 · 실제 빠르기는 위 줄에 정직하게).</summary>
+    public const double FrameBudgetMs = 10;
+    /// <summary>실제로 나아간 빠르기 (화면 1초에 틱 · 0.5초마다 고침).</summary>
+    public double Rate { get; private set; }
+    private double _rateTicks, _rateSec, _tickMs = 1;
+    /// <summary>손으로 카메라를 옮긴 뒤 이만큼 손이 쉬면 연출의 카메라로 돌아간다 (함장 결정 — '손대면 잠깐 양보하고 다시 맡는다').</summary>
+    public const double HandHoldSec = 8;
+    private double _handAt;
+    public bool HandCam => !Follow && !Overview && !FollowSelected;
+    public double HandLeft => HandCam ? Math.Max(0, HandHoldSec - (_anim - _handAt)) : 0;
     public bool Follow = true;            // 연출의 카메라를 따라간다 (끄면 손으로)
     public bool Overview;                 // 배 전체
     public double CamX, CamY;             // 화면 가운데 (칸 · 소수)
@@ -105,6 +118,7 @@ public sealed class LiveShow
     private double _carry, _anim;
     private readonly (int x0, int y0, int x1, int y1) _bbox;
     private int _lastHighlights;
+    private string _lastTitle = "";
     public string Banner = "";            // 새 하이라이트가 생기면 몇 초 띄운다
     public double BannerLeft;
     public const double BannerSec = 6;
@@ -117,7 +131,7 @@ public sealed class LiveShow
     public LiveShow(Sim sim, string shipName)
     {
         Sim = sim; ShipName = shipName;
-        Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다)
+        Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다) · 하루 목표는 띄우는 쪽이 고른다 (게임 · --live는 3분)
         Painter = new Painter(sim.Layout) { Nudge = Nudge };
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
@@ -154,6 +168,7 @@ public sealed class LiveShow
     {
         for (long i = 0; i < ticks; i++) { Sim.Step(); Dir.Observe(Sim); }
         WatchComputer(0);
+        _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
     }
 
     /// <summary>화면 시간 realSec만큼 나아간다 — 돌린 틱 수.</summary>
@@ -176,24 +191,36 @@ public sealed class LiveShow
                 n = (int)Math.Min(n, next.From - _replay.Tick);
             if (_carry >= 1) _carry -= Math.Floor(_carry);   // 밀린 것은 버린다 (다음 장에 몰아 돌리지 않는다)
             var w = World; var d = View;
-            d.Foresee = Speed <= Director.CalmSpeed;   // 함장이 빨리 감는 동안은 미리 보지 않는다 (복제가 1초에 수십 번 — 볼 틈도 없다)
+            d.Foresee = SpeedOverride <= 0 || SpeedOverride <= Director.CalmSpeed;   // 고정 빠르기로 빨리 감는 동안은 미리 보지 않는다 (복제가 1초에 수십 번 — 볼 틈도 없다)
+            if (_replay == null) n = Math.Min(n, Math.Max(1, (int)(FrameBudgetMs / Math.Max(0.01, _tickMs))));   // 이 장의 시간 예산 안에서만 (지난 틱들의 걸린 시간으로)
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            double v0 = Speed;
+            int ran = 0;
             for (int i = 0; i < n; i++)
             {
                 if (i == n - 1) Remember();
                 AL("자세 · 걸음");
                 w.Step(); AL("세계");
                 d.Observe(w); AL("연출");
+                ran++;
                 if (_replay != null && w.Tick >= _replayEnd) break;
+                if (SpeedOverride <= 0 && _replay == null && d.Speed < v0 * 0.5) break;   // 묶음 가운데 분위기가 무거워졌다 — 그 틱에서 멈춘다 (빨리 지나치지 않게)
             }
+            if (ran > 0) _tickMs = 0.8 * _tickMs + 0.2 * (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / ran;
+            if (ran < n) _carry = 0;   // 남은 틱은 버린다 (다음 장에 몰지 않는다)
+            n = ran;
             if (n > 0) Trace();
             AL("자세 · 걸음");
             if (_replay != null && _replay.Tick >= _replayEnd) StopReplay();
         }
         _anim += realSec;
-        if (Dir.Highlights.Count > _lastHighlights)
+        if (!Paused) { _rateTicks += n; _rateSec += realSec; if (_rateSec >= 0.5) { Rate = _rateTicks / _rateSec; _rateTicks = 0; _rateSec = 0; } }
+        if (HandCam && _anim - _handAt > HandHoldSec) Follow = true;   // 손이 쉬었다 — 연출이 다시 맡는다
+        // 새 하이라이트 · 같은 사슬에서 커진 하이라이트(죽음이 더해져 제목이 바뀌었다)도 띠를 띄운다
+        if (Dir.Highlights.Count > _lastHighlights || Dir.Highlights.Count > 0 && Dir.Highlights[^1].Title != _lastTitle)
         {
-            _lastHighlights = Dir.Highlights.Count;
-            Banner = Dir.Highlights[^1].Title; BannerLeft = BannerSec;
+            _lastHighlights = Dir.Highlights.Count; _lastTitle = Dir.Highlights[^1].Title;
+            Banner = _lastTitle; BannerLeft = BannerSec;
         }
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         TickNotice(realSec);
@@ -481,8 +508,8 @@ public sealed class LiveShow
     }
 
     /// <summary>손으로 카메라 옮기기 (따라가기를 끈다).</summary>
-    public void Pan(double dx, double dy) { Follow = false; Overview = false; FollowSelected = false; var c = Camera(); CamX = c.left + c.w / 2 + dx; CamY = c.top + c.h / 2 + dy; }
-    public void ZoomBy(double f) { if (!FollowSelected) Follow = false; Overview = false; ViewW = Math.Clamp(ViewW * f, MinView, MaxView); }
+    public void Pan(double dx, double dy) { _handAt = _anim; Follow = false; Overview = false; FollowSelected = false; var c = Camera(); CamX = c.left + c.w / 2 + dx; CamY = c.top + c.h / 2 + dy; }
+    public void ZoomBy(double f) { _handAt = _anim; if (!FollowSelected) Follow = false; Overview = false; ViewW = Math.Clamp(ViewW * f, MinView, MaxView); }
 
     /// <summary>지금 화면이 보는 곳 (칸 · 소수): 배 둘레 안으로 맞춘다 (배보다 넓으면 가운데).</summary>
     public (double left, double top, double w, double h) Camera()
@@ -660,7 +687,7 @@ public sealed class LiveShow
     /// <summary>카메라를 그 칸으로 (손으로 옮긴 것과 같다).</summary>
     public void LookAt(int cell)
     {
-        Follow = false; Overview = false; FollowSelected = false;
+        _handAt = _anim; Follow = false; Overview = false; FollowSelected = false;
         (CamX, CamY) = CellDrawn(cell);   // 떨어져 나간 조각의 칸이면 그 조각이 그려진 곳
     }
 
@@ -902,6 +929,13 @@ public sealed class LiveShow
         return true;
     }
 
+    /// <summary>이 빠르기(화면 1초에 틱)면 하루가 화면 얼마인가 — '3분' · '1.5시간' · '24시간'.</summary>
+    public static string DayLength(double ticksPerSec)
+    {
+        double min = Time.TicksPerDay / Math.Max(1e-6, ticksPerSec) / 60;
+        return min < 1 ? $"{min * 60:0}초" : min < 90 ? $"{min:0.#}분" : $"{min / 60:0.#}시간";
+    }
+
     /// <summary>위 줄: 배 · 시각 · 분위기 · 빠르기 · 사람.</summary>
     public string Status()
     {
@@ -910,8 +944,11 @@ public sealed class LiveShow
         int alive = 0, all = 0;
         if (mind != null && life != null)
             foreach (var a in mind.Agents) if (a.IsPerson) { all++; if (life.Bodies[a.C.Body].Alive != 0) alive++; }
-        string speed = Paused ? "멈춤" : $"×{Speed * Time.SecondsPerTick:0}";
-        return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}";
+        // 실제로 나아간 빠르기를 적는다 (고른 빠르기가 아니라 — 기계가 못 따라가면 그만큼) · 그 빠르기면 하루가 화면 몇 분인가
+        double rate = Rate > 0 ? Rate : Speed;
+        string speed = Paused ? "멈춤" : $"{(SpeedOverride > 0 ? "고정 " : "")}×{rate * Time.SecondsPerTick:0} · 하루 {DayLength(rate)}";
+        string hand = HandCam && _replay == null ? $" · 손 카메라 ({HandLeft:0}초 뒤 연출)" : "";
+        return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}{hand}";
     }
 
     /// <summary>
@@ -961,17 +998,20 @@ public sealed class LiveShow
         double least = Math.Min(food, water);
         o.Add(new Gauge("supply", "물자", $"식량 {Days(food)} · 물 {Days(water)}", least < 7 ? 2 : least < 20 ? 1 : 0));
         int burning = chem?.BurningCount ?? 0;
-        o.Add(new Gauge("fire", "불", burning > 0 ? $"{burning}칸이 탄다" : "없다", burning > 0 ? 2 : 0));
+        // 세계의 진실과 주컴퓨터의 앎이 다르면 그 차이를 적는다 (함장 결정 — 둘 다 두고 차이를 적는다 · '아는 것으로만 판단한다'가 화면에서 보인다)
+        bool smFire = w.Find<ShipMind>()?.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Fire) ?? false;
+        o.Add(new Gauge("fire", "불", burning > 0 ? $"{burning}칸이 탄다{(smFire ? "" : " · 주컴퓨터는 아직 모른다")}" : smFire ? "꺼졌다 · 주컴퓨터는 아직 불로 안다" : "없다", burning > 0 ? 2 : smFire ? 1 : 0));
         return o.ToArray();
     }
 
     /// <summary>
-    /// 사건 띠 (UI U4): 주컴퓨터의 사건 목록에서 — 아직인 것(최근 것부터) · 그다음 30분 안에 끝난 것 · 다섯 줄까지.
+    /// 사건 띠 (UI U4): 주컴퓨터의 사건 목록에서 방마다 한 줄 — 아직인 방(최근 것부터) · 그다음 30분 안에 모두 끝난 방(끝난 차례로) · 다섯 줄까지.
+    /// 한 줄에 그 방의 일들('불 · 독한 기체 · 일산화탄소')과 주컴퓨터가 한 일(봉쇄 · 맡긴 로봇 · 부탁한 사람)을 함께 (예전엔 불 하나가 네 줄 · 끝난 줄이 목록 번호 차례로 뒤섞였다).
     /// 주컴퓨터가 아는 것만 (못 보는 방의 일은 띠에도 없다 — 세계의 진실이 아니라 배가 아는 것).
     /// </summary>
     public FeedItem[] Feed()
     {
-        var sm = World.Find<ShipMind>();
+        var sm = World.Find<ShipMind>(); var mind = World.Find<Mind>();
         if (sm == null) return Array.Empty<FeedItem>();
         long now = World.Tick;
         static int LevelOf(IncidentKind k) => k switch
@@ -982,15 +1022,28 @@ public sealed class LiveShow
             _ => 0,
         };
         static string Hm(long t) { long m = t % Time.TicksPerDay * 60 / Time.TicksPerHour; return $"{m / 60:00}:{m % 60:00}"; }
-        FeedItem Item(in Incident x) => new(Hm(x.Active != 0 ? x.Since : x.Ended),
-            $"{(x.Room >= 0 ? sm.RoomName(x.Room) : "배 전체")} · {ShipMind.KindName(x.Kind)}{(x.Active != 0 ? "" : " — 끝")}", LevelOf(x.Kind), x.Cell, x.Active != 0);
-        var o = new List<FeedItem>(5);
-        for (int i = sm.Incidents.Count - 1; i >= 0 && o.Count < 5; i--) if (sm.Incidents[i].Active != 0) o.Add(Item(sm.Incidents[i]));
-        for (int i = sm.Incidents.Count - 1; i >= 0 && o.Count < 5; i--)
+        string Who(int agent) => mind != null && agent >= 0 && agent < mind.Agents.Count ? mind.NameOf(agent) : "";
+        FeedItem Line(List<Incident> xs, bool active, List<Incident>? over = null)
         {
-            var x = sm.Incidents[i];
-            if (x.Active == 0 && now - x.Ended < Time.Minutes(30)) o.Add(Item(x));
+            var top = xs.OrderByDescending(x => LevelOf(x.Kind)).ThenBy(x => x.Since).First();
+            var kinds = xs.OrderByDescending(x => LevelOf(x.Kind)).Select(x => ShipMind.KindName(x.Kind)).Distinct();
+            var did = new List<string>();
+            if (xs.Any(x => x.Sealed != 0)) did.Add("봉쇄");
+            var robots = xs.SelectMany(x => new[] { x.RobotA, x.RobotB }).Where(r => r >= 0).Distinct().Select(Who).Where(n => n.Length > 0).ToList();
+            if (robots.Count > 0) did.Add(string.Join("·", robots) + " 보냄");
+            var asked = xs.Where(x => x.Person >= 0).Select(x => Who(x.Person)).Where(n => n.Length > 0).Distinct().ToList();
+            if (asked.Count > 0) did.Add(string.Join("·", asked) + "에게 부탁");
+            string room = top.Room >= 0 ? sm.RoomName(top.Room) : "배 전체";
+            string ended = over is { Count: > 0 } ? " · 끝: " + string.Join(" · ", over.Select(x => ShipMind.KindName(x.Kind)).Distinct()) : "";   // 같은 방에서 막 끝난 일
+            string text = $"{room} · {string.Join(" · ", kinds)}{ended}{(active ? "" : " — 끝")}{(active && did.Count > 0 ? " — 주컴퓨터: " + string.Join(" · ", did) : "")}";
+            return new FeedItem(Hm(active ? xs.Min(x => x.Since) : xs.Max(x => x.Ended)), text, xs.Max(x => LevelOf(x.Kind)), top.Cell, active);
         }
+        var o = new List<FeedItem>(5);
+        var live = sm.Incidents.Where(x => x.Active != 0).GroupBy(x => x.Room).OrderByDescending(g => g.Max(x => x.Since));
+        foreach (var g in live) { if (o.Count >= 5) break; o.Add(Line(g.ToList(), true, sm.Incidents.Where(x => x.Active == 0 && x.Room == g.Key && now - x.Ended < Time.Minutes(30)).ToList())); }
+        var liveRooms = live.Select(g => g.Key).ToHashSet();
+        var done = sm.Incidents.Where(x => x.Active == 0 && now - x.Ended < Time.Minutes(30) && !liveRooms.Contains(x.Room)).GroupBy(x => x.Room).OrderByDescending(g => g.Max(x => x.Ended));
+        foreach (var g in done) { if (o.Count >= 5) break; o.Add(Line(g.ToList(), false)); }
         return o.ToArray();
     }
 
@@ -1041,20 +1094,36 @@ public sealed class LiveShow
     public void SelectAgent(int id) { Selected = id; FollowSelected = id >= 0; Overview = false; }
 
     /// <summary>아래 줄: 지금 장면의 원인 사슬 (가장 최근 하이라이트가 아직 이어지면) — 아니면 연출 자막.</summary>
+    /// <summary>
+    /// 아래 줄 (docs/REVIEW.md ② — 함장 결정): 지금 보는 장면의 사슬을 마지막 마디부터 (10분 안의 일) · 아니면 막 끝난 하이라이트 (10분 안) ·
+    /// 조용할 때는 카메라가 보는 방의 일상 ('식당 — 김하늘: 밥 짓기 · 이도윤: 놀이판'). 예전엔 몇 시간 지난 하이라이트 제목이 불이 난 동안에도 떠 있었다.
+    /// </summary>
     public string Story()
     {
         var w = World; var d = View;
         if (ShotNow is { } shot) return $"[{shot.Kind}] {shot.Caption}";
+        if (d.SceneRoot != 0 && d.Chains.TryGetValue(d.SceneRoot, out var rec) && rec.Beats.Count > 0 && w.Tick - rec.Beats[^1].Tick < Time.Minutes(10) && rec.Beats[^1].Cause != 0)
+            return Spread(d.SceneRoot, w.Causes.Story(rec.Beats[^1].Cause));
         if (d.Highlights.Count > 0)
         {
             var h = d.Highlights[^1];
-            if (w.Tick - h.Last < Time.Minutes(10) && h.Cause != 0)
-            {
-                string spread = d.SpreadText(h.Root);   // 사슬이 건넌 갈래 (우주 → 선체 → 사람 …)
-                return spread.Length > 0 ? $"[{spread}] {w.Causes.Story(h.Cause)}" : w.Causes.Story(h.Cause);
-            }
+            if (w.Tick - h.Last < Time.Minutes(10) && h.Cause != 0) return Spread(h.Root, w.Causes.Story(h.Cause));
         }
-        return d.Caption;
+        return Daily();
+        string Spread(int root, string story) { string sp = d.SpreadText(root); return sp.Length > 0 ? $"[{sp}] {story}" : story; }   // 사슬이 건넌 갈래 (우주 → 선체 → 사람 …)
+    }
+
+    /// <summary>조용할 때 아래 줄: 카메라 가운데 방의 사람들이 하는 일 (셋까지) — 방에 아무도 없으면 방 이름만.</summary>
+    private string Daily()
+    {
+        var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>();
+        var L = w.Layout;
+        int cx = (int)Math.Clamp(CamX, 0, L.W - 1), cy = (int)Math.Clamp(CamY, 0, L.H - 1);
+        int room = L.Room[L.Index(cx, cy)];
+        if (room < 0 || mind == null || life == null) return "";
+        var who = mind.Agents.Where(a => (!a.IsPerson || a.C.Body >= 0 && a.C.Body < life.Bodies.Count && life.Bodies[a.C.Body].Alive != 0) && mind.RoomOf(a.C.Cell) == room)
+            .OrderBy(a => a.IsPerson ? 0 : 1).Take(3).Select(a => $"{mind.NameOf(a.Id)}: {mind.Thought(a.Id)}").ToList();
+        return who.Count == 0 ? L.Rooms[room].Name : $"{L.Rooms[room].Name} — {string.Join(" · ", who)}";
     }
 
     /// <summary>다시보기: 하이라이트(없으면 가장 최근 것)를 첫 조짐 직전 찍기부터 다시 보여 준다 — 산 세계는 그동안 멈춘다. 고리에 없으면 false.</summary>

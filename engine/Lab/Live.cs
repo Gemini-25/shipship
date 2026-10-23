@@ -18,6 +18,7 @@ public static partial class Program
         foreach (var old in Directory.GetFiles("build/live", "*.png")) File.Delete(old);
         Warmup.Start();   // 게임처럼: 큰 메서드를 처음 부를 때의 멈칫을 미리 (낮은 우선순위 스레드)
         var show = LiveShow.Crewed(ship, seed);
+        show.DayMinutes = LiveShow.DefaultDayMinutes;   // 게임처럼 (기본 하루 3분)
         show.Sim.Measure = true;
         var adv = new List<double>(); var paint = new List<double>(); var mixMs = new List<double>();
         var paintParts = new Dictionary<string, double>();

@@ -42,8 +42,13 @@ public partial class LiveMain : Node2D
     private string[] _ships = Array.Empty<string>();
     private int _shipAt;
     private ulong _seed = 18;
-    private int _speedAt;                                      // 0: 연출이 정한다
-    private static readonly double[] GameSecPerSec = { 0, 1, 10, 60, 600, 3600 };
+    // 빠르기 단추 (docs/REVIEW.md ① — 함장 결정): 하루 길이 목표 (조용할 때의 상한 — 조짐 · 위험 · 결정적 순간엔 연출이 늘 늦춘다) · 실시간 ×1은 따로 ·
+    // 브레이크 없는 고정 빠르기는 Shift+1~5 (×1 · ×10 · ×60 · ×600 · ×3600)
+    private int _speedAt = 2;                                  // 기본 하루 3분 · -2: 고정 빠르기
+    private static readonly string[] SpeedLabels = { "하루 24분", "10분", "3분", "1분", "최대", "×1" };
+    private static readonly double[] DayMinutesAt = { 24, 10, 3, 1, 0.01 };   // '최대' — 조용함은 기계가 되는 만큼 (한 장의 시간 예산)
+    private static readonly double[] FixedGameSecPerSec = { 1, 10, 60, 600, 3600 };
+    private double _escAt = -99, _nAt = -99, _rAt = -99, _clock;   // 항해를 버리는 키는 3초 안에 두 번 (함장 결정)
     private bool _help = true, _meter;
     private double _helpLeft = 12;
     private const double CutDipSec = 0.18;
@@ -139,6 +144,7 @@ public partial class LiveMain : Node2D
                 gen = _gen;
                 while (_cmds.TryDequeue(out _)) { }               // 옛 배에 내린 손은 버린다
                 _show = LiveShow.Crewed(want, _launchSeed);
+                _show.DayMinutes = _speedAt is >= 0 and < 5 ? DayMinutesAt[_speedAt] : LiveShow.DefaultDayMinutes;   // 하루 길이 목표 (기본 3분)
                 if (_skipHours > 0) { _show.FastForward(Time.Hours(_skipHours)); _skipHours = 0; }
                 if (_ignite)
                 {
@@ -168,6 +174,7 @@ public partial class LiveMain : Node2D
 
     public override void _Process(double delta)
     {
+        _clock += delta;
         _cutDip = Math.Max(0, _cutDip - delta);
         var size = GetViewportRect().Size;
         if (size != _lastSize && size.X > 0) { _lastSize = size; _aspect = size.Y / size.X; }
@@ -308,11 +315,15 @@ public partial class LiveMain : Node2D
         // 새 하이라이트
         if (f.Banner.Length > 0 && f.BannerAlpha > 0)
         {
-            var sz = _bold.GetStringSize("★ " + f.Banner, HorizontalAlignment.Left, -1, 24);
-            var r = new Rect2(vp.X / 2 - sz.X / 2 - 20, TopUi + 14, sz.X + 40, 46);
+            // 넘치면 줄을 바꾼다 (두 줄까지 — 예전엔 너비 제한 없이 가운데에 놓여 1,059~2,135px 띠의 양 끝이 화면 밖이었다)
+            string text = "★ " + f.Banner;
+            float maxW = Math.Min(vp.X - 160, 1000);
+            var one = _bold.GetStringSize(text, HorizontalAlignment.Left, -1, 24);
+            var sz = one.X <= maxW ? one : _bold.GetMultilineStringSize(text, HorizontalAlignment.Left, maxW, 24, 2);
+            var r = new Rect2(vp.X / 2 - sz.X / 2 - 20, TopUi + 14, sz.X + 40, sz.Y + 18);
             DrawRect(r, new Color(0.08f, 0.05f, 0.03f, 0.85f * f.BannerAlpha));
             DrawRect(r, new Color(1f, 0.72f, 0.3f, 0.9f * f.BannerAlpha), false, 2);
-            DrawString(_bold, new Vector2(r.Position.X + 20, r.Position.Y + 31), "★ " + f.Banner, HorizontalAlignment.Left, -1, 24, new Color(1f, 0.86f, 0.6f, f.BannerAlpha));
+            DrawMultilineString(_bold, new Vector2(r.Position.X + 20, r.Position.Y + 31), text, HorizontalAlignment.Left, sz.X + 1, 24, 2, new Color(1f, 0.86f, 0.6f, f.BannerAlpha));
         }
 
         // 아래 줄: 지금 장면의 까닭 (원인 사슬) 또는 연출 자막
@@ -489,11 +500,11 @@ public partial class LiveMain : Node2D
     }
 
     /// <summary>고른 사람 · 로봇: 그려진 자리에 고리 · 왼쪽에 카드.</summary>
-    /// <summary>빠르기 단추 (UI U5 — 위 줄 가운데 오른쪽): 멈춤 · 연출 · ×1 · ×10 · ×60 · ×600 · ×3600 — 지금 것은 밝게 · 누르면 바꾼다 (스페이스 · 1~6과 같다).</summary>
+    /// <summary>빠르기 단추 (UI U5 — 위 줄 가운데 오른쪽): 멈춤 · 하루 24분 · 10분 · 3분 · 1분 · 최대 · ×1(실시간) — 지금 것은 밝게 · 누르면 바꾼다 (스페이스 · 1~6과 같다).</summary>
     private void DrawSpeed(LiveFrame f, Vector2 vp)
     {
         _speedHits.Clear();
-        string[] labels = { "연출", "×1", "×10", "×60", "×600", "×3600" };
+        string[] labels = SpeedLabels;
         float h = 24, gap = 4, right = vp.X - 344, y = 8;   // "새 엔진 판" 표지(오른쪽 끝에서 248~330) 왼쪽에
         var widths = labels.Select(l => _font.GetStringSize(l, HorizontalAlignment.Left, -1, 14).X + 16).ToArray();
         float x = right - widths.Sum() - gap * labels.Length - 34;
@@ -555,15 +566,20 @@ public partial class LiveMain : Node2D
             float r = (float)(vp.X / f.CamW * 0.62);
             DrawArc(new Vector2(px, py), r, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.45f, 0.9f), 2.5f);
         }
-        float w = 430, lh = 25, h = 20 + f.Card.Length * lh + 6;
+        // 줄마다 넘치면 세 줄까지 바꾼다 (예전엔 '왜' 줄의 끝이 잘렸다)
+        float w = 430, lh = 25;
+        var lines = f.Card.Select((t, i) => Math.Max(lh, (i == 0 ? _bold : _font).GetMultilineStringSize(t, HorizontalAlignment.Left, w - 28, i == 0 ? 19 : 15, 3).Y + 6)).ToArray();
+        float h = 20 + lines.Sum() + 6;
         var box = new Rect2(16, TopUi + 12, w, h);
         DrawRect(box, new Color(0.03f, 0.04f, 0.07f, 0.88f));
         DrawRect(box, new Color(1f, 0.9f, 0.45f, 0.7f), false, 1.5f);
+        float cy = box.Position.Y + 28;
         for (int i = 0; i < f.Card.Length; i++)
         {
             bool head = i == 0;
-            DrawString(head ? _bold : _font, new Vector2(box.Position.X + 16, box.Position.Y + 28 + i * lh), f.Card[i], HorizontalAlignment.Left, w - 28, head ? 19 : 15,
+            DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16, cy), f.Card[i], HorizontalAlignment.Left, w - 28, head ? 19 : 15, 3,
                 head ? new Color(1f, 0.92f, 0.65f) : new Color(0.86f, 0.89f, 0.95f));
+            cy += lines[i];
         }
     }
 
@@ -575,8 +591,10 @@ public partial class LiveMain : Node2D
         const float FaceBox = 56;
         float Left(PanelRow r) => r.Face >= 0 && _facesTex != null ? FaceBox : 0;
         float inner = w - 36;
+        // 줄 머리도 넘치면 두 줄까지 (예전엔 bold 16 · 604px에서 잘려 L 판 세 줄이 똑같아 보였다)
+        float MainExtra(PanelRow r) => Math.Max(0, _bold.GetMultilineStringSize((r.On ? "● " : "") + r.Main, HorizontalAlignment.Left, inner - Left(r), 16, 2).Y - 22);
         var heights = f.PanelRows.Select(r => Math.Max(r.Face >= 0 && _facesTex != null ? 48f : 0f,
-            26f + (r.Bars is { Length: > 0 } ? 16 : 0) + (r.Sub.Length > 0 ? _font.GetMultilineStringSize(r.Sub, HorizontalAlignment.Left, inner - Left(r), 14, 8).Y + 4 : 0)) + (r.Face >= 0 ? 6 : 0)).ToArray();
+            26f + MainExtra(r) + (r.Bars is { Length: > 0 } ? 16 : 0) + (r.Sub.Length > 0 ? _font.GetMultilineStringSize(r.Sub, HorizontalAlignment.Left, inner - Left(r), 14, 8).Y + 4 : 0)) + (r.Face >= 0 ? 6 : 0)).ToArray();
         float room = bottom - top - 50 - 34;
         int first = 0;
         float Span(int a, int b) { float t = 0; for (int i = a; i <= b && i < heights.Length; i++) t += heights[i]; return t; }
@@ -603,8 +621,8 @@ public partial class LiveMain : Node2D
                 DrawRect(dst.Grow(2), r.On ? new Color(1f, 0.35f, 0.3f) : new Color(0.4f, 0.52f, 0.7f, 0.7f), false, 1);
             }
             var head = r.On ? new Color(1f, 0.88f, 0.55f) : new Color(0.9f, 0.92f, 0.97f);
-            DrawString(_bold, new Vector2(x0 + lx, y + 17), (r.On ? "● " : "") + r.Main, HorizontalAlignment.Left, inner - lx, 16, head);
-            float ty = y + 38;
+            DrawMultilineString(_bold, new Vector2(x0 + lx, y + 17), (r.On ? "● " : "") + r.Main, HorizontalAlignment.Left, inner - lx, 16, 2, head);
+            float ty = y + 38 + MainExtra(r);
             if (r.Bars is { Length: > 0 } bars)
             {
                 float bw = Math.Min(110, (inner - lx) / bars.Length - 8), bx = x0 + lx;
@@ -629,13 +647,30 @@ public partial class LiveMain : Node2D
         DrawString(_font, new Vector2(box.Position.X + 18, box.End.Y - 12), f.PanelFoot, HorizontalAlignment.Left, inner, 14, new Color(0.6f, 0.68f, 0.8f));
     }
 
-    /// <summary>빠르기를 바꾼다: -1 멈춤 · 계속 (스페이스) · 0 연출 · 1~5 배속 (단추 · 1~6). 멈춘 채 빠르기를 고르면 다시 간다.</summary>
+    /// <summary>빠르기를 바꾼다: -1 멈춤 · 계속 (스페이스) · 0~4 하루 길이 목표 (연출이 늦출 때는 늦춘다) · 5 실시간 ×1 (단추 · 1~6). 멈춘 채 빠르기를 고르면 다시 간다.</summary>
     private void SetSpeed(int at)
     {
         if (at < 0) { _cmds.Enqueue(s => s.Paused = !s.Paused); return; }
         _speedAt = at;
-        double tps = GameSecPerSec[_speedAt] / Time.SecondsPerTick;
-        _cmds.Enqueue(s => { s.SpeedOverride = tps; s.Paused = false; });
+        if (at < DayMinutesAt.Length) { double dm = DayMinutesAt[at]; _cmds.Enqueue(s => { s.DayMinutes = dm; s.SpeedOverride = 0; s.Paused = false; }); }
+        else _cmds.Enqueue(s => { s.SpeedOverride = 1 / Time.SecondsPerTick; s.Paused = false; });
+    }
+
+    /// <summary>브레이크 없는 고정 빠르기 (Shift+1~5) — 불이 나도 그 빠르기로 지나간다.</summary>
+    private void SetFixed(int i)
+    {
+        _speedAt = -2;
+        double tps = FixedGameSecPerSec[i] / Time.SecondsPerTick;
+        _cmds.Enqueue(s => { s.SpeedOverride = tps; s.Paused = false; s.Notify($"고정 빠르기 ×{FixedGameSecPerSec[i]:0} — 일이 나도 늦추지 않는다 (1~6으로 연출에 맡긴다)"); });
+    }
+
+    /// <summary>항해를 버리는 키는 3초 안에 두 번 — 처음엔 알리기만.</summary>
+    private bool Twice(ref double at, string what)
+    {
+        if (_clock - at < 3) { at = -99; return true; }
+        at = _clock;
+        _cmds.Enqueue(s => s.Notify($"{what} — 한 번 더 누르면 (이 항해는 사라진다)"));
+        return false;
     }
 
     private void DrawHelp(Vector2 vp)
@@ -643,20 +678,21 @@ public partial class LiveMain : Node2D
         string[] lines =
         {
             "스페이스  멈춤 / 계속",
-            "1 ~ 6  빠르기: 연출 · ×1 · ×10 · ×60 · ×600 · ×3600",
+            "1 ~ 6  하루 길이: 24분 · 10분 · 3분 · 1분 · 최대 · ×1(실시간) — 일이 나면 연출이 늦춘다",
+            "Shift + 1 ~ 5  고정 빠르기 ×1 · ×10 · ×60 · ×600 · ×3600 (늦추지 않는다)",
             "W A S D · 화살표 · 끌기  카메라 옮기기",
             "휠 · + −  확대 / 축소",
             "F  연출을 따라가기      Tab  배 전체",
             "B  방금 그 장면 다시보기 (한 번 더 누르면 돌아오기)",
             "사람 · 로봇 누르기  생각 · 몸 보기 (그를 따라간다)",
-            "N  다음 배      R  같은 배 새로",
+            "N  다음 배      R  같은 배 새로   (두 번 누르기)",
             "L  볼 만했던 장면 (골라서 다시보기)",
             "T  항로 (1~8 · 출항 전에 고르기 · 지금 구간)",
             "J  주컴퓨터 (지금 사건 · 배 형편 · 일지)",
             "C  사슬 (지금 장면은 어디서 시작됐나)      P  사람",
             "O  겹쳐 보기: 공기 → 열 → 연기 → 사슬 선 → 끔",
             "M  다 켬 → 음악 끔 → 소리 끔      U  소리 자막 (켬 / 끔)",
-            "H  도움말      Esc  처음 화면 (기존 판 · 새 엔진 판 고르기)",
+            "H  도움말      Esc  판 닫기 → 고른 이 놓기 → 두 번 누르면 처음 화면",
             $"지금 항로: {_shown?.Route}",
         };
         float w = 470, h = 26 + lines.Length * 26;
@@ -702,14 +738,15 @@ public partial class LiveMain : Node2D
             switch (k.Keycode)
             {
                 case Key.Space: SetSpeed(-1); break;
+                case >= Key.Key1 and <= Key.Key5 when k.ShiftPressed: SetFixed((int)(k.Keycode - Key.Key1)); break;
                 case >= Key.Key1 and <= Key.Key6: SetSpeed((int)(k.Keycode - Key.Key1)); break;
                 case Key.F: _cmds.Enqueue(s => { s.Follow = true; s.Overview = false; s.Selected = -1; s.FollowSelected = false; }); break;
                 case Key.B: _cmds.Enqueue(s => { if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
                 case Key.Tab: _cmds.Enqueue(s => s.Overview = !s.Overview); break;
                 case Key.Equal or Key.KpAdd: _cmds.Enqueue(s => s.ZoomBy(0.85)); break;
                 case Key.Minus or Key.KpSubtract: _cmds.Enqueue(s => s.ZoomBy(1 / 0.85)); break;
-                case Key.N: _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
-                case Key.R: _seed++; _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
+                case Key.N: if (Twice(ref _nAt, "다음 배로")) { _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); _speedAt = 2; Launch(_ships[_shipAt], _seed); } break;
+                case Key.R: if (Twice(ref _rAt, "같은 배를 새로")) { _seed++; _speedAt = 2; Launch(_ships[_shipAt], _seed); } break;
                 case Key.H: _help = !_help; _helpLeft = 0; break;
                 case Key.T: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Route)); break;
                 case Key.L: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Highlights)); break;
@@ -720,7 +757,10 @@ public partial class LiveMain : Node2D
                 case Key.F3: _meter = !_meter; break;
                 case Key.U: _cmds.Enqueue(s => { s.Ears.Captions = !s.Ears.Captions; s.Notify(s.Ears.Captions ? "소리 자막 켬 (무엇이 · 어느 쪽에서)" : "소리 자막 끔"); }); break;
                 case Key.M: _mute = (_mute + 1) % 3; { string t = _mute switch { 0 => "소리 · 음악 켬", 1 => "음악 끔 (배 안 소리만)", _ => "소리 끔" }; _cmds.Enqueue(s => s.Notify(t)); } break;
-                case Key.Escape: GetTree().ChangeSceneToFile(StartScene); break;
+                case Key.Escape:
+                    if (_shown is { Selected: >= 0 }) { _cmds.Enqueue(s => { s.Selected = -1; s.FollowSelected = false; }); break; }   // 고른 이를 먼저 놓는다
+                    if (Twice(ref _escAt, "처음 화면으로")) GetTree().ChangeSceneToFile(StartScene);
+                    break;
             }
         }
         else if (e is InputEventMouseButton mb)

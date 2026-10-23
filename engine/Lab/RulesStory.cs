@@ -92,6 +92,37 @@ public static partial class Program
                     $"처음 {calmMood} {calmSpeed}틱/초 · 불 쪽으로 {near}틱 · 가장 느리게 {slow}틱/초 · 지금 '{d.Mood}'");
             }
 
+            // ── 하루 몇 분 (docs/REVIEW.md ① — 함장 결정 '추천대로'): 조용함은 하루 목표에 맞춰 빨리 · 가벼운 알아챔 · 외침은 카메라만 ·
+            //    같은 뿌리의 조짐은 장면 하나 · 느린 시간 예산을 다 쓰면 소문은 늦추지 않고 다툼 · 탓 · 감지만 ──
+            {
+                var s = Worlds.Full(lay, 2);
+                var d = new Director(s.Layout) { KeepRing = false, DayMinutes = 3 };
+                for (int i = 0; i < 40; i++) { s.Step(); d.Observe(s); }
+                double calm3 = d.Speed;
+                int cell = At(15, 2);
+                string Step(int n) { for (int i = 0; i < n; i++) { s.Step(); d.Observe(s); } return d.Mood; }
+                s.Facts.Emit(s.Tick, FactKind.Noticed, cell);
+                string afterNotice = Step(2);
+                int root = s.Causes.Add(CauseKind.Setup, "센서에 잡힌 것", s.Tick);
+                s.Facts.Emit(s.Tick, FactKind.Sensed, cell, 1, root);
+                Step(2);
+                long opened = s.Tick;
+                Step((int)Time.Minutes(2));
+                s.Facts.Emit(s.Tick, FactKind.Sensed, cell, 1, root);   // 같은 뿌리 — 창을 늘리지 않는다
+                Step((int)Time.Minutes(1.2));
+                string sameRoot = d.Mood;                               // 처음 연 때부터 3분 넘음 → 조용함
+                // 느린 시간 예산(하루 3분의 4할 = 72초)을 다 쓴다: 감지 하나마다 조짐 3분 = 화면 약 9초
+                for (int k = 0; k < 8; k++) { s.Facts.Emit(s.Tick, FactKind.Sensed, cell, 1, s.Causes.Add(CauseKind.Setup, $"감지 {k}", s.Tick)); Step((int)Time.Minutes(3.1)); }
+                double slowUsed = d.SlowTodaySec;
+                s.Facts.Emit(s.Tick, FactKind.Talk, cell, (float)TalkEnd.Spread, s.Causes.Add(CauseKind.Setup, "소문", s.Tick));
+                string rumor = Step(2);
+                s.Facts.Emit(s.Tick, FactKind.Talk, cell, (float)TalkEnd.Argue, s.Causes.Add(CauseKind.Setup, "다툼", s.Tick));
+                string argue = Step(2);
+                Check("하루 3분: 조용하면 화면 1초에 약 200틱 (조용한 날 = 꼭 3분) · 가벼운 알아챔은 카메라만 · 같은 뿌리의 감지는 3분 창을 다시 늘리지 않는다 · 느린 시간(72초)을 다 쓰면 소문은 늦추지 않고 다툼은 늦춘다",
+                    calm3 is >= 190 and <= 210 && afterNotice == "조용함" && sameRoot == "조용함" && slowUsed >= 72 && rumor == "조용함" && argue == "조짐",
+                    $"조용함 {calm3:0}틱/초 · 알아챔 뒤 {afterNotice} · 같은 뿌리 {sameRoot} · 쓴 느린 시간 {slowUsed:0}초 · 소문 {rumor} · 다툼 {argue} (열린 때 {Time.Clock(opened)})");
+            }
+
             // ── 비슷한 두 불 사이를 오가지 않는다 (머물기) ──
             {
                 var s = Worlds.Full(lay, 2);

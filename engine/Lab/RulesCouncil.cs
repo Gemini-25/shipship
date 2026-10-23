@@ -58,7 +58,7 @@ public static partial class Program
             if (Debug) { Console.WriteLine($"    {story}"); foreach (var l in lines) Console.WriteLine($"      {l}"); }
             Check("재판: 셋이 한 사람을 원망하면 회의가 열려 식당에 모이고 한 마디씩 — 과반이 잘못이라 하면 사흘 벌 당번 · 원망은 반으로 풀리고 · 피고는 고발한 이를 원망한다 · 그의 친구는 '나는 그를 믿는다'",
                 gathered >= 4 && verdict.Kind == FactKind.Verdict && (int)verdict.Size == 2 && m.Penanced(x, s.Tick) && soc.GrudgeOf(acc, x) < 0.35f && soc.GrudgeOf(x, acc) >= 0.25f
-                && lines.Any(l => l.Contains("벌을 받아야")) && lines.Any(l => l.Contains("믿는다")) && story.Contains("고발했다"),
+                && lines.Any(l => l.Contains("벌을 받아야")) && lines.Any(l => l.Contains("믿는다")) && story.Contains("고발했다") && !story.Contains("모두의 원망"),   // 게임 글에 개발 숫자(예전 '모두의 원망 1.1')가 없다
                 $"모임 {gathered}/5 · 판결 {verdict.Size} · 벌 당번 {m.Penanced(x, s.Tick)} · 고발한 이의 원망 0.60 → {soc.GrudgeOf(acc, x):0.00} · 피고의 원망 {soc.GrudgeOf(x, acc):0.00} · 말 {lines.Count}마디 · {story}");
             var vc = s.Causes[verdict.Cause];
             int culprit = soc.Culprit(s, verdict.Cause, -1);

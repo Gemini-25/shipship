@@ -62,7 +62,7 @@ public static partial class Program
             mw.AddPerson(w, At(15, 2)); mw.AddRobot(w, At(20, 7), AgentKind.Robot, At(20, 7));
             return w;
         }
-        var show = new LiveShow(Make(), "시험호");
+        var show = new LiveShow(Make(), "시험호") { DayMinutes = LiveShow.DefaultDayMinutes };   // 게임처럼 (기본 하루 3분)
         var twin = Make();                          // 화면 없이 같은 틱을 돌린 세계
         const double dt = 1.0 / 60;
         int calm = 0;
@@ -91,9 +91,48 @@ public static partial class Program
         }
         twin.Run(show.Sim.Tick - twin.Tick);
         bool same = show.Sim.Save().AsSpan().SequenceEqual(twin.Save());
-        Check("관전 화면: 조용하면 화면 1초에 60틱 · 멈추면 0 (장에 멈춤 표시 · 고른 빠르기가 연출보다 먼저) · 밀린 5초는 50틱까지만 (나머지는 버린다) · 불이 나면 느려지고 카메라가 불을 담는다 · 화면 없이 돌린 세계와 바이트까지 같다",
-            calm is >= 59 and <= 61 && paused == 0 && pausedText.Contains("멈춤") && pausedFrame && speedPick && lag == LiveShow.MaxTicksPerCall && afterLag <= 1 && slow <= Director.OmenSpeed && inView && srcOk && same,
+        Check("관전 화면: 기본 하루 3분 — 조용하면 화면 1초에 약 200틱 · 멈추면 0 (장에 멈춤 표시 · 고른 빠르기가 연출보다 먼저) · 밀린 5초는 한 장의 예산(50틱 · 10ms)까지만 (나머지는 버린다) · 불이 나면 느려지고 카메라가 불을 담는다 · 화면 없이 돌린 세계와 바이트까지 같다",
+            calm is >= 190 and <= 210 && paused == 0 && pausedText.Contains("멈춤") && pausedFrame && speedPick && lag is >= 1 and <= LiveShow.MaxTicksPerCall && afterLag <= 5 && slow <= Director.OmenSpeed && inView && srcOk && same,
             $"조용함 {calm}틱 · 멈춤 {paused}틱 (장에 실림 {pausedFrame} · 고른 빠르기 {speedPick}) · 밀림 {lag}틱 → 다음 장 {afterLag}틱 · 가장 느리게 {slow}틱/초 · 불이 화면 안 {inView} · 그림 {frames}장 (보일 곳 맞음 {srcOk}) · 같음 {same}");
+        // 정직한 위 줄 · 손 카메라 (docs/REVIEW.md ① · ②): 실제로 나아간 빠르기와 '하루 = n'을 적는다 · 손으로 옮긴 카메라는 손이 8초 쉬면 연출로 돌아간다
+        {
+            var hs = new LiveShow(Make(), "시험호") { DayMinutes = LiveShow.DefaultDayMinutes };
+            for (int i = 0; i < 60; i++) hs.Advance(dt);
+            string top = hs.Status();
+            hs.Pan(3, 0);
+            bool hand = hs.HandCam && !hs.Follow;
+            for (int i = 0; i < 60 * 7; i++) hs.Advance(dt);
+            bool still = hs.HandCam;
+            for (int i = 0; i < 60 * 2; i++) hs.Advance(dt);
+            hs.DayMinutes = 0;   // 예전 고정 빠르기 (조용함 60틱)
+            for (int i = 0; i < 90; i++) hs.Advance(dt);
+            Check("관전 화면: 위 줄에 실제 빠르기와 '하루 n분' · 손으로 옮긴 카메라는 손이 8초 쉬면 연출로 돌아간다 (7초엔 아직 손) · 하루 목표를 끄면 예전 빠르기(조용함 ×144)",
+                top.Contains("하루 3") && hand && still && hs.Follow && !hs.HandCam && hs.Rate is >= 55 and <= 65,
+                $"위 줄 '{top}' · 손 {hand} → 7초 {still} → 9초 따라감 {hs.Follow} · 목표 끔 {hs.Rate:0}틱/초");
+        }
+        // 아래 줄 (docs/REVIEW.md ② — 함장 결정): 조용할 땐 카메라가 보는 방의 일상 · 불이 나면 지금 장면의 사슬 (끝 마디부터) ·
+        // 하이라이트가 같은 사슬에서 커지면(제목이 바뀌면) ★ 띠를 다시 띄운다 — 예전엔 몇 시간 지난 하이라이트 제목이 불이 난 동안에도 떠 있었다
+        {
+            var bs = new LiveShow(Make(), "시험호");
+            for (int i = 0; i < 30; i++) bs.Advance(dt);
+            int room = lay.Room[lay.Index((int)bs.CamX, (int)bs.CamY)];
+            string calmLine = bs.Story();
+            bool daily = room >= 0 && calmLine.StartsWith(lay.Rooms[room].Name);
+            int spot = At(3, 5);
+            bs.Sim.Get<Chemistry>().Ignite(spot, 3e6, bs.Sim.Causes.Add(CauseKind.Setup, "침대 밑 불씨", bs.Sim.Tick));
+            string fireLine = "";
+            for (int i = 0; i < 60 * 6 && !fireLine.Contains("불씨"); i++) { bs.Advance(dt); fireLine = bs.Story(); }
+            var dd = bs.Dir;
+            dd.Highlights.Add(new Highlight { Title = "작은 일 — 시험", Tick = bs.Sim.Tick });   // 하이라이트가 섰다
+            bs.Advance(dt);
+            bool first = bs.Banner == "작은 일 — 시험";
+            for (int i = 0; i < 60 * 7; i++) bs.Advance(dt);   // 띠가 사라질 때까지
+            dd.Highlights[^1].Title = "더 큰 일 — 시험";      // 같은 사슬에서 커졌다 (죽음이 더해져 제목이 바뀐 것처럼 — 수는 그대로)
+            bs.Advance(dt);
+            bool grew = first && bs.Banner == "더 큰 일 — 시험" && bs.BannerLeft > 5;
+            Check("아래 줄: 조용할 땐 카메라가 보는 방의 일상 ('방 — 사람: 하는 일') · 불이 나면 지금 장면의 사슬 · 하이라이트가 커지면 ★ 띠를 다시 띄운다",
+                daily && fireLine.Contains("불씨") && grew, $"조용할 때 '{calmLine}' · 불 '{fireLine}' · 커진 띠 {grew} ({dd.Highlights.Count}개)");
+        }
         // 걸음 사이 메우기: 불 난 방에 있던 사람이 달아난다 — 화면 1초에 2틱(한 틱 2.4초에 두세 칸)으로 보면 지나간 길을 따라 칸 사이에 그려진다
         var walk = new LiveShow(Worlds.Full(lay, 3), "시험호");
         var wm = walk.Sim.Get<Mind>();
@@ -249,9 +288,9 @@ public static partial class Program
                 for (int c = 0; c < lay.N; c++) if (ch.Burning[c] != 0) ch.Douse(c, Extinguishant.Water, 50);   // 끈다
                 w.Step();
             }
-            var ended = fs.Feed().FirstOrDefault(x => !x.Active && x.Text.Contains("불"));
-            Check("사건 띠: 평소엔 비었다 · 불이 나면 주컴퓨터가 알자 '불'이 위험 단계로 (자리 칸 · 누르면 카메라가 그리로) · 꺼지면 '끝'으로 남는다",
-                calm && fire.Text != null && fire.Level == 2 && fire.Cell >= 0 && looked && ended.Text != null && ended.Text.EndsWith("끝"),
+            var ended = fs.Feed().FirstOrDefault(x => !x.Active && x.Text.Contains("불") || x.Active && x.Text.Contains("끝: 불"));   // 방마다 한 줄 — 그 방에 아직 일이 남았으면 그 줄에 '끝: 불'
+            Check("사건 띠: 평소엔 비었다 · 불이 나면 주컴퓨터가 알자 '불'이 위험 단계로 (자리 칸 · 누르면 카메라가 그리로) · 꺼지면 '끝'으로 남는다 (방마다 한 줄 — 같은 방에 일이 남았으면 그 줄에 '끝: 불')",
+                calm && fire.Text != null && fire.Level == 2 && fire.Cell >= 0 && looked && ended.Text != null && (ended.Text.EndsWith("끝") || ended.Text.Contains("끝: 불")),
                 $"평소 {calm} · 불 \"{fire.Time} {fire.Text}\" 단계 {fire.Level} · 칸 {fire.Cell} · 카메라 {looked} · 끝 \"{ended.Time} {ended.Text}\"");
         }
 
