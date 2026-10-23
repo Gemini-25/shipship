@@ -105,6 +105,9 @@ public static partial class Program
         // 판단 깊이의 잣대 (docs/MIND.md 성능 예산): 사람 한 명이 쓰는 마음 몫 · 위기 틱의 마음 — 판단 층을 더할 때마다 이 줄로 값을 치른다
         double perPerson = per.GetValueOrDefault("마음") / 40;
         Check("시간 예산: 새터호 조용한 틱 — 마음 ÷ 사람 수 ≤ 0.012ms (판단 층을 더해도 사람 한 명 몫)", perPerson <= 0.012, $"{perPerson * 1000:0.0}µs/사람 (마음 {per.GetValueOrDefault("마음"):0.000}ms · 40명)");
+        // 위기 틱: 같은 위기를 두 번 — 첫 번은 데우기 (불 끄기 · 뿌리기 · 불 느끼기 코드가 이 과정에서 처음 돌며 JIT 번역에 한 번 7~11ms — 틱마다의 값이 아니다) · 둘째 번을 잰다
+        double coldMax = 0;
+        for (int pass = 0; pass < 2; pass++)
         {
             var s = ShipWorld.Crewed("Saetteul", 7, 40, 10);
             s.Run(300);
@@ -112,12 +115,22 @@ public static partial class Program
             var chem = s.Get<Chemistry>();
             foreach (int c in room.Cells.Where((c, i) => i % 9 == 0).Take(4)) chem.Ignite(c, 3e6, s.Causes.Add(CauseKind.Setup, "시험 불", s.Tick, c));
             var mindMs = new List<double>();
+            bool probe = pass == 1 && Environment.GetEnvironmentVariable("CRISIS_PROF") == "1";   // 조사용: 가장 긴 틱 다섯의 마음 안 단계 · 사람 · 로봇마다 (GC 횟수와 함께)
+            var ticks = new List<(double ms, Dictionary<string, double> d)>();
             s.Measure = true;
-            for (int k = 0; k < 400; k++) { s.LastMs.Clear(); s.Step(); mindMs.Add(s.LastMs.GetValueOrDefault("마음")); }
+            for (int k = 0; k < 400; k++)
+            {
+                if (probe) Mind.Prof = new();
+                int g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
+                s.LastMs.Clear(); s.Step(); mindMs.Add(s.LastMs.GetValueOrDefault("마음"));
+                if (probe) { Mind.Prof!["GC0"] = GC.CollectionCount(0) - g0; Mind.Prof["GC1"] = GC.CollectionCount(1) - g1; Mind.Prof["GC2"] = GC.CollectionCount(2) - g2; ticks.Add((mindMs[^1], Mind.Prof)); }
+            }
             s.Measure = false;
+            if (probe) { Mind.Prof = null; foreach (var (ms, d) in ticks.OrderByDescending(x => x.ms).Take(5)) Console.WriteLine($"    {ms:0.00}ms: " + string.Join(" · ", d.Where(kv => !kv.Key.StartsWith("GC")).OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{kv.Key} {kv.Value:0.00}")) + $" · GC {d["GC0"]}/{d["GC1"]}/{d["GC2"]}"); }
             mindMs.Sort();
+            if (pass == 0) { coldMax = mindMs[^1]; continue; }
             double p99 = mindMs[(int)(mindMs.Count * 0.99)], max = mindMs[^1];
-            Check($"시간 예산: 위기 틱 (새터호 {room.Name} 불 넷 · 40명이 달아나고 · 끄고 · 구하고) — 마음 ≤ 2ms (99번째 백분위)", p99 <= 2.0, $"99% {p99:0.00}ms · 가장 긴 틱 {max:0.00}ms · 가운데 {mindMs[mindMs.Count / 2]:0.000}ms");
+            Check($"시간 예산: 위기 틱 (새터호 {room.Name} 불 넷 · 40명이 달아나고 · 끄고 · 구하고) — 마음 ≤ 2ms (99번째 백분위 · 데운 뒤)", p99 <= 2.0, $"99% {p99:0.00}ms · 가장 긴 틱 {max:0.00}ms · 가운데 {mindMs[mindMs.Count / 2]:0.000}ms · (처음 한 번 — JIT 번역을 셈한 가장 긴 틱 {coldMax:0.00}ms)");
         }
         var (th, _) = Measure("Hannuri", 100, 30, 150);
         Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");

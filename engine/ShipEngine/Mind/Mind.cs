@@ -470,6 +470,15 @@ public sealed partial class Mind : IEngine
         return t1;
     }
 
+    /// <summary>조사용 (Prof가 켜져 있을 때만): 사람 · 로봇마다 목표 갈래로 모은 시간 — '걸음:FightFire' 꼴.</summary>
+    private static void LapWho(string what, Agent a, long t0)
+    {
+        double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        if (ms < 0.2) return;
+        string k = $"{what}:{a.C.Kind}#{a.Id}:{a.C.Goal}";
+        Prof![k] = Prof.GetValueOrDefault(k) + ms;
+    }
+
     public void Step(Sim sim, double dt)
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
@@ -504,12 +513,15 @@ public sealed partial class Mind : IEngine
             if (a.C.Up != 0 && a.IsPerson) Instinct(sim, a);
             bool think = a.C.Up != 0 && a.C.Mode == 0 && ((sim.Tick + a.Id) % 2 == 0 || a.Plan.Count == 0 || a.C.StepIndex >= a.Plan.Count);
             if (think) Decide(sim, a);
+            if (Prof != null) LapWho("생각", a, t);
             t = Lap("본능 · 생각", t);
             WithdrawDoor(a);
             WithdrawCook(sim, a);
             WithdrawShower(sim, a);   // 씻다 말고 나가면 물을 잠그거나 · 틀어 둔 채
             HeedWashCall(a, sim.Tick);   // 주컴퓨터가 다른 화장실이 비었다고 하면 옮긴다
+            string? sk = Prof != null && a.C.StepIndex < a.Plan.Count ? a.Plan[a.C.StepIndex].Kind.ToString() : null;
             if (a.C.Up != 0 || IsSleeping(a)) Advance(sim, a, dt);
+            if (Prof != null) LapWho("걸음 " + sk, a, t);
             t = Lap("걸음 · 일", t);
             Needs(sim, a, dt);
             t = Lap("몸의 필요", t);
