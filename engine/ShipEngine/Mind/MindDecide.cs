@@ -97,6 +97,12 @@ public sealed partial class Mind
     {
         var plan = new List<PlanStep>();
         if (!BuildPlan(sim, a, o, plan)) return false;
+        if (o.Cell < 0 && Everyday(o.Goal) && a.IsPerson && LeavesHold(a, plan) is float k && k < 1)
+        {
+            // 자리를 정하지 않은 일상(물 · 쉼 · 어울림)은 고를 때 대피실 · 회의 밖인지 몰랐다 — 계획이 닿는 방으로 감점을 매긴다 (비판 검토: 칸 −1 선택지가 감점을 피해 갔다 · 대피실 문을 나갔다 되돌아왔다)
+            float eff = o.Score * k;
+            foreach (var other in _opts) if (!(other.Goal == o.Goal && other.Target == o.Target) && other.Score > eff) return false;
+        }
         if (HoldBlocks(a, o.Goal))
         {
             // 손 비우기 (docs/MIND.md 3단): 일상의 일 앞에서 든 것을 먼저 — 꼼꼼한 이는 제자리에 · 덤벙대는 이(성실 0.35 아래)는 그 자리에 내려놓는다
@@ -118,6 +124,19 @@ public sealed partial class Mind
         if (o.Goal == GoalKind.Evacuate && _followScore > 0 && o.Score == _followScore) { Followed++; c.FollowedAt = sim.Tick; } // ⑨ 아는 이를 따라 나갔다
         if (IsTask(o.Goal)) Claim(a, o.Goal, o.Target, +1);
         return true;
+    }
+
+    /// <summary>계획이 끝나는 방이 머물러야 할 방(대피실 · 회의) 밖이면 그 감점 (대피 0.15 · 회의 0.3 — 1이면 감점 없음).</summary>
+    private float? LeavesHold(Agent a, List<PlanStep> plan)
+    {
+        int end = -1;
+        for (int i = plan.Count - 1; i >= 0; i--) if (plan[i].Kind == StepKind.GoTo && plan[i].Cell >= 0) { end = plan[i].Cell; break; }
+        if (end < 0) return 1;
+        int room = RoomOf(end);
+        float k = 1;
+        if (Sheltering(a) && room != ShelterRoom) k *= 0.15f;
+        if (Gathering(a) && room != GatherRoom) k *= 0.3f;
+        return k;
     }
 
     // ───────────────────────── 점수 ─────────────────────────

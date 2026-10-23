@@ -89,9 +89,10 @@ public static partial class Program
             s.Run((int)Time.Hours(23));                                         // 0시 전까지 (몫은 0시마다 새로)
             double most = ps.Max(p => m.DrankToday(p));
             if (Debug) Console.WriteLine($"    물: 몫 {m.RationWater:0} · 마신 양 {string.Join(",", ps.Select(p => m.DrankToday(p).ToString("0")))} · 물탱크 {net.WaterTank:0} · 식량 몫 {m.RationFood:0.00}");
-            Check("물도 같은 길: 물 재생기가 망가지고 물탱크가 이틀 치면 물 배급(보통의 85% — 목숨 몫 밑으로는 줄이지 않는다) · 마시는 곳은 하루 몫을 넘게 주지 않는다 (몫까지 마신 이가 있다)",
-                sm.RationWaterOn == 1 && Math.Abs(m.RationWater - ShipMind.WaterShare * ShipMind.WaterPerDay) < 1e-6 && most <= m.RationWater + 1e-6 && most > m.RationWater - 1 && m.RationFood == 0,
-                $"물 몫 {m.RationWater:0}몰 · 가장 많이 마신 이 {most:0}몰 · 식량 배급 {(m.RationFood > 0 ? "있음" : "없음")}");
+            Check("물도 같은 길: 물 재생기가 망가지고 물탱크가 이틀 치면 물 배급(계량기로 잰 실제 양의 85% — 보통 2.5L의 85% 밑으로는 줄이지 않는다) · 마시는 곳은 하루 몫을 넘게 주지 않는다 (몫까지 마신 이가 있다)",
+                sm.RationWaterOn == 1 && Math.Abs(m.RationWater - ShipMind.WaterShare * Math.Max(sm.WaterNeed, ShipMind.WaterPerDay)) < 1e-6 && m.RationWater >= ShipMind.WaterShare * ShipMind.WaterPerDay - 1e-6
+                && most <= m.RationWater + 1e-6 && most > m.RationWater - 1 && m.RationFood == 0,
+                $"물 몫 {m.RationWater:0}몰 (잰 양 {sm.WaterNeed:0}) · 가장 많이 마신 이 {most:0}몰 · 식량 배급 {(m.RationFood > 0 ? "있음" : "없음")}");
         }
 
         // ── 몰래 먹기는 성격대로: 몫을 다 먹고 배고픈 덜 성실 · 덜 다정한 이는 보관함에서 몰래 한 끼 · 성실하고 다정한 이는 참는다 ·

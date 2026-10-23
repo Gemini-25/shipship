@@ -72,6 +72,75 @@ public static partial class Program
             Check("문턱 흔들림: 대피실에 든 이는 목이 말라도 문 앞에서 들락거리지 않고 대피실에 머문다 ('거기 있어라' 선택지가 방 안에서도 남는다)",
                 arrived && g.Flips == 0 && outside < Time.Minutes(1), $"닿음 {arrived} · 흔들림 {g.Flips}번 · 대피실 밖 {outside * Time.SecondsPerTick / 60:0.0}분 · {m.Thought(p.Id)}");
         }
+        // ── 문턱 흔들림 (대피 중 몹시 목마른 이): 자리를 정하지 않은 일상(물 · 쉼)도 계획이 대피실 밖으로 나가면 대피 감점 — 문을 나갔다 되돌아오기를 되풀이하지 않는다 ──
+        {
+            var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            Sim? s = null; Mind? m = null; Agent? p = null;
+            for (ulong seed = 1; seed < 40; seed++)
+            {
+                s = Worlds.Full(lay, seed); m = s.Get<Mind>();
+                p = m[m.AddPerson(s, Worlds.At(lay, 15, 8))];
+                s.Run(2);
+                p.C.Diligent = 1;
+                long h0 = m.SheltersHeeded;
+                m.Shelter(s, lay.Room[Worlds.At(lay, 15, 2)], Worlds.At(lay, 15, 2), s.Tick + Time.Hours(2), 0, 1);
+                if (m.SheltersHeeded > h0) break;
+            }
+            int shelter = lay.Room[Worlds.At(lay, 15, 2)];
+            for (int k = 0; k < Time.Minutes(10); k++) s!.Step();
+            p!.C.Thirst = 0.9f;
+            var g = new MindGauge(s!);
+            int exits = 0; bool inside = m!.RoomOf(p.C.Cell) == shelter;
+            for (int k = 0; k < Time.Minutes(30); k++)
+            {
+                s!.Step(); g.Observe(s.Tick);
+                bool now = m.RoomOf(p.C.Cell) == shelter;
+                if (inside && !now) exits++;
+                inside = now;
+            }
+            Check("문턱 흔들림 (대피 중 몹시 목마른 이): 물처럼 자리를 정하지 않은 일상도 계획이 대피실 밖으로 나가면 미룬다 — 문을 나갔다 되돌아오기를 되풀이하지 않는다",
+                exits == 0 && g.Flips == 0, $"나간 번 {exits} · 흔들림 {g.Flips}번 · {m.Thought(p.Id)}");
+        }
+        // ── 물 배급은 계량기로 잰 양으로: 배급을 열면 한 사람 하루 몫 = 마시는 곳 계량기로 잰 실제 양 × 0.85 (예전 상수 2.5L × 0.85 = 118몰 — 실제의 57%라 모두가 늘 몹시 목말랐다) ──
+        {
+            var s = ShipWorld.Crewed("Hwasal", 11, 3, 0, 0);
+            var m = s.Get<Mind>(); var n = s.Get<Network>(); var life = s.Get<Life>();
+            s.Run(Time.Hours(13));
+            double perDay = -s.Book.Of(Res.Water, Flow.Drunk) / (s.Tick * Time.SecondsPerTick / 86400) / 3;   // 계량기 (마신 양 누계 ÷ 날 ÷ 사람)
+            n.WaterTank = 4000;   // 며칠 치만 남았다 → 다음 시간에 배급을 연다
+            for (int k = 0; k < Time.Hours(2) && m.RationWater <= 0; k++) s.Step();
+            double share = m.RationWater;
+            Check("물 배급은 계량기로 잰 양으로: 한 사람 하루 몫 = 잰 실제 양 × 0.85 (예전엔 상수 118몰 — 실제의 57%)",
+                share > 118.5 && Math.Abs(share - 0.85 * perDay) < 0.2 * perDay, $"잰 양 {perDay:0}몰/일 · 배급 몫 {share:0}몰/일 (예전 118)");
+        }
+        // ── 처지에 맞는 입말: 구조를 본 이가 구한 이에게 '나 업고 나와 줘서 고마워'라고 하지 않는다 · 구해진 이는 그렇게 말한다 · 위로의 말은 위로하는 이가 한다 (예전엔 슬픔이 줄어드는 이가 '울어도 돼') ──
+        {
+            var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            var s = Worlds.Full(lay, 5);
+            var m = s.Get<Mind>(); var soc = s.Get<Society>();
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            int hero = m.AddPerson(s, At(15, 2)), saved = m.AddPerson(s, At(16, 2)), seen = m.AddPerson(s, At(17, 2)), mourner = m.AddPerson(s, At(18, 2));
+            s.Run(2);
+            int cause = s.Causes.Add(CauseKind.Setup, "연기 속에서 업혀 나왔다", s.Tick, At(16, 2));
+            s.Facts.Emit(s.Tick, FactKind.Rescue, At(16, 2), 0, cause, hero, saved);
+            s.Step();
+            (int speaker, string text) Line(int sp, int li, Topic t, TalkEnd e, int about)
+            {
+                m.Acts.Add(new SocialAct { Tick = s.Tick, Kind = SocialActKind.Talk, Actor = sp, Target = li, Other = about, Topic = t, End = e, Cause = cause, Cell = m[sp].C.Cell });
+                int n0 = soc.Sayings.Count;
+                s.Step();
+                if (soc.Sayings.Count == n0) return (-1, "");
+                var x = soc.Sayings[^1];
+                return (x.Speaker, s.Causes.Text(x.Line));
+            }
+            var byWitness = Line(seen, hero, Topic.Rescue, TalkEnd.Praise, hero);
+            var bySaved = Line(saved, hero, Topic.Rescue, TalkEnd.Praise, hero);
+            var comfort = Line(mourner, hero, Topic.Death, TalkEnd.Comfort, saved);
+            bool witnessOk = byWitness.speaker == seen && !byWitness.text.Contains("업고 나와 줘서") && !byWitness.text.Contains("덕분에 살았어");
+            bool savedOk = bySaved.speaker == saved && (bySaved.text.Contains("업고 나와 줘서") || bySaved.text.Contains("덕분에 살았어"));
+            Check("처지에 맞는 입말: 구조를 본 이는 구한 이에게 '대단했어' · 구해진 이는 '업고 나와 줘서 고마워' · 위로의 말은 받아 준 이가 한다 (예전엔 본 이도 '나 업고…' · 슬픔이 줄어드는 이가 '울어도 돼')",
+                witnessOk && savedOk && comfort.speaker == hero, $"본 이: \"{byWitness.text}\" · 구해진 이: \"{bySaved.text}\" · 위로한 이 {(comfort.speaker >= 0 ? m.NameOf(comfort.speaker) : "-")}: \"{comfort.text}\"");
+        }
         // ── 길 거리 맡김: 불 곁 벽 너머 통로의 로봇(직선 3칸 · 돌아가면 15걸음)보다 같은 방 끝의 로봇(직선 8칸 · 10걸음)이 먼저 간다 ──
         var layC = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
         int AtC(int x, int y) => Worlds.At(layC, x, y);

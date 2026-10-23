@@ -26,6 +26,8 @@ public sealed partial class ShipMind
     private double[] _waterHist = new double[24], _drunkHist = new double[24];
     private long[] _waterHistTick = new long[24];
     private int _waterN;
+    /// <summary>마시는 곳 계량기로 잰 한 사람 하루 마신 양 (몰 — 배급이 없을 때 여섯 시간 넘게 잰 것 · 0: 아직 모름). 배급 몫은 이것 × 0.85 (docs/MIND.md 3단 · 함장 결정 17).</summary>
+    public double WaterNeed;
 
     /// <summary>일감판(⑪)의 요청: 지금 막힌 곳 — 새로 막힌 것(무엇이 · 왜가 달라진 것 — 날 수 · 끼니 같은 숫자는 빼고 견준다)만 방송한다.</summary>
     public void ReportBlocks(Sim sim, IReadOnlyList<string> lines, IReadOnlyList<int> causes)
@@ -58,6 +60,7 @@ public sealed partial class ShipMind
         var life = sim.Find<Life>();
         foreach (var a in _mind.Agents) if (a.IsPerson && life != null && life[a.C.Body].Alive != 0) crew++;
         if (crew == 0) return;
+        if (RationWaterOn == 0 && MeasuredDrink(crew) is double need && need > 0) WaterNeed = need;
         double food = Days(sim, Res.Food, RationFoodOn != 0 ? Policy.RationShare : 1), water = WaterDays(sim, RationWaterOn != 0 ? WaterShare : 1);
         byte fOn = (byte)(food < Policy.RationBelow || RationFoodOn != 0 && food < Policy.RationBelow * 1.5f ? 1 : 0);
         byte wOn = (byte)(water < Policy.RationBelow || RationWaterOn != 0 && water < Policy.RationBelow * 1.5f ? 1 : 0);
@@ -75,7 +78,7 @@ public sealed partial class ShipMind
             Say(sim, opening ? $"알립니다. 보통으로 먹으면 {(fOn != 0 ? $"식량이 {food:0}일" : $"물이 {water:0}일")} 치밖에 남지 않았습니다 — 오늘부터 배급합니다: {what}" : $"배급을 고칩니다: {what}");
         }
         else Say(sim, $"배급을 풉니다 — 식량 {food:0}일 · 물 {water:0}일 치");
-        _mind.SetRation(fOn != 0 ? Policy.RationShare * FoodPerDay : 0, wOn != 0 ? WaterShare * WaterPerDay : 0, cause);
+        _mind.SetRation(fOn != 0 ? Policy.RationShare * FoodPerDay : 0, wOn != 0 ? WaterShare * Math.Max(WaterNeed, WaterPerDay) : 0, cause);   // 물 몫: 잰 실제 양 × 0.85 (모르면 · 적으면 보통 2.5L — 몸이 견디는 바닥 밑으로는 안 줄인다)
         _mind.SetShowerRule(sim, wOn != 0 ? ShowerRuleMin : 0, ShowerRuleGap, wOn != 0 ? cause : 0);   // 샤워 배급은 물 배급과 함께 (docs/WASH.md (다))
         sim.Facts.Emit(sim.Tick, FactKind.Rationed, -1, fOn != 0 ? Policy.RationShare : 0, cause, -1, wOn);
     }
@@ -91,6 +94,16 @@ public sealed partial class ShipMind
         _drunkHist[k] = -sim.Book.Of(Res.Water, Flow.Drunk);
         _waterHistTick[k] = sim.Tick;
         _waterN++;
+    }
+
+    /// <summary>계량기로 잰 한 사람 하루 마신 양 (마지막 하루 — 여섯 시간이 안 됐으면 모름).</summary>
+    private double? MeasuredDrink(int crew)
+    {
+        if (_waterN < 2 || crew <= 0) return null;
+        int n = _waterHist.Length, now = (_waterN - 1) % n, old = _waterN < n ? 0 : _waterN % n;
+        double days = (_waterHistTick[now] - _waterHistTick[old]) * Time.SecondsPerTick / 86400;
+        if (days < 0.25 - 1e-9) return null;
+        return (_drunkHist[now] - _drunkHist[old]) / days / crew;
     }
 
     /// <summary>
@@ -170,13 +183,13 @@ public sealed partial class ShipMind
         w.Arr(new[] { RationFoodOn, RationWaterOn }); w.I64(RationsOpened); w.I64(MissingFound); w.F64(MissingMol);
         w.I32(Blocked.Count); foreach (var b in Blocked) w.Str(b); w.Arr(BlockedCause.ToArray());
         w.Arr(_lkSeen); w.Arr(_lkLogged); w.F64(_missingPending); w.I64(_missingSaidAt); w.F64(_jMissing); w.F64(_jProcessed); w.F64(_jRecovered);
-        w.Arr(_waterHist); w.Arr(_drunkHist); w.Arr(_waterHistTick); w.I32(_waterN);
+        w.Arr(_waterHist); w.Arr(_drunkHist); w.Arr(_waterHistTick); w.I32(_waterN); w.F64(WaterNeed);
     }
     private void LoadSupply(StateReader r)
     {
         var on = r.Arr<byte>(); RationFoodOn = on[0]; RationWaterOn = on[1]; RationsOpened = r.I64(); MissingFound = r.I64(); MissingMol = r.F64();
         Blocked.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) Blocked.Add(r.Str() ?? ""); BlockedCause.Clear(); BlockedCause.AddRange(r.Arr<int>());
         _lkSeen = r.Arr<double>(); _lkLogged = r.Arr<double>(); _missingPending = r.F64(); _missingSaidAt = r.I64(); _jMissing = r.F64(); _jProcessed = r.F64(); _jRecovered = r.F64();
-        _waterHist = r.Arr<double>(); _drunkHist = r.Arr<double>(); _waterHistTick = r.Arr<long>(); _waterN = r.I32();
+        _waterHist = r.Arr<double>(); _drunkHist = r.Arr<double>(); _waterHistTick = r.Arr<long>(); _waterN = r.I32(); WaterNeed = r.F64();
     }
 }

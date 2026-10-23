@@ -216,7 +216,7 @@ public sealed partial class Society
                 {
                     Grief[a] = Math.Max(0, Grief[a] - 0.08f); ca.Sad = Math.Max(0, ca.Sad - 0.1f);
                     Warm(sim, a, b, 0.06f); Warm(sim, b, a, 0.04f);
-                    Say(sim, a, b, o, end, Pick(sim, "죽음/위로", a));
+                    Say(sim, b, a, o, end, Pick(sim, "죽음/위로", b));   // 위로의 말은 받아 준 이가 한다 (예전엔 슬픔이 줄어드는 이가 '괜찮아. 울어도 돼.'라고 했다)
                 }
                 else Say(sim, b, a, o, end, Pick(sim, "죽음/어색", b));
                 break;
@@ -228,7 +228,7 @@ public sealed partial class Society
                 if (o.T == Topic.Hurt) { Warm(sim, a, b, 0.03f); Say(sim, b, a, o, end, Pick(sim, "다침/위로", b)); break; }
                 Warm(sim, a, b, hero ? 0.06f : 0.04f); Warm(sim, b, a, 0.04f);
                 if (hero) Add(TrustOf, a, b, 0.05f);
-                string key = $"{TalkTable.TopicName(o.T)}/{(hero ? "칭찬" : "맞장구")}";
+                string key = o.T == Topic.Rescue ? RescueKey(o, a, b, hero) : $"{TalkTable.TopicName(o.T)}/{(hero ? "칭찬" : "맞장구")}";
                 Say(sim, a, b, o, end, Pick(sim, _talk!.Lines.ContainsKey(key) ? key : $"{TalkTable.TopicName(o.T)}/맞장구", a));
                 break;
             }
@@ -258,6 +258,21 @@ public sealed partial class Society
             }
         }
         Talks++;
+    }
+
+    /// <summary>
+    /// 구조 이야기는 처지에 맞게 (docs/MIND.md 3단 — 처지에 맞는 입말): 구해진 이가 구한 이에게 '업고 나와 줘서 고마워' · 본 이가 구한 이에게 '대단했어' ·
+    /// 구한 이가 구해진 이에게 '몸은 괜찮아?' · 본 이가 구해진 이에게 '그가 너를 업고 나오던 거 봤어' · 둘 다 본 이면 '다들 무사해서 다행이야'.
+    /// 구해진 이는 목숨 빚으로 안다 (구한 이에게 빚진 몫).
+    /// </summary>
+    private string RescueKey(in Option o, int a, int b, bool heroIsListener)
+    {
+        int hero = o.About;
+        bool Saved(int x) => x >= 0 && x < N && hero >= 0 && hero < N && x != hero && DebtOf(x, hero) > 0.25f;
+        if (heroIsListener) return Saved(a) ? "구조/칭찬" : "구조/감탄";
+        if (a == hero && Saved(b)) return "구조/안부";
+        if (Saved(b)) return "구조/맞장구";
+        return "구조/함께";
     }
 
     /// <summary>입말 표에서 한 줄 (말하는 사람 · 때에 따라).</summary>
