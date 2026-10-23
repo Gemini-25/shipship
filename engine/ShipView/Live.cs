@@ -93,8 +93,13 @@ public sealed class LiveShow
     /// <summary>하루 길이 목표 (화면 분 · 0이면 연출의 예전 고정 빠르기) — 단추는 이것을 고른다: 조용할 때의 상한일 뿐 · 조짐 · 위험 · 결정적 순간엔 연출이 늘 늦춘다.</summary>
     public double DayMinutes { get => Dir.DayMinutes; set => Dir.DayMinutes = value; }
     public const double DefaultDayMinutes = 3;   // 함장 결정 (docs/REVIEW.md ① 질문 2 — 기본 하루 3분 · 게임과 --live가 띄울 때 고른다 · 0이면 예전 고정 빠르기)
+    /// <summary>따라 보기 (docs/MIND.md 4단 · 함장 결정 '추천대로'): 사람을 골라 따라가면 조용할 때의 빠르기 상한을 '하루 이만큼 분'으로 낮춘다 (24분 = 화면 1초에 게임 1분 — 세세한 동작이 보인다) · 놓으면 고른 하루 목표로 · 0이면 끔. 화면만 — 세계는 그대로.</summary>
+    public double FollowDayMinutes = 24;
+    public bool FollowSlow => SpeedOverride <= 0 && _replay == null && Selected >= 0 && FollowSelected && FollowDayMinutes > 0;
     /// <summary>한 장에 세계를 돌리는 시간 (ms) — 넘으면 남은 틱은 버린다 (그림이 끊기지 않게 · 실제 빠르기는 위 줄에 정직하게).</summary>
     public const double FrameBudgetMs = 10;
+    /// <summary>이 화면의 한 장 예산 (ms — 기본 FrameBudgetMs · 시험이 빠르기만 잴 때 넉넉히 둔다: 벽시계에 기대면 바쁜 기계에서 틱 수가 흔들린다).</summary>
+    public double FrameBudget = FrameBudgetMs;
     /// <summary>실제로 나아간 빠르기 (화면 1초에 틱 · 0.5초마다 고침).</summary>
     public double Rate { get; private set; }
     private double _rateTicks, _rateSec, _tickMs = 1;
@@ -158,7 +163,7 @@ public sealed class LiveShow
         {
             if (SpeedOverride > 0) return SpeedOverride;
             if (_replay != null && _shots.Count > 0) return ShotNow?.Speed ?? JumpSpeed;
-            return View.Speed;
+            return FollowSlow ? Math.Min(View.Speed, Time.TicksPerDay / (FollowDayMinutes * 60)) : View.Speed;   // 따라 보기: 조짐 · 위험은 연출이 더 늦춘다 (작은 쪽)
         }
     }
     public (int x0, int y0, int x1, int y1) Bounds => _bbox;
@@ -192,7 +197,7 @@ public sealed class LiveShow
             if (_carry >= 1) _carry -= Math.Floor(_carry);   // 밀린 것은 버린다 (다음 장에 몰아 돌리지 않는다)
             var w = World; var d = View;
             d.Foresee = SpeedOverride <= 0 || SpeedOverride <= Director.CalmSpeed;   // 고정 빠르기로 빨리 감는 동안은 미리 보지 않는다 (복제가 1초에 수십 번 — 볼 틈도 없다)
-            if (_replay == null) n = Math.Min(n, Math.Max(1, (int)(FrameBudgetMs / Math.Max(0.01, _tickMs))));   // 이 장의 시간 예산 안에서만 (지난 틱들의 걸린 시간으로)
+            if (_replay == null) n = Math.Min(n, Math.Max(1, (int)(FrameBudget / Math.Max(0.01, _tickMs))));   // 이 장의 시간 예산 안에서만 (지난 틱들의 걸린 시간으로)
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             double v0 = Speed;
             int ran = 0;
@@ -947,7 +952,7 @@ public sealed class LiveShow
         // 실제로 나아간 빠르기를 적는다 (고른 빠르기가 아니라 — 기계가 못 따라가면 그만큼) · 그 빠르기면 하루가 화면 몇 분인가
         double rate = Rate > 0 ? Rate : Speed;
         string speed = Paused ? "멈춤" : $"{(SpeedOverride > 0 ? "고정 " : "")}×{rate * Time.SecondsPerTick:0} · 하루 {DayLength(rate)}";
-        string hand = HandCam && _replay == null ? $" · 손 카메라 ({HandLeft:0}초 뒤 연출)" : "";
+        string hand = HandCam && _replay == null ? $" · 손 카메라 ({HandLeft:0}초 뒤 연출)" : FollowSlow ? " · 따라 보기 (천천히)" : "";
         return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}{hand}";
     }
 

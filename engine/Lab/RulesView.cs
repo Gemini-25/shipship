@@ -62,11 +62,12 @@ public static partial class Program
             mw.AddPerson(w, At(15, 2)); mw.AddRobot(w, At(20, 7), AgentKind.Robot, At(20, 7));
             return w;
         }
-        var show = new LiveShow(Make(), "시험호") { DayMinutes = LiveShow.DefaultDayMinutes };   // 게임처럼 (기본 하루 3분)
+        var show = new LiveShow(Make(), "시험호") { DayMinutes = LiveShow.DefaultDayMinutes, FrameBudget = 1000 };   // 게임처럼 (기본 하루 3분) · 빠르기만 잴 때는 한 장 예산을 넉넉히 (바쁜 기계에서 벽시계에 흔들리지 않게)
         var twin = Make();                          // 화면 없이 같은 틱을 돌린 세계
         const double dt = 1.0 / 60;
         int calm = 0;
-        for (int i = 0; i < 60; i++) calm += show.Advance(dt);       // 조용함: 화면 1초 = 60틱
+        for (int i = 0; i < 60; i++) calm += show.Advance(dt);       // 조용함: 화면 1초 = 약 200틱
+        show.FrameBudget = LiveShow.FrameBudgetMs;                    // 아래 '밀린 5초'는 실제 예산으로
         show.Paused = true; int paused = show.Advance(1); string pausedText = show.Status();
         var pf = show.Render(); bool pausedFrame = pf.Paused; show.Recycle(pf.Img); show.Paused = false;   // 빠르기 단추 (UI U5): 장에 멈춤이 실린다
         var rf = show.Render(); pausedFrame &= !rf.Paused; show.Recycle(rf.Img);
@@ -94,6 +95,24 @@ public static partial class Program
         Check("관전 화면: 기본 하루 3분 — 조용하면 화면 1초에 약 200틱 · 멈추면 0 (장에 멈춤 표시 · 고른 빠르기가 연출보다 먼저) · 밀린 5초는 한 장의 예산(50틱 · 10ms)까지만 (나머지는 버린다) · 불이 나면 느려지고 카메라가 불을 담는다 · 화면 없이 돌린 세계와 바이트까지 같다",
             calm is >= 190 and <= 210 && paused == 0 && pausedText.Contains("멈춤") && pausedFrame && speedPick && lag is >= 1 and <= LiveShow.MaxTicksPerCall && afterLag <= 5 && slow <= Director.OmenSpeed && inView && srcOk && same,
             $"조용함 {calm}틱 · 멈춤 {paused}틱 (장에 실림 {pausedFrame} · 고른 빠르기 {speedPick}) · 밀림 {lag}틱 → 다음 장 {afterLag}틱 · 가장 느리게 {slow}틱/초 · 불이 화면 안 {inView} · 그림 {frames}장 (보일 곳 맞음 {srcOk}) · 같음 {same}");
+        // 따라 보기 (docs/MIND.md 4단 · 함장 결정 '추천대로'): 사람을 골라 따라가면 조용할 때 하루 24분(화면 1초 = 게임 1분 = 25틱) · 위 줄에 '따라 보기' · 놓으면 하루 3분으로 · 세계는 그대로
+        {
+            var fs = new LiveShow(Make(), "시험호") { DayMinutes = LiveShow.DefaultDayMinutes, FrameBudget = 1000 };
+            var ftwin = Make();
+            int before = 0, follow = 0, after = 0;
+            for (int i = 0; i < 60; i++) before += fs.Advance(dt);
+            int person = fs.Sim.Get<Mind>().Agents.First(a => a.IsPerson).Id;
+            fs.SelectAgent(person);
+            for (int i = 0; i < 60; i++) follow += fs.Advance(dt);
+            string top = fs.Status();
+            fs.SelectAgent(-1);
+            for (int i = 0; i < 60; i++) after += fs.Advance(dt);
+            ftwin.Run(fs.Sim.Tick);
+            bool fsame = fs.Sim.Save().AsSpan().SequenceEqual(ftwin.Save());
+            Check("따라 보기: 사람을 골라 따라가면 조용할 때 화면 1초에 게임 1분(25틱 · 하루 24분) · 위 줄에 '따라 보기' · 놓으면 하루 3분으로 · 화면 없이 돌린 세계와 바이트까지 같다",
+                before is >= 190 and <= 210 && follow is >= 23 and <= 27 && top.Contains("따라 보기") && after is >= 190 and <= 220 && fsame,
+                $"고르기 전 {before}틱 · 따라 볼 때 {follow}틱 · 놓은 뒤 {after}틱 · 위 줄 '{top}' · 같음 {fsame}");
+        }
         // 정직한 위 줄 · 손 카메라 (docs/REVIEW.md ① · ②): 실제로 나아간 빠르기와 '하루 = n'을 적는다 · 손으로 옮긴 카메라는 손이 8초 쉬면 연출로 돌아간다
         {
             var hs = new LiveShow(Make(), "시험호") { DayMinutes = LiveShow.DefaultDayMinutes };
