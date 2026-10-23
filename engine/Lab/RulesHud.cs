@@ -7,8 +7,8 @@ namespace Lab;
 /// <summary>마우스만으로 되는 화면 (docs/UI.md 8 — 함장 요청 10-23): 자리표 · 누름 · 뒤로 · 판 줄 열쇠 · 출항 준비 · 커서 쪽 확대 · 올림과 누름 · 넘기기 — 세계는 그대로.</summary>
 public static partial class Program
 {
-    /// <summary>자리표 시험용 그림 한 장 (사람 n · 모두 켬 / 모두 끔).</summary>
-    private static LiveFrame FakeFrame(int people, bool on)
+    /// <summary>자리표 시험용 그림 한 장 (사람 n · 로봇 n/3 · 모두 켬 / 모두 끔 · 판을 닫으면 말 창).</summary>
+    private static LiveFrame FakeFrame(int people, bool on, bool panel = true)
     {
         var f = new LiveFrame
         {
@@ -19,8 +19,10 @@ public static partial class Program
                 new Gauge("power", "전력", "182/240kW", 0), new Gauge("hull", "선체", "구멍 둘 · 빠지는 방 하나", 2), new Gauge("supply", "물자", "식량 넉넉 · 물 넉넉", 0), new Gauge("fire", "불", "셋 · 주컴퓨터는 아직 모른다", 2),
             },
             Crew = Enumerable.Range(0, people).Select(i => new CrewFace(i, "김하늘" + i, "불을 끈다", i % 4, i)).ToArray(),
+            Robots = Enumerable.Range(0, Math.Max(1, people / 3)).Select(i => new RobotChip(people + i, (i % 5 == 4 ? "D" : "R") + (i + 1), i % 2 == 0 ? "충전" : "불", i % 4, "로봇")).ToArray(),
         };
         if (!on) return f;
+        if (!panel) f.Talk = new[] { new TalkLine("09:12 로봇 2 → 식당 불", 1, 1), new TalkLine("09:12 식당 봉쇄 (사람이 안에 있다)", 2, 1), new TalkLine("09:13 식당 히터 전원을 내렸다 — 불이 났다", 0, 1) };
         f.Card = new[] { "김하늘 '불꽃' · 기관사", "사람됨: 말이 많고 용감하다 · 꿈: 귀향 · 즐겨 하는 것: 음악을 듣는다 · 짝: 이도윤", "생각: 불이야! 다들 다치면 안 되는데", "몸: 깨어 있음 · 핏속 산소 95% · 체온 37.0℃", "다침: 화상 12", "마음: 두려움 · 긴장" };
         f.Selected = 0;
         f.Feed = Enumerable.Range(0, 5).Select(i => new FeedItem("09:1" + i, "식당 불 — 주컴퓨터: 로봇 2", i % 3, i * 10, true)).ToArray();
@@ -46,21 +48,22 @@ public static partial class Program
             var bad = new List<string>(); var small = new List<string>(); int layouts = 0;
             foreach (var (pw, ph) in new[] { (1920, 1080), (1920, 1010), (1600, 900), (1366, 768), (1280, 720), (2560, 1440) })
                 foreach (int n in new[] { 3, 12, 40, 100 })
-                    foreach (bool on in new[] { true, false })
+                    foreach (int mode in new[] { 0, 1, 2 })
                     {
-                        var f = FakeFrame(n, on);
+                        bool on = mode < 2;
+                        var f = FakeFrame(n, on, mode == 0);
                         var st = new HudState();
                         HudLayout.Build(f, st, pw, ph, Hud.Approx, Hud.ApproxLines, hud);
                         layouts++;
-                        foreach (var o in hud.Overlaps()) bad.Add($"{pw}×{ph} 사람 {n} {(on ? "켬" : "끔")}: {o}");
-                        foreach (var o in hud.Outside()) bad.Add($"{pw}×{ph} 사람 {n} {(on ? "켬" : "끔")}: 밖 {o}");
+                        foreach (var o in hud.Overlaps()) bad.Add($"{pw}×{ph} 사람 {n} {(mode == 0 ? "켬" : mode == 1 ? "말 창" : "끔")}: {o}");
+                        foreach (var o in hud.Outside()) bad.Add($"{pw}×{ph} 사람 {n} {(mode == 0 ? "켬" : mode == 1 ? "말 창" : "끔")}: 밖 {o}");
                         foreach (var h in hud.Hits)
                         {
-                            float need = h.Act is UiAct.Crew ? 30 : h.Act is UiAct.Pause or UiAct.Speed or UiAct.FixedMenu or UiAct.Sound or UiAct.Captions or UiAct.Help or UiAct.Menu or UiAct.ReplayStop ? 32 : h.Act is UiAct.Story ? 0 : 26;
+                            float need = h.Act is UiAct.Crew ? 30 : h.Act is UiAct.Robot or UiAct.RobotMore ? 26 : h.Act is UiAct.Pause or UiAct.Speed or UiAct.FixedMenu or UiAct.Sound or UiAct.Captions or UiAct.Help or UiAct.Menu or UiAct.ReplayStop ? 32 : h.Act is UiAct.Story ? 0 : 26;
                             if (h.R.H + 0.01f < need || h.R.W + 0.01f < (h.Act == UiAct.PanelBar ? 18 : Math.Min(need, 28))) small.Add($"{pw}×{ph} 사람 {n}: {h.Act} {h.R.W:0}×{h.R.H:0}");
                         }
                     }
-            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 × 모두 켬 · 끔 — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상)",
+            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상)",
                 bad.Count == 0 && small.Count == 0, $"자리표 {layouts}가지 · 겹침 · 밖 {bad.Count} {string.Join(" | ", bad.Take(4))} · 작은 자리 {small.Count} {string.Join(" | ", small.Take(3))}");
         }
         // 3: 누름이 새지 않는다 · 같은 손잡이일 때만 · 자막 위는 세계로

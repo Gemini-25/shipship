@@ -30,6 +30,8 @@ public sealed class LiveFrame
     public Gauge[] Vitals = Array.Empty<Gauge>();
     /// <summary>사람 줄 (UI U2): 사람마다 얼굴 · 이름 · 하는 일 · 단계 — 얼굴은 Faces (칸 Painter.FaceW × FaceH · 한 줄에 FacesPerRow) · 바뀌면 FacesVersion이 오른다.</summary>
     public CrewFace[] Crew = Array.Empty<CrewFace>();
+    public RobotChip[] Robots = Array.Empty<RobotChip>();
+    public TalkLine[] Talk = Array.Empty<TalkLine>();
     public Img? Faces;
     public int FacesVersion, FacesPerRow = LiveShow.FacesPerRow;
     public int Selected = -1;
@@ -162,6 +164,8 @@ public sealed partial class LiveShow
     public LiveShow(Sim sim, string shipName)
     {
         Sim = sim; ShipName = shipName;
+        if (sim.Find<Mind>() is { } jm) jm.Journal = true;   // 판단 일지 · 주컴퓨터 일지를 켠다 (쓰기만 — 법칙 '판단 일지는 세계를 바꾸지 않는다') — 로봇 카드 · 말 창이 읽는다
+        if (sim.Find<ShipMind>() is { } jc) jc.NoteOn = true;
         Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다) · 하루 목표는 띄우는 쪽이 고른다 (게임 · --live는 3분)
         Painter = new Painter(sim.Layout) { Nudge = Nudge };
         var L = sim.Layout;
@@ -257,6 +261,7 @@ public sealed partial class LiveShow
         TickNotice(realSec);
         WatchComputer(realSec);
         WatchSpeech(realSec);
+        WatchTalk(realSec);
         AL("알림 · 주컴퓨터 지켜보기");
         // 카메라: 연출이 고른 곳으로 부드럽게 (전체 보기면 배 가운데)
         var L = Sim.Layout;
@@ -515,7 +520,7 @@ public sealed partial class LiveShow
         }
         else
         {
-            lines.Add("하는 일: " + mind.Thought(a.Id));
+            RobotCard(w, mind, a, lines);   // 4단: 하는 일 ▸ 방법 · 맡은 까닭 · 최근 판단
             var net = w.Find<Network>();
             if (net != null && a.C.Mech >= 0 && a.C.Mech < net.Robots.Count)
             {
@@ -649,7 +654,7 @@ public sealed partial class LiveShow
             PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = prows, PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
             Vitals = Vitals(),
-            Crew = CrewBar(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
+            Crew = CrewBar(), Robots = RobotBar(), Talk = Talk(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
             Feed = Feed(), Paused = Paused,
             // 마우스 화면의 손잡이 상태 (docs/UI.md 1.2)
             Panel = Panel, PanelPickKey = PanelPickKey, Show = Show, Legend = Show == Overlay.None ? "" : OverlayName(Show),
@@ -983,6 +988,14 @@ public sealed partial class LiveShow
                     rows.Add(new PanelRow($"{mind.NameOf(id)}{(so?.NickOf(id) is string nk ? $" '{nk}'" : "")} — {state}",
                         $"{Persona(mind, so, a)}{(thinks.Length > 0 ? "\n생각: " + thinks : "")}\n몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
                         slots.GetValueOrDefault(id, -1), bars, Key: KeyPerson(id)));
+                }
+                // 로봇 · 드론 (사람 다음 — 칩 줄의 '+N'이 여기로)
+                foreach (var chip in RobotBar())
+                {
+                    var ra = mind.Agents[chip.Id];
+                    var card = new List<string>();
+                    RobotCard(w, mind, ra, card);
+                    rows.Add(new PanelRow($"{mind.NameOf(chip.Id)} — {(chip.Level == 3 ? "멈췄다" : Mind.GoalName(ra.C.Goal))}", string.Join("\n", card.Skip(0)) + $"\n전지 {ra.C.Battery * 100:0}%", chip.Level >= 2, Key: KeyPerson(chip.Id)));
                 }
                 break;
             }

@@ -42,11 +42,14 @@ public sealed class Ring<T> where T : struct
     private readonly int _cap;
     public Ring(int cap) { _cap = cap; }
     public int Count => _n;
+    /// <summary>지금까지 넣은 수 (밀려난 것 포함 — 화면이 새 것만 읽는 자리표).</summary>
+    public long Added { get; private set; }
     public void Add(in T x)
     {
         _a ??= new T[_cap];
         _a[_head] = x; _head = (_head + 1) % _cap;
         if (_n < _cap) _n++;
+        Added++;
     }
     /// <summary>k번째로 새 것 (0: 가장 새 것 · k &lt; Count).</summary>
     public ref T Newest(int k) => ref _a![(_head - 1 - k + 2 * _cap) % _cap];

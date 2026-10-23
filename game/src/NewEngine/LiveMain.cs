@@ -406,6 +406,7 @@ public partial class LiveMain : Node2D
         Lap("카드");
         DrawFeed(f); Lap("사건");
         DrawCenter(f); Lap("가운데");
+        DrawTalk(f); Lap("말 창");
         DrawStory(f); Lap("아래 줄");
         if (f.Broadcast.Length > 0 && f.BroadcastAlpha > 0.05f) DrawBroadcast(f);
         DrawCaptions(f);
@@ -623,6 +624,12 @@ public partial class LiveMain : Node2D
     {
         switch (key)
         {
+            case "computer":   // 주컴퓨터: 화면 + 받침
+                DrawRect(new Rect2(c + new Vector2(-s, -s * 0.8f), new Vector2(s * 2, s * 1.3f)), col, false, 1.5f);
+                DrawLine(c + new Vector2(0, s * 0.5f), c + new Vector2(0, s * 0.95f), col, 1.5f);
+                DrawLine(c + new Vector2(-s * 0.55f, s * 0.95f), c + new Vector2(s * 0.55f, s * 0.95f), col, 1.5f);
+                DrawLine(c + new Vector2(-s * 0.5f, -s * 0.25f), c + new Vector2(s * 0.3f, -s * 0.25f), col, 1.5f);
+                break;
             case "air":   // 공기: 동그라미 속 거품 둘
                 DrawArc(c, s, 0, Mathf.Tau, 20, col, 1.5f);
                 DrawCircle(c + new Vector2(-s * 0.3f, s * 0.15f), s * 0.28f, col);
@@ -813,6 +820,48 @@ public partial class LiveMain : Node2D
             }
         }
         foreach (var h in _hud.Hits) if (h.Act == UiAct.CrewMore) DrawButton(h, $"+{_hud.CrewMore}", 14);
+        DrawRobots(f);
+    }
+
+    /// <summary>로봇 칩 줄: 칩 글 (굵게) + 하는 일 낱말 · 테두리는 형편 (멈춤 회색 · 못 움직임 붉게 깜빡 · 전지 적음 호박색) · 고른 로봇은 금빛.</summary>
+    private void DrawRobots(LiveFrame f)
+    {
+        float pulse = 0.6f + 0.4f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau * 0.8f);
+        foreach (var h in _hud.Hits)
+        {
+            if (h.Act == UiAct.RobotMore) { DrawButton(h, $"+{f.Robots.Length - _hud.Hits.Count(x => x.Act == UiAct.Robot)}", 13); continue; }
+            if (h.Act != UiAct.Robot) continue;
+            var c = f.Robots.FirstOrDefault(x => x.Id == h.Key);
+            var r = R(h.R);
+            bool hover = h.R.Contains(_mouse.X / U, _mouse.Y / U);
+            DrawRect(r, new Color(0.03f, 0.04f, 0.07f, 0.82f));
+            var edge = h.On ? new Color(1f, 0.86f, 0.4f) : c.Level switch { 3 => new Color(0.3f, 0.3f, 0.34f), 2 => new Color(1f, 0.35f, 0.3f, pulse), 1 => new Color(1f, 0.76f, 0.32f), _ => new Color(0.45f, 0.75f, 0.85f, 0.75f) };
+            DrawRect(r, hover ? new Color(0.7f, 0.82f, 1f) : edge, false, h.On || c.Level == 2 || hover ? 2 : 1);
+            var ink = c.Level == 3 ? new Color(0.5f, 0.5f, 0.55f) : Ink;
+            float tagW = MeasureW(c.Tag, Fs(13), true);
+            DrawString(_bold, new Vector2(r.Position.X + 9 * U, r.End.Y - 8 * U), c.Tag, HorizontalAlignment.Left, -1, Fs(13), c.Level == 3 ? ink : new Color(0.6f, 0.88f, 0.95f));
+            DrawString(_font, new Vector2(r.Position.X + 9 * U + tagW + 6 * U, r.End.Y - 8 * U), c.Word, HorizontalAlignment.Left, -1, Fs(13), ink);
+        }
+    }
+
+    /// <summary>주컴퓨터 말 창 (탭 밑 오른쪽): 머리 '주컴퓨터' + 줄 셋 (맡김 · 막힘은 호박색 점 · 봉쇄 · 막힌 곳은 붉은 점) · 누르면 주컴퓨터 판.</summary>
+    private void DrawTalk(LiveFrame f)
+    {
+        if (f.Talk.Length == 0 || !_hud.Areas.TryGetValue("말 창", out var a)) return;
+        var r = R(a);
+        float alpha = f.Talk.Max(t => t.Alpha);
+        bool hover = a.Contains(_mouse.X / U, _mouse.Y / U);
+        DrawRect(r, new Color(0.03f, 0.04f, 0.07f, 0.86f * Math.Max(alpha, 0.3f)));
+        DrawRect(r, hover ? new Color(0.7f, 0.82f, 1f) : new Color(0.45f, 0.6f, 0.85f, 0.7f * alpha), false, hover ? 2 : 1);
+        DrawIcon("computer", r.Position + new Vector2(18, 17) * U, 7 * U, new Color(0.6f, 0.88f, 0.95f, alpha));
+        DrawString(_bold, r.Position + new Vector2(34, 23) * U, "주컴퓨터", HorizontalAlignment.Left, -1, Fs(14), new Color(0.6f, 0.88f, 0.95f, alpha));
+        for (int i = 0; i < f.Talk.Length; i++)
+        {
+            var t = f.Talk[i];
+            float y = r.Position.Y + (34 + i * 24) * U;
+            if (t.Level > 0) DrawCircle(new Vector2(r.Position.X + 14 * U, y + 12 * U), 3.5f * U, t.Level == 2 ? new Color(1f, 0.4f, 0.35f, t.Alpha) : new Color(1f, 0.76f, 0.32f, t.Alpha));
+            DrawString(_font, new Vector2(r.Position.X + 24 * U, y + 17 * U), t.Text, HorizontalAlignment.Left, r.Size.X - 32 * U, Fs(14), new Color(0.86f, 0.9f, 0.96f, t.Alpha));
+        }
     }
 
     /// <summary>보기 묶음 (오른쪽 아래): 연출 따라가기 (손으로 옮겼으면 남은 초 고리) · 배 전체 · 축소 · 확대 · 겹쳐 보기 · 방금 장면.</summary>
@@ -1009,7 +1058,8 @@ public partial class LiveMain : Node2D
             "고정 빠르기 단추   ×1 · ×10 · ×60 · ×600 · ×3600 — 늦추지 않는다 (Shift + 1~5)",
             "끌기 · 가운데 단추 끌기   카메라 옮기기 (W A S D · 화살표)",
             "휠 · 두 번 누르기   커서 쪽으로 확대 / 축소 · 판 위에서는 넘기기 (+ −)",
-            "사람 · 로봇 누르기 · 사람 줄 누르기   생각 · 몸 보기 · 따라가기 — 카드의 × 로 놓기 (Esc)",
+            "사람 · 로봇 누르기 · 사람 줄 · 로봇 칩 누르기   생각 · 몸 보기 · 따라가기 — 로봇은 하는 일 · 맡은 까닭 · 최근 판단 (카드의 × 로 놓기 · Esc)",
+            "주컴퓨터 말 창 (오른쪽 위)   주컴퓨터가 방금 한 말 세 줄 — 누르면 주컴퓨터 판 (J)",
             "오른쪽 누르기   뒤로 — 펼친 목록 → 판 → 고른 이 (Esc)",
             "판 탭   장면 (L) · 항로 (T) · 주컴퓨터 (J) · 사슬 (C) · 사람 (P) — 줄을 눌러 고른다",
             "오른쪽 아래   연출 따라가기 (F) · 배 전체 (Tab) · 축소 · 확대 · 겹쳐 보기 (O) · 방금 장면 다시보기 (B)",
@@ -1090,7 +1140,9 @@ public partial class LiveMain : Node2D
             case UiAct.CardClose: _cmds.Enqueue(s => s.Release()); break;
             case UiAct.CardName: { int id = f?.Selected ?? -1; _cmds.Enqueue(s => s.CenterOn(id)); break; }
             case UiAct.Crew: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
-            case UiAct.CrewMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.People) s.TogglePanel(PanelKind.People); }); break;
+            case UiAct.CrewMore or UiAct.RobotMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.People) s.TogglePanel(PanelKind.People); }); break;
+            case UiAct.Robot: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
+            case UiAct.Talk: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Journal) s.TogglePanel(PanelKind.Journal); }); break;
             case UiAct.Feed: if (f != null && k < f.Feed.Length) { int cell = f.Feed[k].Cell; _cmds.Enqueue(s => s.LookAt(cell)); } break;
             case UiAct.Vital: if (f != null && k < f.Vitals.Length) { string icon = f.Vitals[k].Icon; _cmds.Enqueue(s => s.GaugeGo(icon)); } break;
             case UiAct.Notice: _cmds.Enqueue(s => s.NoticeGo()); break;

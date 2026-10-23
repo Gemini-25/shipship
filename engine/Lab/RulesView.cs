@@ -272,6 +272,7 @@ public static partial class Program
             partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
         ViewRules2(lay, dt);
         ViewRules3(lay, dt);
+        RobotViewRules(dt);
     }
 
     /// <summary>화면 바퀴 3 — 4단 보이게 하는 틀: 속말 · (뒤에) 풍선 · 로봇 칩 · 카드 · 주컴퓨터 말 창 (세계 그대로).</summary>

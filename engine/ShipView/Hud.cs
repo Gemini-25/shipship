@@ -16,7 +16,7 @@ public readonly record struct RectF(float X, float Y, float W, float H)
 public enum UiAct
 {
     Pause, Speed, FixedMenu, Fixed, Sound, Captions, Help, Menu, MenuShip, ShipPick, MenuRestart, MenuStart, Tab, PanelClose, PanelRow, PanelRowAct, PanelBar, ChainLines, Depart,
-    CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts,
+    CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts, Robot, RobotMore, Talk,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -296,9 +296,10 @@ public static class HudLayout
         // 사람 줄 (16..W−16−270−16 · 아래 끝 = 보기 묶음 아래 끝)
         float crewRight = view.X - 16, crewBottom = view.Bottom;
         float crewTop = LayoutCrew(f, h, Side, crewRight, crewBottom, Tw);
+        crewTop = LayoutRobots(f, h, Side, crewRight, f.Crew.Length > 0 ? crewTop - 6 : crewBottom, Tw);   // 로봇 칩 줄 (사람 줄 위)
         // 범례
         float legendBottom = view.Y - 8;
-        float crewRightEdge = h.Areas.TryGetValue("사람 줄", out var ca) ? ca.Right : Side;
+        float crewRightEdge = Math.Max(h.Areas.TryGetValue("사람 줄", out var ca) ? ca.Right : Side, h.Areas.TryGetValue("로봇 줄", out var ra) ? ra.Right : Side);
         if (crewRightEdge > W - Side - 420) legendBottom = Math.Min(legendBottom, crewTop - 8);   // 사람 줄이 범례 밑까지 오면 그 위로
         if (f.Show != Overlay.None)
         {
@@ -343,8 +344,19 @@ public static class HudLayout
             LayoutPanel(f, s, h, new RectF(panelLeft, 96, pw, bottom - 96), Tw, Th);
         }
 
+        // ── 주컴퓨터 말 창 (판이 닫혔을 때 · 탭 밑 오른쪽 · 누르면 주컴퓨터 판) ──
+        if (f.Panel == PanelKind.None && f.Talk.Length > 0)
+        {
+            float tw = Math.Clamp(W - LeftCol - 600 - 2 * Side, 300, 440);
+            var r = new RectF(W - Side - tw, 96, tw, 34 + f.Talk.Length * 24 + 6);
+            h.Areas["말 창"] = r;
+            h.Hits.Add(new UiHit(r, UiAct.Talk, 0, false, true, "주컴퓨터 판에서 보기 (J)"));
+            h.Blocks.Add(("말 창", r));
+            panelLeft = r.X;
+        }
+
         // ── 가운데 칸: 다시보기 띠 → 출항 준비 띠 → ★ → 알림 ──
-        float colL = LeftCol, colR = (f.Panel != PanelKind.None ? panelLeft : W) - Side, cy = 96;
+        float colL = LeftCol, colR = (f.Panel != PanelKind.None || f.Talk.Length > 0 ? panelLeft : W) - Side, cy = 96;
         float colW = Math.Max(200, colR - colL);
         RectF Center(float w, float hgt) { w = Math.Min(w, colW); float cx = Math.Clamp(W / 2 - w / 2, colL, colR - w); return new RectF(cx, cy, w, hgt); }
         if (f.Replaying)
@@ -485,6 +497,35 @@ public static class HudLayout
         h.Areas["사람 줄"] = crewArea;
         h.Blocks.Add(("사람 줄", crewArea));
         return y0;
+    }
+
+    public const float ChipH = 26;
+
+    /// <summary>로봇 칩 줄: 'R1 불' (칩 글 + 하는 일 낱말) · 넘치면 '+N' (사람 판의 로봇 줄로) — 위 끝을 돌려준다.</summary>
+    private static float LayoutRobots(LiveFrame f, Hud h, float left, float right, float bottom, Func<string, int, bool, float> tw)
+    {
+        int n = f.Robots.Length;
+        if (n == 0) return bottom;
+        float y = bottom - ChipH, x = left;
+        int fit = 0;
+        foreach (var c in f.Robots)
+        {
+            float w = Math.Max(52, tw(c.Tag, 13, true) + 6 + tw(c.Word, 13, false) + 22);
+            if (x + w > right - (fit + 1 < n ? 48 : 0)) break;
+            h.Hits.Add(new UiHit(new RectF(x, y, w, ChipH), UiAct.Robot, c.Id, c.Id == f.Selected, true, c.Tip));
+            x += w + 4; fit++;
+        }
+        if (fit < n)
+        {
+            var more = new RectF(x, y, 44, ChipH);
+            h.Hits.Add(new UiHit(more, UiAct.RobotMore, 0, false, true, $"로봇 {n - fit} 더 — 사람 판에서 보기 (P)"));
+            h.Areas["로봇 더"] = more;
+            x += 48;
+        }
+        var area = new RectF(left, y, Math.Max(0, x - 4 - left), ChipH);
+        h.Areas["로봇 줄"] = area;
+        h.Blocks.Add(("로봇 줄", area));
+        return y;
     }
 
     /// <summary>판: 머리 50 (제목 · [사슬 선] · ×) · 출항 준비 줄 · 보이는 줄 (넘기기 — PanelFirst부터 · 고른 줄이 바뀌면 보이게) · 넘김 막대 · 바닥 34.</summary>
