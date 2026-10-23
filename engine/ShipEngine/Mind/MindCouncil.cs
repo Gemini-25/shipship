@@ -44,8 +44,8 @@ public sealed partial class Mind
 
     private void MeetingOption(Agent a, int here)
     {
-        if (!Gathering(a) || RoomOf(here) == GatherRoom || BelievedRoomBad(a, GatherRoom)) return;
-        Add(GoalKind.Meeting, GatherRoom, GatherCell, 2.4f, GatherCause);
+        if (!Gathering(a) || BelievedRoomBad(a, GatherRoom)) return;
+        Add(GoalKind.Meeting, GatherRoom, GatherCell, 2.4f, GatherCause);   // 방 안에서도 남는다 — 들어서는 순간 사라지면 문 앞에서 들락거린다 (검토 ③-2)
     }
 
     /// <summary>회의 · 판결이 고르기 점수에 닿는 곱.</summary>
@@ -54,6 +54,7 @@ public sealed partial class Mind
         if (!a.IsPerson || a.Id >= _penance.Length) return 1;
         float k = 1;
         if (Gathering(a) && Everyday(g) && cell >= 0 && RoomOf(cell) != GatherRoom) k *= 0.3f;
+        if (Sheltering(a) && Everyday(g) && cell >= 0 && RoomOf(cell) != ShelterRoom) k *= 0.3f;   // 대피 중엔 대피실 밖 일상을 덜 고른다 (회의와 같다)
         if (_penance[a.Id] > _nowTick)
         {
             if (g is GoalKind.Relax or GoalKind.Socialize or GoalKind.Exercise) k *= 0.3f;

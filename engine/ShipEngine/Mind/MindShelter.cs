@@ -47,10 +47,10 @@ public sealed partial class Mind
     /// <summary>지금 대피 방송을 따르고 있다.</summary>
     private bool Sheltering(Agent a) => a.IsPerson && ShelterRoom >= 0 && ShelterUntil > _nowTick && a.Id < _heed.Length && _heed[a.Id] != 0;
 
-    /// <summary>대피실로 가는 갈래: 밖에 있으면 (그 방이 위험하다고 믿지 않으면).</summary>
+    /// <summary>대피실로 가는 · 거기 머무는 갈래 (그 방이 위험하다고 믿지 않으면) — 방 안에서도 남는다 (들어서는 순간 사라지면 문 앞에서 들락거린다 · 검토 ③-2).</summary>
     private void ShelterOption(Agent a, int here)
     {
-        if (!Sheltering(a) || RoomOf(here) == ShelterRoom || BelievedRoomBad(a, ShelterRoom)) return;
+        if (!Sheltering(a) || BelievedRoomBad(a, ShelterRoom)) return;
         Add(GoalKind.Shelter, ShelterRoom, ShelterCell, 4f, ShelterCause);
     }
 

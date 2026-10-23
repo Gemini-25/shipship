@@ -143,6 +143,7 @@ public static partial class Program
             s.Run(Time.Minutes(3));
             double ms = sw.Elapsed.TotalMilliseconds;
             var im = cm.Imaginations.Where(v => v.Room == lay.Room[At(6, 2)]).ToList();
+            if (Debug) { foreach (var l in cm.Log) Console.WriteLine($"    (가) {Time.Clock(l.tick)} {l.text}"); foreach (var x in cm.Incidents) Console.WriteLine($"    (가) 사건 {x.Kind} 방 {x.Room} 대상 {x.Subject} 활성 {x.Active}"); }
             bool chosenNow = im.Any(v => v.Option == 1 && v.Chosen == 1);
             Check("상상 (가): 뚫린 방에 쓰러진 사람 · 열린 문 너머에도 쓰러진 사람 — 두 미래를 돌려 보고 '지금 닫는다'를 고른다 → 옆 방 사람이 산다",
                 chosenNow && life[m[b].C.Body].Alive != 0 && f.Pressure(life[m[b].C.Body].Cell) > 50,

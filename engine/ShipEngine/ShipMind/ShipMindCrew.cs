@@ -86,19 +86,22 @@ public sealed partial class ShipMind
 
     /// <summary>맡기는 차례를 _order에 채운다 (급한 것부터 · 같으면 먼저 난 것) — 돌려주는 것은 그 수.
     /// 붙잡은 사건이 다섯을 넘으면 '몰렸다' — 앞일 그려 보기(복제 세계)를 멈추고 방침대로만 한다 (아폴로 11호 1202 경보: 덜 급한 일을 버리고 급한 일만 돌렸다).</summary>
+    private readonly HashSet<int> _triagePeople = new();
     private int Triage(Sim sim)
     {
-        int n = 0;
+        int n = 0, load = 0;
         if (_order.Length < Incidents.Count) _order = new int[Incidents.Count * 2];
+        _triagePeople.Clear();
         for (int i = 0; i < Incidents.Count; i++)
         {
             if (Incidents[i].Active == 0) continue;
             int r = Rank(Incidents[i].Kind), j = n++;
             while (j > 0 && Rank(Incidents[_order[j - 1]].Kind) > r) { _order[j] = _order[j - 1]; j--; }   // 안정 삽입 정렬 — 같은 급은 먼저 난 것이 앞
             _order[j] = i;
+            if (!PersonKind(Incidents[i].Kind) || Incidents[i].Subject < 0 || _triagePeople.Add(Incidents[i].Subject)) load++;   // 한 사람의 사건(쓰러짐 · 다친 사람 …)은 하나로 센다
         }
-        byte over = (byte)(n > 5 ? 1 : 0);
-        if (over != Overloaded) { Overloaded = over; if (over != 0) { Overloads++; Say(sim, $"사건이 몰렸다 ({n}건) — 앞일을 그려 보지 않고 급한 것부터 맡긴다"); } }
+        byte over = (byte)(load > 5 ? 1 : 0);
+        if (over != Overloaded) { Overloaded = over; if (over != 0) { Overloads++; Say(sim, $"사건이 몰렸다 ({load}건) — 앞일을 그려 보지 않고 급한 것부터 맡긴다"); } }
         return n;
     }
 

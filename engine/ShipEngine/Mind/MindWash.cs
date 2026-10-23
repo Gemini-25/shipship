@@ -132,8 +132,9 @@ public sealed partial class Mind
             foreach (var v in a.Avoid) if (v.Goal == g && v.Target == fu) { avoided = true; break; }   // 줄이 길어 돌아선 곳은 한동안 고르지 않는다
             if (avoided) continue;
             int cell = L.Furniture[fu].Cells[0];
-            int d = Manhattan(a.C.Cell, cell) + 12 * WashLine(a, fu, g) + (int)(60 * DreadAt(a, cell));
+            int d = PathDist(a.C.Cell, cell) + 12 * WashLine(a, fu, g) + (int)(60 * DreadAt(a, cell));   // 길 거리 (벽 너머 가까운 곳은 멀다)
             if (Called(a, _nowTick - Time.Minutes(10), out int to, out _) && to == fu) d -= 40;   // 주컴퓨터가 비었다고 알려 준 곳
+            if (a.C.Goal == g && a.C.GoalTarget == fu) d = d * 7 / 10;   // 고른 곳을 지킨다 (3할 여유 — 두 곳 사이를 오가지 않게)
             if (d < bd) { bd = d; best = fu; }
         }
         return best;

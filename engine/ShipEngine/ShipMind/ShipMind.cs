@@ -321,12 +321,27 @@ public sealed partial class ShipMind : IEngine
         }
     }
 
+    /// <summary>사람 사건 (쓰러짐 · 다침 · 심정지 · 수술 · 마음 돌봄)은 사람에 묶는다 — 방은 그 사람이 지금 있는 곳일 뿐이다
+    /// (예전엔 방에 묶어 다친 이가 방을 옮길 때마다 새 사건이 서고 로봇이 바뀌었다 — 20분에 사건 14개 · 검토 ③-5).</summary>
+    public static bool PersonKind(IncidentKind k) => k is IncidentKind.PersonDown or IncidentKind.Injured or IncidentKind.Arrest or IncidentKind.Surgery or IncidentKind.Counsel;
+
+    /// <summary>사건의 열쇠: 사람 사건은 (종류 · 사람) · 장치 · 문 사건은 (종류 · 방 · 대상) · 나머지는 (종류 · 방).</summary>
+    private static long IncidentKey(IncidentKind k, int room, int subject)
+    {
+        bool person = PersonKind(k) && subject >= 0;
+        bool thing = k is IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain or IncidentKind.DoorJam or IncidentKind.PipeHunt;
+        return ((long)k << 48) | ((long)(person ? 0 : room + 1) << 24) | (uint)((person || thing ? subject : -1) + 1);
+    }
+
+    private static bool Same(in Incident x, IncidentKind k, int room, int subject) =>
+        x.Kind == k && (PersonKind(k) && subject >= 0 ? x.Subject == subject : x.Room == room && (subject < 0 || x.Subject == subject));
+
     public int Find(IncidentKind k, int room, int subject = -1)
     {
         for (int i = 0; i < Incidents.Count; i++)
         {
             var x = Incidents[i];
-            if (x.Active != 0 && x.Kind == k && x.Room == room && (subject < 0 || x.Subject == subject)) return i;
+            if (x.Active != 0 && Same(x, k, room, subject)) return i;
         }
         return -1;
     }
@@ -338,6 +353,7 @@ public sealed partial class ShipMind : IEngine
         {
             var x = Incidents[i];
             x.Clear = 0; x.Level = level; if (cell >= 0) x.Cell = cell;
+            x.Room = room;   // 사람 사건: 그 사람이 옮겨 간 방 (다른 사건은 같은 방이다)
             Incidents[i] = x;
             return;
         }
@@ -345,9 +361,9 @@ public sealed partial class ShipMind : IEngine
         for (int j = Incidents.Count - 1; j >= 0; j--)
         {
             var y = Incidents[j];
-            if (y.Active == 0 && y.Kind == k && y.Room == room && (subject < 0 || y.Subject == subject) && sim.Tick - y.Ended < Time.Minutes(3))
+            if (y.Active == 0 && Same(y, k, room, subject) && sim.Tick - y.Ended < Time.Minutes(3))
             {
-                y.Active = 1; y.Clear = 0; y.Level = level; if (cell >= 0) y.Cell = cell;
+                y.Active = 1; y.Clear = 0; y.Level = level; if (cell >= 0) y.Cell = cell; y.Room = room;
                 Incidents[j] = y;
                 return;
             }
@@ -379,7 +395,7 @@ public sealed partial class ShipMind : IEngine
     private void Detect(Sim sim)
     {
         var seen = new HashSet<long>();
-        void Mark(IncidentKind k, int room, int subject = -1) => seen.Add(((long)k << 48) | ((long)(room + 1) << 24) | (uint)(subject + 1));
+        void Mark(IncidentKind k, int room, int subject = -1) => seen.Add(IncidentKey(k, room, subject));
         // 배 전체 산소 (사람이 쓰는 방의 가운뎃값) — 배 전체가 함께 묽어진 것은 방마다가 아니라 배의 일 하나다
         float shipO2 = ShipO2();
         if (shipO2 < 15) { Raise(sim, IncidentKind.BadAir, -1, -1, shipO2); Mark(IncidentKind.BadAir, -1); }
@@ -603,8 +619,7 @@ public sealed partial class ShipMind : IEngine
             var x = Incidents[i];
             if (x.Active == 0) continue;
             if (x.Room >= 0 && x.Room < RoomSeen.Length && (RoomSeen[x.Room] == 0 || _stale[x.Room] != 0) && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost or IncidentKind.PowerLost or IncidentKind.LineCut or IncidentKind.PipeHunt)) continue; // 못 보는 방은 그대로 둔다
-            long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain or IncidentKind.DoorJam or IncidentKind.PipeHunt ? x.Subject : -1) + 1);
-            if (seen.Contains(key)) continue;
+            if (seen.Contains(IncidentKey(x.Kind, x.Room, x.Subject))) continue;
             // 끝: 5번(1분) 연속 멀쩡 · 위험한 사건은 적어도 2분은 붙잡는다
             int need = Dangerous(x.Kind) ? 5 : 2;
             if (++x.Clear >= need && (!Dangerous(x.Kind) || sim.Tick - x.Since >= Time.Minutes(2))) { x.Active = 0; x.Ended = sim.Tick; Incidents[i] = x; End(sim, ref x); } // 끝난 것을 먼저 적어야 End가 '그 방에 다른 사건이 남았나'를 바르게 본다
