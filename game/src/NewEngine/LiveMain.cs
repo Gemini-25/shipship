@@ -41,6 +41,7 @@ public partial class LiveMain : Node2D
     private ImageTexture? _tex;
     private LiveFrame? _shown;
     private Font _font = null!, _bold = null!;
+    private int _thoughts = -1;
     private string[] _ships = Array.Empty<string>(), _shipNames = Array.Empty<string>();
     private int _shipAt;
     private ulong _seed = 18;
@@ -109,6 +110,7 @@ public partial class LiveMain : Node2D
             else if (a == "--hold") _noHold = false;
             else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
             else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
+            else if (a.StartsWith("--thoughts=") && int.TryParse(a[11..], out var th)) _thoughts = Math.Clamp(th, 0, 2);
         }
         var args = OS.GetCmdlineUserArgs();
         _noHold = !args.Contains("--hold") && args.Any(a => a.StartsWith("--for") || a.StartsWith("--shots") || a.StartsWith("--skip") || a == "--ignite" || a.StartsWith("--panel") || a.StartsWith("--pick"));
@@ -324,6 +326,7 @@ public partial class LiveMain : Node2D
         if (_pick >= 0 && _runT > 3) { int who = _pick; _pick = -1; _cmds.Enqueue(s => s.SelectAgent(who)); }
         if (_openPanel != PanelKind.None && _runT > 3) { var k = _openPanel; _openPanel = PanelKind.None; _cmds.Enqueue(s => s.TogglePanel(k)); }
         if (_overlay != Overlay.None && _runT > 2) { var o = _overlay; _overlay = Overlay.None; _cmds.Enqueue(s => s.Show = o); }
+        if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shotDir != null && _shown != null && _runT >= _nextShot)
@@ -395,6 +398,7 @@ public partial class LiveMain : Node2D
         long t = Stopwatch.GetTimestamp();
         void Lap(string k) { if (_runFor <= 0) return; long n = Stopwatch.GetTimestamp(); _laps[k] = _laps.GetValueOrDefault(k) + (n - t) * 1000.0 / Stopwatch.Frequency; t = n; }
         DrawWorldMarks(f, vp); Lap("세계 위");
+        DrawBubbles(f, vp); Lap("풍선");
         DrawTop(f); Lap("위 줄");
         DrawVitals(f); Lap("띠");
         DrawTabs(f); Lap("탭");
@@ -438,6 +442,82 @@ public partial class LiveMain : Node2D
             }
         }
     }
+
+    private readonly StyleBoxFlat _speech = new() { CornerRadiusTopLeft = 7, CornerRadiusTopRight = 7, CornerRadiusBottomLeft = 7, CornerRadiusBottomRight = 7, AntiAliasing = true };
+    private readonly StyleBoxFlat _cloud = new() { CornerRadiusTopLeft = 14, CornerRadiusTopRight = 14, CornerRadiusBottomLeft = 14, CornerRadiusBottomRight = 14, AntiAliasing = true };
+    private static readonly string[] ThoughtWords = { "속마음 풍선: 끔", "속마음 풍선: 고른 이", "속마음 풍선: 화면 안 셋" };
+
+    /// <summary>머리 위 풍선: 입말 = 흰 둥근 네모 + 꼬리 · 속말 = 옅은 푸른 구름 + 작은 동그라미 둘 · 판이 가린 자리는 그리지 않는다 · 겹치면 위로 민다.</summary>
+    private void DrawBubbles(LiveFrame f, Vector2 vp)
+    {
+        if (f.Bubbles.Length == 0) return;
+        float cellPx = (float)(vp.X / f.CamW);
+        int fs = Fs((int)Math.Clamp(cellPx * 0.42f, 13, 17));
+        float lineH = _font.GetHeight(fs);
+        // 자리부터: 머리 위 가운데 → 오른쪽 · 왼쪽으로 비킴 → 겹친 풍선 위로 (여섯 번까지) · 판이 가린 머리 · 위 줄에 닿는 것은 뺀다
+        _bubblePlaced.Clear();
+        if (!double.IsNaN(f.SelX))   // 고른 이의 몸은 가리지 않는다 (그리지 않는 자리)
+        {
+            var c = new Vector2((float)((f.SelX - f.CamLeft) / f.CamW * vp.X), (float)((f.SelY - f.CamTop) / f.CamH * vp.Y));
+            _bubblePlaced.Add((new Rect2(c - new Vector2(0.45f, 0.62f) * cellPx, new Vector2(0.9f, 1.1f) * cellPx), c, false, 0, Array.Empty<string>()));
+        }
+        foreach (var b in f.Bubbles)
+        {
+            var head = new Vector2((float)((b.X - f.CamLeft) / f.CamW * vp.X), (float)((b.Y - f.CamTop) / f.CamH * vp.Y));
+            if (_hud.At(head.X / U, head.Y / U).Kind != RouteKind.World) continue;   // 판 · 손잡이가 가린 머리
+            var lines = b.Text.Split('\n');
+            float w = 0;
+            foreach (var l in lines) w = Math.Max(w, MeasureW(l, fs, false));
+            var size = new Vector2(w + 18 * U, lines.Length * lineH + 10 * U);
+            float top = head.Y - size.Y - 10 * U, gap = 6 * U;
+            Rect2 Fit(float x, float y) => new(new Vector2(Math.Clamp(x, 4, vp.X - size.X - 4), y), size);
+            bool Free(Rect2 r) => _bubblePlaced.TrueForAll(p => !p.box.Grow(2 * U).Intersects(r));
+            var box = Fit(head.X - size.X / 2, top);
+            if (!Free(box))
+            {
+                var hit = _bubblePlaced.First(p => p.box.Grow(2 * U).Intersects(box)).box;
+                var right = Fit(hit.End.X + gap, top); var left = Fit(hit.Position.X - size.X - gap, top);
+                if (Free(right)) box = right;
+                else if (Free(left)) box = left;
+                else
+                    for (int k = 0; k < 6 && !Free(box); k++)
+                        box.Position = new Vector2(box.Position.X, _bubblePlaced.Where(p => p.box.Grow(2 * U).Intersects(box)).Min(p => p.box.Position.Y) - size.Y - gap);
+            }
+            if (box.Position.Y < 46 * U || !Free(box)) continue;
+            _bubblePlaced.Add((box, head, b.Inner, b.Alpha, lines));
+        }
+        // 꼬리 · 구름 점을 먼저 (다른 풍선 글 뒤로 숨는다) → 풍선 → 글
+        foreach (var (box, head, inner, a, lines) in _bubblePlaced)
+        {
+            if (lines.Length == 0) continue;
+            if (inner)
+            {
+                var fill = new Color(0.86f, 0.92f, 1f, 0.82f * a);
+                var foot = new Vector2(Math.Clamp(head.X, box.Position.X + 10 * U, box.End.X - 10 * U), box.End.Y);
+                DrawCircle(foot.Lerp(head, 0.35f), 3.2f * U, fill);
+                DrawCircle(foot.Lerp(head, 0.7f), 2f * U, fill);
+            }
+            else
+            {
+                var fill = new Color(0.98f, 0.97f, 0.93f, 0.95f * a);
+                float tx = Math.Clamp(head.X, box.Position.X + 10 * U, box.End.X - 10 * U);
+                DrawColoredPolygon(new[] { new Vector2(tx - 5 * U, box.End.Y - 1), new Vector2(tx + 5 * U, box.End.Y - 1), new Vector2(head.X, head.Y - 2 * U) }, fill);
+            }
+        }
+        foreach (var (box, _, inner, a, lines) in _bubblePlaced)
+        {
+            if (lines.Length == 0) continue;
+            if (inner) DrawStyleBox(_cloud, box, new Color(0.86f, 0.92f, 1f, 0.82f * a));
+            else DrawStyleBox(_speech, box, new Color(0.98f, 0.97f, 0.93f, 0.95f * a));
+            var ink = inner ? new Color(0.18f, 0.24f, 0.36f, a) : new Color(0.08f, 0.08f, 0.1f, a);
+            for (int i = 0; i < lines.Length; i++)
+                DrawString(_font, new Vector2(box.Position.X + 9 * U, box.Position.Y + 5 * U + lineH * i + lineH * 0.78f), lines[i], HorizontalAlignment.Left, -1, fs, ink);
+        }
+    }
+
+    private readonly List<(Rect2 box, Vector2 head, bool inner, float alpha, string[] lines)> _bubblePlaced = new();
+
+    private void DrawStyleBox(StyleBoxFlat sb, Rect2 r, Color c) { sb.BgColor = c; DrawStyleBox(sb, r); }
 
     /// <summary>위 줄: 분위기 점 · 상태 글 · 멈춤 · 빠르기 · 고정 ▾ · '새 엔진 판' · 소리 · 자막 · 도움말 · 메뉴.</summary>
     private void DrawTop(LiveFrame f)
@@ -874,12 +954,13 @@ public partial class LiveMain : Node2D
                     DrawButton(h with { On = false }, "");
                     DrawString(h.On ? _bold : _font, R(h.R).Position + new Vector2(14, 22) * U, (h.On ? "● " : "") + HudLayout.OverlayWords[h.Key], HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), Ink);
                     break;
-                case UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Help when h.Key >= 100:
+                case UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help when h.Key >= 100:
                 {
                     string t = h.Act switch
                     {
                         UiAct.MenuShip => "배 바꾸기  ›", UiAct.MenuRestart => "같은 배로 새 항해", UiAct.MenuStart => "처음 화면으로",
-                        UiAct.Sound => _hs.Mute switch { 0 => "소리: 다 켬", 1 => "소리: 음악 끔", _ => "소리: 끔" }, UiAct.Captions => f.CaptionsOn ? "소리 자막: 켬" : "소리 자막: 끔", _ => "도움말",
+                        UiAct.Sound => _hs.Mute switch { 0 => "소리: 다 켬", 1 => "소리: 음악 끔", _ => "소리: 끔" }, UiAct.Captions => f.CaptionsOn ? "소리 자막: 켬" : "소리 자막: 끔",
+                        UiAct.Speech => f.SpeechOn ? "말풍선: 켬" : "말풍선: 끔", UiAct.Thoughts => ThoughtWords[Math.Clamp(f.ThoughtsOn, 0, 2)], _ => "도움말",
                     };
                     DrawButton(h with { On = false }, "");
                     DrawString(_font, R(h.R).Position + new Vector2(14, 24) * U, t, HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), Ink);
@@ -933,7 +1014,7 @@ public partial class LiveMain : Node2D
             "판 탭   장면 (L) · 항로 (T) · 주컴퓨터 (J) · 사슬 (C) · 사람 (P) — 줄을 눌러 고른다",
             "오른쪽 아래   연출 따라가기 (F) · 배 전체 (Tab) · 축소 · 확대 · 겹쳐 보기 (O) · 방금 장면 다시보기 (B)",
             "겹쳐 보기   공기 · 열 · 연기 · 사슬 선 · 선과 관",
-            "위 오른쪽   소리 (M) · 소리 자막 (U) · 도움말 (H) · 메뉴",
+            "위 오른쪽   소리 (M) · 소리 자막 (U) · 도움말 (H) · 메뉴 — 말풍선 (K) · 속마음 풍선: 끔 · 고른 이 · 화면 안 셋 (I)",
             "메뉴   배 바꾸기 (N 두 번) · 같은 배로 새 항해 (R 두 번) · 처음 화면 (Esc 두 번)",
             "띠 · 알림 누르기   그 자리 · 그 판으로",
             $"항로   출항 전에만 여덟 항로 가운데 고른다 · 지금 항로: {_shown?.Route}",
@@ -988,6 +1069,8 @@ public partial class LiveMain : Node2D
             case UiAct.Fixed: { int i = (int)k; _cmds.Enqueue(s => s.SetFixed(i)); _hs.Open = HudOpen.None; break; }
             case UiAct.Sound: _hs.Mute = (_hs.Mute + 1) % 3; { string t = _hs.Mute switch { 0 => "소리 · 음악 켬", 1 => "음악 끔 (배 안 소리만)", _ => "소리 끔" }; _cmds.Enqueue(s => s.Notify(t)); } break;
             case UiAct.Captions: _cmds.Enqueue(s => { s.Ears.Captions = !s.Ears.Captions; s.Notify(s.Ears.Captions ? "소리 자막 켬 (무엇이 · 어느 쪽에서)" : "소리 자막 끔"); }); break;
+            case UiAct.Speech: _cmds.Enqueue(s => { s.SpeechBubbles = !s.SpeechBubbles; s.Notify(s.SpeechBubbles ? "말풍선 켬 — 소리 내어 한 말 · 외침" : "말풍선 끔"); }); break;
+            case UiAct.Thoughts: _cmds.Enqueue(s => { s.ThoughtBubbles = (s.ThoughtBubbles + 1) % 3; s.Notify(ThoughtWords[s.ThoughtBubbles]); }); break;
             case UiAct.Help: _hs.Help = k == 0 || k >= 100 ? !_hs.Help : false; _hs.HelpBlink = 0; _hs.Open = HudOpen.None; break;
             case UiAct.Menu: _hs.Open = _hs.Open is HudOpen.Menu or HudOpen.Ships ? HudOpen.None : HudOpen.Menu; break;
             case UiAct.MenuShip: _hs.Open = _hs.Open == HudOpen.Ships ? HudOpen.Menu : HudOpen.Ships; break;
@@ -1211,6 +1294,8 @@ public partial class LiveMain : Node2D
             case Godot.Key.F3: _meter = !_meter; break;
             case Godot.Key.U: Do(Hk(UiAct.Captions)); break;
             case Godot.Key.M: Do(Hk(UiAct.Sound)); break;
+            case Godot.Key.K: Do(Hk(UiAct.Speech)); break;
+            case Godot.Key.I: Do(Hk(UiAct.Thoughts)); break;
             case Godot.Key.Escape:
                 if (Back()) break;   // 펼친 목록 → 판 → 고른 이를 먼저 닫는다
                 if (Twice(ref _escAt, "처음 화면으로")) GetTree().ChangeSceneToFile(StartScene);

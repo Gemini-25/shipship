@@ -315,6 +315,67 @@ public static partial class Program
                 sameGoal && ta.Length > 4 && ta != tb && ta == ta2 && inPanel && tb2.Contains("문이 끼었다") && clean && same,
                 $"같은 목표 {sameGoal} ({sm[pa].C.Goal}) · 살가움 '{ta}' · 무뚝뚝 '{tb}' · 다시 '{ta2}' · 사람 판 {inPanel} · 막힘 '{tb2}' · 금지어 없음 {clean} · 같음 {same}");
         }
+        // 입말 풍선: 사람이 말하면 그 머리 위에 그 말 (1~2마디) · 화면 3초 넘게 남고 7초 뒤엔 없다 (하루 3분 · 화면 1초 200틱에서도) · 회의 말은 이름 앞머리를 뗀다 · 자는 이의 말은 띄우지 않는다 · 세계 그대로
+        {
+            Sim Make()
+            {
+                var s = Worlds.Full(lay, 52);
+                var m = s.Get<Mind>();
+                m.AddPerson(s, At(3, 2)); m.AddPerson(s, At(6, 2)); m.AddPerson(s, At(20, 2));
+                s.Run(3);
+                return s;
+            }
+            var show = new LiveShow(Make(), "시험호") { FrameBudget = 1000, DayMinutes = LiveShow.DefaultDayMinutes };
+            var twin = Make();
+            show.Follow = false; show.CamX = 12; show.CamY = 5; show.ViewW = 30;
+            show.Advance(dt);
+            var mm = show.Sim.Get<Mind>();
+            int pa = mm.Agents[0].Id, pb = mm.Agents[1].Id, pc = mm.Agents[2].Id;
+            void CatchUp() => twin.Run(show.Sim.Tick - twin.Tick);
+            void Sleep(Sim s) { var m = s.Get<Mind>(); s.Get<Life>()[m[pc].C.Body].Asleep = 1; m[pc].C.Sleepy = 1; }
+            void Talk(Sim s)
+            {
+                var so = s.Get<Society>(); var m = s.Get<Mind>();
+                void Say(int who, string text) => so.Sayings.Add(new Saying { Tick = s.Tick, Speaker = who, Listener = -1, Line = s.Causes.Add(CauseKind.Society, text, s.Tick, m[who].C.Cell, 0, 0, who), Cell = m[who].C.Cell });
+                Say(pa, "밥 먹었어요?"); Say(pb, "이도윤: \"제가 맡겠습니다\""); Say(pc, "으음… 엄마");
+            }
+            CatchUp(); Sleep(show.Sim); Sleep(twin); Talk(show.Sim); Talk(twin);
+            show.Advance(dt);
+            CatchUp(); Sleep(show.Sim); Sleep(twin);   // 계획을 바꾸면 깨므로 다시 재운다 (두 세계 같이)
+            var f0 = show.Render(); show.Recycle(f0.Img);
+            string A(LiveFrame f) => f.Bubbles.FirstOrDefault(b => b.Id == pa && !b.Inner).Text ?? "";
+            string B(LiveFrame f) => f.Bubbles.FirstOrDefault(b => b.Id == pb && !b.Inner).Text ?? "";
+            bool sleeper = f0.Bubbles.Any(b => b.Id == pc);
+            for (int i = 0; i < 180; i++) show.Advance(1 / 60.0);   // 화면 3초
+            var f3 = show.Render(); show.Recycle(f3.Img);
+            for (int i = 0; i < 240; i++) show.Advance(1 / 60.0);   // 화면 7초
+            var f7 = show.Render(); show.Recycle(f7.Img);
+            CatchUp();
+            bool same = show.Sim.Save().AsSpan().SequenceEqual(twin.Save());
+            bool ok = A(f0) == "밥 먹었어요?" && B(f0) == "제가 맡겠습니다" && !sleeper && A(f3) == "밥 먹었어요?" && f7.Bubbles.Length == 0 && f0.Bubbles.All(b => ShipView.TextLint.Bad(b.Text) == null) && same;
+            Check("입말 풍선: 사람이 말하면 그 머리 위에 그 말 · 회의 말은 이름 앞머리를 뗀다 · 자는 이의 잠꼬대는 띄우지 않는다 · 화면 3초 넘게 남고 7초 뒤엔 없다 (하루 3분에서도 — 화면 시간으로 붙든다) · 금지어 없음 · 세계는 쌍둥이와 같다",
+                ok, $"첫 장 A '{A(f0)}' · B '{B(f0)}' · 자는 이 {sleeper} · 3초 뒤 A '{A(f3)}' · 7초 뒤 {f7.Bubbles.Length}개 · 쌍둥이와 같음 {same}");
+            // 속말 풍선 (설정): 끄면 없고 · 고른 이만이면 그 머리 위 생각 구름에 카드 '생각:'과 같은 글
+            show.SelectAgent(pa); show.ThoughtBubbles = 1;
+            var ft = show.Render(); show.Recycle(ft.Img);
+            string card = show.Card().FirstOrDefault(l => l.StartsWith("생각:")) ?? "";
+            var tb = ft.Bubbles.FirstOrDefault(b => b.Id == pa && b.Inner);
+            show.ThoughtBubbles = 0;
+            var fo = show.Render(); show.Recycle(fo.Img);
+            Check("속말 풍선: 고른 이만으로 켜면 그 머리 위 생각 구름에 카드 '생각:'과 같은 글 · 끄면 없다",
+                tb.Text != null && card.Length > 4 && ShipView.Speech.Cut2(card["생각: ".Length..]) == tb.Text && !fo.Bubbles.Any(b => b.Inner), $"구름 '{tb.Text}' · 카드 '{card}' · 끈 뒤 {fo.Bubbles.Count(b => b.Inner)}");
+            // 외침 풍선: 위급을 외쳐 알리면 (사실 '외쳤다') 그 머리 위에 외침 · 같은 이는 화면 10초에 하나
+            var ws = show.Sim;
+            ws.Facts.Emit(ws.Tick, FactKind.Warned, mm[pa].C.Cell, 1, 0, pa, (int)BeliefKind.Fire);
+            show.Advance(1 / 60.0);
+            var fw = show.Render(); show.Recycle(fw.Img);
+            ws.Facts.Emit(ws.Tick, FactKind.Warned, mm[pa].C.Cell, 1, 0, pa, (int)BeliefKind.Breach);
+            show.Advance(1 / 60.0);
+            var fw2 = show.Render(); show.Recycle(fw2.Img);
+            string want = ShipView.Inner.Shout(BeliefKind.Fire, false), w1 = A(fw), w2 = A(fw2);
+            Check("외침 풍선: 위급을 외쳐 알리면 그 머리 위에 외침 · 같은 이의 외침은 화면 10초에 하나",
+                want.Length > 0 && w1 == ShipView.Speech.Cut2(want) && w2 == w1, $"외침 '{w1}' · 곧 다음 '{w2}' · 바라는 '{want}'");
+        }
     }
 
     /// <summary>화면 바퀴 2 — 새 엔진에 맞게: 사슬 판 · 사람 판 · 주컴퓨터 판의 지금 사건 · 겹쳐 보기.</summary>

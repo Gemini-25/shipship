@@ -57,6 +57,9 @@ public sealed class LiveFrame
     public AgentSpot[] Spots = Array.Empty<AgentSpot>();
     public int HoverId = -1;
     public string HoverName = "", HoverDoing = "";
+    /// <summary>머리 위 풍선 (입말 · 속말 — docs/MIND.md 4단).</summary>
+    public Bubble[] Bubbles = Array.Empty<Bubble>();
+    public bool SpeechOn = true; public int ThoughtsOn;
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -253,6 +256,7 @@ public sealed partial class LiveShow
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         TickNotice(realSec);
         WatchComputer(realSec);
+        WatchSpeech(realSec);
         AL("알림 · 주컴퓨터 지켜보기");
         // 카메라: 연출이 고른 곳으로 부드럽게 (전체 보기면 배 가운데)
         var L = Sim.Layout;
@@ -654,6 +658,7 @@ public sealed partial class LiveShow
             CanReplay = latest != null && CanReplay(latest), ReplayWhy = latest == null ? "아직 볼 만한 장면이 없다" : CanReplay(latest) ? "" : "한 시간 넘게 지나 다시 볼 수 없다",
             Holding = Holding, DepartIn = DepartInMin(), Highlights = Dir.Highlights.Count, JournalNew = JournalNew, NoticeLink = Notice.Length > 0 ? _noticeLink : PanelKind.None,
             StoryIsChain = ChainNow().Count > 0, Spots = SpotsNow(),
+            Bubbles = Bubbles(), SpeechOn = SpeechBubbles, ThoughtsOn = ThoughtBubbles,
             HoverId = HoverOk() ? HoverId : -1, HoverName = HoverOk() ? World.Find<Mind>()!.NameOf(HoverId) : "", HoverDoing = HoverOk() ? World.Find<Mind>()!.Thought(HoverId) : "",
         };
     }

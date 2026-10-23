@@ -16,7 +16,7 @@ public readonly record struct RectF(float X, float Y, float W, float H)
 public enum UiAct
 {
     Pause, Speed, FixedMenu, Fixed, Sound, Captions, Help, Menu, MenuShip, ShipPick, MenuRestart, MenuStart, Tab, PanelClose, PanelRow, PanelRowAct, PanelBar, ChainLines, Depart,
-    CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab,
+    CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -152,7 +152,7 @@ public sealed class HudState
     {
         HudOpen.Fixed => a is UiAct.Fixed or UiAct.FixedMenu,
         HudOpen.Overlay => a is UiAct.Overlay or UiAct.OverlayMenu,
-        HudOpen.Menu => a is UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Help or UiAct.Menu,
+        HudOpen.Menu => a is UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help or UiAct.Menu,
         HudOpen.Ships => a is UiAct.ShipPick or UiAct.MenuShip or UiAct.Menu,
         _ => false,
     };
@@ -414,8 +414,8 @@ public static class HudLayout
         }
         if (s.Open is HudOpen.Menu or HudOpen.Ships)
         {
-            string[] items = { "배 바꾸기 ›", "같은 배로 새 항해", "소리", "소리 자막", "도움말", "처음 화면으로" };
-            UiAct[] acts = { UiAct.MenuShip, UiAct.MenuRestart, UiAct.Sound, UiAct.Captions, UiAct.Help, UiAct.MenuStart };
+            string[] items = { "배 바꾸기 ›", "같은 배로 새 항해", "소리", "소리 자막", "말풍선 (K)", "속마음 풍선 (I)", "도움말", "처음 화면으로" };
+            UiAct[] acts = { UiAct.MenuShip, UiAct.MenuRestart, UiAct.Sound, UiAct.Captions, UiAct.Speech, UiAct.Thoughts, UiAct.Help, UiAct.MenuStart };
             var area = new RectF(W - Side - 240, 46, 240, items.Length * 38 + 12);
             h.Blocks.Insert(0, ("목록 메뉴", area)); h.Areas["목록 메뉴"] = area;
             for (int i = items.Length - 1; i >= 0; i--) h.Hits.Insert(0, new UiHit(new RectF(area.X + 6, area.Y + 6 + i * 38, 228, 36), acts[i], 100 + i, false, true, items[i]));
