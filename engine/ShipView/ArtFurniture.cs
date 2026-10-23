@@ -632,3 +632,30 @@ public static class ArtFurniture
         return o;
     }
 }
+
+/// <summary>
+/// 색 맞추기 (텍스처 T2): 옛 도트 설비 그림 (새로 그리지 않은 70여 종)을 새 색표 쪽으로 — 채도를 낮추고 (큰 면은 낮은 채도 · 채도는 사람 · 화면 빛 · 사고 신호에만) ·
+/// 그늘 쪽은 푸른 보라 (#16142a)로 · 밝은 쪽은 조금 따뜻하게 비튼다. 구울 때 한 번 (화면 · 표시등은 따로 그려 그대로).
+/// </summary>
+public static class ArtPalette
+{
+    public static readonly Rgba Shade = Rgba.Hex("#16142a"), WarmLight = Rgba.Hex("#fff0d4");
+
+    public static Img Unify(Img src)
+    {
+        var o = new Img(src.W, src.H);
+        for (int i = 0; i < src.Px.Length; i += 4)
+        {
+            byte a = src.Px[i + 3];
+            if (a == 0) continue;
+            float r = src.Px[i], g = src.Px[i + 1], b = src.Px[i + 2];
+            float l = 0.299f * r + 0.587f * g + 0.114f * b;
+            const float keep = 0.72f;   // 채도 72%
+            r = l + (r - l) * keep; g = l + (g - l) * keep; b = l + (b - l) * keep;
+            if (l < 70) { float t = 0.22f * (1 - l / 70f); r += (Shade.R - r) * t; g += (Shade.G - g) * t; b += (Shade.B - b) * t; }
+            else if (l > 170) { float t = 0.08f * (l - 170) / 85f; r += (WarmLight.R - r) * t; g += (WarmLight.G - g) * t; b += (WarmLight.B - b) * t; }
+            o.Px[i] = (byte)Math.Clamp(r, 0, 255); o.Px[i + 1] = (byte)Math.Clamp(g, 0, 255); o.Px[i + 2] = (byte)Math.Clamp(b, 0, 255); o.Px[i + 3] = a;
+        }
+        return o;
+    }
+}

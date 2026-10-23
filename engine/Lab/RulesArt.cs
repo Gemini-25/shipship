@@ -1,6 +1,7 @@
 using ShipEngine;
 using ShipSim.Art;
 using ShipView;
+using ShipSim.Core;
 
 namespace Lab;
 
@@ -209,6 +210,26 @@ public static partial class Program
             for (int y = 2; y < T - rise - 2; y++) for (int x = 10; x < 22; x++) if (!e.Get(lx * T + x, (ly - 1) * T + y).Equals(with.Get(lx * T + x, (ly - 1) * T + y))) above++;
             Check("텍스처 앞 가림: 키 큰 설비 바로 뒤(북쪽)에 선 사람은 설비의 솟은 윗부분에 가린다 · 그 위로는 사람이 보인다",
                 diff == 0 && same > 50 && above > 20, $"겹친 곳 같음 {same} · 다름 {diff} · 그 위 사람 도트 {above} (사람 칸 {occ.X(m[who].C.Cell)},{occ.Y(m[who].C.Cell)})");
+        }
+        // 11 · 옛 그림 색 맞추기 (T2): 새로 그리지 않은 설비는 채도를 낮추고 (큰 면은 낮은 채도) · 그늘은 푸른 보라로 · 투명은 그대로
+        {
+            static double Sat(Rgba c) { int mx = Math.Max(c.R, Math.Max(c.G, c.B)), mn = Math.Min(c.R, Math.Min(c.G, c.B)); return mx == 0 ? 0 : (mx - mn) / (double)mx; }
+            double s0 = 0, s1 = 0; int n = 0, alphaBad = 0, darkWarm0 = 0, darkWarm1 = 0;
+            foreach (var ft in new[] { FurnitureType.Seat, FurnitureType.SupplyCache, FurnitureType.MealDispenser, FurnitureType.Workbench, FurnitureType.Scrubber })
+            {
+                var old = DotMachines.Body(ft, 1, 1, -1, 1, 0, 3); var neu = ArtPalette.Unify(old);
+                for (int y = 0; y < old.H; y++) for (int x = 0; x < old.W; x++)
+                {
+                    var a = old.Get(x, y); var b = neu.Get(x, y);
+                    if (a.A != b.A) alphaBad++;
+                    if (a.A == 0) continue;
+                    s0 += Sat(a); s1 += Sat(b); n++;
+                    if (a.Luma < 40 && a.R > a.B) darkWarm0++;
+                    if (b.Luma < 40 && b.R > b.B) darkWarm1++;
+                }
+            }
+            Check("텍스처 색 맞추기: 옛 도트 설비 그림은 채도를 낮추고 (평균 15% 넘게) · 어두운 도트는 푸른 보라 쪽으로 (붉은 기 도는 그늘이 준다) · 투명은 그대로",
+                s1 < s0 * 0.85 && alphaBad == 0 && darkWarm1 <= darkWarm0, $"평균 채도 {s0 / n:0.000} → {s1 / n:0.000} · 붉은 그늘 {darkWarm0} → {darkWarm1} · 알파 다름 {alphaBad}");
         }
         // 7 · 같은 세계 같은 그림 · 그림은 세계를 바꾸지 않는다
         {

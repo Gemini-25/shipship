@@ -634,7 +634,7 @@ public sealed partial class Painter
             }
             var ft = _fixType[i] ?? FurnitureType.Shelf;
             int rise = DotMachines.RiseOf(ft);
-            var body = Cached(Key(5, (int)ft, bw, bh, i), (ft, bw, bh, i, rise), static q => Shadowed(DotMachines.Body(q.ft, q.bw, q.bh, -1, 1, 0, q.i), q.rise));
+            var body = Cached(Key(5, (int)ft, bw, bh, i), (ft, bw, bh, i, rise), static q => Shadowed(ArtPalette.Unify(DotMachines.Body(q.ft, q.bw, q.bh, -1, 1, 0, q.i)), q.rise));   // 옛 그림은 새 색표 쪽으로 (T2)
             int px = Px(bx), py = Py(by) - rise;
             Put(img, body, px, py);
             if (rise >= 6 && ft is not (FurnitureType.Bed or FurnitureType.Seat or FurnitureType.CrashSeat or FurnitureType.MedBed)) _front.Add((body, px, py, by + bh - 1));
