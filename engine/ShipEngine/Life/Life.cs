@@ -251,12 +251,13 @@ public sealed partial class Life : IEngine
 
     // ───────────────────────── 한 걸음 ─────────────────────────
 
+    public void Bind(Sim sim) => _net ??= sim.Find<Network>();
+
     public void Step(Sim sim, double dt)
     {
         var st = sim.Find<Structure>();
         var outside = sim.Find<Outside>();
         var chem = sim.Find<Chemistry>();
-        _net ??= sim.Find<Network>();
         _flames.Clear();
         if (chem != null && chem.BurningCount > 0)
             for (int i = 0; i < L.N; i++) if (chem.Burning[i] != 0 && chem.Hrr[i] > 0) _flames.Add(i);

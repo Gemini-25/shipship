@@ -447,8 +447,9 @@ public sealed partial class Mind : IEngine
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
-    private void Bind(Sim sim)
+    public void Bind(Sim sim)
     {
+        _out ??= sim.Find<Outside>();
         _life ??= sim.Find<Life>(); _net ??= sim.Find<Network>(); _st ??= sim.Find<Structure>();
         _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>(); _work ??= sim.Find<Work>();
     }

@@ -220,6 +220,8 @@ public sealed partial class Structure : IEngine
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
+    public void Bind(Sim sim) { _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>(); }
+
     public void Step(Sim sim, double dt)
     {
         if (_p.Length != L.N) _p = new double[L.N];
@@ -401,7 +403,6 @@ public sealed partial class Structure : IEngine
 
     private void Doors(Sim sim, double dt)
     {
-        _life ??= sim.Find<Life>();
         for (int d = 0; d < L.Doors.Count; d++)
         {
             float now = F.DoorOpen[d], target = DoorTarget[d];

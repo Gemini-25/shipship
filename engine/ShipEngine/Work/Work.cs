@@ -53,9 +53,10 @@ public sealed partial class Work : IEngine
 
     public Work(Layout layout, Tables tables) { L = layout; T = tables; }
 
+    public void Bind(Sim sim) { _mind = sim.Find<Mind>(); _net = sim.Find<Network>(); _life = sim.Find<Life>(); _f = sim.Find<Field>(); }
+
     public void Step(Sim sim, double dt)
     {
-        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _life ??= sim.Find<Life>(); _f ??= sim.Find<Field>();
         if (_mind == null) return;
         if (MakerProgress.Length != L.Furniture.Count) MakerProgress = new float[L.Furniture.Count];
         Makers(sim, dt);

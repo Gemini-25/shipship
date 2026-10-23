@@ -45,8 +45,13 @@ public sealed class Sim
     public T Get<T>() where T : class, IEngine => (T)_byType[typeof(T)];
     public T? Find<T>() where T : class, IEngine => _byType.TryGetValue(typeof(T), out var e) ? (T)e : null;
 
+    private bool _bound;
+    /// <summary>엔진마다 다른 엔진을 잇는다 (첫 틱 전 · 되살린 뒤).</summary>
+    private void BindAll() { foreach (var e in _engines) e.Bind(this); _bound = true; }
+
     public void Step()
     {
+        if (!_bound) BindAll();
         foreach (var e in _order)
         {
             long k = ((Tick - e.Offset) % e.Every + e.Every) % e.Every;
@@ -126,6 +131,7 @@ public sealed class Sim
         Book.Load(r);
         foreach (var e in _engines) { r.Tag(e.Name); e.Load(r); }
         r.Tag("end");
+        BindAll();
     }
 
     /// <summary>같은 준비로 새 세계를 만들고 지금 상태를 읽어 넣는다 (주컴퓨터 · 연출의 미래 돌려 보기).</summary>

@@ -164,9 +164,10 @@ public sealed partial class Society : IEngine
         Bond = b; TrustOf = tr; Grudge = gr; Debt = de; Known = kn; LastTalk = lt; TrustComputer = t; Grief = g; Attract = at; Partner = pa; _near = new byte[n * n]; LiarMark = lm; N = n;
     }
 
+    public void Bind(Sim sim) { _mind ??= sim.Find<Mind>(); _life ??= sim.Find<Life>(); _net ??= sim.Find<Network>(); }
+
     public void Step(Sim sim, double dt)
     {
-        _mind ??= sim.Find<Mind>(); _life ??= sim.Find<Life>(); _net ??= sim.Find<Network>();
         if (_mind == null || _life == null) return;
         _talk ??= TalkTable.Load();
         Resize(_mind.Agents.Count);

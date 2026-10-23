@@ -30,4 +30,7 @@ public interface IEngine : IState
     int Offset { get; }
     /// <summary>dt = Every × 2.4초.</summary>
     void Step(Sim sim, double dt);
+    /// <summary>다른 엔진을 잇는다 — Sim이 첫 틱 전에 · 되살린 뒤에 한 번 부른다.
+    /// Step 안에서 늦게 이으면, 되살린 세계에서 이 엔진이 아직 돌지 않았을 때 다른 엔진이 먼저 읽어 빈 값을 받는다 (검토 ⑤-2 · 법칙 '긴 왕복').</summary>
+    void Bind(Sim sim) { }
 }

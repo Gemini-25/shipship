@@ -14,7 +14,6 @@ public sealed partial class Mind
     private void Fling(Sim sim, double dt)
     {
         if (Loose.Count == 0) return;
-        _out ??= sim.Find<Outside>();
         double ix = _out != null ? -_out.Ax : 0, iy = _out != null ? -_out.Ay : 0;   // ⑤ 점화: 배 안의 것은 −a 쪽으로 (관성력 m·a)
         bool burning = ix != 0 || iy != 0;
         bool bodies = _st != null && _st.Bodies.Count > 1;   // ④ 칸 강체: 떨어져 나간 조각 · 덜컹인 배 안의 것이 느끼는 힘

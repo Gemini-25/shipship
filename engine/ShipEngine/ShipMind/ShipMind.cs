@@ -163,8 +163,9 @@ public sealed partial class ShipMind : IEngine
         BreakerResetAt = Array.Empty<long>();
     }
 
-    private void Bind(Sim sim)
+    public void Bind(Sim sim)
     {
+        _work ??= sim.Find<Work>();
         _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _sense ??= sim.Find<Sensors>(); _out ??= sim.Find<Outside>(); _st ??= sim.Find<Structure>(); _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>();
         if (_net != null && Shed.Length != _net.Devices.Count) Shed = new byte[_net.Devices.Count];
         if (_net != null && BreakerResetAt.Length != _net.Feeders.Count) BreakerResetAt = Enumerable.Repeat(long.MinValue / 2, _net.Feeders.Count).ToArray();

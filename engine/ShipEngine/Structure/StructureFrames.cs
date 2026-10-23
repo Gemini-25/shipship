@@ -467,7 +467,6 @@ public sealed partial class Structure
                 continue;
             }
             if (grow < DoorGapM || DoorJam[d] != 0) continue;
-            _chem ??= sim.Find<Chemistry>();
             int heat = 0;
             Span<int> nb = stackalloc int[4];
             L.Neighbors(c, nb);

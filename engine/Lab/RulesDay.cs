@@ -182,5 +182,15 @@ public static partial class Program
             long ticks = day.Get<Structure>().ThermalTicks;
             Check("열 수축: 디딤호 하루의 딱 소리는 배 전체에서 시간당 몇 번 (하루 20 ~ 1,000번)", ticks >= 20 && ticks <= 1000, $"하루 {ticks}번");
         }
+
+        // ── 긴 왕복 (검토 ⑤-2): 하루 끝(125의 배수 틱 — 주컴퓨터가 물자를 묻기 7틱 앞)에서 찍어 되살린 세계와 원래 세계를 150틱 나란히 —
+        //    일과 물자 엔진이 늦게 이으면 되살린 쪽 주컴퓨터만 '마실 물 · 식량 · 산소 0일 치'를 보고 7틱 만에 갈라졌다. 맨 끝에 둔다 (원래 세계를 더 돌린다) ──
+        {
+            var back = new Sim(day.Setup); back.Load(day.Save());
+            long at = day.Tick, diff = -1;
+            for (int k = 0; k < 150 && diff < 0; k++) { day.Step(); back.Step(); if (day.Hash() != back.Hash()) diff = day.Tick; }
+            Check("긴 왕복: 하루 끝에 되살린 세계가 원래 세계와 150틱 바이트까지 같다 (주컴퓨터가 물자를 묻는 틱을 지나도)", diff < 0,
+                $"되살린 틱 {at} (125 나머지 {at % 125})" + (diff < 0 ? "" : $" · 틱 {diff}에 갈라짐"));
+        }
     }
 }

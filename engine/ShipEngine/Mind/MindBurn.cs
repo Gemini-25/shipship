@@ -20,7 +20,6 @@ public sealed partial class Mind
 
     private void Inertia(Sim sim)
     {
-        _out ??= sim.Find<Outside>();
         if (_out == null || _life == null) return;
         double g = Math.Sqrt(_out.Ax * _out.Ax + _out.Ay * _out.Ay) / Outside.G0;
         double jump = g - _lastG;

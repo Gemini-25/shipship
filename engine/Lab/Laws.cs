@@ -419,11 +419,28 @@ public static partial class Program
                 for (int k = 0; k < 400 && firstDiff < 0; k++) { o.Step(); r.Step(); if (k % 20 == 19 && o.Hash() != r.Hash()) firstDiff = o.Tick; }
                 Check("모든 엔진: 원래 세계와 도중에 되살린 세계가 이어 돌려도 같다 (사람 6 · 로봇 3 · 불 · 충돌 · 400틱)", firstDiff < 0, firstDiff < 0 ? "" : $"틱 {firstDiff}에 갈라짐");
             }
+            // 긴 왕복: 되살린 세계는 아직 한 번도 돌지 않은 엔진도 다른 엔진이 물으면 같은 답을 한다 (검토 ⑤-2).
+            //   주컴퓨터는 125틱마다(나머지 7) 물자 며칠 치를 일과 물자 엔진에 묻는다 — 그 엔진은 25틱마다(나머지 7) 돌며 다른 엔진을 늦게 이었다.
+            //   그 틈(나머지 108~124 · 0~7)에 되살리면 재고가 0으로 읽혀 주컴퓨터만 '마실 물 · 식량 · 산소 0일 치'를 보고 갈라졌다.
+            {
+                var o = ShipWorld.Crewed("Didim", 3, 6, 2);
+                o.Run(125 + 5);   // 나머지 5 — 주컴퓨터가 묻기 2틱 앞
+                var r = new Sim(o.Setup); r.Load(o.Save());
+                var wo = o.Get<Work>(); var wr = r.Get<Work>();
+                bool sameStock = Enumerable.Range(0, Book.Bulk).All(k => wo.Stock(k) == wr.Stock(k));
+                string stock = string.Join(" · ", Enumerable.Range(0, Book.Bulk).Select(k => $"{wo.Stock(k):0}/{wr.Stock(k):0}"));
+                long firstDiff = -1;
+                for (int k = 0; k < 150 && firstDiff < 0; k++) { o.Step(); r.Step(); if (o.Hash() != r.Hash()) firstDiff = o.Tick; }
+                Check("긴 왕복: 되살린 직후에도 물자 재고를 같게 읽고 · 주컴퓨터가 물자를 묻는 틱을 지나도 원래 세계와 같다 (틈에서 되살림 · 150틱)",
+                    sameStock && firstDiff < 0,
+                    $"되살린 직후 재고 (원래/되살린) {stock}" + (firstDiff < 0 ? "" : $" · 틱 {firstDiff}에 갈라짐"));
+            }
         }
 
         if (Do("마음"))
         {
             Console.WriteLine("\n[⑧ 결정론 · 찍기 — 사람 · 로봇이 탄 배]");
+            Sim? orig = null;
             ulong RunCrew(int threads, int ticks, out byte[] snap)
             {
                 int keep = Par.Threads; Par.Threads = threads;
@@ -435,16 +452,17 @@ public static partial class Program
                 s.Run(ticks - 200);
                 snap = s.Save();
                 Par.Threads = keep;
+                orig ??= s;
                 return s.Hash();
             }
             ulong one = RunCrew(1, 600, out var snap), many = RunCrew(Math.Max(4, Environment.ProcessorCount), 600, out _);
             Check("마음: 1코어 = 여러 코어 (사람 6 · 로봇 2 · 불)", one == many, $"{one:x16} / {many:x16}");
             // 찍기 → 되살려 이어 돌린 것 = 그냥 이어 돌린 것
-            var a = new Sim(ShipWorld.Setup(Layout.Ship("Didim", Tables.Default), 5));
-            a.Load(snap);
-            var b = a.Clone();
+            var b = new Sim(ShipWorld.Setup(Layout.Ship("Didim", Tables.Default), 5));
+            b.Load(snap);
+            var a = orig!;   // 원래 세계와 견준다 (되살린 세계끼리 견주면 둘 다 같은 것을 잃어 왕복 결함을 못 잡는다 — 검토 ⑤-2)
             a.Run(300); b.Run(300);
-            Check("마음: 되살린 세계도 같은 길을 간다 (믿음 · 계획 · 길 · 물건까지)", a.Hash() == b.Hash() && a.Get<Mind>().Agents.Count == 8,
+            Check("마음: 되살린 세계도 원래 세계와 같은 길을 간다 (믿음 · 계획 · 길 · 물건까지)", a.Hash() == b.Hash() && a.Get<Mind>().Agents.Count == 8,
                 $"{a.Hash():x16} / {b.Hash():x16} · {snap.Length / 1024}KB");
             // 먹으면 음식(포도당)이 냉장고에서 몸으로 옮겨 간다 — 사라지거나 생기지 않는다
             var e = ShipWorld.Crewed("Didim", 5, 4, 0);

@@ -15,7 +15,6 @@ public sealed partial class ShipMind
     /// <summary>살림 — 주컴퓨터가 돌 때 (Step에서 · Online 뒤).</summary>
     private void Chores(Sim sim)
     {
-        _work ??= sim.Find<Work>();
         if (_mind == null || _work == null) return;
         if (sim.Tick % MakerEvery == ChoreOffset % MakerEvery) SwitchMakers();
         if (sim.Tick % ChoreEvery == ChoreOffset) { PlanChores(sim); FindBlocks(sim); }

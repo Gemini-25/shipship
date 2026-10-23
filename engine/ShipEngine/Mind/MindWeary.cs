@@ -19,7 +19,6 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (asleep) return;
-        _out ??= sim.Find<Outside>();
         double w0 = c.Weary;
         bool easing = c.Goal is GoalKind.Relax or GoalKind.Socialize or GoalKind.Exercise && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.Use;
         double crowd = 1 + Math.Min(0.5, 0.1 * Math.Max(0, others - 2));

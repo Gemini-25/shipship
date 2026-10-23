@@ -383,10 +383,11 @@ public sealed partial class Network : IEngine
         return t1;
     }
 
+    public void Bind(Sim sim) => _stc ??= sim.Find<Structure>();
+
     public void Step(Sim sim, double dt)
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
-        _stc ??= sim.Find<Structure>();
         UpdateCuts();
         EnsureLines();
         LinkInsulation(sim);

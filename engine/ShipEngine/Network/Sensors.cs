@@ -70,9 +70,10 @@ public sealed class Sensors : IEngine
     /// <summary>돌덩이의 레이더 단면 (m² — 3000kg/m³ 구의 πr²).</summary>
     public static double RockSigma(double mass) { double r = Math.Cbrt(3 * mass / (4 * Math.PI * 3000)); return Math.PI * r * r; }
 
+    public void Bind(Sim sim) { _net ??= sim.Find<Network>(); _out ??= sim.Find<Outside>(); }
+
     public void Step(Sim sim, double dt)
     {
-        _net ??= sim.Find<Network>(); _out ??= sim.Find<Outside>();
         if (_net == null || _out == null) return;
         _arrays ??= _net.Devices.Where(d => d.Type == "SensorArray").Select(d => d.Id).ToArray();
         var o = _out;
