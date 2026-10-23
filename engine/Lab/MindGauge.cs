@@ -19,6 +19,10 @@ public sealed class MindGauge
     public long RobotIdle, RobotUp; // 일감 없이 놀거나 충전(전지 > 0.6)한 로봇 · 틱 / 켜진 로봇 · 틱
     public int JobsDone, JobsOverdue;
     public int PersonReraised;      // 같은 사람의 사건이 30분 안에 새로 선 수
+    // 로봇 몫 (docs/MIND.md 4단): 든 채 논 틱 · 막힌 채 맡김을 쥔 틱 · 사건에 보낸 로봇의 길 손해 (가장 빨리 닿을 로봇과의 걸음 차)
+    public long RobotHeldIdle, RobotStuckAssigned;
+    public int Sent; public long PathLoss;
+    private readonly Dictionary<int, int> _sentTo = new();   // 사건 번호 → 처음 보낸 로봇
     public readonly Dictionary<string, int> FlipWho = new();   // 이름 → 흔들림 수 (보고용)
 
     private readonly Mind _m;
@@ -83,6 +87,8 @@ public sealed class MindGauge
                 RobotUp++;
                 if (c.AssignedUntil > now && c.AssignedGoal != GoalKind.Idle && c.Goal != c.AssignedGoal) RobotOffJob++;
                 if (c.Goal is GoalKind.Idle or GoalKind.Charge && c.Battery > 0.6f && c.AssignedUntil <= now) RobotIdle++;
+                if (c.Holding != 255 && c.Goal is GoalKind.Idle or GoalKind.Charge && (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count || a.Plan[c.StepIndex].Kind == StepKind.Use)) RobotHeldIdle++;
+                if (c.AssignedUntil > now && c.AssignedGoal != GoalKind.Idle && c.Goal != c.AssignedGoal && c.SnagGoal == c.AssignedGoal && c.Snag != SnagKind.None && now - c.SnagTick < RepeatWindow) RobotStuckAssigned++;
             }
         }
         if (now % 125 != 8) return;   // 일감 · 사건은 주컴퓨터가 몇 분마다 바꾼다 — 125틱마다 보면 된다
@@ -101,6 +107,14 @@ public sealed class MindGauge
         }
         foreach (var x in _sm.Incidents)
         {
+            // 길 손해: 사건에 처음 보낸 로봇과, 그때 켜진 로봇 가운데 가장 가까운(길 거리) 것의 걸음 차
+            if (x.Active != 0 && x.RobotA >= 0 && x.Cell >= 0 && !_sentTo.ContainsKey(x.Id))
+            {
+                _sentTo[x.Id] = x.RobotA;
+                int mine = _m.PathDist(_m.Agents[x.RobotA].C.Cell, x.Cell), best = mine;
+                foreach (var r in _m.Agents) if (r.C.Kind == AgentKind.Robot && r.C.Up != 0 && _m.RobotCan(r, _m.Agents[x.RobotA].C.AssignedGoal)) best = Math.Min(best, _m.PathDist(r.C.Cell, x.Cell));
+                Sent++; PathLoss += Math.Max(0, mine - best);
+            }
             if (x.Active == 0 || x.Kind is not (IncidentKind.PersonDown or IncidentKind.Injured or IncidentKind.Arrest or IncidentKind.Surgery or IncidentKind.Counsel)) continue;
             var key = (x.Kind, x.Subject);
             if (_person.TryGetValue(key, out var p) && p.id != x.Id && now - p.seen < RepeatWindow) PersonReraised++;
@@ -111,12 +125,16 @@ public sealed class MindGauge
     public double FlipMinutes => FlipTicks * Time.SecondsPerTick / 60;
     public double RobotIdleShare => RobotUp == 0 ? 0 : (double)RobotIdle / RobotUp;
     public double RobotOffJobMinutes => RobotOffJob * Time.SecondsPerTick / 60;
+    public double RobotHeldIdleMinutes => RobotHeldIdle * Time.SecondsPerTick / 60;
+    public double RobotStuckMinutes => RobotStuckAssigned * Time.SecondsPerTick / 60;
+    public double PathLossPerSend => Sent == 0 ? 0 : (double)PathLoss / Sent;
 
     public string Line() =>
         $"판단 눈금 — 흔들림 {Flips}번 · {FlipMinutes:0}분{(FlipWho.Count > 0 ? " (" + string.Join(" ", FlipWho.OrderByDescending(kv => kv.Value).Take(3).Select(kv => $"{kv.Key} {kv.Value}")) + ")" : "")}"
         + $" · 실패 {Fails} (30분 안에 같은 것 다시 {FailRepeats}) · 맡은 일을 두고 딴 일 한 로봇 {RobotOffJobMinutes:0}분 · 로봇 놂 {RobotIdleShare:P0}"
-        + $" · 일감 끝 {JobsDone} · 기한 넘김 {JobsOverdue} · 같은 사람 사건 다시 섬 {PersonReraised}";
+        + $" · 일감 끝 {JobsDone} · 기한 넘김 {JobsOverdue} · 같은 사람 사건 다시 섬 {PersonReraised}"
+        + $" · 로봇: 든 채 논 {RobotHeldIdleMinutes:0}분 · 막힌 채 맡김 {RobotStuckMinutes:0}분 · 길 손해 {PathLossPerSend:0.0}걸음 ({Sent}번 보냄) · 놓아줌 {_sm.Released} · 못 한 일감 {_sm.JobsFailed} (막힌 곳 방송 {_sm.JobsStuck})";
 
     public string Json() => FormattableString.Invariant(
-        $"\"flips\":{Flips},\"flipMin\":{FlipMinutes:0},\"fails\":{Fails},\"failRepeats\":{FailRepeats},\"robotOffJobMin\":{RobotOffJobMinutes:0},\"robotIdle\":{RobotIdleShare:0.000},\"jobsDone\":{JobsDone},\"jobsOverdue\":{JobsOverdue},\"personReraised\":{PersonReraised}");
+        $"\"flips\":{Flips},\"flipMin\":{FlipMinutes:0},\"fails\":{Fails},\"failRepeats\":{FailRepeats},\"robotOffJobMin\":{RobotOffJobMinutes:0},\"robotIdle\":{RobotIdleShare:0.000},\"jobsDone\":{JobsDone},\"jobsOverdue\":{JobsOverdue},\"personReraised\":{PersonReraised},\"robotHeldIdleMin\":{RobotHeldIdleMinutes:0},\"robotStuckMin\":{RobotStuckMinutes:0},\"pathLoss\":{PathLossPerSend:0.0},\"sent\":{Sent},\"released\":{_sm.Released},\"jobsFailed\":{_sm.JobsFailed},\"jobsStuck\":{_sm.JobsStuck}");
 }

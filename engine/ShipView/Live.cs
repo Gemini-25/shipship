@@ -471,6 +471,7 @@ public sealed class LiveShow
                 if (b.DeathCause != 0) lines.Add(w.Causes.Story(b.DeathCause));
                 return lines.ToArray();
             }
+            lines.Add("사람됨: " + Persona(mind, w.Find<Society>(), a));   // 4단: 누가 어떤 사람인지 (성격 낱말 · 꿈 · 즐겨 하는 것 · 짝 — 숫자는 내지 않는다)
             lines.Add("생각: " + (b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : mind.Thought(a.Id)));
             string pondered = mind.RecentThought(a.Id, w.Tick, Time.Hours(1));   // 판단 엔진: 막혀서 한 궁리 (한 시간 안)
             if (pondered.Length > 0) lines.Add("궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered));
@@ -510,6 +511,44 @@ public sealed class LiveShow
             else lines.Add($"전지 {a.C.Battery * 100:0}% · 손상 {a.C.Damage * 100:0}%");
         }
         return lines.ToArray();
+    }
+
+    /// <summary>
+    /// 사람됨 한 줄 (docs/MIND.md 4단 — 화면만 · 세계의 값을 읽기만): 가장 두드러진 성격 둘~셋을 낱말로 ('꼼꼼하고 겁이 많다') ·
+    /// 꿈 (인생 목표 — 이뤘으면 '이뤘다') · 즐겨 하는 것 (쉬는 시간의 취미) · 짝. 숫자는 내지 않는다.
+    /// </summary>
+    public static string Persona(Mind mind, Society? soc, Agent a)
+    {
+        var c = a.C;
+        // (축 값 · 높을 때 [이어 말 · 끝말] · 낮을 때) — 0.5에서 멀수록 두드러진다
+        var traits = new (float v, string hiGo, string hiEnd, string loGo, string loEnd)[]
+        {
+            (c.Consc, "꼼꼼하고", "꼼꼼하다", "덤벙대고", "덤벙댄다"),
+            (c.Extra, "말이 많고", "말이 많다", "조용하고", "조용하다"),
+            (c.Agree, "다정하고", "다정하다", "무뚝뚝하고", "무뚝뚝하다"),
+            (c.Neuro, "걱정이 많고", "걱정이 많다", "느긋하고", "느긋하다"),
+            (c.Open, "새것을 좋아하고", "새것을 좋아한다", "늘 하던 것을 좋아하고", "늘 하던 것을 좋아한다"),
+            (c.Brave, "용감하고", "용감하다", "겁이 많고", "겁이 많다"),
+        };
+        var picked = traits.Select((t, i) => (t, i, d: Math.Abs(t.v - 0.5f))).Where(x => x.d >= 0.15f).OrderByDescending(x => x.d).ThenBy(x => x.i).Take(3).ToList();
+        string words;
+        if (picked.Count == 0) words = "무난하다";
+        else
+        {
+            var parts = picked.Select((x, k) => k < picked.Count - 1 ? (x.t.v >= 0.5f ? x.t.hiGo : x.t.loGo) : (x.t.v >= 0.5f ? x.t.hiEnd : x.t.loEnd));
+            words = string.Join(" ", parts);
+        }
+        var bits = new List<string> { words };
+        string aim = Mind.AimName((Aim)c.Aim);
+        if (aim.Length > 0) bits.Add($"꿈: {aim}{(c.AimMet != 0 ? " (이뤘다)" : "")}");
+        bits.Add("즐겨 하는 것: " + (Hobby)c.Hobby switch
+        {
+            Hobby.Read => "책 읽기", Hobby.Game => "놀이판", Hobby.Film => "영상 보기", Hobby.Music => "음악 듣기",
+            Hobby.Study => "자료 들여다보기", Hobby.Tinker => "손으로 만들기", _ => "가만히 쉬기",
+        });
+        int mate = soc?.PartnerOf(a.Id) ?? -1;
+        if (mate >= 0 && mate < mind.Agents.Count) bits.Add($"짝: {mind.NameOf(mate)}");
+        return string.Join(" · ", bits);
     }
 
     /// <summary>손으로 카메라 옮기기 (따라가기를 끈다).</summary>
@@ -894,7 +933,7 @@ public sealed class LiveShow
                     if (so?.PastLine(id) is { Length: > 0 } past) near.Add(past);   // ⑫ 출항 과거사
                     string pondered = b.Alive != 0 ? mind.RecentThought(id, w.Tick, Time.Hours(1)) : "";
                     rows.Add(new PanelRow($"{mind.NameOf(id)}{(so?.NickOf(id) is string nk ? $" '{nk}'" : "")} — {state}",
-                        $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
+                        $"{Persona(mind, so, a)}\n몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
                         slots.GetValueOrDefault(id, -1), bars));
                 }
                 break;

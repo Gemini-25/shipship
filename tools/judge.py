@@ -62,12 +62,15 @@ for r in runs:
         if r['robotOffJobMin'] / max(0.1, r['ran']) > 60: problems['판단'].append(f'{tag}: 맡은 일을 두고 딴 일 한 로봇 {r["robotOffJobMin"]}분')
         if r['jobsOverdue'] > max(2, 0.2 * r['jobsDone']): problems['판단'].append(f'{tag}: 기한 넘긴 일감 {r["jobsOverdue"]} (끝낸 것 {r["jobsDone"]})')
         if r['personReraised'] > 0: problems['판단'].append(f'{tag}: 같은 사람의 사건이 30분 안에 다시 섬 {r["personReraised"]}')
+        if r.get('robotHeldIdleMin', 0) / max(0.1, r['ran']) > 30: problems['판단'].append(f'{tag}: 로봇이 든 채 논 시간 {r["robotHeldIdleMin"]}분')
+        if r.get('robotStuckMin', 0) / max(0.1, r['ran']) > 10: problems['판단'].append(f'{tag}: 막힌 채 맡김을 쥔 로봇 {r["robotStuckMin"]}분')
+        if r.get('pathLoss', 0) > 5: problems['판단'].append(f'{tag}: 사건에 보낸 로봇의 길 손해 평균 {r["pathLoss"]}걸음 ({r.get("sent", 0)}번)')
 
 print()
 for key, title in [('사람', '버팀 ① 사람이 살아남는다 (한꺼번에 다 죽는 판 없음)'), ('순환', '버팀 ② 물자 · 설비가 순환한다'),
                    ('값', '버팀 ③ 값이 터지거나 굳지 않는다'), ('지루함', '버팀 ④ 지루하지 않다 (하이라이트 3~12인 날 70% · 작은 장면까지 쳐서 볼 거리 없는 시간 12시간 안)'),
                    ('저절로', '저절로 드러남 (원인 없는 큰 일 0)'),
-                   ('판단', '판단 (흔들림 사람 하루 10분 안 · 같은 실패 되풀이 하루 2번 안 · 로봇이 맡은 일을 둔 시간 하루 60분 안 · 기한 넘긴 일감 20% 안 · 같은 사람 사건 다시 섬 0)')]:
+                   ('판단', '판단 (흔들림 사람 하루 10분 안 · 같은 실패 되풀이 하루 2번 안 · 로봇이 맡은 일을 둔 시간 하루 60분 안 · 기한 넘긴 일감 20% 안 · 같은 사람 사건 다시 섬 0 · 로봇이 든 채 논 시간 하루 30분 안 · 막힌 채 맡김 하루 10분 안 · 길 손해 평균 5걸음 안)')]:
     p = problems[key]
     print(f'{mark(not p)} {title}' + ('' if not p else ' — ' + ' / '.join(p[:8]) + (f' 외 {len(p) - 8}' if len(p) > 8 else '')))
 

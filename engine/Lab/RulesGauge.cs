@@ -26,5 +26,18 @@ public static partial class Program
         var g = new MindGauge(s);
         for (int i = 0; i < Time.Minutes(20); i++) { s.Step(); g.Observe(s.Tick); }
         Check("켜진 로봇을 센다 (놂 몫이 0~1)", g.RobotUp > 0 && g.RobotIdleShare is >= 0 and <= 1, g.Line());
+        // 로봇 몫 (docs/MIND.md 4단): 소화기를 든 채 쉬는 로봇을 센다 — 돌려놓으면(10분 뒤) 더 늘지 않는다
+        {
+            var h = ShipWorld.Crewed("Hwasal", 11, 3, 3, 0);
+            var hm = h.Get<Mind>();
+            h.Run(Time.Minutes(10));
+            foreach (var a in hm.Agents) if (a.C.Kind == AgentKind.Robot) { a.C.Holding = hm.iExt; a.C.HoldCharge = 500; }
+            var hg = new MindGauge(h);
+            for (int i = 0; i < Time.Minutes(40); i++) { h.Step(); hg.Observe(h.Tick); }
+            long mid = hg.RobotHeldIdle;
+            for (int i = 0; i < Time.Minutes(20); i++) { h.Step(); hg.Observe(h.Tick); }
+            Check("로봇 몫: 소화기를 든 채 쉬는 로봇을 센다 · 돌려놓은 뒤엔 늘지 않는다 (든 채 논 시간 · 막힌 채 맡김 · 길 손해가 판정 줄에)",
+                mid > 0 && hg.RobotHeldIdle == mid && hg.Line().Contains("든 채 논"), $"든 채 논 {mid * Time.SecondsPerTick / 60:0}분 → 그 뒤 20분 +{(hg.RobotHeldIdle - mid) * Time.SecondsPerTick / 60:0}분 · {hg.Line()}");
+        }
     }
 }

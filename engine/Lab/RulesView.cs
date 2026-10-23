@@ -256,6 +256,18 @@ public static partial class Program
             picked && card.Length >= 3 && card[0].StartsWith(pm.NameOf(who)) && card.Any(l => l.StartsWith("생각:")) && card.Any(l => l.StartsWith("몸:")) && followed && released,
             $"고름 {picked} · 카드 [{string.Join(" / ", card)}] · 따라감 {followed} · 놓음 {released}");
 
+        // 사람됨 한 줄 (docs/MIND.md 4단): 카드 · 사람 판에 성격 낱말 · 꿈 · 즐겨 하는 것 — 숫자 없이 · 같은 사람은 같은 말
+        {
+            pm[who].C.Brave = 0.1f; pm[who].C.Open = 0.5f; pm[who].C.Extra = 0.5f; pm[who].C.Agree = 0.5f; pm[who].C.Neuro = 0.5f; pm[who].C.Consc = 0.9f;
+            pick.SelectAgent(who);
+            string persona = pick.Card().FirstOrDefault(l => l.StartsWith("사람됨:")) ?? "";
+            pick.TogglePanel(PanelKind.People);
+            var ppf = pick.Render(); pick.Recycle(ppf.Img);
+            bool inPanel = ppf.PanelRows.Any(r => r.Sub.Contains(persona["사람됨: ".Length..]));
+            Check("사람됨 한 줄: 카드와 사람 판에 성격 낱말 · 꿈 · 즐겨 하는 것 (꼼꼼 0.9 · 용기 0.1 → '겁이 많고 꼼꼼하다') — 숫자를 내지 않는다",
+                (persona.Contains("꼼꼼하고") || persona.Contains("꼼꼼하다")) && (persona.Contains("겁이 많고") || persona.Contains("겁이 많다")) && persona.Contains("즐겨 하는 것:") && !persona.Any(char.IsDigit) && inPanel,
+                $"'{persona}' · 사람 판에 {inPanel}");
+        }
         Check("관전 화면: 틱이 드물면 걸음 사이를 메운다 — 한 틱에 지나간 칸들을 따라 사람 · 로봇이 칸 사이 자리에 그려진다",
             partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
         ViewRules2(lay, dt);
