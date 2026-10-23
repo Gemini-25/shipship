@@ -182,6 +182,34 @@ public static partial class Program
             double feet = Luma(Px(img, ax, ay, 9, T - 3)), beside = Luma(Px(img, ax + 1, ay, 9, T - 3));
             Check("텍스처 사람: 선 사람 발밑엔 그늘 타원 (곁 바닥보다 어둡다 — 사람이 바닥에 선다)", feet < beside * 0.85, $"발밑 {feet:0} · 곁 바닥 {beside:0}");
         }
+        // 10 · 앞 가림 (T9): 우주복 보관함 바로 북쪽에 선 사람은 보관함 윗부분에 가린다 (예전엔 사람이 늘 설비 위에)
+        {
+            var occ = Worlds.Ascii(@"
+#########
+#.......#
+#.......#
+#....L..#
+#.......#
+#########", new Dictionary<char, string> { ['L'] = "SuitLocker" });
+            var s = Worlds.Full(occ, 13);
+            var m = s.Get<Mind>(); var lt = s.Get<Light>();
+            for (int r = 0; r < occ.Rooms.Count; r++) lt.Lamp[r] = 300;
+            var p = new Painter(occ);
+            var empty = p.Frame(s, 0, 0, occ.W, occ.H, 0); var e = new Img(empty.W, empty.H); Array.Copy(empty.Px, e.Px, e.Px.Length);
+            int who = m.AddPerson(s, Worlds.At(occ, 5, 2));
+            var with = p.Frame(s, 0, 0, occ.W, occ.H, 0);
+            int lx = 6, ly = 4, rise = ArtFurniture.Rise("SuitLocker", 1, 1, Facing.S);   // 그림 칸 (도면은 둘레 한 칸을 더 둔다) — 보관함 (6, 4) · 사람 (6, 3)
+            int same = 0, diff = 0, above = 0;
+            for (int y = T - rise + 1; y < T; y++)
+                for (int x = 6; x < T - 6; x++)
+                {
+                    bool eq = e.Get(lx * T + x, (ly - 1) * T + y).Equals(with.Get(lx * T + x, (ly - 1) * T + y));
+                    if (eq) same++; else diff++;
+                }
+            for (int y = 2; y < T - rise - 2; y++) for (int x = 10; x < 22; x++) if (!e.Get(lx * T + x, (ly - 1) * T + y).Equals(with.Get(lx * T + x, (ly - 1) * T + y))) above++;
+            Check("텍스처 앞 가림: 키 큰 설비 바로 뒤(북쪽)에 선 사람은 설비의 솟은 윗부분에 가린다 · 그 위로는 사람이 보인다",
+                diff == 0 && same > 50 && above > 20, $"겹친 곳 같음 {same} · 다름 {diff} · 그 위 사람 도트 {above} (사람 칸 {occ.X(m[who].C.Cell)},{occ.Y(m[who].C.Cell)})");
+        }
         // 7 · 같은 세계 같은 그림 · 그림은 세계를 바꾸지 않는다
         {
             var s = Worlds.Full(lay, 7);

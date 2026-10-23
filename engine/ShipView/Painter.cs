@@ -370,7 +370,7 @@ public sealed partial class Painter
         var life = s.Find<Life>();
         int Px(int x) => (x - x0) * T;
         int Py(int y) => (y - y0) * T;
-        _emissive.Clear();
+        _emissive.Clear(); _front.Clear();
         GatherFacts(s);
         long lt = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (ProfAlloc != null) _lapAlloc = GC.GetAllocatedBytesForCurrentThread();
@@ -611,7 +611,9 @@ public sealed partial class Painter
                 var fill = FillOf(i, mind);
                 int nrise = ArtFurniture.Rise(type, bw, bh, face);
                 long key = (12L << 56) ^ ((long)i << 36) ^ (fill.Key << 8) ^ ((long)face << 4);
-                Put(img, Cached(key, (type, bw, bh, face, fill, i), static q => Shadowed(ArtFurniture.Body(q.type, q.bw, q.bh, q.face, q.fill, q.i), Math.Max(1, ArtFurniture.Rise(q.type, q.bw, q.bh, q.face)))), Px(bx), Py(by) - nrise);
+                var nbody = Cached(key, (type, bw, bh, face, fill, i), static q => Shadowed(ArtFurniture.Body(q.type, q.bw, q.bh, q.face, q.fill, q.i), Math.Max(1, ArtFurniture.Rise(q.type, q.bw, q.bh, q.face))));
+                Put(img, nbody, Px(bx), Py(by) - nrise);
+                if (nrise >= 6 && type != "Bed") _front.Add((nbody, Px(bx), Py(by) - nrise, by + bh - 1));
                 int ndev = DeviceOf(net, i);
                 var nst = ndev < 0 ? FixState.On : net!.IsBroken(ndev, Part.Electric) || net.IsBroken(ndev, Part.Mechanical) ? FixState.Broken : net.Working(ndev) ? FixState.On : FixState.Off;
                 int stIdx = nst == FixState.Off ? 0 : nst == FixState.Broken ? 2 : 1;
@@ -635,6 +637,7 @@ public sealed partial class Painter
             var body = Cached(Key(5, (int)ft, bw, bh, i), (ft, bw, bh, i, rise), static q => Shadowed(DotMachines.Body(q.ft, q.bw, q.bh, -1, 1, 0, q.i), q.rise));
             int px = Px(bx), py = Py(by) - rise;
             Put(img, body, px, py);
+            if (rise >= 6 && ft is not (FurnitureType.Bed or FurnitureType.Seat or FurnitureType.CrashSeat or FurnitureType.MedBed)) _front.Add((body, px, py, by + bh - 1));
             var dev = DeviceOf(net, i);
             var state = dev < 0 ? FixState.On : net!.IsBroken(dev, Part.Electric) || net.IsBroken(dev, Part.Mechanical) ? FixState.Broken : net.Working(dev) ? FixState.On : FixState.Off;
             if (state != FixState.Off)
@@ -699,8 +702,16 @@ public sealed partial class Painter
                 var (nx, ny) = Nudge?.Invoke(a) ?? (0, 0);
                 if (a.IsPerson) DrawPerson(img, mind, life, a, Px(x) + nx, Py(y) + ny, frame);
                 else DrawBot(img, a, Px(x) + nx, Py(y) + ny, frame);
+                // 앞 가림 (T9): 이 사람 · 로봇보다 아래 줄에 밑이 있는 솟은 설비가 그 그림과 겹치면 겹친 곳만 다시 얹는다
+                int sx0 = Px(x) + nx, sy0 = Py(y) + ny + T - 46, sx1 = sx0 + T, sy1 = Py(y) + ny + T;
+                foreach (var (fimg, fx, fy, baseRow) in _front)
+                {
+                    if (baseRow <= y || fx >= sx1 || fy >= sy1 || fx + fimg.W <= sx0 || fy + fimg.H <= sy0) continue;
+                    PutClip(img, fimg, fx, fy, sx0, sy0, sx1, sy1);
+                }
             }
         }
+        _front.Clear();
 
         lt = Lap("사람 · 로봇", lt);
         // ── 떠 있는 물방울 (무중력 — 사람 위 공중에 떠돈다 · 많을수록 크고 많다) ──
@@ -877,6 +888,23 @@ public sealed partial class Painter
         o.DrawShadowOf(body, 0, 0, 0.3f);
         o.Draw(body, 0, 0);
         return o;
+    }
+
+    /// <summary>이 장에 그린 솟은 설비 (그림 · 자리 · 밑 줄) — 앞 가림에 쓴다.</summary>
+    private readonly List<(Img img, int x, int y, int baseRow)> _front = new();
+
+    /// <summary>그림의 (cx0, cy0)~(cx1, cy1) 안쪽만 얹는다 (투명 도트는 건너뛴다).</summary>
+    private static void PutClip(Img dst, Img src, int dx, int dy, int cx0, int cy0, int cx1, int cy1)
+    {
+        int x0 = Math.Max(Math.Max(0, cx0), dx), y0 = Math.Max(Math.Max(0, cy0), dy);
+        int x1 = Math.Min(Math.Min(dst.W, cx1), dx + src.W), y1 = Math.Min(Math.Min(dst.H, cy1), dy + src.H);
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+            {
+                var c = src.Get(x - dx, y - dy);
+                if (c.A == 255) dst.Set(x, y, c);
+                else if (c.A > 0) dst.Blend(x, y, c);
+            }
     }
 
     private int[]? _devOf;
