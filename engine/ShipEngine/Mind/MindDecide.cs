@@ -61,7 +61,7 @@ public sealed partial class Mind
             if (busy && o.Goal == c.Goal && o.Target == c.GoalTarget) return;  // 지금 것이 가장 낫다
             if (busy && o.Score <= current) return;
             if (TryPlan(sim, a, o)) return;
-            if (k == 0) NoteCantPlan(a, o.Goal, o.Target, o.Cell, sim.Tick);   // 판단 일지 (쓰기만)
+            if (k == 0 && _buildFailed) NoteCantPlan(a, o.Goal, o.Target, o.Cell, sim.Tick);   // 판단 일지 (쓰기만 — 1순위의 계획을 짓지 못했을 때만)
         }
     }
 
@@ -94,10 +94,13 @@ public sealed partial class Mind
         HoldTakenOff(a, iSuit, o2);   // 손에 들고 우주복 보관함에 걸어가 넣는다 (예전엔 벗는 순간 보관함으로 옮아 갔다)
     }
 
+    private bool _buildFailed;   // 판단 일지: 방금 TryPlan이 계획을 짓지 못해 졌나 (감점 · 피한 방 때문에 다른 것을 고른 것과 가른다)
+
     private bool TryPlan(Sim sim, Agent a, Option o)
     {
         var plan = new List<PlanStep>();
-        if (!BuildPlan(sim, a, o, plan)) return false;
+        _buildFailed = false;
+        if (!BuildPlan(sim, a, o, plan)) { _buildFailed = true; return false; }
         if (o.Cell < 0 && Everyday(o.Goal) && a.IsPerson && LeavesHold(a, plan) is float k && k < 1)
         {
             // 자리를 정하지 않은 일상(물 · 쉼 · 어울림)은 고를 때 대피실 · 회의 밖인지 몰랐다 — 계획이 닿는 방으로 감점을 매긴다 (비판 검토: 칸 −1 선택지가 감점을 피해 갔다 · 대피실 문을 나갔다 되돌아왔다)
@@ -119,14 +122,14 @@ public sealed partial class Mind
         if (c.Carrying >= 0) DropCarried(sim, a, false);
         if (IsTask(c.Goal)) Claim(a, c.Goal, c.GoalTarget, -1);
         if (a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && Journaled(a, c.Goal) && (c.Goal != o.Goal || c.GoalTarget != o.Target))
-            a.Judged.Add(new Judgment { Tick = sim.Tick, Goal = c.Goal, Target = c.GoalTarget, Cell = c.Cell, Method = (byte)o.Goal, Held = c.Holding, Out = Judged.Dropped, By = -1 });   // 판단 일지: 하던 일을 그만두고 다른 일로 (방법 칸에 바꾼 목표)
+            Jot(a, new Judgment { Tick = sim.Tick, Goal = c.Goal, Target = c.GoalTarget, Cell = c.Cell, Method = (byte)o.Goal, Held = c.Holding, Out = JudgeOut.Dropped, By = -1 });   // 판단 일지: 하던 일을 그만두고 다른 일로 (방법 칸에 바꾼 목표)
         c.Goal = o.Goal; c.GoalTarget = o.Target; c.GoalCell = o.Cell; c.GoalCause = o.Cause; c.GoalScore = o.Score; c.GoalSince = sim.Tick;
         c.Failed = 0;
         a.Plan = plan; c.StepIndex = 0; c.StepStart = sim.Tick; a.Path.Clear(); a.PathIdx = 0; c.WaitTicks = 0;
         c.CloseHard = (byte)(o.Goal == GoalKind.Evacuate ? 1 : 0);
         if (o.Goal == GoalKind.Evacuate && _followScore > 0 && o.Score == _followScore) { Followed++; c.FollowedAt = sim.Tick; } // ⑨ 아는 이를 따라 나갔다
         if (IsTask(o.Goal)) Claim(a, o.Goal, o.Target, +1);
-        if (Journaled(a, o.Goal)) a.Judged.Add(new Judgment { Tick = sim.Tick, Goal = o.Goal, Target = o.Target, Cell = o.Cell, Method = FirstHand(plan), Held = c.Holding, Out = Judged.Set, By = c.AssignedGoal == o.Goal && c.AssignedUntil > sim.Tick ? -2 : -1 });   // 판단 일지 (쓰기만)
+        if (Journaled(a, o.Goal)) Jot(a, new Judgment { Tick = sim.Tick, Goal = o.Goal, Target = o.Target, Cell = o.Cell, Method = FirstHand(plan), Held = c.Holding, Out = JudgeOut.Set, By = c.AssignedGoal == o.Goal && c.AssignedUntil > sim.Tick ? -2 : -1 });   // 판단 일지 (쓰기만)
         return true;
     }
 
@@ -141,15 +144,15 @@ public sealed partial class Mind
     }
 
     /// <summary>판단 일지: 1순위를 세우지 못했다 — 같은 (목표 · 대상)이 여덟 칸 안에 있고 10분 안이면 때만 고친다 (2틱마다 되풀이해 칸을 채우지 않게).</summary>
-    private static void NoteCantPlan(Agent a, GoalKind g, int target, int cell, long t)
+    private void NoteCantPlan(Agent a, GoalKind g, int target, int cell, long t)
     {
-        if (!Judgments.Enabled) return;
-        for (int k = 0; k < a.Judged.Count; k++)
+        if (!Journal) return;
+        for (int k = 0; k < (a.Judged?.Count ?? 0); k++)
         {
-            ref var j = ref a.Judged.Newest(k);
-            if (j.Out == Judged.CantPlan && j.Goal == g && j.Target == target && t - j.Tick < Time.Minutes(10)) { j.Tick = t; return; }
+            ref var j = ref a.Judged!.Newest(k);
+            if (j.Out == JudgeOut.CantPlan && j.Goal == g && j.Target == target && t - j.Tick < Time.Minutes(10)) { j.Tick = t; return; }
         }
-        a.Judged.Add(new Judgment { Tick = t, Goal = g, Target = target, Cell = cell, Method = 255, Held = a.C.Holding, Out = Judged.CantPlan, By = -1 });
+        Jot(a, new Judgment { Tick = t, Goal = g, Target = target, Cell = cell, Method = 255, Held = a.C.Holding, Out = JudgeOut.CantPlan, By = -1 });
     }
 
     /// <summary>계획이 끝나는 방이 머물러야 할 방(대피실 · 회의) 밖이면 그 감점 (대피 0.15 · 회의 0.3 — 1이면 감점 없음).</summary>

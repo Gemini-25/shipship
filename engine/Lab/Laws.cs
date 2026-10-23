@@ -108,8 +108,8 @@ public static partial class Program
             {
                 (byte[] save, ulong flow, int robotNotes, int computerNotes) Run(bool on)
                 {
-                    Judgments.Enabled = on;
                     var s = ShipWorld.Crewed("Didim", 3, 6, 2);
+                    s.Get<Mind>().Journal = on; s.Get<ShipMind>().NoteOn = on;
                     s.Run(60);
                     s.Get<Chemistry>().Ignite(s.Layout.Furniture.First(f => f.Type == "Bed").Cells[0], 3e6, s.Causes.Add(CauseKind.Setup, "침대 곁 충전기에서 불꽃이 튀었다", s.Tick));
                     ulong h = 1469598103934665603UL;
@@ -119,8 +119,7 @@ public static partial class Program
                         foreach (var f in s.Facts.Since(cur)) { h ^= (ulong)(f.Tick * 31 + (long)f.Kind * 7 + f.Cell + f.Actor * 13); h *= 1099511628211UL; }
                     }
                     var m = s.Get<Mind>();
-                    Judgments.Enabled = true;
-                    return (s.Save(), h, m.Agents.Where(a => !a.IsPerson).Sum(a => a.Judged.Count), s.Get<ShipMind>().Notes.Count);
+                    return (s.Save(), h, m.Agents.Where(a => !a.IsPerson).Sum(a => a.Judged?.Count ?? 0), s.Get<ShipMind>().Notes?.Count ?? 0);
                 }
                 var off = Run(false); var on = Run(true);
                 Check("판단 일지는 세계를 바꾸지 않는다: 디딤호 6명 · 로봇 2 · 불 하나 3000틱 — 일지를 켠 세계와 끈 세계의 찍기 바이트 · 사실 흐름이 같다 · 켠 세계에만 로봇 · 주컴퓨터 일지가 있다",

@@ -289,7 +289,7 @@ public sealed partial class Mind
                         a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Wash, Target = st.Target, Until = t + Time.Hours(1) });
                         if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
                         a.LastFail = "Wash: 샤워 칸에서 물이 나오지 않는다";
-                        a.Judged.Add(new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = c.Cell, Method = 255, Held = c.Holding, Out = Judged.Blocked, Why = SnagKind.NoWater, By = -1 });   // 판단 일지 (쓰기만)
+                        Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = c.Cell, Method = 255, Held = c.Holding, Out = JudgeOut.Blocked, Why = SnagKind.NoWater, By = -1, Note = "샤워 칸에서 물이 나오지 않는다" });   // 판단 일지 (쓰기만)
                         c.Anger = Math.Min(1, c.Anger + 0.05f);
                         break;
                     }
@@ -357,7 +357,7 @@ public sealed partial class Mind
         a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = fu, Until = t + Time.Minutes(10) });
         if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
         a.LastFail = $"{c.Goal}: {why}";
-        a.Judged.Add(new Judgment { Tick = t, Goal = c.Goal, Target = fu, Cell = c.Cell, Method = 255, Held = c.Holding, Out = Judged.Dropped, By = -1 });   // 판단 일지 (쓰기만 — 제 판단으로 돌아섰다)
+        Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = fu, Cell = c.Cell, Method = 255, Held = c.Holding, Out = JudgeOut.Turned, By = -1, Note = why });   // 판단 일지 (쓰기만 — 막힘이 아니라 제 판단으로 돌아섰다)
         EndPlan(a);
         c.Goal = GoalKind.Idle;
     }

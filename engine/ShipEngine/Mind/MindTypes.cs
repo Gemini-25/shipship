@@ -334,6 +334,6 @@ public sealed class Agent
     public string LastFail = "";   // 관찰용: 마지막으로 그만둔 까닭 (찍지 않는다)
     public string LastThought = "";   // 관찰용: 마지막 궁리 (찍지 않는다)
     public long LastThoughtTick = long.MinValue / 2;   // 관찰용: 그때 (찍지 않는다)
-    public readonly Ring<Judgment> Judged = new(8);   // 관찰용: 판단 일지 여덟 칸 (찍지 않는다 · 판단은 읽지 않는다 — 화면만)
+    public Ring<Judgment>? Judged;   // 관찰용: 판단 일지 여덟 칸 (세계가 일지를 켰을 때 첫 쓰기에 잡는다 · 찍지 않는다 · 판단은 읽지 않는다 — 화면만)
     public bool IsPerson => C.Kind == AgentKind.Person;
 }

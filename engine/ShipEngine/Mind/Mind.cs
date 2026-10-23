@@ -337,19 +337,29 @@ public sealed partial class Mind : IEngine
 
     /// <summary>로봇 · 사람에게 일을 맡긴다: 믿음을 넣고 그 목표에 점수를 더한다 (until 틱까지).</summary>
     /// <summary>⑪ 일감판이 일을 맡긴다 (믿음 없이).</summary>
+    /// <summary>판단 일지를 쓰나 (세계마다 — 기본 끔 · 찍지 않는다: 되살린 세계 · 복제 · 상상 · 앞선 세계는 쓰지 않는다 · 화면과 시험이 산 세계에서 켠다).</summary>
+    public bool Journal;
+
+    /// <summary>판단 일지 한 칸 (쓰기만 — 켠 세계에서만 · 고리는 첫 쓰기에 잡는다).</summary>
+    private void Jot(Agent a, in Judgment j)
+    {
+        if (!Journal) return;
+        (a.Judged ??= new Ring<Judgment>(8)).Add(j);
+    }
+
     /// <summary>판단 일지 (쓰기만): 주컴퓨터가 이 로봇을 그 일에서 놓아줬다.</summary>
     public void NoteReleased(int agent, long t, GoalKind goal, int cell)
     {
         if (agent < 0 || agent >= Agents.Count) return;
         var a = Agents[agent];
-        a.Judged.Add(new Judgment { Tick = t, Goal = goal, Target = a.C.AssignedTarget, Cell = cell, Method = 255, Held = a.C.Holding, Out = Judged.Released, Why = a.C.Snag, By = -2 });
+        Jot(a, new Judgment { Tick = t, Goal = goal, Target = a.C.AssignedTarget, Cell = cell, Method = 255, Held = a.C.Holding, Out = JudgeOut.Released, Why = a.C.Snag, By = -2 });
     }
 
     public void AssignJob(int agent, GoalKind goal, int target, int arg, long until)
     {
         var a = Agents[agent];
         a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedArg = arg; a.C.AssignedUntil = until;
-        a.Judged.Add(new Judgment { Tick = _nowTick, Goal = goal, Target = target, Cell = -1, Method = 255, Held = a.C.Holding, Out = Judged.Assigned, By = -2 });   // 판단 일지 (쓰기만)
+        Jot(a, new Judgment { Tick = _nowTick, Goal = goal, Target = target, Cell = -1, Method = 255, Held = a.C.Holding, Out = JudgeOut.Assigned, By = -2 });   // 판단 일지 (쓰기만)
     }
 
     public int ItemIndex(string name) => Array.IndexOf(ItemNames, name);
@@ -410,7 +420,7 @@ public sealed partial class Mind : IEngine
         if (b.Kind != BeliefKind.None) Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
         a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedUntil = until;
         if (arg != 0 || a.C.AssignedArg == PlanBound) a.C.AssignedArg = arg;
-        a.Judged.Add(new Judgment { Tick = sim.Tick, Goal = goal, Target = target, Cell = b.Cell, Method = 255, Held = a.C.Holding, Out = Judged.Assigned, By = -2 });   // 판단 일지 (쓰기만)
+        Jot(a, new Judgment { Tick = sim.Tick, Goal = goal, Target = target, Cell = b.Cell, Method = 255, Held = a.C.Holding, Out = JudgeOut.Assigned, By = -2 });   // 판단 일지 (쓰기만)
         a.Avoid.RemoveAll(v => v.Goal == goal && v.Target == target); // 새로 맡긴 일: '거기는 봤다'를 접고 다시 간다
     }
 

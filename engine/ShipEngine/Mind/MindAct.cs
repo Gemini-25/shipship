@@ -152,7 +152,7 @@ public sealed partial class Mind
     private void Next(Agent a, long t)
     {
         a.C.StepIndex++; a.C.StepStart = t + 1; a.Path.Clear(); a.PathIdx = 0; a.C.WaitTicks = 0;
-        if (a.C.StepIndex == a.Plan.Count && Journaled(a, a.C.Goal)) a.Judged.Add(new Judgment { Tick = t, Goal = a.C.Goal, Target = a.C.GoalTarget, Cell = a.C.Cell, Method = 255, Held = a.C.Holding, Out = Judged.Done, By = -1 });   // 판단 일지 (쓰기만)
+        if (a.C.StepIndex == a.Plan.Count && Journaled(a, a.C.Goal)) Jot(a, new Judgment { Tick = t, Goal = a.C.Goal, Target = a.C.GoalTarget, Cell = a.C.Cell, Method = 255, Held = a.C.Holding, Out = JudgeOut.Done, By = -1 });   // 판단 일지 (쓰기만)
     }
 
     private void EndPlan(Agent a) { a.Plan.Clear(); a.Path.Clear(); a.C.StepIndex = 0; }
@@ -162,7 +162,7 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         NoteSnag(sim, a, snag, cell >= 0 ? cell : c.Cell, subject);   // ⑧ 판단 엔진: 막힌 까닭을 남긴다 (목표를 거두기 전에)
-        a.Judged.Add(new Judgment { Tick = sim.Tick, Goal = c.Goal, Target = c.GoalTarget, Cell = cell >= 0 ? cell : c.Cell, Method = 255, Held = c.Holding, Out = c.Mode != 0 ? Judged.Dropped : Judged.Blocked, Why = snag, By = -1 });   // 판단 일지 (쓰기만)
+        Jot(a, new Judgment { Tick = sim.Tick, Goal = c.Goal, Target = c.GoalTarget, Cell = cell >= 0 ? cell : c.Cell, Method = 255, Held = c.Holding, Out = c.Mode != 0 ? JudgeOut.Dropped : JudgeOut.Blocked, Why = snag, By = -1, Note = why });   // 판단 일지 (쓰기만)
         if (a.IsPerson && c.Mode == 0)   // ⑧ 판단 엔진 (마): 막히면 궁리한다 · 제 궁리를 하다 막혔으면 그 계획을 버리고 배워서 다시
         {
             if (c.Goal == GoalKind.Improvise) OwnFailed(sim, a, snag, cell >= 0 ? cell : c.Cell, subject);

@@ -96,8 +96,9 @@ public sealed partial class ShipMind : IEngine
     public ShipPolicy Policy = ShipPolicy.Default;
     public List<Incident> Incidents = new();
     public readonly List<(long tick, string text)> Log = new();
-    /// <summary>관찰용: 주컴퓨터 일지 512칸 (갈래 · 로봇 · 사건 — 찍지 않는다 · 판단은 읽지 않는다 · 화면만).</summary>
-    public readonly Ring<ComputerNote> Notes = new(512);
+    /// <summary>관찰용: 주컴퓨터 일지 512칸 (갈래 · 로봇 · 사건 — 찍지 않는다 · 판단은 읽지 않는다 · 화면만) · 켜기 NoteOn (세계마다 · 기본 끔).</summary>
+    public Ring<ComputerNote>? Notes;
+    public bool NoteOn;
     public bool Online;
     public float[] RoomKPa, RoomKPaPrev, RoomO2, RoomSoot, RoomSootPrev, RoomCO, RoomCO2, RoomTemp;
     public byte[] RoomCO2Hold = Array.Empty<byte>();   // 이산화탄소가 한계를 넘어 머문 읽기 수 (6이면 1분 — 경보)
@@ -237,7 +238,7 @@ public sealed partial class ShipMind : IEngine
         if (PlanLog && !Imagining && (text.StartsWith("생각") || text.StartsWith("계획") || text.StartsWith("미리"))) Console.WriteLine($"      ({sim.Seed}) {Time.Clock(sim.Tick)} {text}");
         Log.Add((sim.Tick, text));
         if (Log.Count > 300) Log.RemoveRange(0, Log.Count - 300);
-        if (!Imagining) Notes.Add(new ComputerNote { Tick = sim.Tick, Kind = kind, Robot = robot, Incident = incident, Reason = reason, Text = text });   // 주컴퓨터 일지 (쓰기만)
+        if (NoteOn && !Imagining) (Notes ??= new Ring<ComputerNote>(512)).Add(new ComputerNote { Tick = sim.Tick, Kind = kind, Robot = robot, Incident = incident, Reason = reason, Text = text });   // 주컴퓨터 일지 (쓰기만)
     }
 
     /// <summary>판단 일지의 '맡긴 까닭' 글 (화면이 읽는다).</summary>
