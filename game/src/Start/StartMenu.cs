@@ -20,6 +20,8 @@ public partial class StartMenu : Node2D
     private Choice[] _choices = Array.Empty<Choice>();
     private int _pick = 1, _hover = -1;
     private Rect2[] _cards = Array.Empty<Rect2>();
+    private Rect2 _quit;
+    private int _pressCard = -1; private bool _pressQuit;
     private Font _font = null!, _bold = null!;
     private double _t;
     private string? _shot;
@@ -130,8 +132,14 @@ public partial class StartMenu : Node2D
                 y += sz.Y + 12;
             }
         }
-        DrawCentered(_font, "1 · 2 또는 누르기로 고른다 · ← → 와 Enter · Esc 나가기", new Vector2(cx, top + h + 56), 17, new Color(0.6f, 0.65f, 0.75f));
-        DrawCentered(_font, "새 엔진 판에서 Esc를 누르면 이 화면으로 돌아온다", new Vector2(cx, top + h + 84), 15, new Color(0.5f, 0.55f, 0.65f));
+        DrawCentered(_font, "판을 눌러 고른다 (1 · 2 · ← → · Enter)", new Vector2(cx, top + h + 56), 17, new Color(0.6f, 0.65f, 0.75f));
+        DrawCentered(_font, "새 엔진 판에서는 오른쪽 위 메뉴 → 처음 화면으로 (Esc 두 번)", new Vector2(cx, top + h + 84), 15, new Color(0.5f, 0.55f, 0.65f));
+        // 나가기 단추 (마우스만으로 — docs/UI.md 3.9)
+        _quit = new Rect2(cx - 70, top + h + 108, 140, 40);
+        bool qh = _quit.HasPoint(GetViewport().GetMousePosition());
+        DrawRect(_quit, new Color(0.06f, 0.08f, 0.12f, qh ? 0.95f : 0.8f));
+        DrawRect(_quit, new Color(0.3f, 0.38f, 0.5f, qh ? 1 : 0.7f), false, 1);
+        DrawString(_font, new Vector2(_quit.Position.X, _quit.Position.Y + 26), "나가기 (Esc)", HorizontalAlignment.Center, 140, 16, new Color(0.8f, 0.85f, 0.93f));
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -153,11 +161,17 @@ public partial class StartMenu : Node2D
         {
             _hover = Array.FindIndex(_cards, r => r.HasPoint(mm.Position));
             if (_hover >= 0) _pick = _hover;
+            Input.SetDefaultCursorShape(_hover >= 0 || _quit.HasPoint(mm.Position) ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow);
         }
-        else if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb)
+        else if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left } mb)
         {
+            // 누름이 아니라 놓을 때 고른다 (누른 판과 놓은 판이 같을 때만 — docs/UI.md 같은 손잡이 규칙)
             int at = Array.FindIndex(_cards, r => r.HasPoint(mb.Position));
-            if (at >= 0) Go(_choices[at].Scene);
+            bool quit = _quit.HasPoint(mb.Position);
+            if (mb.Pressed) { _pressCard = at; _pressQuit = quit; return; }
+            if (at >= 0 && at == _pressCard) Go(_choices[at].Scene);
+            else if (quit && _pressQuit) GetTree().Quit();
+            _pressCard = -1; _pressQuit = false;
         }
     }
 

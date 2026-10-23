@@ -37,7 +37,30 @@ public sealed class LiveFrame
     public FeedItem[] Feed = Array.Empty<FeedItem>();
     /// <summary>멈춤 (빠르기 단추 — UI U5).</summary>
     public bool Paused;
+    // ── 마우스 화면 (docs/UI.md 1.2): 손잡이를 켜진 모양으로 그리고 누를 자리를 셈하는 데 드는 화면 값 (세계 아님) ──
+    public PanelKind Panel;
+    public long PanelPickKey;
+    public Overlay Show;
+    public string Legend = "";
+    public bool Follow, Overview, FollowSelected, Replaying;
+    public double HandLeft;
+    public int SpeedPick = 2, FixedPick = -1;
+    public bool CaptionsOn;
+    public bool CanReplay;
+    public string ReplayWhy = "";
+    public bool Holding;
+    public double DepartIn = double.NaN;
+    public int Highlights;
+    public bool JournalNew;
+    public PanelKind NoticeLink;
+    public bool StoryIsChain;
+    public AgentSpot[] Spots = Array.Empty<AgentSpot>();
+    public int HoverId = -1;
+    public string HoverName = "", HoverDoing = "";
 }
+
+/// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
+public readonly record struct AgentSpot(int Id, double X, double Y, bool Robot);
 
 /// <summary>사건 띠의 한 줄: 때 · 글 · 단계 (0 알림 · 1 조심 · 2 위험) · 자리 칸 (-1 없음) · 아직인가.</summary>
 public readonly record struct FeedItem(string Time, string Text, int Level, int Cell, bool Active);
@@ -49,7 +72,7 @@ public readonly record struct Gauge(string Icon, string Name, string Value, int 
 public readonly record struct CrewFace(int Id, string Name, string State, int Level, int Slot);
 
 /// <summary>판의 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등) — 사람 판은 얼굴(사람 줄 얼굴 그림의 칸)과 상태 막대도.</summary>
-public readonly record struct PanelRow(string Main, string Sub, bool On, int Face = -1, PanelBar[]? Bars = null);
+public readonly record struct PanelRow(string Main, string Sub, bool On, int Face = -1, PanelBar[]? Bars = null, long Key = 0, string Act = "", bool ActOn = true, string Why = "");
 /// <summary>판 줄의 막대 하나 (UI U3): 이름 · 0~1 · 단계 (0 괜찮다 · 1 조심 · 2 위험).</summary>
 public readonly record struct PanelBar(string Name, float Value, int Level);
 
@@ -61,7 +84,7 @@ public enum PanelKind { None, Highlights, Route, Journal, Chain, People }
 /// Godot 장면은 이것을 작업 스레드에서 부르고 나온 그림을 텍스처로 올리기만 한다 (메인 스레드는 세계를 만지지 않는다 — 60프레임).
 /// 실험실(--live)도 같은 것을 돌려 PNG로 확인한다. 세계는 읽기만 한다 (연출 · 그리기 — 결정론 그대로).
 /// </summary>
-public sealed class LiveShow
+public sealed partial class LiveShow
 {
     public readonly Sim Sim;              // 산 세계
     public readonly Director Dir;         // 산 세계의 연출 (다시보기 고리: 2분마다 찍기 1시간치)
@@ -437,15 +460,7 @@ public sealed class LiveShow
     /// <summary>화면에서 누른 자리(칸 · 소수)에 가장 가까운 사람 · 로봇을 고른다 (한 칸 안) — 없으면 고른 것을 놓는다.</summary>
     public bool SelectAt(double x, double y)
     {
-        var mind = World.Find<Mind>();
-        int best = -1; double bd = 0.9 * 0.9;
-        if (mind != null)
-            foreach (var a in mind.Agents)
-            {
-                var (ax, ay) = DrawnAt(a.Id);
-                double d = (ax - x) * (ax - x) + (ay - y - 0.15) * (ay - y - 0.15); // 그림은 칸 위쪽으로 조금 솟는다
-                if (d < bd) { bd = d; best = a.Id; }
-            }
+        int best = Nearest(SpotsNow(), x, y);   // 메인 스레드가 올림에 쓰는 것과 같은 셈 (올린 사람과 누른 사람이 늘 같다)
         Selected = best; FollowSelected = best >= 0;
         return best >= 0;
     }
@@ -609,6 +624,9 @@ public sealed class LiveShow
         var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         var (shx, shy) = Shake();
+        var prows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows();
+        SyncPick(prows);
+        var latest = Dir.Highlights.Count > 0 ? Dir.Highlights[^1] : null;
         float srcX = Math.Clamp((float)((left - x0) * Painter.T) + shx, 0, Math.Max(0, needW - (float)(w * Painter.T)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
         float srcY = Math.Clamp((float)((top - y0) * Painter.T) + shy, 0, Math.Max(0, needH - (float)(h * Painter.T)));
         return new LiveFrame
@@ -624,11 +642,19 @@ public sealed class LiveShow
             Notice = Notice, Route = RouteLine(),
             Broadcast = _castLeft > 0 ? _cast : "", BroadcastAlpha = (float)Math.Clamp(Math.Min(_castLeft, CastSec - _castLeft) / 0.5, 0, 1),
             Captions = Ears.Captions ? Ears.CaptionsNow() : Array.Empty<ShipView.Audio.SoundCaption>(),
-            PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows(), PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
+            PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = prows, PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
             Vitals = Vitals(),
             Crew = CrewBar(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
             Feed = Feed(), Paused = Paused,
+            // 마우스 화면의 손잡이 상태 (docs/UI.md 1.2)
+            Panel = Panel, PanelPickKey = PanelPickKey, Show = Show, Legend = Show == Overlay.None ? "" : OverlayName(Show),
+            Follow = Follow, Overview = Overview, FollowSelected = FollowSelected, Replaying = _replay != null, HandLeft = HandLeft,
+            SpeedPick = SpeedPick, FixedPick = FixedPick, CaptionsOn = Ears.Captions,
+            CanReplay = latest != null && CanReplay(latest), ReplayWhy = latest == null ? "아직 볼 만한 장면이 없다" : CanReplay(latest) ? "" : "한 시간 넘게 지나 다시 볼 수 없다",
+            Holding = Holding, DepartIn = DepartInMin(), Highlights = Dir.Highlights.Count, JournalNew = JournalNew, NoticeLink = Notice.Length > 0 ? _noticeLink : PanelKind.None,
+            StoryIsChain = ChainNow().Count > 0, Spots = SpotsNow(),
+            HoverId = HoverOk() ? HoverId : -1, HoverName = HoverOk() ? World.Find<Mind>()!.NameOf(HoverId) : "", HoverDoing = HoverOk() ? World.Find<Mind>()!.Thought(HoverId) : "",
         };
     }
 
@@ -654,7 +680,7 @@ public sealed class LiveShow
     public void Recycle(Img img) { if (_spare.Count < 3) _spare.Add(img); }
 
     // ── 주컴퓨터 방송 · 일지 (⑩) — 산 세계에서만 ──
-    private string _cast = ""; private double _castLeft; private int _journals = -1; private long _castTick = long.MinValue;
+    private string _cast = ""; private double _castLeft; private int _journals = -1; private long _castTick = long.MinValue, _journalTick = long.MinValue;
     public const double CastSec = 12;
 
     /// <summary>주컴퓨터가 방송하면 (아침 방송 · 항해 달력 — 소리 단계 S6) 자막으로 몇 초 · 일지를 쓰면 알림 (J로 보기).</summary>
@@ -663,9 +689,11 @@ public sealed class LiveShow
         _castLeft = Math.Max(0, _castLeft - realSec);
         var sm = Sim.Find<ShipMind>();
         if (sm == null) return;
-        if (_journals < 0) { _journals = sm.Journal.Count; _castTick = sm.Broadcasts.Count > 0 ? sm.Broadcasts[^1].tick : long.MinValue; }
+        long lastJournal = sm.Journal.Count > 0 ? sm.Journal[^1].tick : long.MinValue;
+        if (_journals < 0) { _journals = 0; _journalTick = lastJournal; _castTick = sm.Broadcasts.Count > 0 ? sm.Broadcasts[^1].tick : long.MinValue; }
         if (sm.Broadcasts.Count > 0 && sm.Broadcasts[^1].tick != _castTick) { _castTick = sm.Broadcasts[^1].tick; _cast = "주컴퓨터 방송 — " + sm.Broadcasts[^1].text; _castLeft = CastSec; }
-        if (sm.Journal.Count != _journals) { _journals = sm.Journal.Count; if (_journals > 0) Notify("주컴퓨터가 일지를 썼다 — J로 보기", 5); }
+        // 일지: 마지막 일지의 때로 견준다 (예전엔 줄 수로 — 60줄을 넘으면 앞에서 지워 수가 늘 60이라 알림이 멈췄다)
+        if (lastJournal != _journalTick) { _journalTick = lastJournal; if (lastJournal != long.MinValue) { JournalNew = true; Notify("주컴퓨터가 일지를 썼다 — 눌러서 보기", 5, PanelKind.Journal); } }
     }
 
     // ── 판: 하이라이트 목록(L) · 항로(T) · 일지(J) ──
@@ -677,16 +705,22 @@ public sealed class LiveShow
     {
         if (Panel == k) { Panel = PanelKind.None; return; }
         Panel = k;
+        if (k == PanelKind.Journal) JournalNew = false;
         var o = Sim.Find<Outside>();
         PanelPick = k == PanelKind.Route && o != null ? Math.Max(0, o.Route - 1) : 0;
+        var rows = PanelRows();
+        PanelPickKey = PanelPick < rows.Length ? rows[PanelPick].Key : 0;
     }
 
     /// <summary>↑ ↓: 판에서 고르기.</summary>
     public void PanelMove(int d)
     {
-        int n = Panel switch { PanelKind.Highlights => Dir.Highlights.Count, PanelKind.Route => Sim.Tables.Space.Routes.Count, PanelKind.None => 0, _ => PanelRows().Length };
+        var rows = PanelRows();
+        SyncPick(rows);
+        int n = Panel switch { PanelKind.Highlights => Dir.Highlights.Count, PanelKind.Route => Sim.Tables.Space.Routes.Count, PanelKind.None => 0, _ => rows.Length };
         if (n == 0) { PanelPick = 0; return; }
-        PanelPick = Math.Clamp(PanelPick + d, 0, n - 1);
+        PanelPick = Math.Clamp(PanelPick + d, 0, Math.Min(n, rows.Length) - 1);
+        PanelPickKey = rows[PanelPick].Key;
     }
 
     /// <summary>← →: (판마다 — 지금은 쓰는 판이 없다).</summary>
@@ -695,6 +729,7 @@ public sealed class LiveShow
     /// <summary>Enter: 하이라이트는 다시보기 · 항로는 출항 전이면 고른 항로로. 한 일이 있으면 true.</summary>
     public bool PanelEnter()
     {
+        SyncPick(PanelRows());
         switch (Panel)
         {
             case PanelKind.Highlights:
@@ -798,11 +833,11 @@ public sealed class LiveShow
 
     private string PanelFootOf() => Panel switch
     {
-        PanelKind.Highlights => "↑ ↓ 고르기 · Enter 다시보기 · L 닫기",
-        PanelKind.Route => "↑ ↓ 항로 · Enter 고르기 (출항 전에만) · T 닫기",
-        PanelKind.Journal => "↑ ↓ 고르기 · J 닫기",
-        PanelKind.Chain => "↑ ↓ 고르기 · Enter 그 자리 보기 · O 사슬 선 · C 닫기",
-        PanelKind.People => "↑ ↓ 고르기 · Enter 따라가기 · P 닫기",
+        PanelKind.Highlights => "줄을 눌러 고르기 · ▶ 다시보기 · 휠로 넘기기 (↑↓ · Enter · L)",
+        PanelKind.Route => double.IsNaN(DepartInMin()) ? "항로는 출항 때만 고른다 · 휠로 넘기기 (T)" : "항로를 누르면 그 길로 · 출항 전에만 (↑↓ · Enter · T)",
+        PanelKind.Journal => "줄을 누르면 펼친다 · 휠로 넘기기 (↑↓ · J)",
+        PanelKind.Chain => "마디를 누르면 그 자리로 · 위 단추로 사슬 선 (↑↓ · Enter · O · C)",
+        PanelKind.People => "사람을 누르면 따라간다 · 휠로 넘기기 (↑↓ · Enter · P)",
         _ => "",
     };
 
@@ -813,14 +848,17 @@ public sealed class LiveShow
         switch (Panel)
         {
             case PanelKind.Highlights:
-                foreach (var h in HighlightsNewest())
+                for (int hi = Dir.Highlights.Count - 1; hi >= 0; hi--)
                 {
+                    var h = Dir.Highlights[hi];
                     string story = h.Cause != 0 ? Sim.Causes.Story(h.Cause) : "";
                     string said = h.Line.Length > 0 ? h.Line : story.Length > 0 && story != h.Title ? story : "";
-                    string when = CanReplay(h) ? "Enter로 다시보기" : "한 시간 넘게 지나 다시 볼 수 없다";
-                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(h.People ? "사람 이야기 · " : "")}{h.Title}", said.Length > 0 ? said + "\n" + when : when, CanReplay(h)));
+                    bool can = CanReplay(h);
+                    string when = can ? "" : "한 시간 넘게 지나 다시 볼 수 없다";
+                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(h.People ? "사람 이야기 · " : "")}{h.Title}", said.Length > 0 && when.Length > 0 ? said + "\n" + when : said + when, can,
+                        Key: KeyHighlight(hi), Act: "▶ 다시보기", ActOn: can, Why: "한 시간 넘게 지나 다시 볼 수 없다 (한 시간 안의 것만)"));
                 }
-                if (rows.Count == 0) rows.Add(new PanelRow("아직 볼 만한 장면이 없다", "조용한 항해 — 일이 나면 여기에 쌓인다", false));
+                if (rows.Count == 0) rows.Add(new PanelRow("아직 볼 만한 장면이 없다", "조용한 항해 — 일이 나면 여기에 쌓인다", false, Key: -9));
                 break;
             case PanelKind.Route:
             {
@@ -832,12 +870,14 @@ public sealed class LiveShow
                 {
                     var r = routes[i];
                     double dv = Outside.HohmannDv(o.VoyageFrom > 0 ? o.VoyageFrom : o.Distance, double.IsNaN(o.PendingTo) ? o.VoyageTo : o.PendingTo, r.Incline).dv1 - flat;
-                    rows.Add(new PanelRow($"{i + 1}  {r.Name}", $"{r.Line}\n파편 ×{r.Zones:0.##} · 깊은 우주 ×{r.Deep:0.##} · 지나는 배 ×{r.Traffic:0.##}{(r.Incline > 0 ? $" · 면 {r.Incline:0.#}° (출발 +{dv:0}m/s)" : "")}", o.Route == i + 1));
+                    bool open = !double.IsNaN(DepartInMin());
+                    rows.Add(new PanelRow($"{i + 1}  {r.Name}", $"{r.Line}\n파편 ×{r.Zones:0.##} · 깊은 우주 ×{r.Deep:0.##} · 지나는 배 ×{r.Traffic:0.##}{(r.Incline > 0 ? $" · 면 {r.Incline:0.#}° (출발 +{dv:0}m/s)" : "")}", o.Route == i + 1,
+                        Key: i + 1, ActOn: open, Why: "항로는 출항 때만 고른다"));
                 }
                 var zone = o.ZoneAt(o.Distance); var ahead = o.ZoneAhead(Sim.Tick, 24);
                 var sense = Sim.Find<Sensors>();
                 rows.Add(new PanelRow(o.VoyageTicks > 0 ? $"항해 {(Sim.Tick - o.VoyageStart) / (double)Time.TicksPerDay:0}일째 / {o.VoyageTicks / (double)Time.TicksPerDay:0}일 · {o.Distance:0.000}AU" : "출항 전 — 항로를 고를 수 있다",
-                    $"{(zone != null ? $"지금 {zone.Name}" : "깊은 우주")}{(ahead != null ? $" · 하루 안에 {ahead.Name}" : "")} · 고향까지 빛 {o.HomeLightMinutes(Sim.Tick):0}분 · 센서에 잡힌 것 {sense?.Tracks.Count ?? 0}", false));
+                    $"{(zone != null ? $"지금 {zone.Name}" : "깊은 우주")}{(ahead != null ? $" · 하루 안에 {ahead.Name}" : "")} · 고향까지 빛 {o.HomeLightMinutes(Sim.Tick):0}분 · 센서에 잡힌 것 {sense?.Tracks.Count ?? 0}", false, Key: -1));
                 break;
             }
             case PanelKind.Journal:
@@ -855,41 +895,41 @@ public sealed class LiveShow
                     if (x.Person >= 0 && mind != null && x.Person < mind.Agents.Count) who.Add($"{mind.NameOf(x.Person)}이(가) 받아 줌");
                     string plan = sm.PlanLine(x.Id), chain = plan.Length > 0 ? sm.ChainLine(x) : "";   // 판단 엔진: 지어낸 계획 — 생각 사슬 · 걸음 (✔ 마침 · ▶ 하는 중)
                     rows.Add(new PanelRow($"지금 · {sm.RoomName(x.Room)}: {ShipMind.KindName(x.Kind)} ({Math.Max(0, now - x.Since) / (double)Time.Minutes(1):0}분째)",
-                        (who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다") + (chain.Length > 0 ? "\n궁리: " + chain : "") + (plan.Length > 0 ? "\n계획: " + plan : ""), true));
+                        (who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다") + (chain.Length > 0 ? "\n궁리: " + chain : "") + (plan.Length > 0 ? "\n계획: " + plan : ""), true, Key: x.Id));
                 }
                 string blind = sm.BlindLine();
-                rows.Add(new PanelRow("배 형편", sm.ShipLine(Sim, true) + (blind.Length > 0 ? "\n" + blind : "") + (sm.HelmLine.Length > 0 ? "\n항로: " + sm.HelmLine : ""), false));
+                rows.Add(new PanelRow("배 형편", sm.ShipLine(Sim, true) + (blind.Length > 0 ? "\n" + blind : "") + (sm.HelmLine.Length > 0 ? "\n항로: " + sm.HelmLine : ""), false, Key: -1));
                 var manual = Sim.Find<Society>()?.Manual.Where(e => e.Removed == 0).ToList();   // 판단 엔진 (바): 회의가 넣은 매뉴얼
                 if (manual != null && manual.Count > 0)
-                    rows.Add(new PanelRow($"매뉴얼 ({manual.Count})", string.Join("\n", manual.Select(e => $"{e.Name} — 찬성 {e.Yes}/{e.Of} · 통한 번 {e.Wins}{(e.Fails > 0 ? $" · 틀어진 번 {e.Fails}" : "")}")), false));
+                    rows.Add(new PanelRow($"매뉴얼 ({manual.Count})", string.Join("\n", manual.Select(e => $"{e.Name} — 찬성 {e.Yes}/{e.Of} · 통한 번 {e.Wins}{(e.Fails > 0 ? $" · 틀어진 번 {e.Fails}" : "")}")), false, Key: -2));
                 int head = rows.Count;
                 for (int i = sm.Journal.Count - 1; i >= 0; i--)
                 {
                     var (t, text) = sm.Journal[i];
                     var lines = text.Split('\n');
-                    int row = head + sm.Journal.Count - 1 - i;
-                    rows.Add(new PanelRow($"{HourMin(t)}  {lines[0]}", row == PanelPick ? string.Join("\n", lines.Skip(1)) : "", false));
+                    long key = KeyJournal(t);
+                    rows.Add(new PanelRow($"{HourMin(t)}  {lines[0]}", key == PanelPickKey ? string.Join("\n", lines.Skip(1)) : "", false, Key: key));   // 고른 일지만 펼친다 (열쇠로 — 차례 번호는 새 사건이 위에 끼면 밀린다)
                 }
-                if (rows.Count == head) rows.Add(new PanelRow("아직 일지가 없다", $"주컴퓨터는 {sm.JournalHour}시에 하루를 적는다", false));
-                if (sm.Morning.Length > 0) rows.Add(new PanelRow("아침 방송", sm.Morning, false));
+                if (rows.Count == head) rows.Add(new PanelRow("아직 일지가 없다", $"주컴퓨터는 {sm.JournalHour}시에 하루를 적는다", false, Key: -4));
+                if (sm.Morning.Length > 0) rows.Add(new PanelRow("아침 방송", sm.Morning, false, Key: -3));
                 break;
             }
             case PanelKind.Chain:
             {
                 var chain = ChainNow();
-                if (chain.Count == 0) { rows.Add(new PanelRow("지금 이어지는 사슬이 없다", "일이 나면 그 일이 어디서 시작됐는지 여기에 차례로 적힌다", false)); break; }
+                if (chain.Count == 0) { rows.Add(new PanelRow("지금 이어지는 사슬이 없다", "일이 나면 그 일이 어디서 시작됐는지 여기에 차례로 적힌다", false, Key: -1)); break; }
                 var w = World; var d = View;
                 var root = d.Chains.GetValueOrDefault(chain[0]);
                 string spread = d.SpreadText(chain[0]);
                 rows.Add(new PanelRow(spread.Length > 0 ? $"건넌 갈래: {spread}" : "한 갈래 안의 일",
-                    root != null ? $"이 뿌리에서 난 큰 일 {root.Facts} · 가지 {root.Leaves.Count} · {HourMin(root.First)}부터" : "", false));
+                    root != null ? $"이 뿌리에서 난 큰 일 {root.Facts} · 가지 {root.Leaves.Count} · {HourMin(root.First)}부터" : "", false, Key: -1));
                 var cm = w.Find<ShipMind>();
                 foreach (int c in chain)
                 {
                     var n = w.Causes[c];
                     string kind = Director.PlainName[Director.EngineOf(n.Kind)];
                     string where = n.Cell >= 0 && w.Layout.Room[n.Cell] >= 0 ? (cm?.RoomName(w.Layout.Room[n.Cell]) ?? w.Layout.Rooms[w.Layout.Room[n.Cell]].Name) : n.Cell >= 0 ? "통로 · 벽" : "배 바깥 · 배 전체";
-                    rows.Add(new PanelRow((kind.Length > 0 ? $"[{kind}] " : "") + w.Causes.Text(c), $"{HourMin(n.Tick)} · {where}", n.Cell >= 0));
+                    rows.Add(new PanelRow((kind.Length > 0 ? $"[{kind}] " : "") + w.Causes.Text(c), $"{HourMin(n.Tick)} · {where}", n.Cell >= 0, Key: c, ActOn: n.Cell >= 0, Why: "그 일은 배 한 곳의 일이 아니다"));
                 }
                 break;
             }
@@ -897,7 +937,7 @@ public sealed class LiveShow
             {
                 var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>(); var so = w.Find<Society>();
                 if (mind == null || life == null) break;
-                if (so != null && so.CultureLine(w) is string culture) rows.Add(new PanelRow("이 배의 관습", culture, false));   // ⑨ 함께 먹는 때 · 금기 · 배의 규칙
+                if (so != null && so.CultureLine(w) is string culture) rows.Add(new PanelRow("이 배의 관습", culture, false, Key: -1));   // ⑨ 함께 먹는 때 · 금기 · 배의 규칙
                 var slots = new Dictionary<int, int>();   // 사람 줄 얼굴 그림의 칸 (사람 차례)
                 foreach (var pa in mind.Agents) if (pa.IsPerson) slots[pa.Id] = slots.Count;
                 static PanelBar Bar(string name, float v) => new(name, Math.Clamp(v, 0, 1), v < 0.3f ? 2 : v < 0.6f ? 1 : 0);
@@ -937,7 +977,7 @@ public sealed class LiveShow
                     string thinks = b.Alive == 0 ? "" : b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : Inner.Of(w, mind, a);   // 4단 속말 (카드와 같은 글)
                     rows.Add(new PanelRow($"{mind.NameOf(id)}{(so?.NickOf(id) is string nk ? $" '{nk}'" : "")} — {state}",
                         $"{Persona(mind, so, a)}{(thinks.Length > 0 ? "\n생각: " + thinks : "")}\n몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
-                        slots.GetValueOrDefault(id, -1), bars));
+                        slots.GetValueOrDefault(id, -1), bars, Key: KeyPerson(id)));
                 }
                 break;
             }
@@ -949,7 +989,7 @@ public sealed class LiveShow
     private string _notice = ""; private double _noticeLeft;
     /// <summary>잠깐 띄우는 알림 (항로를 골랐다 등) — 남은 초가 0이면 빈 글.</summary>
     public string Notice => _noticeLeft > 0 ? _notice : "";
-    public void Notify(string text, double seconds = 3) { _notice = text; _noticeLeft = seconds; }
+    public void Notify(string text, double seconds = 3, PanelKind link = PanelKind.None) { _notice = text; _noticeLeft = seconds; _noticeLink = link; }
     public void TickNotice(double realSec) => _noticeLeft = Math.Max(0, _noticeLeft - realSec);
 
     /// <summary>항로 한 줄: 번호 · 이름.</summary>
@@ -966,7 +1006,7 @@ public sealed class LiveShow
     {
         var o = Sim.Find<Outside>();
         if (o == null || route < 1 || route > Sim.Tables.Space.Routes.Count) return false;
-        if (double.IsNaN(o.PendingTo) || o.VoyageTicks > 0) { Notify("이미 떠났다 — 항로는 출항 때만 고른다"); return false; }
+        if (double.IsNaN(DepartInMin())) { Notify("이미 떠났다 — 항로는 출항 때만 고른다"); return false; }   // 출발 점화가 시작됐으면 (계획에 남은 출발 점화가 없다) 더는 못 바꾼다
         o.Route = route;
         var due = o.Plan.FirstOrDefault(p => p.Kind == BurnKind.Depart);
         double minutes = due.Kind == BurnKind.Depart ? Math.Max(1, (due.Due - Sim.Tick) / (double)Time.TicksPerHour * 60) : 20;
@@ -994,7 +1034,8 @@ public sealed class LiveShow
         // 실제로 나아간 빠르기를 적는다 (고른 빠르기가 아니라 — 기계가 못 따라가면 그만큼) · 그 빠르기면 하루가 화면 몇 분인가
         double rate = Rate > 0 ? Rate : Speed;
         string speed = Paused ? "멈춤" : $"{(SpeedOverride > 0 ? "고정 " : "")}×{rate * Time.SecondsPerTick:0} · 하루 {DayLength(rate)}";
-        string hand = HandCam && _replay == null ? $" · 손 카메라 ({HandLeft:0}초 뒤 연출)" : FollowSlow ? " · 따라 보기 (천천히)" : "";
+        string hand = FollowSlow ? " · 따라 보기 (천천히)" : "";   // 손 카메라 남은 초는 화면의 연출 단추 고리가 보인다 (docs/UI.md)
+        if (Holding) speed = "출항 준비 · 멈춤";
         return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}{hand}";
     }
 
