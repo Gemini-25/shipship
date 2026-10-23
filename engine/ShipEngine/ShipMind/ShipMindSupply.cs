@@ -22,6 +22,10 @@ public sealed partial class ShipMind
     private double _missingPending;
     private long _missingSaidAt = long.MinValue / 2;
     private double _jMissing, _jProcessed, _jRecovered;      // 지난 일지 때의 셈
+    /// <summary>물 셈 (한 시간마다 · 마지막 24개): 물탱크 + 오수 통 × 되찾는 몫 · 마신 물 누계 — 씻은 물 · 오줌이 오수 통에서 되찾기를 기다리는 동안은 준 것이 아니다.</summary>
+    private double[] _waterHist = new double[24], _drunkHist = new double[24];
+    private long[] _waterHistTick = new long[24];
+    private int _waterN;
 
     /// <summary>일감판(⑪)의 요청: 지금 막힌 곳 — 새로 막힌 것(무엇이 · 왜가 달라진 것 — 날 수 · 끼니 같은 숫자는 빼고 견준다)만 방송한다.</summary>
     public void ReportBlocks(Sim sim, IReadOnlyList<string> lines, IReadOnlyList<int> causes)
@@ -48,18 +52,19 @@ public sealed partial class ShipMind
     {
         if (_mind == null) return;
         if (sim.Tick % ReadEvery == 0) WatchLockers(sim);
+        if (sim.Tick % Time.Hours(1) == 37) SampleWater(sim);
         if (sim.Tick % Time.Hours(1) != 37 || Policy.RationBelow <= 0 || sim.Tick < Time.Hours(6)) return;   // 장부가 여섯 시간은 쌓여야 하루 빠르기를 믿는다 (첫 끼니가 몰린 한 시간으로 재면 '12일 치'가 '5일 치'로 보였다)
         int crew = 0;
         var life = sim.Find<Life>();
         foreach (var a in _mind.Agents) if (a.IsPerson && life != null && life[a.C.Body].Alive != 0) crew++;
         if (crew == 0) return;
-        double food = Days(sim, Res.Food, RationFoodOn != 0 ? Policy.RationShare : 1), water = Days(sim, Res.Water, RationWaterOn != 0 ? WaterShare : 1);
+        double food = Days(sim, Res.Food, RationFoodOn != 0 ? Policy.RationShare : 1), water = WaterDays(sim, RationWaterOn != 0 ? WaterShare : 1);
         byte fOn = (byte)(food < Policy.RationBelow || RationFoodOn != 0 && food < Policy.RationBelow * 1.5f ? 1 : 0);
         byte wOn = (byte)(water < Policy.RationBelow || RationWaterOn != 0 && water < Policy.RationBelow * 1.5f ? 1 : 0);
         if (fOn == RationFoodOn && wOn == RationWaterOn) return;
         bool opening = fOn > RationFoodOn || wOn > RationWaterOn;
         RationFoodOn = fOn; RationWaterOn = wOn;
-        string what = string.Join(" · ", new[] { fOn != 0 ? $"식량 하루 몫 {Policy.RationShare * 4:0}/4 ({food:0}일 치)" : "", wOn != 0 ? $"물 하루 몫 {WaterShare * 100:0}% ({water:0}일 치)" : "" }.Where(x => x.Length > 0));
+        string what = string.Join(" · ", new[] { fOn != 0 ? $"식량 하루 몫 {Policy.RationShare * 4:0}/4 ({food:0}일 치)" : "", wOn != 0 ? $"물 하루 몫 {WaterShare * 100:0}% ({water:0}일 치) · 샤워는 {ShowerRuleMin}분 · 이틀에 한 번" : "" }.Where(x => x.Length > 0));
         int cause = 0;
         if (fOn != 0 || wOn != 0)
         {
@@ -71,7 +76,36 @@ public sealed partial class ShipMind
         }
         else Say(sim, $"배급을 풉니다 — 식량 {food:0}일 · 물 {water:0}일 치");
         _mind.SetRation(fOn != 0 ? Policy.RationShare * FoodPerDay : 0, wOn != 0 ? WaterShare * WaterPerDay : 0, cause);
+        _mind.SetShowerRule(sim, wOn != 0 ? ShowerRuleMin : 0, ShowerRuleGap, wOn != 0 ? cause : 0);   // 샤워 배급은 물 배급과 함께 (docs/WASH.md (다))
         sim.Facts.Emit(sim.Tick, FactKind.Rationed, -1, fOn != 0 ? Policy.RationShare : 0, cause, -1, wOn);
+    }
+
+    /// <summary>물 셈 한 칸 (센서: 물탱크 · 오수 통의 수위 · 물 재생기가 도는지 · 마시는 곳의 계량기).</summary>
+    private void SampleWater(Sim sim)
+    {
+        if (_net == null) return;
+        bool rec = false;
+        foreach (var d in _net.Devices) if (d.Def.Role == "recycler" && _net.Working(d.Id) && !_net.IsBroken(d.Id, Part.Filter)) { rec = true; break; }
+        int k = _waterN % _waterHist.Length;
+        _waterHist[k] = _net.WaterTank + (rec ? Network.WaterRecovery * _net.WasteWater : 0);
+        _drunkHist[k] = -sim.Book.Of(Res.Water, Flow.Drunk);
+        _waterHistTick[k] = sim.Tick;
+        _waterN++;
+    }
+
+    /// <summary>
+    /// 물은 며칠 버티나: (물탱크 + 되찾을 오수) ÷ 실제로 줄어든 빠르기 (마지막 하루 — 아직 하루가 안 됐으면 그동안) — 배급 중이면 마시는 몫을 보통으로 되돌려 친다.
+    /// 장부의 '쓴 양 − 되찾은 양'은 샤워 물이 오수 통에서 기다리는 동안 크게 잡힌다 (찾아 고친 결함 — 아침 샤워 몇 번에 '30일 치 아래'로 보여 배급을 열었다).
+    /// </summary>
+    private double WaterDays(Sim sim, float share)
+    {
+        if (_waterN < 2) return Days(sim, Res.Water, share);
+        int n = _waterHist.Length, now = (_waterN - 1) % n, old = _waterN < n ? 0 : _waterN % n;
+        double days = (_waterHistTick[now] - _waterHistTick[old]) * Time.SecondsPerTick / 86400;
+        if (days < 1.0 / 24 - 1e-9) return Days(sim, Res.Water, share);
+        double loss = (_waterHist[old] - _waterHist[now]) / days, drunk = (_drunkHist[now] - _drunkHist[old]) / days;
+        loss += drunk * (1 / Math.Max(0.1f, share) - 1);
+        return loss <= 1e-9 ? double.PositiveInfinity : _waterHist[now] / loss;
     }
 
     /// <summary>보통으로 쓰면 며칠 버티나: 재고 ÷ (지금 쓰는 양 ÷ 지금 몫 − 만드는 양) — 모르면 무한.</summary>
@@ -136,11 +170,13 @@ public sealed partial class ShipMind
         w.Arr(new[] { RationFoodOn, RationWaterOn }); w.I64(RationsOpened); w.I64(MissingFound); w.F64(MissingMol);
         w.I32(Blocked.Count); foreach (var b in Blocked) w.Str(b); w.Arr(BlockedCause.ToArray());
         w.Arr(_lkSeen); w.Arr(_lkLogged); w.F64(_missingPending); w.I64(_missingSaidAt); w.F64(_jMissing); w.F64(_jProcessed); w.F64(_jRecovered);
+        w.Arr(_waterHist); w.Arr(_drunkHist); w.Arr(_waterHistTick); w.I32(_waterN);
     }
     private void LoadSupply(StateReader r)
     {
         var on = r.Arr<byte>(); RationFoodOn = on[0]; RationWaterOn = on[1]; RationsOpened = r.I64(); MissingFound = r.I64(); MissingMol = r.F64();
         Blocked.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) Blocked.Add(r.Str() ?? ""); BlockedCause.Clear(); BlockedCause.AddRange(r.Arr<int>());
         _lkSeen = r.Arr<double>(); _lkLogged = r.Arr<double>(); _missingPending = r.F64(); _missingSaidAt = r.I64(); _jMissing = r.F64(); _jProcessed = r.F64(); _jRecovered = r.F64();
+        _waterHist = r.Arr<double>(); _drunkHist = r.Arr<double>(); _waterHistTick = r.Arr<long>(); _waterN = r.I32();
     }
 }

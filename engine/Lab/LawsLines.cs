@@ -61,7 +61,7 @@ public static partial class Program
             foreach (var fu in L.Furniture)
             {
                 int c = fu.Cells[0];
-                if ((net.LineAt[c] & Network.Bit(LineKind.Water)) == 0) continue;
+                if ((net.LineAt[c] & Network.Bit(LineKind.Water)) == 0 || !net.WaterUser(fu.Id) && fu.Type != "WaterRecycler") continue;   // 물을 쓰는 설비만 (관 위를 지나기만 하는 설비에 '물이 오나'는 늘 참)
                 checkedN++;
                 if (net.WaterAt(fu.Id) != Reach(LineKind.Water, tanks, c)) wrong++;
             }

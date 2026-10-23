@@ -184,6 +184,7 @@ public sealed partial class Life : IEngine
         Mold = new float[L.N];
         _sealed = new bool[L.N];
         foreach (var fu in L.Furniture) if (T.Equip(fu.Type).Sealed) foreach (int c in fu.Cells) _sealed[c] = true;
+        WashArrays();
     }
 
     /// <summary>포장된 식량 칸 (식량 보관함 — 상하지 않는다 · 불에는 탄다).</summary>
@@ -730,6 +731,6 @@ public sealed partial class Life : IEngine
         return (g, w, f);
     }
 
-    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); }
-    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); }
+    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); w.Tag("변기"); w.Arr(Tank); w.Arr(Bowl); w.Arr(Heap); w.Arr(Clogged); w.Arr(ClogCause); w.Arr(Grime); w.Arr(Flushes); w.Arr(ScrubbedAt); w.I64(Clogs); w.I64(Overflows); w.F64(WasteCarried); }
+    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); r.Tag("변기"); Tank = r.Arr<double>(); Bowl = r.Arr<double>(); Heap = r.Arr<double>(); Clogged = r.Arr<byte>(); ClogCause = r.Arr<int>(); Grime = r.Arr<float>(); Flushes = r.Arr<int>(); ScrubbedAt = r.Arr<int>(); Clogs = r.I64(); Overflows = r.I64(); WasteCarried = r.F64(); }
 }

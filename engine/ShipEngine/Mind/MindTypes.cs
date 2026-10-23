@@ -78,6 +78,7 @@ public enum GoalKind : byte
     Tighten,    // ④ 열 · 진동 — 진동에 풀려 덜컹거리는 장치의 볼트를 조인다 (대상: 장치)
     Toilet,     // 화장실 — 변기에 비운다 (대상: 변기 설비 · 없으면 용변 봉투)
     Wash,       // 씻는다 — 샤워 칸 (대상: 샤워 칸 설비 · 없으면 물수건)
+    ToiletCare, // 변기 손질 (맡긴 일 — 대상: 변기 설비 · Arg 0 닦기 · 1 뚫기 · 2 오물 통 비우기 · 3 내려놓인 통 주워 비우기 (대상: 칸))
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -107,6 +108,7 @@ public enum StepKind : byte
     Put,       // ⑪ 든 물건을 설비에 넣는다 (Target: 설비 — 나르기)
     Rebuild,   // ⑪ 부서진 설비의 틀을 외장 틀로 새로 짠다 (Target: 장치)
     Tighten,   // ④ 풀린 볼트를 조인다 (Target: 장치)
+    Sanitize,  // 변기 손질 (Target: 설비 · Arg 0 닦기 · 1 뚫기 · 2 오물 통 들기 · 3 비울 곳에 쏟기 · 4 내려놓인 통 줍기 (Cell))
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

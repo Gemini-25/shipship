@@ -68,6 +68,7 @@ public sealed partial class Mind
             case StepKind.Put: PutStep(sim, a, st); return;
             case StepKind.Rebuild: RebuildStep(sim, a, st); return;
             case StepKind.Tighten: TightenStep(sim, a, st); return;
+            case StepKind.Sanitize: SanitizeStep(sim, a, st); return;
             case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.Salvage: SalvageStep(sim, a, st); return;
@@ -188,6 +189,7 @@ public sealed partial class Mind
     private void DropHeld(Agent a)
     {
         if (a.C.Holding == 255) return;
+        if (a.C.Holding == iWaste && !WasteDown.Contains(a.C.Cell)) WasteDown.Add(a.C.Cell);   // 오물 통을 내려놓으면 주컴퓨터에 알린다 (주워 비우게)
         Loose.Add(new LooseItem { Item = a.C.Holding, Cell = a.C.Cell, Charge = a.C.HoldCharge });
         a.C.Holding = 255; a.C.HoldCharge = 0;
     }
@@ -211,7 +213,7 @@ public sealed partial class Mind
         if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }
         if (use == UseKind.Cpr) Activity(a, "hard");   // 가슴 압박은 힘든 일
         if (use == UseKind.Queue) { QueueStep(sim, a, st); return; }   // 화장실 · 샤워 줄
-        if (use == UseKind.Shower && t <= c.StepStart + 1) ShowerStart(st);
+        if (use == UseKind.Shower && t <= c.StepStart + 1) ShowerStart(a, st);
         bool done = t - c.StepStart >= st.Value;
         if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
         if (use == UseKind.Surgery) { int r = SurgeryTick(sim, a, st); if (r < 0) return; done = r > 0 || t - c.StepStart >= st.Value; }

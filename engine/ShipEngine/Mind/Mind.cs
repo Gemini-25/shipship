@@ -42,6 +42,7 @@ public sealed partial class Mind : IEngine
     public readonly byte iOpioid, iApap, iAbx, iAntidote, iEpi;   // ⑦ 약품고 (의료 침대)
     public readonly byte iRegen, iArtHeart, iArtLung, iHypnotic;             // ⑦ (라-2) 재생 젤 (의료 침대) · 인공 심장 · 인공 폐 (진단 장치)
     public readonly byte iChip, iScrap, iScrapElec, iFrame;                  // ⑪ 공급 사슬 — 전자 소자 · 헌 부품 · 헌 전기 부품 · 외장 틀
+    public readonly byte iWaste;                                             // 화장실 (다) — 오물 통 (든 무게는 HoldCharge kg)
     public readonly byte iBlanket;                                           // 꾸밈의 방화 담요 (함장 승인)
     /// <summary>⑪ 부품 갈래마다 갈아 끼울 부품 (전기 · 기계 · 봉함 · 거르개 — <see cref="Part"/> 차례).</summary>
     public readonly byte[] iSpare;
@@ -82,7 +83,7 @@ public sealed partial class Mind : IEngine
         iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품"); iCO2 = Item("이산화탄소 소화기"); iAed = Item("제세동기");
         iOpioid = Item("진통제"); iApap = Item("해열제"); iAbx = Item("항생제"); iAntidote = Item("해독제"); iEpi = Item("아드레날린");
         iRegen = Item("재생 젤"); iArtHeart = Item("인공 심장"); iArtLung = Item("인공 폐"); iHypnotic = Item("수면제");
-        iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품"); iFrame = Item("외장 틀");
+        iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품"); iFrame = Item("외장 틀"); iWaste = Item("오물 통");
         iBlanket = Item("방화 담요");
         iSpare = new[] { Item("전기 부품"), Item("기계 부품"), Item("봉함재"), Item("거르개") };
 
@@ -415,7 +416,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", GoalKind.Surgery => "수술한다", GoalKind.Attack => "주저앉아 숨을 고른다", GoalKind.Withdraw => "침대에 틀어박혀 있다", GoalKind.Counsel => "이야기를 들어 준다", GoalKind.Haul => "헌 부품을 정제기로 나른다", GoalKind.Tighten => "볼트를 조인다", GoalKind.Toilet => "화장실에 간다", GoalKind.Wash => "씻는다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", GoalKind.Surgery => "수술한다", GoalKind.Attack => "주저앉아 숨을 고른다", GoalKind.Withdraw => "침대에 틀어박혀 있다", GoalKind.Counsel => "이야기를 들어 준다", GoalKind.Haul => "헌 부품을 정제기로 나른다", GoalKind.Tighten => "볼트를 조인다", GoalKind.Toilet => "화장실에 간다", GoalKind.Wash => "씻는다", GoalKind.ToiletCare => "변기를 손질한다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -437,7 +438,7 @@ public sealed partial class Mind : IEngine
             string step = st.Kind switch
             {
                 StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => a.C.Holding == iBlanket ? "담요로 덮는 중" : a.C.Holding == iCO2 ? "소화기를 뿜는 중" : "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Tighten => "조이는 중", StepKind.Clean => "닦는 중", StepKind.Harvest => "거두는 중", StepKind.Stow => "갈무리하는 중", StepKind.TakeFood => "식량 상자 꺼내는 중",
-                StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중", _ => "",
+                StepKind.Sanitize => st.Arg switch { 0 => "변기를 닦는 중", 1 => "막힌 변기를 뚫는 중", 2 => "오물 통을 드는 중", 4 => "내려놓은 오물 통을 줍는 중", _ => "오물 통을 비우는 중" }, StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중", _ => "",
             };
             if (step.Length > 0) s += " — " + step;
         }
@@ -503,6 +504,8 @@ public sealed partial class Mind : IEngine
             t = Lap("본능 · 생각", t);
             WithdrawDoor(a);
             WithdrawCook(sim, a);
+            WithdrawShower(sim, a);   // 씻다 말고 나가면 물을 잠그거나 · 틀어 둔 채
+            HeedWashCall(a, sim.Tick);   // 주컴퓨터가 다른 화장실이 비었다고 하면 옮긴다
             if (a.C.Up != 0 || IsSleeping(a)) Advance(sim, a, dt);
             t = Lap("걸음 · 일", t);
             Needs(sim, a, dt);
@@ -579,7 +582,7 @@ public sealed partial class Mind : IEngine
     private void Fall(Sim sim, Agent a)
     {
         if (a.C.Carrying >= 0) DropCarried(sim, a, false);
-        if (a.C.Holding != 255) { Loose.Add(new LooseItem { Item = a.C.Holding, Cell = a.C.Cell, Charge = a.C.HoldCharge }); a.C.Holding = 255; a.C.HoldCharge = 0; }
+        DropHeld(a);
         a.Plan.Clear(); a.Path.Clear(); a.C.StepIndex = 0; a.C.Goal = GoalKind.Down; a.C.Mode = 0;
         if (a.C.OpenedDoor >= 0) a.C.OpenedDoor = -1;
     }
@@ -721,7 +724,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveActs(w); SaveSecrets(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w); SaveLetters(w); SaveAhead(w);
+        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveActs(w); SaveSecrets(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w); SaveLetters(w); SaveAhead(w); SaveWash(w);
     }
 
     public void Load(StateReader r)
@@ -743,6 +746,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadActs(r); LoadSecrets(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r); LoadLetters(r); LoadAhead(r);
+        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadActs(r); LoadSecrets(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r); LoadLetters(r); LoadAhead(r); LoadWash(r);
     }
 }

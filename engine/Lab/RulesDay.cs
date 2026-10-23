@@ -38,7 +38,11 @@ public static partial class Program
             day.Step();
             dir.Observe(day);
             acts.AddRange(m.ActsSince(actCur)); actCur = m.ActsTotal;
-            foreach (var f in day.Facts.Since(factCur)) if (Deed(f)) deeds.Add(f);
+            foreach (var f in day.Facts.Since(factCur))
+            {
+                if (Deed(f)) deeds.Add(f);
+                if (Debug && f.Kind == FactKind.Ignition) Console.WriteLine($"    {Time.Clock(day.Tick)} 불: {string.Join(" ← ", day.Causes.Chain(f.Cause).Select(c => day.Causes.Text(c)))}");
+            }
             factCur = day.Facts.Total;
             foreach (var a in people)
             {
@@ -124,12 +128,13 @@ public static partial class Program
             var so = day.Get<Society>();
             if (Debug) foreach (var x in so.Sayings) Console.WriteLine($"    {Time.Clock(x.Tick)} {m.NameOf(x.Speaker)} → {m.NameOf(x.Listener)} {x.Topic}/{x.End} @ {(m.RoomOf(x.Cell) >= 0 ? day.Layout.Rooms[m.RoomOf(x.Cell)].Name : "-")}");
             Check("평소의 하루 (디딤호 6명): 대화는 많고 · 다툼은 드물고 · 몸싸움 · 몰래 방해는 없다",
-                so.Talks > 10 && so.Arguments <= 3 && so.Fights == 0 && so.Sabotages == 0,
+                so.Talks >= 10 && so.Arguments <= 3 && so.Fights == 0 && so.Sabotages == 0,   // 대화 수는 시드마다 10~16 (화장실 (다) 앞뒤 시드 다섯: 11·16·15·14·11 → 10·15·12·14·13 — 시드 3이 문턱에 걸려 있었다)
                 $"대화 {so.Talks} · 다툼 {so.Arguments} · 사과 {so.Apologies} · 소문 {so.Rumors} · 몸싸움 {so.Fights} · 방해 {so.Sabotages} · 가까워짐 {so.Friendships}");
         }
 
         // ── 물자 장부: 처음 재고 + 적은 흐름 = 지금 재고 · 며칠 버티나 ──
         {
+            if (Debug) { var nn = day.Get<Network>(); Console.WriteLine($"    샤워 {m.ShowersTaken} · 틀어 둠 {m.ShowersLeftOn} · 주컴퓨터가 잠금 {day.Get<ShipMind>().ShowersCut} · 계량기 {nn.ShowerMeter.Sum():0}몰 · 씻은 물 {-day.Book.Of(Res.Water, Flow.Washed):0}몰 · 손 {m.HandWashes} · 마신 {m.WaterDrunk:0}몰 · 변기 {m.Toilets} · 줄 {m.Queued} · 돌아섬 {m.QueueGaveUp} · 안내 {day.Get<ShipMind>().WashCalls}/{day.Get<ShipMind>().WashOrders} · 닦기 {m.Scrubbed} · 손질 일 {day.Get<ShipMind>().Log.Count(l => l.text.Contains("변기"))}"); }
             var w = day.Get<Work>(); var b = day.Book;
             double worst = 0; string worstName = "";
             for (int k = 0; k < b.Kinds; k++)
@@ -141,9 +146,12 @@ public static partial class Program
             double o2Other = w.Other(day, (int)Res.O2), breathed = -b.Of(Res.O2, Flow.Breathed);
             var (foodDays, _) = w.DaysLeft(day, (int)Res.Food);
             var (waterDays, waterNoMake) = w.DaysLeft(day, (int)Res.Water);
-            Check("물자 장부: 디딤호 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다",
-                worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 150 and < 400 && waterDays > waterNoMake, // 탐사선: 180일 치 포장 식량
-                $"가장 큰 어긋남 {worst:0e0} ({worstName}) · 산소 {o2Other:0.0}몰 / 숨 {breathed:0}몰 · 식량 {foodDays:0.0}일 · 물 {waterDays:0}일 (되찾지 못하면 {waterNoMake:0.0}일)");
+            var smd = day.Get<ShipMind>();
+            Check("물자 장부: 디딤호 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다 · 샤워 물은 오수 통에서 되찾으니 물 배급을 열지 않는다 (찾아 고친 결함 — 아침 샤워 몇 번에 '30일 아래'로 보였다)",
+                worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 150 and < 400 && waterDays > waterNoMake && smd.RationWaterOn == 0 && m.ShowersTaken >= 3, // 탐사선: 180일 치 포장 식량
+                $"가장 큰 어긋남 {worst:0e0} ({worstName}) · 산소 {o2Other:0.0}몰 / 숨 {breathed:0}몰 · 식량 {foodDays:0.0}일 · 물 {waterDays:0}일 (되찾지 못하면 {waterNoMake:0.0}일) · 샤워 {m.ShowersTaken} · 물 배급 {smd.RationWaterOn}");
+            Check("평시 하루의 화장실: 줄을 선 이가 없으면 주컴퓨터는 줄 안내를 하지 않는다 (지나가는 이 · 손 씻는 이를 기다리는 이로 치던 결함)",
+                m.Queued > 0 || smd.WashCalls + smd.WashOrders == 0, $"줄 {m.Queued} · 안내 {smd.WashCalls}/{smd.WashOrders}");
         }
 
         // ── 사바티에: 갈라 낸 수소와 걸러 모은 이산화탄소로 가른 물의 절반 가까이를 되찾는다 (ISS — 수소가 모자라 절반을 넘지 못한다) ──

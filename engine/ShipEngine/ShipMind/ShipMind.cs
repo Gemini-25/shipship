@@ -200,6 +200,7 @@ public sealed partial class ShipMind : IEngine
         RunPlans(sim); t = Prof.Lap("주컴퓨터:계획", t);  // ⑩ 판단 엔진: 지어낸 계획을 걸음마다
         Power(sim); t = Prof.Lap("주컴퓨터:전력", t);
         Chores(sim); t = Prof.Lap("주컴퓨터:살림", t);   // 판단 이관 (아): 일감판 · 막힌 곳 · 만드는 설비
+        WashWatch(sim);   // 화장실 (다): 변기 조절기 보고 → 사용 금지 불 · 손질 일감 · 화장실 줄
         Comms(sim);   // ⑤ 통신 지연 — 원격 진료 · 태양 합
         Voyage(sim);  // ⑤ 별계 지도 — 다음 들를 곳
         CalendarStep(sim);   // ⑫ 긴 줄기 — 항해 달력
@@ -1074,7 +1075,7 @@ public sealed partial class ShipMind : IEngine
             {
                 if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
                 int from = -1;
-                if (a.C.AssignedUntil > sim.Tick && !Root(x) && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten)) // 일상 일(⑪)은 놓고 온다
+                if (a.C.AssignedUntil > sim.Tick && !Root(x) && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten or GoalKind.ToiletCare)) // 일상 일(⑪)은 놓고 온다
                 {
                     // 이미 맡은 일이 있다 (불의 뿌리 — 눌어붙은 합선 — 는 하던 일을 놓고 간다) · 급한 일(쓰러진 사람 · 불 · 공기 빠짐 · 샘)에는 덜 급한 사건 일을 하던 로봇도 데려온다 (쉬는 로봇이 없을 때만)
                     from = Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;
@@ -1141,7 +1142,7 @@ public sealed partial class ShipMind : IEngine
             if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone || !_mind.HandsOk(a) || !_mind.LegsOk(a)) continue;
             bool mine = a.Id == x.RobotA || a.Id == x.RobotB;
             int from = -1;
-            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten))
+            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten or GoalKind.ToiletCare))
             {
                 // 덜 급한 사건 일을 하던 로봇은 데려올 수 있다 (급한 차례 — 로봇을 맡기는 때와 같은 셈 · take일 때만)
                 from = take && Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;
@@ -1300,7 +1301,7 @@ public sealed partial class ShipMind : IEngine
         double gap = _net.Demanded - _net.Supplied;
         if (gap > 0.05 * Math.Max(1, _net.Demanded))
         {
-            var order = _net.Devices.Where(d => _net.On[d.Id] != 0 && ShedRank(d.Def.Role) >= 0).OrderBy(d => ShedRank(d.Def.Role)).ThenBy(d => d.Id);
+            var order = _net.Devices.Where(d => _net.On[d.Id] != 0 && ShedRank(d.Def.Role) >= 0 && d.Type != "Toilet").OrderBy(d => ShedRank(d.Def.Role)).ThenBy(d => d.Id);   // 변기 흡입 팬(0.02kW)은 끄지 않는다 — 끄면 쓰던 변기가 막힌다
             int shed = 0;
             foreach (var d in order)
             {
@@ -1460,7 +1461,7 @@ public sealed partial class ShipMind : IEngine
         w.Bool(Online);
         w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomHCN); w.Arr(RoomHCl); w.Arr(RoomToxCell); w.Arr(RoomO2Pct); w.Arr(RoomLel); w.Arr(RoomH2); w.Arr(RoomCH4); w.Arr(RoomLelCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
-        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w); SaveParts(w); SaveComms(w); SaveVoyage(w); SaveCalendar(w);
+        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w); SaveParts(w); SaveComms(w); SaveVoyage(w); SaveCalendar(w); SaveWash(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
         SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w); SaveEars(w);
@@ -1474,7 +1475,7 @@ public sealed partial class ShipMind : IEngine
         Online = r.Bool();
         r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomHCN); r.ArrInto(RoomHCl); r.ArrInto(RoomToxCell); r.ArrInto(RoomO2Pct); r.ArrInto(RoomLel); r.ArrInto(RoomH2); r.ArrInto(RoomCH4); r.ArrInto(RoomLelCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
-        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r); LoadParts(r); LoadComms(r); LoadVoyage(r); LoadCalendar(r);
+        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r); LoadParts(r); LoadComms(r); LoadVoyage(r); LoadCalendar(r); LoadWash(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
         LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r); LoadEars(r);

@@ -120,6 +120,7 @@ public sealed partial class ShipMind
         GoalKind.Restock => _work!.FoodAt(j.Target) >= Work.RestockBelow * 2 || _work.FoodAt(j.Arg) < 1,
         GoalKind.Haul => HaulDone(j.Arg, j.Agent),
         GoalKind.Tighten => _net == null || j.Target >= _net.Loose.Length || _net.Loose[j.Target] < Network.LooseFelt,
+        GoalKind.ToiletCare => CareDone(j),
         _ => true,
     };
 
@@ -156,7 +157,7 @@ public sealed partial class ShipMind
     }
 
     private static bool ChoreBusy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
-        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten;
+        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare;
 
     public readonly List<string> Blocks = new();
     public readonly List<int> BlockCauses = new();        // 막힌 곳마다 원인 마디 (⑪ — 같은 막힘이면 같은 마디 · 망가진 설비 때문이면 그 고장의 원인에 잇는다)

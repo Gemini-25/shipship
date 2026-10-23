@@ -871,6 +871,9 @@ public sealed partial class Network : IEngine
                     // 냉각수 재킷: 열의 80%는 냉각 고리로 (모자라면 냉각에서 방으로 돌려준다)
                     if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8, CoolComp(d))); }
                     break;
+                case "appliance" when dev.Type == "Shower":
+                    ShowerStep(sim, d, kw, dt);   // 샤워 칸: 틀어 두면 물이 흐르고 · 열은 물과 함께 배수구로 (NetworkShower)
+                    break;
                 default:
                     // 전기는 결국 열 — 장치가 차지한 칸에 고루 (긴 재배 선반의 전등 열이 한 칸에 몰리지 않게)
                     if (kw > 0) HeatInto(dev, kw * 1000 * dt);
@@ -1299,7 +1302,7 @@ public sealed partial class Network : IEngine
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
         SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w); SaveChips(w); SaveRobots(w); SaveVibration(w);
-        w.Tag("조명"); w.Arr(LampDim); w.Arr(EmergencyMin);
+        w.Tag("조명"); w.Arr(LampDim); w.Arr(EmergencyMin); SaveShower(w);
     }
 
     public void Load(StateReader r)
@@ -1320,6 +1323,6 @@ public sealed partial class Network : IEngine
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
         LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r); LoadChips(r); LoadRobots(r); LoadVibration(r);
-        r.Tag("조명"); LampDim = r.Arr<float>(); EmergencyMin = r.Arr<float>();
+        r.Tag("조명"); LampDim = r.Arr<float>(); EmergencyMin = r.Arr<float>(); LoadShower(r);
     }
 }

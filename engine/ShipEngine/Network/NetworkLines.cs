@@ -206,7 +206,7 @@ public sealed partial class Network
             {
                 if (fu.Cells.Length == 0 || fu.Type == "WaterRecycler") continue;
                 var def = T.Dev(fu.Type);
-                if (def != null && def.Role is "o2gen" or "grow" || fu.Type is "MealDispenser" or "CoffeeMachine" or "IceMaker" or "GreywaterFilter" or "DeconShower") users.Add(fu);
+                if (def != null && def.Role is "o2gen" or "grow" || fu.Type is "MealDispenser" or "CoffeeMachine" or "IceMaker" or "GreywaterFilter" or "DeconShower" or "Shower" or "Sink") users.Add(fu);   // 화장실 (다): 샤워 칸 · 세면대도 물관으로 (끊기면 물이 나오지 않는다)
             }
             LayNet(LineKind.Water, wsrc.Select(fu => fu.Cells[0]).ToList(), users.Select(fu => fu.Cells[0]).ToList());
             foreach (var fu in wsrc.Concat(users)) if ((LineAt[fu.Cells[0]] & Bit(LineKind.Water)) != 0) _waterCell[fu.Id] = fu.Cells[0];
@@ -347,6 +347,8 @@ public sealed partial class Network
         int wc = _pipeComp[_waterCell[furniture] * 2 + 1];
         return wc >= 0 && wc < _waterSrc.Length && _waterSrc[wc];
     }
+    /// <summary>물관으로 물을 받는 설비인가 (관 위를 지나기만 하는 설비는 아니다 — 그런 설비에 <see cref="WaterAt"/>는 늘 참).</summary>
+    public bool WaterUser(int furniture) => _hasWaterNet && furniture >= 0 && furniture < _waterCell.Length && _waterCell[furniture] >= 0;
     public bool WaterAtDevice(int device) => device < 0 || device >= Devices.Count || WaterAt(Devices[device].Furniture);
     public bool LineCutAt(int cell, LineKind k) => cell >= 0 && cell < LineCut.Length && (LineCut[cell] & Bit(k)) != 0;
     public float LeakAt(int cell, LineKind k) => k is LineKind.Coolant or LineKind.Water && cell >= 0 && cell < LineCut.Length ? PipeLeak[cell * 2 + (k == LineKind.Water ? 1 : 0)] : 0;

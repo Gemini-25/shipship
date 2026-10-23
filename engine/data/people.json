@@ -67,7 +67,8 @@
     "헌 부품":     { "minutes": 0, "kg": 3 },
     "헌 전기 부품": { "minutes": 0, "kg": 2 },
     "외장 틀":     { "minutes": 90, "kg": 15 },
-    "방화 담요":   { "minutes": 0.1, "kg": 2 }
+    "방화 담요":   { "minutes": 0.1, "kg": 2 },
+    "오물 통":     { "minutes": 0, "kg": 30 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

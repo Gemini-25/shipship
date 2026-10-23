@@ -108,7 +108,7 @@ public sealed partial class Mind
             DropCarried(sim, a, false);
             _life!.Strike(sim, vb, 0.1f, 0, cause);   // 업혀 있던 이도 바닥에
         }
-        if (a.C.Holding != 255) { Loose.Add(new LooseItem { Item = a.C.Holding, Cell = cell, Charge = a.C.HoldCharge }); a.C.Holding = 255; a.C.HoldCharge = 0; }
+        if (a.C.Holding != 255) { if (a.C.Holding == iWaste && !WasteDown.Contains(cell)) WasteDown.Add(cell); Loose.Add(new LooseItem { Item = a.C.Holding, Cell = cell, Charge = a.C.HoldCharge }); a.C.Holding = 255; a.C.HoldCharge = 0; }
         _life!.Strike(sim, a.C.Body, blunt, 0, cause);
         a.C.MoveBudget = 0; a.C.StepStart = t;
         a.C.Fear = Math.Min(1, a.C.Fear + 0.2f);
