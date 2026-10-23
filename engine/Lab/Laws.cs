@@ -207,10 +207,15 @@ public static partial class Program
                 half > 0 && half > expect * 0.8 && half < expect * 1.6, $"{half}틱 · 식 {expect:0}틱");
             // 큰 구멍: 몇 초 안에 거의 진공
             var s3 = Worlds.FieldOnly(Worlds.Ascii(Worlds.Symmetric), 1, ff => ff.SetHole(h2, 2.5f));
-            s3.Run(10);
             var f3 = s3.Get<Field>();
+            double coldest = f3.Temp(c2); int coldTick = 0;
+            for (int i = 1; i <= 10; i++)   // 틱마다 잰다 — 10틱 뒤에는 이미 빈 방이라 바닥 온도만 남는다 (검토 ④-5)
+            {
+                s3.Step();
+                if (f3.Moles(c2) > 1e-3 && f3.Temp(c2) < coldest) { coldest = f3.Temp(c2); coldTick = i; }
+            }
             Check("뚫린 외판(2.5m²): 24초 안에 거의 진공", f3.Pressure(c2) < 5, $"{f3.Pressure(c2):0.00} kPa");
-            Check("남은 공기는 단열 팽창으로 식는다", s3.Get<Field>().Temp(c2) < 260 || f3.Moles(c2) < 1e-3, $"{f3.Temp(c2):0}K");
+            Check("남은 공기는 단열 팽창으로 식는다 (빠지는 동안 틱마다 잼)", coldest < 260, $"가장 찬 때 {coldest:0}K (틱 {coldTick})");
         }
 
         if (Do("바람"))

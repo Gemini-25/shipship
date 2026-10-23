@@ -9,7 +9,7 @@ name: tests
 
 on:
   push:
-    branches-ignore: ['claude/engine-rewrite']   # 새 엔진 가지는 engine.yml (옛 장면 시험은 엔진을 다 만든 뒤 다시)
+    branches-ignore: ['claude/**', 'ccr-*', 'engine-rewrite*']   # 새 엔진 가지 · 그 작업 가지는 engine.yml (옛 장면 시험은 엔진을 다 만든 뒤 다시 · 손으로는 workflow_dispatch)
     paths-ignore: ['**.md', 'docs/**', '**.jpg', '**.png', '**.wav', '**.ogg']
   workflow_dispatch:
     inputs:

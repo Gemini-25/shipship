@@ -54,11 +54,20 @@ for r in runs:
     gap = r.get('gapH', r.get('quietH', 0))   # 함장 기준 (나): 작은 장면(20~80)도 볼 거리 — 하이라이트 문턱 80은 그대로
     if gap > 12: problems['지루함'].append(f'{tag}: {gap:.0f}시간 동안 볼 거리 없음 (작은 장면도 없음)')
     if r.get('orphans', 0) > 0: problems['저절로'].append(f'{tag}: 원인 없는 큰 일 {r["orphans"]}')
+    # ⑤ 판단 (docs/REVIEW.md ③ — 사람 · 하루마다 · 아는 것으로 막히면 다른 길)
+    if 'flips' in r:
+        pd = max(1.0, r['crew'] * max(0.1, r['ran']))
+        if r['flipMin'] / pd > 10: problems['판단'].append(f'{tag}: 흔들림 {r["flips"]}번 · {r["flipMin"]}분 (사람 하루 {r["flipMin"] / pd:.0f}분)')
+        if r['failRepeats'] / pd > 2: problems['판단'].append(f'{tag}: 실패 뒤 30분 안에 같은 일을 다시 {r["failRepeats"]}번 (사람 하루 {r["failRepeats"] / pd:.1f})')
+        if r['robotOffJobMin'] / max(0.1, r['ran']) > 60: problems['판단'].append(f'{tag}: 맡은 일을 두고 딴 일 한 로봇 {r["robotOffJobMin"]}분')
+        if r['jobsOverdue'] > max(2, 0.2 * r['jobsDone']): problems['판단'].append(f'{tag}: 기한 넘긴 일감 {r["jobsOverdue"]} (끝낸 것 {r["jobsDone"]})')
+        if r['personReraised'] > 0: problems['판단'].append(f'{tag}: 같은 사람의 사건이 30분 안에 다시 섬 {r["personReraised"]}')
 
 print()
 for key, title in [('사람', '버팀 ① 사람이 살아남는다 (한꺼번에 다 죽는 판 없음)'), ('순환', '버팀 ② 물자 · 설비가 순환한다'),
                    ('값', '버팀 ③ 값이 터지거나 굳지 않는다'), ('지루함', '버팀 ④ 지루하지 않다 (하이라이트 3~12인 날 70% · 작은 장면까지 쳐서 볼 거리 없는 시간 12시간 안)'),
-                   ('저절로', '저절로 드러남 (원인 없는 큰 일 0)')]:
+                   ('저절로', '저절로 드러남 (원인 없는 큰 일 0)'),
+                   ('판단', '판단 (흔들림 사람 하루 10분 안 · 같은 실패 되풀이 하루 2번 안 · 로봇이 맡은 일을 둔 시간 하루 60분 안 · 기한 넘긴 일감 20% 안 · 같은 사람 사건 다시 섬 0)')]:
     p = problems[key]
     print(f'{mark(not p)} {title}' + ('' if not p else ' — ' + ' / '.join(p[:8]) + (f' 외 {len(p) - 8}' if len(p) > 8 else '')))
 

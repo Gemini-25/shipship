@@ -59,6 +59,7 @@ public static partial class Program
         var dBroken = new int[nDays]; var dHoleAge = new double[nDays]; var dHoleCm2 = new double[nDays]; var dO2 = new double[nDays]; var dStuck = new int[nDays];
         var dWeary = new double[nDays]; var dArgue = new long[nDays]; long argue0 = 0; var soc = s.Get<Society>();
         var loops = new Dictionary<string, int>(); var shipMind = s.Get<ShipMind>(); int agentFails = 0;   // 막힌 판단: 로봇을 여덟 번 넘게 보낸 사건 · 같은 목표에 다섯 번 넘게 막힌 사람 · 로봇
+        var gauge = new MindGauge(s);   // 판단 눈금 (흔들림 · 같은 실패 되풀이 · 로봇 · 일감 · 사람 사건 — docs/REVIEW.md ③)
         for (int i = 0; i < nDays; i++) dO2[i] = 99;
         int nan = 0;
         var pairs = new int[14, 14];
@@ -75,6 +76,7 @@ public static partial class Program
             hourMs += ms; ticks++;
             if (t % Time.TicksPerHour == Time.TicksPerHour - 1) { worstHourMs = Math.Max(worstHourMs, hourMs / Time.TicksPerHour); hourMs = 0; }
             d.Observe(s);
+            gauge.Observe(s.Tick);
             int day = (int)Math.Min(nDays - 1, t / dayTicks);
             foreach (var f in s.Facts.Since(cursor))
             {
@@ -196,6 +198,7 @@ public static partial class Program
         Console.WriteLine($"\n  {ship} 시드 {seed} · 사람 {crew} · {ran:0.0}일 · {clock.Elapsed.TotalSeconds:0}초 — 산 사람 {alive}/{crew} · 죽음 {deadCount} ({string.Join(" · ", causes.Select(kv => $"{kv.Key} {kv.Value}"))})");
         Console.WriteLine($"    하이라이트 날마다 {string.Join(" ", hlDay.Take(fullDays))} (3~12인 날 {inRange}/{fullDays} · 사건과 사람이 섞인 날 {mixed}) · 작은 장면이 있던 시간 날마다 {string.Join(" ", small)} · 볼 거리 없는 가장 긴 시간 {gap:0}시간 · 가장 넓은 사슬 {wide?.Count ?? 0}개 엔진 ({wide?.Path}) · 여섯 개 넘게 {d.ChainsWith(6)} · 원인 없는 큰 일 {d.Orphans.Values.Sum()}{(d.Orphans.Count > 0 ? " (" + string.Join(" ", d.Orphans.OrderByDescending(kv => kv.Value).Take(5).Select(kv => $"{Director.FactText(kv.Key)} {kv.Value}")) + ")" : "")} · 배 갈라짐 {splits}{(splits > 0 ? $" (그때 산 사람 {aliveAtSplit} → 끝에 {alive})" : "")}");
         Console.WriteLine($"    사고 날마다 {string.Join(" ", acc.Take(fullDays))} ({string.Join(" ", accKinds.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{FactNames.Of(kv.Key)} {kv.Value}"))}) · 다침/쓰러짐 {string.Join(" ", hurt.Take(fullDays))} · 식량 {food:0}일 · 물 {water:0}일 · 예비 공기 {net.AirReserve:0}몰 · 마스크 {mind.MasksWorn} · 긴급 공기 {s.Get<ShipMind>().EmergencyAir} · 거짓말 {s.Get<Society>().LiesTold}(들통 {s.Get<Society>().LiesExposed}) · 회의 {s.Get<Society>().Councils}(재판 {s.Get<Society>().Trials} 유죄 {s.Get<Society>().Convictions} · 선거 {s.Get<Society>().Elections} · 반란 {s.Get<Society>().Mutinies} · 못 열림 {s.Get<Society>().CouncilsFailed} · 흩어짐 {s.Get<Society>().CouncilsBroken}) · 대화 {s.Get<Society>().Talks}(다툼 {s.Get<Society>().Arguments} · 사과 {s.Get<Society>().Apologies} · 소문 {s.Get<Society>().Rumors} · 편듦 {s.Get<Society>().Sides} · 말림 {s.Get<Society>().Mediations} · 몸싸움 {s.Get<Society>().Fights} · 밤 깸 {s.Get<Society>().NightWakes}) · 대피 {s.Get<ShipMind>().Shelters} · 되풀이한 판단 {loops.Count}{(loops.Count > 0 ? "(" + string.Join(" ", loops.OrderByDescending(kv => kv.Value).Take(4).Select(kv => $"{kv.Key} {kv.Value}번")) + ")" : "")} · 같은 목표에 막힌 이 {agentFails}명 · 한 틱 {msTick:0.00}ms (가장 느린 시간 {worstHourMs:0.00}ms → 60프레임 배속 {maxSpeed:0}배)");
+        Console.WriteLine($"    {gauge.Line()}");
         Console.WriteLine($"JUDGE {{\"ship\":\"{ship}\",\"seed\":{seed},\"crew\":{crew},\"days\":{days},\"ran\":{ran:0.00},\"alive\":{alive},\"deaths\":{deadCount},"
             + $"\"firstDeath\":{(firstDeath < 0 ? -1 : firstDeath / (double)dayTicks):0.00},\"halfDead\":{(halfDead < 0 ? -1 : halfDead / (double)dayTicks):0.00},"
             + $"\"causes\":{{{string.Join(",", causes.Select(kv => $"\"{Esc(kv.Key)}\":{kv.Value}"))}}},"
@@ -203,7 +206,7 @@ public static partial class Program
             + $"\"maxEngines\":{wide?.Count ?? 0},\"six\":{d.ChainsWith(6)},\"five\":{d.ChainsWith(5)},\"orphans\":{d.Orphans.Values.Sum()},\"splits\":{splits},\"aliveAtSplit\":{aliveAtSplit},"
             + $"\"food\":{Math.Min(9999, food):0},\"water\":{Math.Min(9999, water):0},\"air\":{net.AirReserve:0},\"msTick\":{msTick:0.000},\"worstMs\":{worstHourMs:0.000},\"speed\":{maxSpeed:0},"
             + $"\"dFood\":{JD(dFood.Take(fullDays))},\"dWater\":{JD(dWater.Take(fullDays))},\"dAir\":{JD(dAir.Take(fullDays), 1e9)},\"dPatch\":{J(dPatch.Take(fullDays))},\"dRepair\":{J(dRepair.Take(fullDays))},"
-            + $"\"loops\":{loops.Count},\"stuckAgents\":{agentFails},"
+            + $"\"loops\":{loops.Count},\"stuckAgents\":{agentFails},{gauge.Json()},"
             + $"\"dWeary\":{JD(dWeary.Take(fullDays).Select(x => Math.Round(x, 2)))},\"dArgue\":{J(dArgue.Take(fullDays).Select(x => (int)x))},"
             + $"\"dBroken\":{J(dBroken.Take(fullDays))},\"dHoleAge\":{JD(dHoleAge.Take(fullDays))},\"dHoleCm2\":{JD(dHoleCm2.Take(fullDays))},\"dO2\":{JD(dO2.Take(fullDays))},\"dStuck\":{J(dStuck.Take(fullDays))},"
             + $"\"nan\":{nan},\"quietH\":{quiet:0.0},\"gapH\":{gap:0},\"small\":{J(small)},\"weekKinds\":{J(weekKinds)},\"pairs\":{{{string.Join(",", pairList)}}}}}");
