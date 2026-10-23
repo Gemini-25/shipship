@@ -104,6 +104,30 @@ public static partial class Program
             Check("저장 판: 다른 판 · 판 번호 없는 저장은 분명한 말로 거절하고 · 같은 판은 읽는다",
                 newer.Contains($"저장 판 {Sim.SaveVersion + 1}") && bare.Contains("판 번호가 없는") && same == "", $"다른 판: \"{newer}\" · 판 없음: \"{bare}\"");
 
+            // 판단 일지 (docs/MIND.md 4단): 쓰기만 — 켠 세계와 끈 세계가 찍기 바이트 · 사실 흐름까지 같다
+            {
+                (byte[] save, ulong flow, int robotNotes, int computerNotes) Run(bool on)
+                {
+                    Judgments.Enabled = on;
+                    var s = ShipWorld.Crewed("Didim", 3, 6, 2);
+                    s.Run(60);
+                    s.Get<Chemistry>().Ignite(s.Layout.Furniture.First(f => f.Type == "Bed").Cells[0], 3e6, s.Causes.Add(CauseKind.Setup, "침대 곁 충전기에서 불꽃이 튀었다", s.Tick));
+                    ulong h = 1469598103934665603UL;
+                    for (int k = 0; k < 3000; k++)
+                    {
+                        long cur = s.Facts.Total; s.Step();
+                        foreach (var f in s.Facts.Since(cur)) { h ^= (ulong)(f.Tick * 31 + (long)f.Kind * 7 + f.Cell + f.Actor * 13); h *= 1099511628211UL; }
+                    }
+                    var m = s.Get<Mind>();
+                    Judgments.Enabled = true;
+                    return (s.Save(), h, m.Agents.Where(a => !a.IsPerson).Sum(a => a.Judged.Count), s.Get<ShipMind>().Notes.Count);
+                }
+                var off = Run(false); var on = Run(true);
+                Check("판단 일지는 세계를 바꾸지 않는다: 디딤호 6명 · 로봇 2 · 불 하나 3000틱 — 일지를 켠 세계와 끈 세계의 찍기 바이트 · 사실 흐름이 같다 · 켠 세계에만 로봇 · 주컴퓨터 일지가 있다",
+                    on.save.AsSpan().SequenceEqual(off.save) && on.flow == off.flow && on.robotNotes > 0 && on.computerNotes > 0 && off.robotNotes == 0 && off.computerNotes == 0,
+                    $"찍기 같음 {on.save.AsSpan().SequenceEqual(off.save)} · 흐름 같음 {on.flow == off.flow} · 로봇 일지 {on.robotNotes} · 주컴퓨터 일지 {on.computerNotes} (끈 세계 {off.robotNotes} · {off.computerNotes})");
+            }
+
             // 저장 모양 지문: 엔진이 저장하는 것(무엇을 어떤 순서 · 꼴로)이 바뀌었는데 판 번호를 그대로 두면 빨강 — 옛 저장을 엉뚱하게 읽는 일을 막는다
             ulong shape = ShipWorld.Crewed("Didim", 1, 6, 2).ShapeOf();
             Check($"저장 모양이 판 {Sim.SaveVersion}의 지문과 같다 (모양이 바뀌면 Sim.SaveVersion을 올리고 SaveShape를 고친다)", shape == Sim.SaveShape,

@@ -96,6 +96,8 @@ public sealed partial class ShipMind : IEngine
     public ShipPolicy Policy = ShipPolicy.Default;
     public List<Incident> Incidents = new();
     public readonly List<(long tick, string text)> Log = new();
+    /// <summary>관찰용: 주컴퓨터 일지 512칸 (갈래 · 로봇 · 사건 — 찍지 않는다 · 판단은 읽지 않는다 · 화면만).</summary>
+    public readonly Ring<ComputerNote> Notes = new(512);
     public bool Online;
     public float[] RoomKPa, RoomKPaPrev, RoomO2, RoomSoot, RoomSootPrev, RoomCO, RoomCO2, RoomTemp;
     public byte[] RoomCO2Hold = Array.Empty<byte>();   // 이산화탄소가 한계를 넘어 머문 읽기 수 (6이면 1분 — 경보)
@@ -230,12 +232,16 @@ public sealed partial class ShipMind : IEngine
 
     private static readonly bool PlanLog = Environment.GetEnvironmentVariable("PLAN_LOG") == "1";
 
-    private void Say(Sim sim, string text)
+    private void Say(Sim sim, string text, NoteKind kind = NoteKind.Other, int robot = -1, int incident = -1, byte reason = 0)
     {
         if (PlanLog && !Imagining && (text.StartsWith("생각") || text.StartsWith("계획") || text.StartsWith("미리"))) Console.WriteLine($"      ({sim.Seed}) {Time.Clock(sim.Tick)} {text}");
         Log.Add((sim.Tick, text));
         if (Log.Count > 300) Log.RemoveRange(0, Log.Count - 300);
+        if (!Imagining) Notes.Add(new ComputerNote { Tick = sim.Tick, Kind = kind, Robot = robot, Incident = incident, Reason = reason, Text = text });   // 주컴퓨터 일지 (쓰기만)
     }
+
+    /// <summary>판단 일지의 '맡긴 까닭' 글 (화면이 읽는다).</summary>
+    public static string ReasonText(byte r) => r switch { 1 => "가장 가까웠다", 2 => "맞는 것을 들고 있었다", 3 => "더 급한 일이라 데려왔다", 4 => "앞 로봇이 막혀 바꿨다", 5 => "갈 수 있는 로봇이 이것뿐이었다", _ => "" };
 
     // ───────────────────────── 센서 ─────────────────────────
 
@@ -923,7 +929,7 @@ public sealed partial class ShipMind : IEngine
         if (x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Flammable && _net != null && x.Room >= 0 && Find(IncidentKind.Fire, x.Room) < 0 && Find(IncidentKind.CO, x.Room) < 0 && Find(IncidentKind.Toxic, x.Room) < 0 && Find(IncidentKind.Flammable, x.Room) < 0)
         {
             _net.SetDamper(x.Room, true);
-            if (_net.Exhaust[x.Room] != 0) { _net.SetExhaust(x.Room, false); Say(sim, $"{RoomName(x.Room)} 정화 배기를 멈추고 통풍구를 열었다"); }
+            if (_net.Exhaust[x.Room] != 0) { _net.SetExhaust(x.Room, false); Say(sim, $"{RoomName(x.Room)} 정화 배기를 멈추고 통풍구를 열었다", NoteKind.Vent, -1, x.Id); }
         }
         foreach (int rb in new[] { x.RobotA, x.RobotB })
             if (rb >= 0 && _mind != null) _mind.Agents[rb].C.AssignedUntil = 0;
@@ -963,16 +969,16 @@ public sealed partial class ShipMind : IEngine
                     {
                         int cut = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {RoomName(x.Room)} {dv.Name} 전원을 내렸다", sim.Tick, dv.Cell, _net.OnCause[dv.Id] != 0 ? _net.OnCause[dv.Id] : x.Cause);
                         sim.Facts.Emit(sim.Tick, FactKind.Switched, dv.Cell, 0, cut, -1, dv.Id);
-                        _net.SetOn(dv.Id, false); StovesCut++; Say(sim, $"{RoomName(x.Room)} {dv.Name} 전원을 내렸다 — {(x.Kind == IncidentKind.Fire ? "불이 났다" : "산소가 짙다")}");
+                        _net.SetOn(dv.Id, false); StovesCut++; Say(sim, $"{RoomName(x.Room)} {dv.Name} 전원을 내렸다 — {(x.Kind == IncidentKind.Fire ? "불이 났다" : "산소가 짙다")}", NoteKind.Power, -1, x.Id);
                     }
             // 연기 · 독한 공기가 덕트로 번지지 않게 그 방 통풍구를 닫는다
-            if (x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Flammable && x.Room >= 0 && _net != null && _net.Damper[x.Room] != 0) { _net.SetDamper(x.Room, false); Say(sim, $"{RoomName(x.Room)} 통풍구를 닫았다"); }
+            if (x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Flammable && x.Room >= 0 && _net != null && _net.Damper[x.Room] != 0) { _net.SetDamper(x.Room, false); Say(sim, $"{RoomName(x.Room)} 통풍구를 닫았다", NoteKind.Vent, -1, x.Id); }
             // 독한 기체는 그 방 덕트를 정화기로만 돌려 그 자리에서 거른다 (불이 난 방은 아니다 — 공기를 더 대 주지 않게)
             if (x.Kind is IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Flammable && x.Room >= 0 && _net != null && _net.Exhaust[x.Room] == 0 && Find(IncidentKind.Fire, x.Room) < 0)
             {
                 _net.SetExhaust(x.Room, true);
                 Exhausts++;
-                Say(sim, _net.ScrubberWorking() ? $"{RoomName(x.Room)} 정화 배기 — 덕트를 정화기로만 돌린다" : $"{RoomName(x.Room)} 정화 배기 — 정화기가 서 있어 걸러지지 않는다");
+                Say(sim, _net.ScrubberWorking() ? $"{RoomName(x.Room)} 정화 배기 — 덕트를 정화기로만 돌린다" : $"{RoomName(x.Room)} 정화 배기 — 정화기가 서 있어 걸러지지 않는다", NoteKind.Vent, -1, x.Id);
             }
             // 봉쇄
             if (Policy.AutoSeal != 0 && x.Kind is IncidentKind.Fire or IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.Toxic && x.Room >= 0) SealRoom(sim, ref x);
@@ -1111,7 +1117,7 @@ public sealed partial class ShipMind : IEngine
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
         while (have < need)
         {
-            int best = -1, bd = int.MaxValue, bestFrom = -1;
+            int best = -1, bd = int.MaxValue, bestFrom = -1, cands = 0, bestHand = 0;
             foreach (var a in _mind.Agents)
             {
                 if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
@@ -1124,8 +1130,10 @@ public sealed partial class ShipMind : IEngine
                 }
                 if (a.Id == x.RobotA && Busy(x.RobotA) || a.Id == x.RobotB && Busy(x.RobotB)) continue; // 이 사건에 가 있는 로봇 (일을 마쳤으면 다시 보낼 수 있다)
                 if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10) || a.Id == x.Dropped2 && sim.Tick - x.DroppedAt2 < Time.Minutes(10)) continue;   // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다 (둘까지 — A → B → A가 되지 않게)
-                int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + HandCost(a, g) + (from >= 0 ? 100000 : 0);   // 길 거리 (벽 너머 직선이 아니라 문을 돌아) + 손에 든 것
-                if (d < bd) { bd = d; best = a.Id; bestFrom = from; }
+                int hand = HandCost(a, g);
+                int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + hand + (from >= 0 ? 100000 : 0);   // 길 거리 (벽 너머 직선이 아니라 문을 돌아) + 손에 든 것
+                cands++;
+                if (d < bd) { bd = d; best = a.Id; bestFrom = from; bestHand = hand; }
             }
             if (best < 0) break;
             if (bestFrom >= 0)
@@ -1134,7 +1142,7 @@ public sealed partial class ShipMind : IEngine
                 if (y.RobotA == best) y.RobotA = -1; else y.RobotB = -1;
                 Incidents[bestFrom] = y;
                 Preempts++;
-                Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {KindName(y.Kind)} 일은 미루고 → {RoomName(x.Room)} {KindName(x.Kind)} (더 급하다)");
+                Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {KindName(y.Kind)} 일은 미루고 → {RoomName(x.Room)} {KindName(x.Kind)} (더 급하다)", NoteKind.Defer, best, y.Id, 3);
             }
             var belief = g == GoalKind.Repair && x.Kind == IncidentKind.ElectricFault && _net != null
                 ? new Belief { Kind = BeliefKind.Broken, Cell = _net.Devices[target].Cell, Subject = target, Conf = 1f, Cause = x.Cause }
@@ -1145,7 +1153,8 @@ public sealed partial class ShipMind : IEngine
             have++;
             x.Tries++;
             Assignments++;
-            Say(sim, $"{_mind.NameOf(best)} → {RoomName(x.Room)} {KindName(x.Kind)}");
+            byte why = bestFrom >= 0 ? (byte)3 : x.Dropped >= 0 && sim.Tick - x.DroppedAt < Time.Minutes(10) ? (byte)4 : bestHand < 0 ? (byte)2 : cands <= 1 ? (byte)5 : (byte)1;   // 맡긴 까닭 (일지만 — 판단은 읽지 않는다)
+            Say(sim, $"{_mind.NameOf(best)} → {RoomName(x.Room)} {KindName(x.Kind)}", NoteKind.Assign, best, x.Id, why);
             sim.Facts.Emit(sim.Tick, FactKind.ComputerAssign, x.Cell, 0, x.Cause, best, (int)x.Kind);
         }
         // 로봇이 모자라면 사람에게 부탁한다 (함장 방침 — 기본은 로봇이 하나도 없을 때 1분 기다린 뒤)
@@ -1189,7 +1198,8 @@ public sealed partial class ShipMind : IEngine
         x.Dropped2 = x.Dropped; x.DroppedAt2 = x.DroppedAt;   // 앞서 놓아준 로봇도 기억한다
         x.Dropped = rb; x.DroppedAt = sim.Tick;
         Released++;
-        Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일에서 놓아준다 — {(body ? (_mind.LegsOk(a) ? Mind.SnagText(SnagKind.NoHands) : Mind.SnagText(SnagKind.NoLegs)) : Mind.SnagText(c.Snag))} → 다른 로봇");
+        Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일에서 놓아준다 — {(body ? (_mind.LegsOk(a) ? Mind.SnagText(SnagKind.NoHands) : Mind.SnagText(SnagKind.NoLegs)) : Mind.SnagText(c.Snag))} → 다른 로봇", NoteKind.Release, rb, x.Id);
+        _mind.NoteReleased(rb, sim.Tick, g, x.Cell);
     }
 
     public long Released;
@@ -1212,7 +1222,7 @@ public sealed partial class ShipMind : IEngine
                 NoteTried(x.Id, (byte)(c.Snag == SnagKind.NoWayOut || c.SnagTarget >= 0 && c.SnagTarget < L.N && L.Kind[c.SnagTarget] == CellKind.Outside ? 2 : 1), 255, -1, c.Snag, c.SnagSubject, c.SnagTick);
             if (again) { if (x.Snagged < 255) x.Snagged++; continue; }
             x.Snagged = 1; SnagsRead++;
-            Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일이 막혔다 — {Mind.SnagText(c.Snag)}");
+            Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일이 막혔다 — {Mind.SnagText(c.Snag)}", NoteKind.Block, rb, x.Id);
         }
     }
 
@@ -1270,7 +1280,7 @@ public sealed partial class ShipMind : IEngine
                 wait.Chosen = (byte)(sealNow ? 0 : 1); now.Chosen = (byte)(sealNow ? 1 : 0);
                 Imaginations.Add(wait); Imaginations.Add(now);
                 if (Imaginations.Count > 40) Imaginations.RemoveRange(0, Imaginations.Count - 40);
-                Say(sim, $"{RoomName(x.Room)}: 5분 뒤 — 기다리면 죽음 {wait.Dead} · 쓰러짐 {wait.Down} / 지금 닫으면 죽음 {now.Dead} · 쓰러짐 {now.Down} → {(sealNow ? "지금 닫는다" : "기다린다")}");
+                Say(sim, $"{RoomName(x.Room)}: 5분 뒤 — 기다리면 죽음 {wait.Dead} · 쓰러짐 {wait.Down} / 지금 닫으면 죽음 {now.Dead} · 쓰러짐 {now.Down} → {(sealNow ? "지금 닫는다" : "기다린다")}", NoteKind.Plan, -1, x.Id);
                 if (sealNow) waitOver = true;
             }
             else if (Imaginations.Any(v => v.Room == xr && v.Tick >= Math.Min(xs, t - Time.Minutes(5)) && v.Option == 1 && v.Chosen == 1)) waitOver = true;
@@ -1279,7 +1289,7 @@ public sealed partial class ShipMind : IEngine
             Seals++;
             int cause = sim.Causes.Add(CauseKind.Computer, peopleIn ? $"주컴퓨터가 {Ko.Eul(RoomName(x.Room))} 봉쇄했다 — 안에 사람이 있었다" : $"주컴퓨터가 {Ko.Eul(RoomName(x.Room))} 봉쇄했다", t, x.Cell, x.Cause);
             sim.Facts.Emit(t, FactKind.ComputerSeal, x.Cell, peopleIn ? 1 : 0, cause, -1, x.Room);
-            Say(sim, $"{RoomName(x.Room)} 봉쇄{(peopleIn ? " (사람이 안에 있다)" : "")}");
+            Say(sim, $"{RoomName(x.Room)} 봉쇄{(peopleIn ? " (사람이 안에 있다)" : "")}", NoteKind.Seal, -1, x.Id);
             UnplugForSeal(sim, x.Room, cause);   // ⑥ 문틀의 연장선은 뽑는다 (그 방은 다시 어둡다)
         }
         // 열린 문은 지나는 이가 없을 때 다시 닫는다 (로봇 · 사람은 지나다닐 수 있다) — 문 칸에 선 이 · 문을 기다리는 이 · 곁 2칸에서 걷는 이만 (문 대각선 충전독에서 충전하는 로봇이 봉쇄한 방 문을 내내 열어 두던 결함)
@@ -1311,7 +1321,7 @@ public sealed partial class ShipMind : IEngine
             Span<int> nb = stackalloc int[4];
             L.Neighbors(d.Cell, nb);
             foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0) room = L.Room[j];
-            Say(sim, $"{RoomName(room)} 바깥문이 열린 채 아무도 없어 닫았다");
+            Say(sim, $"{RoomName(room)} 바깥문이 열린 채 아무도 없어 닫았다", NoteKind.Door);
             OuterClosed++;
         }
     }

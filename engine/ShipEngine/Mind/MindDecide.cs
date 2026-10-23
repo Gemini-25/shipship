@@ -61,6 +61,7 @@ public sealed partial class Mind
             if (busy && o.Goal == c.Goal && o.Target == c.GoalTarget) return;  // 지금 것이 가장 낫다
             if (busy && o.Score <= current) return;
             if (TryPlan(sim, a, o)) return;
+            if (k == 0) NoteCantPlan(a, o.Goal, o.Target, o.Cell, sim.Tick);   // 판단 일지 (쓰기만)
         }
     }
 
@@ -117,13 +118,38 @@ public sealed partial class Mind
         if (IsSleeping(a)) _life![c.Body].Asleep = 0;
         if (c.Carrying >= 0) DropCarried(sim, a, false);
         if (IsTask(c.Goal)) Claim(a, c.Goal, c.GoalTarget, -1);
+        if (a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && Journaled(a, c.Goal) && (c.Goal != o.Goal || c.GoalTarget != o.Target))
+            a.Judged.Add(new Judgment { Tick = sim.Tick, Goal = c.Goal, Target = c.GoalTarget, Cell = c.Cell, Method = (byte)o.Goal, Held = c.Holding, Out = Judged.Dropped, By = -1 });   // 판단 일지: 하던 일을 그만두고 다른 일로 (방법 칸에 바꾼 목표)
         c.Goal = o.Goal; c.GoalTarget = o.Target; c.GoalCell = o.Cell; c.GoalCause = o.Cause; c.GoalScore = o.Score; c.GoalSince = sim.Tick;
         c.Failed = 0;
         a.Plan = plan; c.StepIndex = 0; c.StepStart = sim.Tick; a.Path.Clear(); a.PathIdx = 0; c.WaitTicks = 0;
         c.CloseHard = (byte)(o.Goal == GoalKind.Evacuate ? 1 : 0);
         if (o.Goal == GoalKind.Evacuate && _followScore > 0 && o.Score == _followScore) { Followed++; c.FollowedAt = sim.Tick; } // ⑨ 아는 이를 따라 나갔다
         if (IsTask(o.Goal)) Claim(a, o.Goal, o.Target, +1);
+        if (Journaled(a, o.Goal)) a.Judged.Add(new Judgment { Tick = sim.Tick, Goal = o.Goal, Target = o.Target, Cell = o.Cell, Method = FirstHand(plan), Held = c.Holding, Out = Judged.Set, By = c.AssignedGoal == o.Goal && c.AssignedUntil > sim.Tick ? -2 : -1 });   // 판단 일지 (쓰기만)
         return true;
+    }
+
+    /// <summary>판단 일지에 적을 만한 목표인가 — 빈둥 · 넉넉한 전지로 독에서 쉬기는 빼낸다 (고리 여덟 칸을 되풀이로 채우지 않게).</summary>
+    private static bool Journaled(Agent a, GoalKind g) => g != GoalKind.Idle && !(g == GoalKind.Charge && a.C.Battery >= 0.6f);
+
+    /// <summary>판단 일지의 '방법': 계획의 첫 손 걸음 (가기 말고 — 없으면 255).</summary>
+    private static byte FirstHand(List<PlanStep> plan)
+    {
+        foreach (var st in plan) if (st.Kind is not (StepKind.GoTo or StepKind.None)) return (byte)st.Kind;
+        return 255;
+    }
+
+    /// <summary>판단 일지: 1순위를 세우지 못했다 — 같은 (목표 · 대상)이 여덟 칸 안에 있고 10분 안이면 때만 고친다 (2틱마다 되풀이해 칸을 채우지 않게).</summary>
+    private static void NoteCantPlan(Agent a, GoalKind g, int target, int cell, long t)
+    {
+        if (!Judgments.Enabled) return;
+        for (int k = 0; k < a.Judged.Count; k++)
+        {
+            ref var j = ref a.Judged.Newest(k);
+            if (j.Out == Judged.CantPlan && j.Goal == g && j.Target == target && t - j.Tick < Time.Minutes(10)) { j.Tick = t; return; }
+        }
+        a.Judged.Add(new Judgment { Tick = t, Goal = g, Target = target, Cell = cell, Method = 255, Held = a.C.Holding, Out = Judged.CantPlan, By = -1 });
     }
 
     /// <summary>계획이 끝나는 방이 머물러야 할 방(대피실 · 회의) 밖이면 그 감점 (대피 0.15 · 회의 0.3 — 1이면 감점 없음).</summary>

@@ -204,7 +204,7 @@ public sealed partial class ShipMind
             if (c.AssignedGoal == j.Kind && c.AssignedTarget == j.Target) c.AssignedUntil = sim.Tick;
         }
         string who = j.Agent >= 0 && j.Agent < mind.Agents.Count ? mind.NameOf(j.Agent) : "맡은 이";
-        Say(sim, $"일감 {JobTitle(j)} — {who}: {(why == SnagKind.None ? "기한을 넘겼다" : Mind.SnagText(why))} → 다른 이에게");
+        Say(sim, $"일감 {JobTitle(j)} — {who}: {(why == SnagKind.None ? "기한을 넘겼다" : Mind.SnagText(why))} → 다른 이에게", NoteKind.Job);
     }
 
     /// <summary>그 일감을 그 이가 여섯 시간 안에 못 했나.</summary>
@@ -233,7 +233,7 @@ public sealed partial class ShipMind
         if (JobFails.Count >= 64) JobFails.RemoveAt(0);
         JobFails.Add(new JobFail { Kind = j.Kind, Target = j.Target, Arg = j.Arg, Agent = -2, Snag = last, Tick = now });
         JobsStuck++;
-        Say(sim, $"막힌 곳: {JobTitle(j)} — {(last == SnagKind.None ? "맡은 이마다 기한을 넘겼다" : Mind.SnagText(last))} (로봇 · 사람 모두 못 했다)");
+        Say(sim, $"막힌 곳: {JobTitle(j)} — {(last == SnagKind.None ? "맡은 이마다 기한을 넘겼다" : Mind.SnagText(last))} (로봇 · 사람 모두 못 했다)", NoteKind.Stuck);
     }
 
     /// <summary>일감의 이름 (일지 · 막힌 곳 줄): 무엇 (어디).</summary>
