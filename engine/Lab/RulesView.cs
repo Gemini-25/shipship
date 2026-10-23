@@ -37,7 +37,7 @@ public static partial class Program
                 if (c.R > 200 && c.G > 80 && c.B < 90) fire++;
             }
         // 같은 바닥(보통 방)끼리 견준다: 빠진 오른쪽 방 · 멀쩡한 아래 통로 — 칸 안쪽의 평균 푸른 기 (파랑 − 빨강 · 초록 평균: 강철 바닥은 본디 조금 푸르다)
-        double Blue(int cell) { double b = 0; int n = 0; for (int y = 12; y < 26; y++) for (int x = 6; x < 26; x++) { var q = img.Get(lay.X(cell) * Painter.T + x, lay.Y(cell) * Painter.T + y); b += q.B - (q.R + q.G) / 2.0; n++; } return b / n; }
+        double Blue(int cell) { double b = 0; int n = 0; for (int y = 12; y < 26; y++) for (int x = 6; x < 26; x++) { var q = img.Get(lay.X(cell) * Painter.T + x, lay.Y(cell) * Painter.T + y); b += 100.0 * (q.B - (q.R + q.G) / 2.0) / Math.Max(8.0, (q.R + q.G + q.B) / 3.0); n++; } return b / n; }   // 밝기로 나눈 푸른 기 (빛 웅덩이로 밝기가 달라도)
         double vac = Blue(At(19, 4)), ok = Blue(At(19, 8));
         if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
         {

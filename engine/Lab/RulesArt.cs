@@ -129,6 +129,59 @@ public static partial class Program
             }
             Check("텍스처 바닥: 한 방 8×8칸에 서로 다른 바닥 칸이 많다 (되풀이 주기 8칸 — 예전엔 네 가지가 되풀이)", seen.Count >= 40, $"다른 칸 {seen.Count}/64");
         }
+        // 8 · 빛 웅덩이 (T5): 웅덩이를 넣어도 방 평균은 세계 조명 그대로 (±3%) · 낮은 은은하게 · 등이 낮은 밤 · 비상등은 짙게 · 등이 꺼지면 웅덩이 없음
+        {
+            var big = Worlds.Ascii(@"
+##################
+#................#
+#................#
+#................#
+#................#
+#................#
+#................#
+#................#
+#................#
+##################");
+            var s = Worlds.Full(big, 9);
+            var lt = s.Get<Light>(); var net = s.Get<Network>();
+            var p = new Painter(big);
+            int room = big.Room[Worlds.At(big, 5, 5)];
+            (double mean, double lo, double hi) Floor(float lamp, bool pools)
+            {
+                lt.Lamp[room] = lamp; Painter.NoPools = !pools;
+                var img = p.Frame(s, 0, 0, big.W, big.H, 0);
+                Painter.NoPools = false;
+                var cellMeans = new List<double>(); double all = 0; int n = 0;
+                for (int cy = 1; cy < 9; cy++) for (int cx = 1; cx < 17; cx++)   // 방 바닥 모두 (평균) · 벽 그늘 밖 안쪽 칸 (대비)
+                {
+                    double v = Mean(img, cx, cy, 0, T, Luma, 0, T);
+                    all += v; n++;
+                    if (cy >= 3 && cx >= 2 && cx < 16) cellMeans.Add(Mean(img, cx, cy, 10, 30, Luma));
+                }
+                return (all / n, cellMeans.Min(), cellMeans.Max());
+            }
+            var day = Floor(300, true); var dayFlat = Floor(300, false);
+            var night = Floor(90, true); var nightFlat = Floor(90, false);
+            var off = Floor(0, true); var offFlat = Floor(0, false);
+            double keepDay = day.mean / dayFlat.mean, keepNight = night.mean / nightFlat.mean;
+            double spreadDay = day.hi / day.lo, spreadNight = night.hi / night.lo, flat = dayFlat.hi / dayFlat.lo;
+            Check("텍스처 빛 웅덩이: 등 자리에서 웅덩이가 지고 그 사이는 어둡다 — 방 평균은 세계 조명 그대로 (±3%) · 등이 낮은 밤은 낮보다 대비가 크다 · 등이 꺼지면 웅덩이 없음",
+                Math.Abs(keepDay - 1) <= 0.03 && Math.Abs(keepNight - 1) <= 0.03 && spreadDay > flat * 1.2 && spreadNight > spreadDay * 1.15 && Math.Abs(off.mean - offFlat.mean) < 0.5,
+                $"평균 유지 낮 {keepDay:0.000} · 밤 {keepNight:0.000} · 칸 밝기 최대/최소 고른 빛 {flat:0.00} · 낮 {spreadDay:0.00} · 밤 {spreadNight:0.00} · 꺼짐 {off.mean:0.0}/{offFlat.mean:0.0} · 등 자리 {p.PoolSpots.Count(q => q.room == room)}");
+        }
+        // 9 · 발밑 그림자 (T9): 선 사람 발밑에 그늘 타원 (바닥보다 어둡다)
+        {
+            var s = Worlds.Full(lay, 11);
+            var m = s.Get<Mind>(); var lt = s.Get<Light>();
+            for (int r = 0; r < lay.Rooms.Count; r++) lt.Lamp[r] = 300;
+            int who = m.AddPerson(s, At(6, 2));
+            var p = new Painter(lay);
+            var img = p.Frame(s, 0, 0, lay.W, lay.H, 0);
+            var cell = m[who].C.Cell;
+            int ax = lay.X(cell) - 1, ay = lay.Y(cell) - 1;
+            double feet = Luma(Px(img, ax, ay, 9, T - 3)), beside = Luma(Px(img, ax + 1, ay, 9, T - 3));
+            Check("텍스처 사람: 선 사람 발밑엔 그늘 타원 (곁 바닥보다 어둡다 — 사람이 바닥에 선다)", feet < beside * 0.85, $"발밑 {feet:0} · 곁 바닥 {beside:0}");
+        }
         // 7 · 같은 세계 같은 그림 · 그림은 세계를 바꾸지 않는다
         {
             var s = Worlds.Full(lay, 7);

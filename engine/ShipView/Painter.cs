@@ -993,9 +993,11 @@ public sealed partial class Painter
         if (c.Floated != 0)
         {
             lift = 6 + ((frame / 5 + a.Id) % 4) switch { 0 => 0, 1 => 1, 2 => 2, _ => 1 };
-            img.Fill(px + T / 2 - 6, py + T - 5, 12, 3, Rgba.Hex("#000000"), 0.28f);
-            img.Fill(px + T / 2 - 4, py + T - 6, 8, 1, Rgba.Hex("#000000"), 0.18f);
+            img.Oval(px + T / 2, py + T - 4, 5, 1.6f, FootShade, 0.22f);   // 떠 있으면 옅고 작게
         }
+        else if (b.Low != 0 && !lying) img.Oval(px + T / 2, py + T / 2 + 9, 9, 2.4f, FootShade, 0.34f);
+        else if (lying) img.Oval(px + T / 2, py + T / 2 + 5, 12, 3.2f, FootShade, 0.32f);
+        else img.Oval(px + T / 2, py + T - 3, 6.5f, 2.1f, FootShade, 0.36f);   // 발밑 그림자 (T9 — 늘: 사람이 바닥에 선다)
         if (lying)
         {
             // 누운 사람: 옆으로 돌린 그림 (머리가 왼쪽)
@@ -1059,6 +1061,8 @@ public sealed partial class Painter
             else Mark(img, mx, my, Rgba.Hex("#ffd146"));
         }
     }
+
+    private static readonly Rgba FootShade = Rgba.Hex("#16142a");   // 그늘 색 (푸른 보라 — 검정 대신)
 
     private static void Mark(Img img, int cx, int top, Rgba col)
     {
@@ -1182,12 +1186,14 @@ public sealed partial class Painter
             : DotBotState.Ok;
         if (c.Kind == AgentKind.Drone)
         {
+            img.Oval(px + T / 2, py + T - 4, 5, 1.5f, FootShade, 0.2f);   // 떠 있는 드론의 옅은 그림자
             var dr = Cached(Key(9, (int)state, frame & 3, a.Id & 3), (state, f4: frame & 3), static q => DotBots.Drone(DotDroneKind.Repair, q.state, q.f4));
             Put(img, dr, px + T / 2 - dr.W / 2, py + T / 2 - dr.H / 2 - 8);
             return;
         }
         var kind = (DotBotKind)(a.Id % 4);
         var bot = Cached(Key(8, (int)kind, (int)state, frame & 3, a.Id & 7), (kind, state, f4: frame & 3, a.Id), static q => DotBots.Robot(q.kind, q.state, q.f4, q.Id));
+        img.Oval(px + T / 2, py + T - 2, 7.5f, 2.2f, FootShade, 0.38f);   // 바퀴 · 다리 밑 그림자
         Put(img, bot, px + T / 2 - DotBots.Cx, py + T - DotBots.Foot - 1);
     }
 }
