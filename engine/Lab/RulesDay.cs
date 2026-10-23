@@ -183,6 +183,23 @@ public static partial class Program
             Check("열 수축: 디딤호 하루의 딱 소리는 배 전체에서 시간당 몇 번 (하루 20 ~ 1,000번)", ticks >= 20 && ticks <= 1000, $"하루 {ticks}번");
         }
 
+        // ── 음식 향은 쌓이지 않는다 (검토 ④-2): 하루 내내 밥을 지어도 정화기의 숯이 걷는다 — 예전엔 없애는 곳이 없어 이틀 만에 배 전체가 13.5ppm ──
+        {
+            var fa = day.Get<Field>();
+            double mol = 0, ppm = 0; int n = 0;
+            for (int c = 0; c < day.Layout.N; c++) if (fa.Moles(c) > 1) { ppm += fa.Ppm(fa.T.gAroma, c); n++; }
+            ppm /= Math.Max(1, n);
+            mol = fa.Total(fa.T.gAroma);
+            if (Debug)
+                foreach (var r in day.Layout.Rooms.Select((r, i) => (r, i)).OrderByDescending(x => x.r.Cells.Sum(c => fa.Gas(fa.T.gAroma, c))).Take(5))
+                    Console.WriteLine($"    향 {r.r.Name} {r.r.Cells.Sum(c => fa.Gas(fa.T.gAroma, c)):0.0000}몰 · 통풍구 {day.Get<Network>().Vent[r.i]} · 막음 {day.Get<Network>().Damper[r.i]}");
+            double held = day.Get<Network>().ScrubHeld()[fa.T.Gases[fa.T.gAroma].Index], caught = held / Math.Max(1e-12, held + mol);
+            // 덕트가 배 공기를 정화기로 돌리는 시간 상수는 열 몇 시간 (ISS TCCS도 시간당 15m³ — 하루 남짓) — 끼니마다 오르고 숯이 걷어 2ppm 아래에 머문다
+            Check("음식 향이 쌓이지 않는다: 하루 밥을 지은 디딤호에서 낸 향의 4할 넘게 정화기 숯에 붙잡히고 · 배 평균 2ppm 아래 (예전엔 걷는 곳이 없어 나흘에 13.5ppm)",
+                m.Cooked > 0 && caught > 0.4 && ppm < 2,
+                $"밥 짓기 {m.Cooked} · 숯에 {held:0.000}몰 ({caught:P0}) · 공기에 {mol:0.000}몰 · 배 평균 {ppm:0.00}ppm");
+        }
+
         // ── 긴 왕복 (검토 ⑤-2): 하루 끝(125의 배수 틱 — 주컴퓨터가 물자를 묻기 7틱 앞)에서 찍어 되살린 세계와 원래 세계를 150틱 나란히 —
         //    일과 물자 엔진이 늦게 이으면 되살린 쪽 주컴퓨터만 '마실 물 · 식량 · 산소 0일 치'를 보고 7틱 만에 갈라졌다. 맨 끝에 둔다 (원래 세계를 더 돌린다) ──
         {

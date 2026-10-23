@@ -107,7 +107,7 @@ public sealed partial class Network : IEngine
     public byte[] Damper;         // 1: 열림
     /// <summary>1: 정화 배기 — 그 방 덕트를 배 덕트에서 떼어 정화기(활성탄 · 촉매)로만 돌린다 (독한 기체가 다른 방으로 가지 않고 그 방에서 걸러진다).</summary>
     public byte[] Exhaust;
-    public double TraceScrubbed;  // 정화기가 걸러 낸 독한 기체 (몰 — 암모니아 · 일산화탄소 · 오존)
+    public double TraceScrubbed;  // 정화기가 걸러 낸 독한 기체 (몰 — 세 단: 숯 · 촉매 산화 · 산성 기체 흡착)
     // ── 배 전체 ──
     public bool ReactorScram;
     public int ScramCause;
@@ -262,6 +262,7 @@ public sealed partial class Network : IEngine
         return take;
     }
     public const double PanFill = 55.5;   // 냄비 물 1L (몰)
+    public const double AromaFromK = 350, AromaPerSec = 1e-4 / 2.4;   // 음식 향이 오르는 냄비 온도 · 빠르기 (몰/초 — 예전 마음이 내던 틱마다 1e-4)
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; if (BreakerWeld[feeder] != 0) BreakerStuck[feeder] = 1; }   // 상한 접점은 올리는 순간 눌어붙는다
     /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>
     public void PullFeeder(int feeder) { Breaker[feeder] = 0; BreakerStuck[feeder] = 0; OverSec[feeder] = 0; }
@@ -318,10 +319,12 @@ public sealed partial class Network : IEngine
         return false;
     }
     /// <summary>독한 기체를 거르는 정화기(이산화탄소 정화기 · 공기 재생기의 활성탄 거르개)가 돌고 있나.</summary>
-    public bool ScrubberWorking()
+    public bool ScrubberWorking() => ScrubberDevice() >= 0;
+    /// <summary>독한 기체를 거르는 첫 정화기 (정화 배기가 그 거르개로 간다 · 없으면 -1).</summary>
+    public int ScrubberDevice()
     {
-        for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role is "scrubber" or "o2gen" && Working(d) && Broken[d * 4 + (int)Part.Filter] == 0) return true;
-        return false;
+        for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role is "scrubber" or "o2gen" && Working(d) && Broken[d * 4 + (int)Part.Filter] == 0) return d;
+        return -1;
     }
     /// <summary>
     /// 낡은 기계의 소리 (dB — 바퀴 2 소리): 기계 부품의 마모가 숨은 한계의 60%를 넘으면 커진다 — 12 × ((마모 − 0.6)/0.4)² (0.9에서 +6.8 · 끝에서 +12).
@@ -381,7 +384,7 @@ public sealed partial class Network : IEngine
     public int PartCause(int device, Part p) => _wearCause.GetValueOrDefault(device * 4 + (int)p);
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
+    public void Repair(int device, Part p) { if (p == Part.Filter) EmptyBed(device); Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -778,15 +781,15 @@ public sealed partial class Network : IEngine
                     VentedH2 += h2;
                     // 이산화탄소 거르기 (공기 재생기 — 옛 배의 '산소 발생기'는 한 대로 둘 다 했다 · 거르개가 닳으면 1/5)
                     if (dev.Def.Mol > 0 && p > 0) ScrubRoom(dev, T.gCO2, dev.Def.Mol * (filterBad ? 0.2 : 1) * dt);
-                    // 독한 기체 거름 (활성탄 거르개)
-                    if (p > 0 && !filterBad) TraceScrubbed += ScrubTrace(dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
+                    // 독한 기체 거름 (거르개 세 단)
+                    if (p > 0 && !filterBad) TraceScrubbed += ScrubTrace(sim, d, dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
                     break;
                 }
                 case "scrubber":
                 {
                     ScrubRoom(dev, T.gCO2, dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * (filterBad ? 0.2 : 1) * dt);
-                    // 독한 기체 거름 (활성탄 · 촉매 산화): 정화기 방 공기의 독한 기체를 초마다 1%씩 — 덕트가 배 공기를 이리로 돌린다
-                    if (p > 0 && mechOk && !filterBad) TraceScrubbed += ScrubTrace(dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
+                    // 독한 기체 거름 (세 단 — 활성탄 · 촉매 산화 · 산성 기체 흡착): 정화기 방 공기의 독한 기체를 초마다 1%씩 — 덕트가 배 공기를 이리로 돌린다
+                    if (p > 0 && mechOk && !filterBad) TraceScrubbed += ScrubTrace(sim, d, dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
                     HeatInto(dev, kw * 1000 * dt);
                     break;
                 }
@@ -846,6 +849,8 @@ public sealed partial class Network : IEngine
                     }
                     else pk += q * dt / cPan;
                     PanK[d] = (float)Math.Max(tAir, pk);
+                    // 음식 향: 켠 조리대의 냄비가 끓을 만큼 뜨겁고 물 · 음식이 있으면 (월드가 낸다 — 판단은 켜고 끌 뿐 · 정화기의 숯이 걷는다)
+                    if (kw > 0 && PanK[d] >= AromaFromK && (PanWater[d] > 0 || food > 0.05)) F.AddGas(c, T.gAroma, AromaPerSec * dt, tAir);
                     F.AddSurfaceHeat(c, loss * dt * 0.5);                                  // 냄비가 내는 열의 반은 조리대 겉면으로
                     F.AddHeat(c, (kw * 1000 * 0.4 + loss * 0.5) * dt);
                     // 물이 다 졸고 200℃를 넘으면 음식이 눌어 연기가 난다 (당 · 기름의 열분해 — C₆H₁₂O₆ → 6C + 6H₂O) — 불꽃보다 먼저 냄새 · 연기 (감지기가 안다)
@@ -1004,14 +1009,14 @@ public sealed partial class Network : IEngine
         _airflowCells.Clear();
         if (HvacKw <= 0) return; // 팬이 돌지 않는다 (냉각 고리 · 열교환기가 모두 섰다)
         // 정화 배기: 방 곳곳의 흡입구로 칸 공기의 1.5%씩(1분이면 방 공기의 3할)을 정화기로 보내 독한 기체의 90%를 걸러 그 방으로 돌려준다 (정화기가 서 있으면 못 한다)
-        bool scrub = false, checkedScrub = false;
+        int scrub = -1; bool checkedScrub = false;
         for (int r = 0; r < L.Rooms.Count; r++)
         {
             int v = Vent[r];
             if (Exhaust[r] == 0 || v < 0 || !RoomPowered(r) || F.RegionOf[v] < 0) continue;
-            if (!checkedScrub) { scrub = ScrubberWorking(); checkedScrub = true; }
-            if (!scrub) break;
-            TraceScrubbed += ScrubTrace(L.Rooms[r].Cells, VentFraction / 4 * 0.9);
+            if (!checkedScrub) { scrub = ScrubberDevice(); checkedScrub = true; }
+            if (scrub < 0) break;
+            TraceScrubbed += ScrubTrace(sim, scrub, L.Rooms[r].Cells, VentFraction / 4 * 0.9);
         }
         var vents = new List<int>();
         for (int r = 0; r < L.Rooms.Count; r++)
@@ -1112,21 +1117,6 @@ public sealed partial class Network : IEngine
     }
 
     /// <summary>송풍기로 방 공기를 돌려 기체 하나를 걷는다 — 방 칸마다 가진 만큼 나눠서 (장치 칸만 비우지 않게).</summary>
-    /// <summary>칸들의 독한 기체(암모니아 · 일산화탄소 · 오존)를 frac만큼 걸러 낸다. 걸러 낸 몰.</summary>
-    private int[]? _trace; // 거르는 독한 기체 (암모니아 · 일산화탄소 · 오존)
-    private double ScrubTrace(int[] cells, double frac)
-    {
-        double took = 0;
-        _trace ??= new[] { T.gNH3, T.gCO, T.gO3 };
-        foreach (int c in cells)
-            foreach (int g in _trace)
-            {
-                double n = F.Gas(g, c);
-                if (n > 1e-9) took += F.RemoveGas(c, g, n * frac);
-            }
-        return took;
-    }
-
     private void ScrubRoom(Device dev, int gas, double mol)
     {
         if (mol <= 0) return;
@@ -1315,7 +1305,7 @@ public sealed partial class Network : IEngine
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
         SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w); SaveChips(w); SaveRobots(w); SaveVibration(w);
-        w.Tag("조명"); w.Arr(LampDim); w.Arr(EmergencyMin); SaveShower(w);
+        w.Tag("조명"); w.Arr(LampDim); w.Arr(EmergencyMin); SaveShower(w); SaveScrub(w);
     }
 
     public void Load(StateReader r)
@@ -1336,6 +1326,6 @@ public sealed partial class Network : IEngine
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
         LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r); LoadChips(r); LoadRobots(r); LoadVibration(r);
-        r.Tag("조명"); LampDim = r.Arr<float>(); EmergencyMin = r.Arr<float>(); LoadShower(r);
+        r.Tag("조명"); LampDim = r.Arr<float>(); EmergencyMin = r.Arr<float>(); LoadShower(r); LoadScrub(r);
     }
 }

@@ -84,7 +84,7 @@ public sealed partial class Mind
         return true;
     }
 
-    /// <summary>밥 짓기 한 틱: 처음에 켠다 (냄비에 물 1L) · 짓는 동안 음식 냄새 · 다 되면 끈다 (깜빡할 수 있다).</summary>
+    /// <summary>밥 짓기 한 틱: 처음에 켠다 (냄비에 물 1L — 탱크에서) · 다 되면 끈다 (깜빡할 수 있다). 음식 냄새는 뜨거운 냄비에서 월드가 낸다.</summary>
     private void CookStep(Sim sim, Agent a, PlanStep st, bool done)
     {
         if (_net == null || st.Target < 0) return;
@@ -96,7 +96,6 @@ public sealed partial class Mind
             if (_net.On[d] == 0) _net.SetOn(d, true);
             _net.FillPan(sim, d);
         }
-        F.AddGas(_net.Devices[d].Cell, T.gAroma, 1e-4, F.Temp(_net.Devices[d].Cell)); // 음식 냄새 (배고픈 이가 끌려온다)
         if (done) { Cooked++; if (a.IsPerson) a.C.SkCook = Math.Min(1, a.C.SkCook + 0.003f * Practice(a.C, "조리") * UseSkill(a, 4, sim.Tick)); FinishCook(sim, a, false); }
     }
 
