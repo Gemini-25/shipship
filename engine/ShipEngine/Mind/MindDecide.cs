@@ -21,6 +21,7 @@ public sealed partial class Mind
         _opts.Clear(); _followScore = 0;
         a.Avoid.RemoveAll(v => v.Until <= t);
         _deciding = a; _nowTick = t;
+        if (c.Holding != c.HeldItem) { c.HeldItem = c.Holding; c.HeldSince = t; }   // 손에 든 것이 바뀌었다 (든 때를 적는다)
         if (a.IsPerson) TakeOffSuit(sim, a);
         if (a.IsPerson && c.Goal == GoalKind.Improvise && (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count)) OwnFinished(sim, a);   // 제 궁리를 다 했다
         Options(sim, a);
@@ -51,6 +52,8 @@ public sealed partial class Mind
         if (busy && current < 0 && c.Goal is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Toilet or GoalKind.Wash && c.StepIndex > 0) current = 1.5f; // 하던 식사 · 잠 · 볼일 · 샤워는 웬만하면 마친다
         // 시작한 쉼 · 어울림도 마친다 (하는 동안 지루함 · 외로움이 풀려 선택지가 사라져도 — 일 · 끼니처럼 더 급한 것은 끼어든다)
         if (busy && current < 0 && c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex > 0) current = 1.0f;
+        // 주운 것 · 꺼낸 쓴 것을 제자리에 넣는 일은 마친다 (주운 뒤엔 바닥에 없어 그 선택지가 사라진다 — 불 · 위험처럼 급한 것은 끼어든다)
+        if (busy && current < 0 && c.Goal is GoalKind.Gather or GoalKind.Stash or GoalKind.Refill && c.StepIndex > 0) current = 2.0f;
 
         for (int k = 0; k < Math.Min(4, _opts.Count); k++)
         {
@@ -63,7 +66,7 @@ public sealed partial class Mind
 
     /// <summary>
     /// 우주복을 벗는다: 숨쉴 만한 방(80kPa · 산소 18kPa · 독 없음)에 왔고 우주복이 필요한 일(막기 · 구하기 · 불 끄기 · 대피) 중이 아니면 —
-    /// 우주복 산소가 바닥나면 그런 일 중이어도 벗는다 (헬멧 속에서 숨이 막힌다). 가장 가까운 우주복 보관함에 걸어 둔다.
+    /// 우주복 산소가 바닥나면 그런 일 중이어도 벗는다 (헬멧 속에서 숨이 막힌다). 벗은 것은 손에 들고 가장 가까운 보관함에 걸어가 넣는다 (돌려놓기).
     /// </summary>
     private void TakeOffSuit(Sim sim, Agent a)
     {
@@ -77,39 +80,31 @@ public sealed partial class Mind
         {
             // 좋은 공기 — 마스크를 벗어 가장 가까운 마스크함에 돌려놓는다 (병이 반 넘게 남았으면)
             if (BelievedRoomBad(a, RoomOf(here))) return;
-            bool keep = b.MaskO2 >= 0.5 * ItemCharge(iMask);
+            float left = b.MaskO2;
             b.Mask = 0; b.MaskO2 = 0;
-            if (keep)
-            {
-                int box = -1, bestD = int.MaxValue;
-                for (int fu = 0; fu < L.Furniture.Count; fu++)
-                {
-                    if (L.Furniture[fu].Type != "OxygenMaskBox" || L.Furniture[fu].Cells.Length == 0) continue;
-                    int dm = Manhattan(here, L.Furniture[fu].Cells[0]);
-                    if (dm < bestD) { bestD = dm; box = fu; }
-                }
-                if (box >= 0) Stock[box * ItemCount + iMask]++;
-            }
+            HoldTakenOff(a, iMask, left);   // 손에 들고 마스크함에 걸어가 넣는다 (남은 산소 그대로 — 주컴퓨터가 채우기를 맡긴다)
             if (b.Suit == 0) return;
         }
         bool empty = b.SuitO2 < 0.1 * ItemCharge(iSuit);
         bool task = c.Goal is GoalKind.Patch or GoalKind.Rescue or GoalKind.FightFire or GoalKind.Evacuate or GoalKind.GetSuit && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count;
         if (!empty && (task || BelievedRoomBad(a, RoomOf(here)))) return;
+        float o2 = b.SuitO2;
         b.Suit = 0; b.SuitO2 = 0;
-        int locker = -1, bd = int.MaxValue;
-        for (int fu = 0; fu < L.Furniture.Count; fu++)
-        {
-            if (L.Furniture[fu].Type != "SuitLocker" || L.Furniture[fu].Cells.Length == 0) continue;
-            int d = Manhattan(here, L.Furniture[fu].Cells[0]);
-            if (d < bd) { bd = d; locker = fu; }
-        }
-        if (locker >= 0) Stock[locker * ItemCount + iSuit]++;
+        HoldTakenOff(a, iSuit, o2);   // 손에 들고 우주복 보관함에 걸어가 넣는다 (예전엔 벗는 순간 보관함으로 옮아 갔다)
     }
 
     private bool TryPlan(Sim sim, Agent a, Option o)
     {
         var plan = new List<PlanStep>();
         if (!BuildPlan(sim, a, o, plan)) return false;
+        if (HoldBlocks(a, o.Goal))
+        {
+            // 손 비우기 (docs/MIND.md 3단): 일상의 일 앞에서 든 것을 먼저 — 꼼꼼한 이는 제자리에 · 덤벙대는 이(성실 0.35 아래)는 그 자리에 내려놓는다
+            var pre = new List<PlanStep>();
+            int h = a.C.Cell;
+            FreeHands(a, ref h, pre, a.IsPerson && a.C.Consc < 0.35f);
+            plan.InsertRange(0, pre);
+        }
         // 일상의 걸음이 방금 빠져나온 위험한 방으로 들어가면 하지 않는다 (침대 · 밥 · 일터를 그 안에서 고른 계획)
         if (Everyday(o.Goal)) foreach (var st in plan) if (st.Kind == StepKind.GoTo && Shunned(a, st.Cell)) return false;
         ref var c = ref a.C;
@@ -151,7 +146,7 @@ public sealed partial class Mind
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
-                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.Gather && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
         if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
@@ -215,6 +210,8 @@ public sealed partial class Mind
             if (c.Extra > 0.6f && c.Bored > 0.1f && !InWindow(hour, c.ShiftHour, 8) && SomeoneFree(a))
                 Add(GoalKind.Socialize, -1, -1, (Math.Max(0.35f, c.Bored * 1.5f) + 0.1f) * (c.Extra - 0.5f) * 2.5f * (1 - c.Depress));
             HeartOptions(a, here, InWindow(hour, c.ShiftHour, 8));   // ⑧ 공황 발작 · 침대에 틀어박힘
+            StashOption(a, here);    // 손 비우기 · 돌려놓기 (docs/MIND.md 3단)
+            GatherOption(a, here);   // 맡긴 줍기 · 꼼꼼한 이는 보이는 바닥 물건을 줍는다
             Add(GoalKind.Idle, -1, here, 0.3f * (1 - DreadAt(a, here)));   // 꺼리는 방에서는 우두커니 머물지 않는다
             JobOption(a);
             // ⑨ 몸싸움: 덤빈 이는 그 자리에서 · 맞는 이는 겁이 많으면 방을 빠져나가 문을 닫는다
@@ -228,7 +225,7 @@ public sealed partial class Mind
         {
             float low = c.Battery < 0.1f ? 8 : c.Battery < 0.3f ? 4 : c.Battery < 0.95f && c.Goal == GoalKind.Charge ? 1.5f : 0.4f;
             Add(GoalKind.Charge, c.Dock, c.Dock, low);
-            if (!drone) JobOption(a);
+            if (!drone) { JobOption(a); StashOption(a, here); GatherOption(a, here); }   // 돌려놓기 · 줍기 (docs/MIND.md 3단)
         }
 
         float caution = person ? 1 - c.Fear * (1 - c.Brave) : 1;
@@ -574,7 +571,7 @@ public sealed partial class Mind
                 {
                     if (c.Holding != iPatch)
                     {
-                        if (c.Holding != 255) return false;
+                        FreeHands(a, ref here, plan, true);   // 급하다 — 든 것을 그 자리에 내려놓는다
                         int src = NearestStock(here, iPatch);
                         if (src < 0) return false;
                         plan.Add(Go(L.Furniture[src].Cells[0], 1));
@@ -605,7 +602,7 @@ public sealed partial class Mind
                 {
                     if (a.IsPerson && c.Holding != iRepair)
                     {
-                        if (c.Holding != 255) return false;
+                        FreeHands(a, ref here, plan, true);
                         int src = NearestStock(here, iRepair);
                         if (src < 0) return false;
                         plan.Add(Go(L.Furniture[src].Cells[0], 1));
@@ -632,7 +629,7 @@ public sealed partial class Mind
                 if (stand < 0 || _st == null || _st.Braced[wall] != 0 && !_st.JammedAt(wall)) return false;
                 if (a.IsPerson && c.Holding != iRepair)
                 {
-                    if (c.Holding != 255) return false;
+                    FreeHands(a, ref here, plan, true);
                     int src = NearestStock(here, iRepair);
                     if (src < 0) return false;
                     plan.Add(Go(L.Furniture[src].Cells[0], 1));
@@ -657,7 +654,7 @@ public sealed partial class Mind
                 if (!a.IsPerson && !InPouch(c, part) && NearestStock(here, spare) < 0) return false;   // 로봇: 주머니에도 배에도 그 갈래가 없다
                 if (a.IsPerson && c.Holding != spare)
                 {
-                    if (c.Holding != 255) return false;
+                    FreeHands(a, ref here, plan, false);
                     int src = NearestStock(here, spare);
                     if (src < 0) return false;
                     plan.Add(Go(L.Furniture[src].Cells[0], 1));
@@ -676,7 +673,8 @@ public sealed partial class Mind
             case GoalKind.Harvest:
             {
                 // 다 자란 작물 → 손에 들고 → 가까운 식량 창고 (냉장고가 먼저 — 썩지 않게)
-                if (_life == null || o.Target >= _life.Crops.Count || c.Holding != 255 && c.Holding != iHarvest) return false;
+                if (_life == null || o.Target >= _life.Crops.Count) return false;
+                if (c.Holding != iHarvest) FreeHands(a, ref here, plan, false);   // 든 것을 먼저 제자리에
                 int crop = _life.Crops[o.Target].Cell;
                 int store = Nearest(crop, _food, fu => L.Furniture[fu].Type == "Fridge");
                 if (store < 0) store = Nearest(crop, _food, _ => true);
@@ -693,7 +691,7 @@ public sealed partial class Mind
             case GoalKind.Restock:
             {
                 // 식량 보관함 → 식량 상자 → 주방 (맡긴 일: Target 냉장고 · 배식기, 맡긴 Arg 보관함 · 들고만 있으면 가까운 주방)
-                if (c.Holding != 255 && c.Holding != iRation) return false;
+                if (c.Holding != iRation) FreeHands(a, ref here, plan, false);
                 int point = o.Target >= 0 ? o.Target : Nearest(c.Cell, _food, _ => true);
                 if (point < 0) return false;
                 if (c.Holding != iRation)
@@ -710,10 +708,11 @@ public sealed partial class Mind
             case GoalKind.Haul:
             {
                 // ⑪ 헌 부품: 놓인 설비 → 손에 들고 → 정제기 (맡긴 일: Target 정제기 · Arg 설비 × 256 + 물건 · 들고만 있으면 가까운 정제기)
-                if (c.Holding != 255 && c.Holding != iScrap && c.Holding != iScrapElec) return false;
+                bool scrap = c.Holding == iScrap || c.Holding == iScrapElec;
+                if (!scrap) FreeHands(a, ref here, plan, false);
                 int refinery = o.Target >= 0 ? o.Target : NearestRefinery(c.Cell);
                 if (refinery < 0) return false;
-                if (c.Holding == 255)
+                if (!scrap)
                 {
                     int src = c.AssignedGoal == GoalKind.Haul ? c.AssignedArg / 256 : -1, item = c.AssignedArg % 256;
                     if (src < 0 || src >= L.Furniture.Count || Stock[src * ItemCount + item] <= 0) return false;
@@ -724,6 +723,9 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Put, Target = refinery });
                 return true;
             }
+            case GoalKind.Stash: return PlanStash(a, o, plan);
+            case GoalKind.Refill: return PlanRefill(a, o, here, plan);
+            case GoalKind.Gather: return PlanGather(a, o, here, plan);
             case GoalKind.Tighten:
             {
                 // ④ 풀린 볼트: 장치 곁으로 가서 조인다 (연장은 몸에 — 사람 손 · 로봇 팔)
@@ -856,7 +858,8 @@ public sealed partial class Mind
 
     /// <summary>일상 목표 (위기를 다루는 일이 아닌 것) — 빠져나온 위험한 방으로는 이것 때문에 돌아가지 않는다.</summary>
     private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize or GoalKind.Toilet or GoalKind.Wash
-        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare;
+        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare
+        or GoalKind.Stash or GoalKind.Refill or GoalKind.Gather;
 
     /// <summary>
     /// 피하는 칸: 사람이 방금(10분) 빠져나온 방이고 아직 위험하다고 믿는다 (지금 그 방 안이면 아니다).
@@ -951,10 +954,10 @@ public sealed partial class Mind
         if (c.Holding == iScrap || c.Holding == iScrapElec) Add(GoalKind.Haul, c.AssignedGoal == GoalKind.Haul && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
         // 오물 통을 들고 있으면 (비우기가 끊겼어도) 비울 곳으로
         if (c.Holding == iWaste) Add(GoalKind.ToiletCare, -1, c.Cell, 1.0f);
-        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare)) return;
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Refill)) return;
         int cell = c.AssignedGoal switch
         {
-            GoalKind.Craft => L.Furniture[c.AssignedTarget].Cells[0],
+            GoalKind.Craft or GoalKind.Refill => c.AssignedTarget >= 0 && c.AssignedTarget < L.Furniture.Count && L.Furniture[c.AssignedTarget].Cells.Length > 0 ? L.Furniture[c.AssignedTarget].Cells[0] : -1,
             GoalKind.Maintain => _net != null ? _net.Devices[c.AssignedTarget / 4].Cell : -1,
             GoalKind.Tighten => _net != null && c.AssignedTarget < _net.Devices.Count ? _net.Devices[c.AssignedTarget].Cell : -1,
             GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,

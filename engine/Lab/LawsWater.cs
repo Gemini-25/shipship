@@ -35,5 +35,23 @@ public static partial class Program
             $"담음 {took:0.0}몰 · 탱크 {tank0:0.0}→{net.WaterTank:0.0} · 장부 {book:0.0}");
         Check("물 보존: 탱크 · 오수 · 냄비 · 공기의 김 · 바닥 물 (+ 음식 속 물 6배)의 합이 끓이고 졸아 눌어도 같다 (조리대 40분)", boiled > 1 && Math.Abs(w1 - w0) < 1e-6 * w0,
             $"졸아든 물 {boiled:0.0}몰 · 합 {w0:0.000} → {w1:0.000}몰 ({w1 - w0:+0.0e0;-0.0e0;0})");
+
+        // 쓴 소화기 채우기 (docs/MIND.md 3단 — 손): 채우는 물은 물탱크에서 · 장부 '소화기에 담았다' · 탱크 + 소화기 물의 합은 같다 · 이산화탄소는 모아 둔 것에서 · 산소는 방 공기에서
+        {
+            var s2 = Worlds.Full(Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend), 1);
+            var n2 = s2.Get<Network>(); var f2 = s2.Get<Field>();
+            s2.Run(3);
+            double tank = n2.WaterTank, b0 = s2.Book.Of(Res.Water, Flow.Refill);
+            double got = n2.FillExtinguisher(s2, 400);
+            double co0 = n2.CO2Store = 50; double gotCo2 = n2.FillCO2(155);
+            int cell = Worlds.At(s2.Layout, 3, 2);
+            double o2Room = s2.Layout.Rooms[s2.Layout.Room[cell]].Cells.Sum(c => f2.Gas(s2.Tables.gO2, c));
+            double gotO2 = n2.FillO2(s2, cell, 60);
+            double o2After = s2.Layout.Rooms[s2.Layout.Room[cell]].Cells.Sum(c => f2.Gas(s2.Tables.gO2, c));
+            Check("소화기 채우기: 물은 물탱크에서 (400몰 · 장부 '소화기에 담았다') · 이산화탄소는 모아 둔 만큼만 (50몰) · 산소는 그 방 공기에서 (방 산소의 5분의 1까지)",
+                Math.Abs(got - 400) < 1e-9 && Math.Abs(tank - n2.WaterTank - got) < 1e-9 && Math.Abs(s2.Book.Of(Res.Water, Flow.Refill) - b0 + got) < 1e-9
+                && Math.Abs(gotCo2 - co0) < 1e-12 && n2.CO2Store == 0 && gotO2 > 0 && gotO2 <= 0.2 * o2Room + 1e-9 && Math.Abs(o2Room - o2After - gotO2) < 1e-6,
+                $"물 {got:0}몰 · 탱크 {tank:0}→{n2.WaterTank:0} · 이산화탄소 {gotCo2:0}몰 · 산소 {gotO2:0.0}몰 (방 {o2Room:0}몰)");
+        }
     }
 }

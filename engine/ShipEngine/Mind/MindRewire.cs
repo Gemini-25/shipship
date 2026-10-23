@@ -26,7 +26,7 @@ public sealed partial class Mind
     private bool PlanPart(Agent a, int dev, int part, int here, List<PlanStep> plan)
     {
         if (HasPart(a, part)) return true;
-        if (a.C.Holding != 255) return false;
+        FreeHands(a, ref here, plan, false);   // 든 것을 먼저 제자리에 (손이 차서 소리 없이 깨지지 않게)
         int src = NearestStock(here, SpareOf(part));
         if (src >= 0)
         {

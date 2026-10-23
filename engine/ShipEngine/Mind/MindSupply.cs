@@ -45,7 +45,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         if (c.Holding != iFrame)
         {
-            if (c.Holding != 255) return false;
+            FreeHands(a, ref here, plan, false);
             int src = NearestStock(here, iFrame);
             if (src < 0) return false;
             plan.Add(Go(L.Furniture[src].Cells[0], 1));
@@ -88,10 +88,11 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int fu = st.Target;
-        if (c.Holding == 255 || fu < 0 || fu >= L.Furniture.Count) { JobDone(a, t); return; }
+        bool stash = st.Arg >= 1;   // 1: 돌려놓기 · 손 비우기 (맡긴 일의 끝이 아니다) · 2: 채운 것을 돌려놓기 (채우기 일감의 끝)
+        if (c.Holding == 255 || fu < 0 || fu >= L.Furniture.Count) { if (stash) Next(a, t); else JobDone(a, t); return; }
         if (Dist(c.Cell, L.Furniture[fu].Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-        Stock[fu * ItemCount + c.Holding]++;
-        c.Holding = 255; c.HoldCharge = 0;
+        StoreHeld(fu, a);
+        if (stash) { Stashed++; if (st.Arg == 2) JobDone(a, t); else Next(a, t); return; }
         Hauled++;
         JobDone(a, t);
     }

@@ -51,8 +51,8 @@ public sealed partial class Mind
                 int k = st.Target * ItemCount + st.Arg;
                 if (Stock[k] <= 0) { Fail(sim, a, "물건이 없다", SnagKind.NoItem, fu.Cells[0], st.Arg); return; }
                 if (c.Holding != 255) DropHeld(a);
-                Stock[k]--;
-                c.Holding = st.Arg; c.HoldCharge = (float)ItemCharge(st.Arg);
+                TakeFrom(st.Target, st.Arg, st.Value == 1, out float charge);   // 남은 양 그대로 (가득 찬 것이 먼저 · 채우기는 쓴 것부터)
+                c.Holding = st.Arg; c.HoldCharge = charge;
                 Next(a, t);
                 return;
             }
@@ -66,6 +66,9 @@ public sealed partial class Mind
             case StepKind.Harvest: HarvestStep(sim, a, st); return;
             case StepKind.Stow: StowStep(sim, a, st); return;
             case StepKind.Put: PutStep(sim, a, st); return;
+            case StepKind.Lay: LayStep(sim, a); return;
+            case StepKind.Gather: GatherStep(sim, a, st); return;
+            case StepKind.Refill: RefillStep(sim, a, st); return;
             case StepKind.Rebuild: RebuildStep(sim, a, st); return;
             case StepKind.Tighten: TightenStep(sim, a, st); return;
             case StepKind.Sanitize: SanitizeStep(sim, a, st); return;
@@ -111,10 +114,10 @@ public sealed partial class Mind
                 {
                     int k = st.Target * ItemCount + st.Arg;
                     if (Stock[k] <= 0 || !a.IsPerson) { Fail(sim, a, st.Arg == iMask ? "마스크가 없다" : "우주복이 없다"); return; }
-                    Stock[k]--;
+                    TakeFrom(st.Target, st.Arg, false, out float o2);   // 남은 산소 그대로
                     ref var body = ref _life![c.Body];
-                    if (st.Arg == iMask) { body.Mask = 1; body.MaskO2 = (float)ItemCharge(st.Arg); MasksWorn++; }
-                    else { body.Suit = 1; body.SuitO2 = (float)ItemCharge(st.Arg); }
+                    if (st.Arg == iMask) { body.Mask = 1; body.MaskO2 = o2; MasksWorn++; }
+                    else { body.Suit = 1; body.SuitO2 = o2; }
                 }
                 Activity(a, "work");
                 if (t - c.StepStart >= Time.Minutes(P.Items[ItemNames[st.Arg]].Minutes)) Next(a, t);
@@ -331,7 +334,7 @@ public sealed partial class Mind
         bool co2 = c.Holding == iCO2;
         if (c.Holding != iExt && !co2 || c.HoldCharge <= 0.5f)
         {
-            if (c.Holding == iExt || co2) UseHeld(sim, a); // 빈 소화기는 버린다
+            if (c.Holding == iExt || co2) { DropHeld(a); Laid++; }   // 빈 소화기는 그 자리에 내려놓는다 (버리지 않는다 — 주워 채운다)
             Fail(sim, a, "소화기가 비었다");
             return;
         }

@@ -79,6 +79,9 @@ public enum GoalKind : byte
     Toilet,     // 화장실 — 변기에 비운다 (대상: 변기 설비 · 없으면 용변 봉투)
     Wash,       // 씻는다 — 샤워 칸 (대상: 샤워 칸 설비 · 없으면 물수건)
     ToiletCare, // 변기 손질 (맡긴 일 — 대상: 변기 설비 · Arg 0 닦기 · 1 뚫기 · 2 오물 통 비우기 · 3 내려놓인 통 주워 비우기 (대상: 칸))
+    Stash,      // 손 비우기 · 돌려놓기 — 든 물건을 제자리(그 물건을 두는 보관함)에 넣는다 (대상: 보관함 설비)
+    Refill,     // 쓴 소화기 · 우주복 · 마스크 채우기 (맡긴 일 — 대상: 보관함 설비 · Arg 물건)
+    Gather,     // 바닥 물건 줍기 → 제자리 (대상: 칸 · Arg 물건)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -109,6 +112,9 @@ public enum StepKind : byte
     Rebuild,   // ⑪ 부서진 설비의 틀을 외장 틀로 새로 짠다 (Target: 장치)
     Tighten,   // ④ 풀린 볼트를 조인다 (Target: 장치)
     Sanitize,  // 변기 손질 (Target: 설비 · Arg 0 닦기 · 1 뚫기 · 2 오물 통 들기 · 3 비울 곳에 쏟기 · 4 내려놓인 통 줍기 (Cell))
+    Lay,       // 든 물건을 그 자리에 내려놓는다 (급할 때 손 비우기)
+    Refill,    // 든 소화기 · 우주복 · 마스크를 채운다 (Target: 채울 곳 설비 · 물탱크 물 · 모은 이산화탄소 · 방 공기의 산소)
+    Gather,    // 바닥 물건을 줍는다 (Cell · Arg: 물건)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
@@ -256,6 +262,9 @@ public struct AgentCore
     public long PlayedAt;
     /// <summary>화장실 · 샤워실 (docs/WASH.md): 마지막으로 변기에 비운 때 · 씻은 때 · 손을 씻은 때.</summary>
     public long ToiletAt, ShoweredAt, HandsAt;
+    /// <summary>손 (docs/MIND.md 3단): 지금 든 물건 · 그것을 든 때 (방금 가져온 것은 한동안 돌려놓지 않는다).</summary>
+    public byte HeldItem;
+    public long HeldSince;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>
@@ -266,6 +275,15 @@ public struct LooseItem
     public int Cell;
     public float Charge;
     public int PlugAt;   // ③ 빨려 붙어 막은 구멍 칸 + 1 (0: 없음)
+}
+
+/// <summary>보관함에 돌려놓은 쓰다 남은 물건 (소화기 물 · 이산화탄소 · 우주복 · 마스크 산소가 덜 찼다) — 꺼낼 때 그 양으로 · 채우기 일감의 대상.</summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct SpentItem
+{
+    public int Furniture;
+    public byte Item;
+    public float Charge;
 }
 
 /// <summary>한동안 다시 고르지 않을 목표 (막혀서 실패한 것).</summary>

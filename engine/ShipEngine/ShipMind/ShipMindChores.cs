@@ -96,6 +96,9 @@ public sealed partial class ShipMind
         }
         // 헌 부품 나르기 (⑪ 공급 사슬 (다)): 장치 곁에 남은 헌 부품을 정제기로 (로봇 먼저 · 사람은 누구나)
         PlanHauls(sim);
+        // 채우기 · 줍기 (docs/MIND.md 3단 — 손): 보관함 무게 센서로 덜 찬 소화기 · 우주복 · 마스크를 안다 · 카메라로 바닥의 큰 물건을 본다
+        PlanRefills(sim);
+        PlanGathers(sim);
         // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
         foreach (var room in L.Rooms)
         {
@@ -120,8 +123,46 @@ public sealed partial class ShipMind
         GoalKind.Haul => HaulDone(j.Arg, j.Agent),
         GoalKind.Tighten => _net == null || j.Target >= _net.Loose.Length || _net.Loose[j.Target] < Network.LooseFelt,
         GoalKind.ToiletCare => CareDone(j),
+        GoalKind.Refill => j.Target >= L.Furniture.Count || _mind!.SpentIn(j.Target, (byte)j.Arg) <= 0 && (j.Agent < 0 || j.Agent >= _mind.Agents.Count || _mind.Agents[j.Agent].C.Holding != j.Arg),
+        GoalKind.Gather => GatherDone(j.Target, j.Arg, j.Agent),
         _ => true,
     };
+
+    /// <summary>채우기 일감: 쓰다 남은 것이 든 보관함마다 하나 (물건마다) — 채울 곳이 있는 것만 (로봇 먼저 · 사람은 누구나).</summary>
+    private void PlanRefills(Sim sim)
+    {
+        var mind = _mind!;
+        foreach (var sp in mind.Spent)
+        {
+            int fu = sp.Furniture;
+            if (fu < 0 || fu >= L.Furniture.Count || mind.SpentIn(fu, sp.Item) <= 0) continue;
+            if (Jobs.Any(j => j.Kind == GoalKind.Refill && j.Target == fu && j.Arg == sp.Item)) continue;
+            if (mind.RefillPoint(sp.Item, L.Furniture[fu].Cells[0], fu) < 0) continue;
+            Post(sim, new Job { Kind = GoalKind.Refill, Target = fu, Arg = sp.Item }, L.Furniture[fu].Cells[0], person => true);
+        }
+    }
+
+    /// <summary>줍기 일감: 카메라에 보이는 바닥의 큰 물건 (5kg 넘게 — 소화기 · 우주복 · 방화 담요 …) · 둘 곳이 있는 것 (작은 물건은 본 로봇이 스스로 줍는다).</summary>
+    private void PlanGathers(Sim sim)
+    {
+        var mind = _mind!;
+        foreach (var x in mind.Loose)
+        {
+            if (x.PlugAt != 0 || x.Item == mind.iWaste || mind.ItemKg(x.Item) < 5 || mind.HomeFor(x.Item, x.Cell) < 0) continue;
+            int room = L.Room[x.Cell];
+            if (room < 0 || _net != null && !_net.RoomPowered(room)) continue;   // 카메라가 꺼진 방은 모른다
+            if (Jobs.Any(j => j.Kind == GoalKind.Gather && j.Target == x.Cell && j.Arg == x.Item)) continue;
+            Post(sim, new Job { Kind = GoalKind.Gather, Target = x.Cell, Arg = x.Item }, x.Cell, person => true);
+        }
+    }
+
+    /// <summary>줍기 끝: 그 칸에 그 물건이 없고 맡은 이도 들고 있지 않다 (제자리에 넣었다).</summary>
+    private bool GatherDone(int cell, int item, int agent)
+    {
+        var mind = _mind!;
+        foreach (var x in mind.Loose) if (x.Cell == cell && x.Item == item && x.PlugAt == 0) return false;
+        return agent < 0 || agent >= mind.Agents.Count || mind.Agents[agent].C.Holding != item;
+    }
 
     /// <summary>나르기 끝: 놓인 곳에 헌 부품이 없고 맡은 이도 들고 있지 않다.</summary>
     private bool HaulDone(int arg, int agent)
@@ -156,7 +197,8 @@ public sealed partial class ShipMind
     }
 
     private static bool ChoreBusy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
-        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare;
+        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare
+        or GoalKind.Refill or GoalKind.Gather;
 
     public readonly List<string> Blocks = new();
     public readonly List<int> BlockCauses = new();        // 막힌 곳마다 원인 마디 (⑪ — 같은 막힘이면 같은 마디 · 망가진 설비 때문이면 그 고장의 원인에 잇는다)
