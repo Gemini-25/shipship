@@ -271,6 +271,50 @@ public static partial class Program
         Check("관전 화면: 틱이 드물면 걸음 사이를 메운다 — 한 틱에 지나간 칸들을 따라 사람 · 로봇이 칸 사이 자리에 그려진다",
             partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
         ViewRules2(lay, dt);
+        ViewRules3(lay, dt);
+    }
+
+    /// <summary>화면 바퀴 3 — 4단 보이게 하는 틀: 속말 · (뒤에) 풍선 · 로봇 칩 · 카드 · 주컴퓨터 말 창 (세계 그대로).</summary>
+    private static void ViewRules3(Layout lay, double dt)
+    {
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        // 속말 첫판: 같은 처지(몹시 목마름)라도 말투가 다른 두 사람은 다른 머릿속 말 · 같은 사람은 같은 말 · 사람 판에도 같은 글 · 막히면 그 까닭 · 금지어 없음 · 세계 그대로
+        {
+            Sim Make()
+            {
+                var s = Worlds.Full(lay, 51);
+                var m = s.Get<Mind>();
+                int a = m.AddPerson(s, At(3, 2)), b = m.AddPerson(s, At(20, 2));
+                m[a].C.Agree = 0.9f; m[a].C.Extra = 0.6f; m[b].C.Agree = 0.2f; m[b].C.Extra = 0.2f;
+                s.Run(3);
+                return s;
+            }
+            var show = new LiveShow(Make(), "시험호") { FrameBudget = 1000 };
+            var twin = Make();
+            var sm = show.Sim.Get<Mind>(); var sl = show.Sim.Get<Life>();
+            int pa = sm.Agents[0].Id, pb = sm.Agents[1].Id;
+            for (int i = 0; i < 40; i++) show.Advance(dt);
+            bool sameGoal = sm[pa].C.Goal == sm[pb].C.Goal;
+            string Thought(int id) { show.SelectAgent(id); return show.Card().FirstOrDefault(l => l.StartsWith("생각:")) ?? ""; }
+            string ta = Thought(pa), tb = Thought(pb), ta2 = Thought(pa);
+            show.SelectAgent(-1);
+            show.TogglePanel(PanelKind.People);
+            var pf = show.Render(); show.Recycle(pf.Img);
+            bool inPanel = pf.PanelRows.Any(r => r.Sub.Contains(ta["생각: ".Length..]));
+            show.TogglePanel(PanelKind.People);
+            // 막힘: 그 목표에서 막혔다 (문이 끼었다) → '생각:'에 그 까닭
+            ref var cb = ref sm[pb].C;
+            cb.Snag = SnagKind.DoorJammed; cb.SnagTick = show.Sim.Tick; cb.SnagGoal = cb.Goal;
+            string tb2 = Thought(pb);
+            show.SelectAgent(-1);
+            twin.Run(show.Sim.Tick - twin.Tick);
+            var tw = twin.Get<Mind>()[pb]; tw.C.Snag = SnagKind.DoorJammed; tw.C.SnagTick = twin.Tick; tw.C.SnagGoal = tw.C.Goal;
+            bool same = show.Sim.Save().AsSpan().SequenceEqual(twin.Save());
+            bool clean = new[] { ta, tb, tb2 }.All(x => ShipView.TextLint.Bad(x["생각: ".Length..]) == null);
+            Check("속말 첫판: 카드와 사람 판의 '생각:'이 그 사람 말투의 머릿속 말 — 같은 목표라도 말투가 다른 두 사람(살가움 · 무뚝뚝)은 다른 글 · 같은 사람은 같은 글 · 막히면 그 까닭 ('문이 끼었다') · 금지어 없음 · 화면 없이 돌린 세계와 바이트까지 같다",
+                sameGoal && ta.Length > 4 && ta != tb && ta == ta2 && inPanel && tb2.Contains("문이 끼었다") && clean && same,
+                $"같은 목표 {sameGoal} ({sm[pa].C.Goal}) · 살가움 '{ta}' · 무뚝뚝 '{tb}' · 다시 '{ta2}' · 사람 판 {inPanel} · 막힘 '{tb2}' · 금지어 없음 {clean} · 같음 {same}");
+        }
     }
 
     /// <summary>화면 바퀴 2 — 새 엔진에 맞게: 사슬 판 · 사람 판 · 주컴퓨터 판의 지금 사건 · 겹쳐 보기.</summary>

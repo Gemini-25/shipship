@@ -472,9 +472,11 @@ public sealed class LiveShow
                 return lines.ToArray();
             }
             lines.Add("사람됨: " + Persona(mind, w.Find<Society>(), a));   // 4단: 누가 어떤 사람인지 (성격 낱말 · 꿈 · 즐겨 하는 것 · 짝 — 숫자는 내지 않는다)
-            lines.Add("생각: " + (b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : mind.Thought(a.Id)));
+            string inner = b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : Inner.Of(w, mind, a);   // 4단 속말: 그 사람 말투의 머릿속 말
+            lines.Add("생각: " + inner);
             string pondered = mind.RecentThought(a.Id, w.Tick, Time.Hours(1));   // 판단 엔진: 막혀서 한 궁리 (한 시간 안)
-            if (pondered.Length > 0) lines.Add("궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered));
+            if (pondered.StartsWith("생각: ")) pondered = pondered[4..];
+            if (pondered.Length > 0 && !inner.Contains(pondered)) lines.Add("궁리: " + TextLint.Clean(pondered));
             string state = b.Conscious == 0 ? "쓰러짐" : b.Asleep != 0 ? "잠" : "깨어 있음";
             lines.Add($"몸: {state} · 핏속 산소 {b.SpO2 * 100:0}% · 체온 {b.CoreK - 273.15:0.0}℃{(b.Suit != 0 ? " · 우주복" : "")}");
             var hurt = new List<string>();
@@ -932,8 +934,9 @@ public sealed class LiveShow
                     }
                     if (so?.PastLine(id) is { Length: > 0 } past) near.Add(past);   // ⑫ 출항 과거사
                     string pondered = b.Alive != 0 ? mind.RecentThought(id, w.Tick, Time.Hours(1)) : "";
+                    string thinks = b.Alive == 0 ? "" : b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : Inner.Of(w, mind, a);   // 4단 속말 (카드와 같은 글)
                     rows.Add(new PanelRow($"{mind.NameOf(id)}{(so?.NickOf(id) is string nk ? $" '{nk}'" : "")} — {state}",
-                        $"{Persona(mind, so, a)}\n몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
+                        $"{Persona(mind, so, a)}{(thinks.Length > 0 ? "\n생각: " + thinks : "")}\n몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger,
                         slots.GetValueOrDefault(id, -1), bars));
                 }
                 break;
