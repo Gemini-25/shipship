@@ -94,7 +94,7 @@ public sealed partial class Mind
         {
             c.CookOn = d + 1;
             if (_net.On[d] == 0) _net.SetOn(d, true);
-            _net.PanWater[d] = Math.Max(_net.PanWater[d], 55.5f);
+            _net.FillPan(sim, d);
         }
         F.AddGas(_net.Devices[d].Cell, T.gAroma, 1e-4, F.Temp(_net.Devices[d].Cell)); // 음식 냄새 (배고픈 이가 끌려온다)
         if (done) { Cooked++; if (a.IsPerson) a.C.SkCook = Math.Min(1, a.C.SkCook + 0.003f * Practice(a.C, "조리") * UseSkill(a, 4, sim.Tick)); FinishCook(sim, a, false); }

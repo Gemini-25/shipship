@@ -250,6 +250,18 @@ public sealed partial class Network : IEngine
     // ───────────────────────── 요청 ─────────────────────────
 
     public void SetOn(int device, bool on) { On[device] = (byte)(on ? 1 : 0); if (!on) OnCause[device] = 0; }
+    /// <summary>냄비에 물을 담는다 (요청 — 물탱크에서 1L까지 · 탱크에 없으면 있는 만큼). 담은 몰을 돌려준다 (검토 ④-3: 전에는 없는 데서 하루 5L가 생겼다).</summary>
+    public double FillPan(Sim sim, int device, double mol = PanFill)
+    {
+        double take = Math.Min(Math.Max(0, mol - PanWater[device]), Math.Max(0, WaterTank));
+        if (take <= 0) return 0;
+        float before = PanWater[device];
+        PanWater[device] = (float)(before + take);
+        take = PanWater[device] - (double)before;   // 냄비 눈금은 float — 탱크에서 뺀 몫과 바이트까지 같게
+        WaterTank -= take; sim.Book.Add(Res.Water, Flow.Cooking, -take);
+        return take;
+    }
+    public const double PanFill = 55.5;   // 냄비 물 1L (몰)
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; if (BreakerWeld[feeder] != 0) BreakerStuck[feeder] = 1; }   // 상한 접점은 올리는 순간 눌어붙는다
     /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>
     public void PullFeeder(int feeder) { Breaker[feeder] = 0; BreakerStuck[feeder] = 0; OverSec[feeder] = 0; }
