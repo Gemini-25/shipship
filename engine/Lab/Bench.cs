@@ -30,11 +30,42 @@ public static partial class Program
     /// <summary>--fingerprint: 배 몇 척을 몇 분 돌린 세계 지문 — 속도만 고친 뒤 결과가 한 비트도 안 바뀌었는지 (고치기 전과 견준다).</summary>
     private static void Fingerprints()
     {
+        if (Environment.GetCommandLineArgs().Contains("flow")) { FlowPrints(); return; }
         foreach (var (ship, people, robots, ticks) in new[] { ("Didim", 6, 2, 3000), ("Salpim", 12, 4, 1500), ("Saetteul", 40, 10, 600), ("Hannuri", 100, 30, 300) })
         {
             var s = ShipWorld.Crewed(ship, 7, people, robots);
             s.Run(ticks);
             Console.WriteLine($"{ship} {people}/{robots} {ticks}틱 {s.Hash():x16}");
+        }
+    }
+
+    /// <summary>
+    /// --fingerprint flow: 사실 흐름 지문 — 세계에 일어난 일(사실의 틱 · 종류 · 칸 · 누가 · 상대 · 원인 글) · 원인 마디 수 · 행동(틱마다 사람 · 로봇의 칸 · 목표 · 대상)만 견준다 (항해 중).
+    /// 무게만 바뀌는 고침(예: 소리 누수 — 찍기 바이트가 줄어 `--fingerprint`는 바뀐다)에서 '일어난 일은 한 비트도 안 바뀌었다'를 보인다 (함장 결정 · REVIEW.md 질문 26).
+    /// </summary>
+    private static void FlowPrints()
+    {
+        foreach (var (ship, people, robots, ticks) in new[] { ("Didim", 6, 2, 36000), ("Salpim", 12, 4, 12000), ("Saetteul", 40, 10, 3000) })
+        {
+            var s = ShipWorld.Crewed(ship, 7, people, robots);
+            ShipWorld.Embark(s, ShipWorld.DefaultRoute);   // 항해 중 — 자연 사건 · 사고가 난다
+            var mind = s.Get<Mind>();
+            ulong h = 1469598103934665603UL, act = 1469598103934665603UL; long cursor = 0, n = 0;
+            void Mix(long v) { h ^= (ulong)v; h *= 1099511628211UL; }
+            void Act(long v) { act ^= (ulong)v; act *= 1099511628211UL; }
+            for (int t = 0; t < ticks; t++)
+            {
+                s.Step();
+                foreach (var a in mind.Agents) { Act(a.C.Cell); Act((long)a.C.Goal); Act(a.C.GoalTarget); }   // 행동: 사람 · 로봇이 어디서 무엇을 하나 (틱마다)
+                foreach (var f in s.Facts.Since(cursor))
+                {
+                    Mix(f.Tick); Mix((long)f.Kind); Mix(f.Cell); Mix(f.Actor); Mix(f.Other); Mix(BitConverter.SingleToInt32Bits(f.Size));
+                    if (f.Cause != 0) foreach (char ch in s.Causes.Text(f.Cause)) Mix(ch);
+                    n++;
+                }
+                cursor = s.Facts.Total;
+            }
+            Console.WriteLine($"{ship} {people}/{robots} {ticks}틱 사실 {n} · 원인 마디 {s.Causes.Count} · 흐름 {h:x16} · 행동 {act:x16} · 세계 {s.Hash():x16}");
         }
     }
 

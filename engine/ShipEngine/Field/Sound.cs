@@ -268,6 +268,19 @@ public sealed class Sound : IEngine
         if (h.Db > _peakDb[c] || _peakTick[c] < sim.Tick - PeakWindow) { _peakDb[c] = h.Db; _peakTick[c] = sim.Tick; _peakCause[c] = h.Cause; }
     }
 
+    /// <summary>감각이 읽을 몇 틱(KeepTicks)보다 오래 남은 소리 수와 가장 오래된 것의 나이 (법칙 '긴 하루' — 0이어야 한다).</summary>
+    public (int n, long age) Stale(long now)
+    {
+        int n = 0; long age = 0;
+        foreach (var list in _heard.Values)
+            foreach (var h in list)
+                if (now - h.Tick > KeepTicks + 1) { n++; age = Math.Max(age, now - h.Tick); }
+        return (n, age);
+    }
+
+    /// <summary>지금 남아 있는 들린 소리 수.</summary>
+    public int HeardCount { get { int n = 0; foreach (var l in _heard.Values) n += l.Count; return n; } }
+
     /// <summary>이 칸에서 들린 소리들 (최근 틱).</summary>
     public IReadOnlyList<Heard> At(int cell) => _heard.TryGetValue(cell, out var l) ? l : Array.Empty<Heard>();
 
@@ -290,6 +303,7 @@ public sealed class Sound : IEngine
             {
                 list.RemoveAll(h => h.Tick <= sim.Tick - KeepTicks);
                 if (list.Count == 0) _heard.Remove(c);
+                else _order.Add((sim.Tick, c));   // 남은 소리가 있으면 다시 줄에 선다 — 안 그러면 그 칸은 다시 정리되지 않는다 (법칙 '긴 하루')
             }
             k++;
         }

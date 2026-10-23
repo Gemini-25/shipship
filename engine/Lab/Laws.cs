@@ -372,6 +372,16 @@ public static partial class Program
             s.Step(); s.Step(); s.Step();
             snd.Emit(s, a, 120, SoundKind.Bang);
             Check("진공에서는 소리가 전해지지 않는다", snd.Loudest(near) == 0 && snd.Loudest(other) == 0, $"{snd.Loudest(near):0} / {snd.Loudest(other):0}dB");
+            // 긴 하루: 들린 소리는 감각이 읽을 몇 틱만 남는다 — 사람이 사는 배를 20분 돌려도 지난 소리가 쌓이지 않는다
+            //   (검토 ⑤-1: 지운 뒤 남은 목록을 다시 줄에 세우지 않아 그 칸이 다시는 정리되지 않았다 — 찍기가 하루 약 23MB씩 자랐다)
+            {
+                var sd = ShipWorld.Crewed("Didim", 7, 6, 2);
+                var sndD = sd.Get<Sound>();
+                int worst = 0; long worstAge = 0;
+                for (int k = 0; k < 500; k++) { sd.Step(); var (n, age) = sndD.Stale(sd.Tick); if (n > worst) { worst = n; worstAge = age; } }
+                Check("긴 하루: 지난 소리가 쌓이지 않는다 (디딤호 20분 · 틱마다 — 감각이 읽을 몇 틱보다 오래된 소리 0)", worst == 0,
+                    $"가장 많을 때 {worst}개 (가장 오래된 것 {worstAge}틱 전) · 지금 남은 소리 {sndD.HeardCount}개");
+            }
         }
 
         if (Do("모든엔진"))
