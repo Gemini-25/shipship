@@ -5,7 +5,7 @@ namespace Lab;
 
 /// <summary>
 /// 5단 A1 관찰 장면 '화장실 그림' — 새뜰호(40명 · 로봇 10)의 아침 06:00~09:00: 쓰는 동안 닫힌 샤워 커튼 · 흐르는 물줄기 · 변기의 '사용 금지' 불 ·
-/// 넘친 변기 발치의 물이 그림에 실제로 나오는가 (1분마다 세계를 보고 · 처음 몇 장을 찍는다 — 재미 · 빈도는 재지 않는다).
+/// 넘친 변기 발치의 물 · 뜨거운 물 위로 오르는 김 (5단 A2)이 그림에 실제로 나오는가 (1분마다 세계를 보고 · 처음 몇 장을 찍는다 — 재미 · 빈도는 재지 않는다).
 /// 차림 (원인 마디 Setup): 새벽에 변기 하나가 막혀 모르고 쓴 이가 넘쳤다 (막힘 · 발치의 물) · 어젯밤 늦게까지 정비한 여섯이 씻지 못하고 잤다 (더러움).
 /// </summary>
 public static partial class Program
@@ -29,8 +29,8 @@ public static partial class Program
         var painter = new Painter(L);
         var page = new System.Text.StringBuilder();
         int k = 0, looks = 0;
-        var seen = new int[5]; var shots = new int[5];   // 커튼 닫힘 · 샤워 물줄기 · 사용 금지 불 · 발치 물 · 손 씻는 물줄기
-        string[] what = { "커튼 닫힌 샤워 칸", "샤워 물줄기", "'사용 금지' 불 켜진 변기", "설비 발치의 물", "손 씻는 물줄기" };
+        var seen = new int[6]; var shots = new int[6];   // 커튼 닫힘 · 샤워 물줄기 · 사용 금지 불 · 발치 물 · 손 씻는 물줄기 · 김 (뜨거운 물)
+        string[] what = { "커튼 닫힌 샤워 칸", "샤워 물줄기", "'사용 금지' 불 켜진 변기", "설비 발치의 물", "손 씻는 물줄기", "김이 오르는 샤워 칸" };
         void Shot(int cell, string text, int D = 32)
         {
             int vw = D == 32 ? 29 : 58, vh = D == 32 ? 19 : 38;
@@ -48,7 +48,7 @@ public static partial class Program
             s.Step();
             if (s.Tick % 25 != 0) continue;   // 1분마다 세계를 본다
             looks++;
-            var at = new int[] { -1, -1, -1, -1, -1 };
+            var at = new int[] { -1, -1, -1, -1, -1, -1 };
             foreach (var a in m.Agents)
             {
                 if (!a.IsPerson || a.C.StepIndex >= a.Plan.Count) continue;
@@ -57,10 +57,10 @@ public static partial class Program
                 if ((UseKind)st.Arg == UseKind.Shower && L.Furniture[st.Target].Cells[0] == a.C.Cell) at[0] = a.C.Cell;
                 if ((UseKind)st.Arg == UseKind.Hands && L.Furniture[st.Target].Type == "Sink" && net.WaterAt(st.Target) && net.WaterTank > 0) at[4] = L.Furniture[st.Target].Cells[0];
             }
-            foreach (var (fu, dev) in showers) if (dev >= 0 && net.ShowerRunning(dev)) at[1] = fu.Cells[0];
+            foreach (var (fu, dev) in showers) if (dev >= 0 && net.ShowerRunning(dev)) { at[1] = fu.Cells[0]; if (net.Working(dev)) at[5] = fu.Cells[0]; }   // 온수기가 돌면 김
             foreach (var fu in toilets) if (m.WashSign[fu.Id] != 0) at[2] = fu.Cells[0];
             foreach (var fu in wash) if (f.Stored(f.T.sWater, fu.Cells[0]) > 2) at[3] = fu.Cells[0];
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
             {
                 if (at[i] < 0) continue;
                 seen[i]++;
@@ -69,6 +69,6 @@ public static partial class Program
         }
         Shot(clogged.Cells[0], $"09:00 넓은 보기 16도트 — 막힌 변기 {(life.Clogged[clogged.Id] == 0 ? "뚫렸다" : "그대로")} · 발치 물 {f.Stored(f.T.sWater, clogged.Cells[0]):0.0}몰", 16);
         File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>washview</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:464px}}img{{width:464px;image-rendering:pixelated}}</style>{page}");
-        Console.WriteLine($"  washview: 1분마다 {looks}번 본 가운데 커튼 닫힌 장 {seen[0]} · 물줄기 장 {seen[1]} · 불 켜진 변기 {seen[2]} · 발치 물 {seen[3]} (손 씻는 물줄기 {seen[4]}) · {k}장 → {dir}");
+        Console.WriteLine($"  washview: 1분마다 {looks}번 본 가운데 커튼 닫힌 장 {seen[0]} · 물줄기 장 {seen[1]} · 불 켜진 변기 {seen[2]} · 발치 물 {seen[3]} · 김 장 {seen[5]} (손 씻는 물줄기 {seen[4]}) · {k}장 → {dir}");
     }
 }

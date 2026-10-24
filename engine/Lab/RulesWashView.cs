@@ -9,6 +9,7 @@ namespace Lab;
 /// 변기는 때 · 막힘 · '사용 금지' 불을 읽고 · 설비 칸에 고인 물은 발치에 웅덩이로 (많이 고이면 설비가 물에 선다) · 세면대는 손 씻는 동안 물줄기.
 /// 그림은 세계를 읽기만 한다 — 모두 기준 그림과의 차로 센다 (커튼 윗단 · 도기가 이미 밝기 230을 넘는다).
 /// 빛깔은 빛 끈 그림으로 견주고, 게임이 쓰는 빛 켠 그림 · 넓은 보기(16 · 8도트)에도 같은 것이 나오는지 본다 (A1 검토: 그 길들에 시험이 없었다).
+/// 5단 A2: 김 (뜨거운 물이 흐르면 샤워기 위로 — 찬물은 없다) · 습도 0.9 넘는 바닥의 흰 안개 · 세면대 칸 0.85 넘으면 거울 김 서림 (세계 습도를 읽기만 — 0.4는 그대로).
 /// </summary>
 public static partial class Program
 {
@@ -23,7 +24,7 @@ public static partial class Program
     private static void WashViewRules()
     {
         if (!Do("화장실 그림")) return;
-        Console.WriteLine("\n[화장실 그림 — 샤워 칸 커튼 · 물줄기 · 변기 때 · 막힘 · 사용 금지 불 · 발치 물 · 세면대 물줄기 (기준 그림과의 차)]");
+        Console.WriteLine("\n[화장실 그림 — 샤워 칸 커튼 · 물줄기 · 변기 때 · 막힘 · 사용 금지 불 · 발치 물 · 세면대 물줄기 · 김 · 안개 · 거울 김 서림 (기준 그림과의 차)]");
         var legend = new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery", ['w'] = "WaterRecycler" };
         var lay = Worlds.Ascii(WashViewShip, legend);
         var s = Worlds.Full(lay, 3);
@@ -228,6 +229,95 @@ public static partial class Program
             bool cutBack = Same(k2F, k0F, sink, KR, 10, 14, 23, 28, 16);
             Check("화장실 그림: 넓은 보기 16도트도 — 손 씻는 동안 수도꼭지 아래 물빛이 늘고 · 물관이 끊기면 기준 그림 그대로",
                 fb1 >= 2 && cutBack, $"기준 그림보다 푸른 점 {fb1} · 끊기면 그대로 {cutBack}");
+        }
+
+        // ── 김 · 습한 방의 안개 · 거울 김 서림 (5단 A2): 뜨거운 물이 흐르면 샤워기 위로 흰 김 · 습도 0.9 넘는 바닥 칸은 흰 막 · 세면대 칸이 0.85를 넘으면 거울이 뿌옇다 (세계 습도를 읽기만 · 장마다) ──
+        {
+            var shower = lay.Furniture.First(x => x.Type == "Shower");
+            var sink = lay.Furniture.First(x => x.Type == "Sink");
+            int sc = shower.Cells[0], kc = sink.Cells[0], dev = net.Devices.First(d => d.Furniture == shower.Id).Id;
+            const int SR = 14, KR = 10;
+            var room = lay.Rooms.First(r => r.Cells.Contains(sc));
+            var free = room.Cells.Where(c => lay.Kind[c] == CellKind.Floor && lay.FurnitureAt[c] < 0).ToArray();   // 가구 없는 바닥 칸
+            static int Lum(Rgba q) => (q.R + q.G + q.B) / 3;
+            static bool White(Rgba q) => q.R > 230 && q.G > 230 && q.B > 230;   // 흰 점 (물줄기 · 물빛 타일은 붉은 기가 230에 못 미친다)
+            // 샤워기 위 띠: 샤워 칸과 양옆 (3칸 폭) · 샤워 칸 위 두 칸부터 샤워기(몸 그림 10줄 — 칸 위 4도트) 바로 위까지 — 물줄기(12줄부터)는 8도트로 줄여도 들지 않는다
+            (int xa, int ya, int xb, int yb) BandOf(int D) => ((lay.X(sc) - 1) * D, (lay.Y(sc) - 2) * D, (lay.X(sc) + 2) * D, (lay.Y(sc) * T - (SR - 10) - 1) * D / T);
+            int Band(Img im, Func<Rgba, bool> pick)
+            {
+                var (xa, ya, xb, yb) = BandOf(32);
+                int n = 0;
+                for (int y = ya; y < yb; y++) for (int x = xa; x < xb; x++) if (pick(im.Get(x, y))) n++;
+                return n;
+            }
+            int Brighter(Img a, Img b, int D)   // 띠 안에서 기준 그림보다 20 넘게 밝아진 점
+            {
+                var (xa, ya, xb, yb) = BandOf(D);
+                int n = 0;
+                for (int y = ya; y < yb; y++) for (int x = xa; x < xb; x++) if (Lum(a.Get(x, y)) - Lum(b.Get(x, y)) >= 20) n++;
+                return n;
+            }
+            double FloorMean(Img im, int D)   // 가구 없는 바닥 칸의 밝기 평균
+            {
+                long sum = 0, n = 0;
+                foreach (int c in free)
+                    for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) { sum += Lum(im.Get(lay.X(c) * D + x, lay.Y(c) * D + y)); n++; }
+                return (double)sum / Math.Max(1, n);
+            }
+            bool SameRoom(Img a, Img b, int D)
+            {
+                foreach (int c in room.Cells)
+                    for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) if (!a.Get(lay.X(c) * D + x, lay.Y(c) * D + y).Equals(b.Get(lay.X(c) * D + x, lay.Y(c) * D + y))) return false;
+                return true;
+            }
+            // 방 칸의 수증기를 상대 습도 rh로 (RulesCracks 응력 부식의 식 — 칸 온도로)
+            void Humid(double rh)
+            {
+                foreach (int c in room.Cells)
+                {
+                    double t = f.Temp(c), want = rh * Water.SatKPa(t) * 1000 * Field.CellVolume / (Field.R * t), have = f.Gas(f.T.gH2O, c);
+                    if (want > have) f.AddGas(c, f.T.gH2O, want - have, t); else f.RemoveGas(c, f.T.gH2O, have - want);
+                }
+            }
+            double rh0 = f.RelHumidity(sc);
+            // (a) 사람 없이 밸브와 온수기를 켜고 3틱 (전기가 들어 온수기가 돈다 — 주컴퓨터가 빈 샤워 칸을 잠그는 2분보다 짧다)
+            net.SetValve(dev, true); net.SetOn(dev, true);
+            s.Run(3);
+            bool hot = net.ShowerRunning(dev) && net.Working(dev);
+            var hotI = Shot(); var hotF = Far(); var hot8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var hotL = Lit();
+            net.SetValve(dev, false);   // 밸브를 닫은 기준 (같은 틱 — 그림만)
+            var offI = Shot(); var offF = Far(); var off8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var offL = Lit();
+            // (b) 온수기를 끈 찬물: 물줄기는 흐르고 김은 없다
+            net.SetValve(dev, true); net.SetOn(dev, false);
+            bool cold = net.ShowerRunning(dev) && !net.Working(dev);
+            var coldI = Shot(); var coldF = Far();
+            net.SetValve(dev, false);
+            int wh = Band(hotI, White), w0 = Band(offI, White), wc = Band(coldI, White);
+            int sp0 = Box(offI, shower, SR, 0, 0, T, T + SR, Spray), spc = Box(coldI, shower, SR, 0, 0, T, T + SR, Spray);
+            Check("화장실 그림: 김 — 밸브와 온수기를 켜고 3틱 (사람 없이) 샤워기 위로 흰 김이 오른다 · 온수기를 끈 찬물은 김 없이 물줄기만",
+                hot && cold && wh > w0 + 20 && wc == w0 && spc >= sp0 + 40, $"습도 {rh0:0.00} · 더운 물 {hot} · 흰 점 잠김 {w0} → 더운 물 {wh} · 찬물 {wc} · 찬물 물줄기 물빛 {sp0} → {spc}");
+            int bf = Brighter(hotF, offF, 16), b8 = Brighter(hot8, off8, 8), bl = Brighter(hotL, offL, 32), bc = Brighter(coldF, offF, 16);
+            Check("화장실 그림: 김 — 빛 켠 그림 (게임이 쓰는 길) · 넓은 보기 16 · 8도트도 샤워기 위가 밝아진다 · 찬물은 그대로",
+                bl >= 20 && bf >= 6 && b8 >= 2 && bc == 0, $"밝아진 점 빛 켬 {bl} · 16도트 {bf} · 8도트 {b8} · 찬물 16도트 {bc}");
+            // (c) 방 칸을 습도 0.97로: 바닥에 흰 막 · 거울이 뿌옇다 · (d) 0.4: 그대로
+            int Mirror(Img im) => Box(im, sink, KR, 7, 1, 25, 10, q => Lum(q) > 230);
+            var dry = Shot(); var dryF = Far(); var dry8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var dryL = Lit();
+            Humid(0.97);
+            double rhW = f.RelHumidity(kc);
+            var wet = Shot(); var wetF = Far(); var wet8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var wetL = Lit();
+            Humid(0.4);
+            double rhL = f.RelHumidity(kc);
+            var low = Shot(); var lowF = Far(); var low8 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Humid(rh0);
+            double m0 = FloorMean(dry, 32), m1 = FloorMean(wet, 32);
+            int g0 = Mirror(dry), g1 = Mirror(wet);
+            bool lowSame = SameRoom(low, dry, 32) && SameRoom(lowF, dryF, 16) && SameRoom(low8, dry8, 8);
+            Check("화장실 그림: 습한 방 (습도 0.97) — 바닥에 흰 안개 (가구 없는 바닥 칸 밝기 평균 +8 넘게) · 세면대 거울이 뿌옇다 · 습도 0.4는 그대로 (32 · 16 · 8도트)",
+                rhW > 0.95 && rhL < 0.42 && m1 > m0 + 8 && g1 > g0 + 10 && lowSame,
+                $"습도 {rhW:0.00} · 바닥 밝기 {m0:0.0} → {m1:0.0} · 거울 밝은 점 {g0} → {g1} · 습도 {rhL:0.00} 그대로 {lowSame}");
+            double f0 = FloorMean(dryF, 16), f1 = FloorMean(wetF, 16), e0 = FloorMean(dry8, 8), e1 = FloorMean(wet8, 8), l0 = FloorMean(dryL, 32), l1 = FloorMean(wetL, 32);
+            Check("화장실 그림: 습한 방 — 빛 켠 그림 · 넓은 보기 16 · 8도트도 바닥에 흰 안개",
+                l1 > l0 + 4 && f1 > f0 + 8 && e1 > e0 + 8, $"바닥 밝기 빛 켬 {l0:0.0} → {l1:0.0} · 16도트 {f0:0.0} → {f1:0.0} · 8도트 {e0:0.0} → {e1:0.0}");
         }
         Painter.FarBakeMs = bakeMs; Painter.FarBakeMax = bakeMax;
     }

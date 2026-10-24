@@ -174,6 +174,16 @@ public sealed partial class Field : IEngine
         return n > 1e-12 ? Pressure(i) * N[i * G + g] / n : 0;
     }
 
+    /// <summary>상대 습도 (수증기 분압 / 그 온도의 포화 수증기압 — Life.MoldStep과 같은 식 · 칸을 한 번 훑는다). 읽기만 — 화면의 김 · 안개가 쓴다
+    /// (월드의 같은 식 일곱 곳은 그대로 둔다 — 지문).</summary>
+    public double RelHumidity(int i)
+    {
+        double n = Read(i, out double gasC, out double kPa);
+        double t = gasC > 1e-6 ? U[i] / gasC : Ts[i];
+        double p = n > 1e-12 ? kPa * N[i * G + T.gH2O] / n : 0;
+        return p / Math.Max(1e-6, Water.SatKPa(Math.Max(250, t)));
+    }
+
     /// <summary>몰 분율 → ppm.</summary>
     public double Ppm(int g, int i)
     {

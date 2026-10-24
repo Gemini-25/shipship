@@ -757,6 +757,9 @@ public sealed partial class Painter
             }
 
         lt = Lap("떠 있는 물방울", lt);
+        // ── 김 · 습한 방의 안개 · 거울 김 서림 (5단 A2 — 세계 습도를 읽기만 · 장마다 · 사람 위에) ──
+        WashAir(img, f, net, x0, y0, w, h, frame);
+        lt = Lap("김 · 안개", lt);
         // ── 새는 공기 줄기 (칸 바람이 빠른 칸만) ──
         AirJets(img, f, x0, y0, w, h, frame);
         lt = Lap("새는 공기 줄기", lt);

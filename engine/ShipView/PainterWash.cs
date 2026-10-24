@@ -9,6 +9,8 @@ namespace ShipView;
 /// 5단 A1 — 세계를 읽는다 (읽기만): 변기 몸은 때 3단 × 막힘 (굽는다) · 장마다 덧그림 — 샤워 칸 물줄기 (밸브 · 물관 · 물탱크) · 세면대 물줄기 (손 씻는 걸음 · 물관) ·
 /// 변기의 '사용 금지' 불 (주컴퓨터가 켠 불) · 쓰는 동안 닫힌 샤워 커튼 (그 칸에서 [샤워] 걸음인 사람 — 커튼은 세계 값이 아니다 · 커튼 위로 얼굴까지) ·
 /// 설비 칸에 고인 물 (발치 웅덩이 — 많이 고이면 곁 바닥처럼 칸에 물이 차고 설비는 그 물에 선다).
+/// 5단 A2 — 세계 습도를 읽는다 (Field.RelHumidity · 장마다 · 굽지 않는다): 뜨거운 물이 흐르는 샤워기 위로 오르는 흰 김 · 습도 0.9 넘는 바닥 칸의 흰 안개 (사람 위에) ·
+/// 세면대 칸 습도 0.85 넘으면 거울 김 서림 — 샤워가 끝나도 세계 습도가 빠지는 만큼 오래 남는다 (제습기가 꺼진 화장실은 늘 뿌옇다).
 /// </summary>
 public sealed partial class Painter
 {
@@ -231,6 +233,113 @@ public sealed partial class Painter
             int lx = x + SignX, ly = y + SignY;
             if (Lighting) _emissive.Add(im => SignLamp(im, lx, ly, 2, true));
             else SignLamp(img, lx, ly, 2, false);
+        }
+    }
+
+    /// <summary>김 · 안개 · 김 서림의 흰 빛 (색표 — 어두움 → 밝음: 김 덩이는 4단 · 빛 받은 속은 5단 · 가장자리는 3단).</summary>
+    private static readonly int SteamRamp = Ramps.Add("#9fb1bf", "#c8d5de", "#e3ebf0", "#f2f6f9", "#fbfdfe", "#ffffff");
+    private static readonly Rgba FogTint = Rgba.Hex("#f4f8fb");
+    /// <summary>김이 한 번 오르는 장 수 (8장에 1초 — 2초에 샤워기에서 두 칸 위까지 오르며 퍼지고 옅어진다).</summary>
+    private const int SteamLife = 16;
+
+    /// <summary>김 뭉치 한 장 (size × size — 흰 덩이 셋이 겹친 뭉게구름 · 점묘 가장자리: 연기 뭉치와 같은 꼴을 흰 색표로). 짙기는 얹을 때.</summary>
+    private Img SteamPuffImg(int size, int seed) => Cached(Key(5, 9240 + size * 4 + (seed & 3)), (size, s4: seed & 3), static q => DotFx.SmokeSprite(q.size, q.s4, SteamRamp));
+
+    /// <summary>김 (뜨거운 물이 흐르는 샤워 칸 — 밸브 · 물 · 온수기가 돈다): 샤워기(몸 그림 21, 10)에서 흰 뭉치 3~6개(습할수록 많다)가 오르며 커지고 옅어진다 (2초에 두 칸 위까지).
+    /// 짙기 0.25 + 0.5 × clamp((습도 − 0.5) / 0.45) — 뭉치를 두른 엷은 겉의 짙기 · 속은 0.55 더 짙다 (갓 나온 김은 어느 방에서나 희다 · 습한 방은 겉까지 짙게 엉긴다) · 오를수록 옅어진다.
+    /// (gx, gy)는 몸 그림 자리 (32도트 그림판) · k는 줄임 (넓은 보기 16도트 2 · 8도트 4).</summary>
+    private void Steam(Img img, double rh, int gx, int gy, int frame, int seed, int k = 1)
+    {
+        float t = (float)Math.Clamp((rh - 0.5) / 0.45, 0, 1), den = 0.25f + 0.5f * t;
+        int n = 3 + (int)MathF.Round(3 * t);
+        for (int q = 0; q < n; q++)
+        {
+            float ph = (frame + q * (float)SteamLife / n) % SteamLife / SteamLife;   // 이 뭉치의 나이 (0 샤워기 → 1 사라짐 · 뭉치마다 고르게 어긋난다)
+            int size = 10 + 2 * (int)(ph * 6);                                                                 // 10 → 20도트 (2도트씩 — 이웃 뭉치와 겹쳐 한 줄기로)
+            float rise = 3 + ph * 34;
+            float sway = MathF.Sin(ph * 5f + q * 1.7f) * 2.2f + (DotHash.F(seed, q, 3) - 0.5f) * 8 * ph;   // 흔들리며 옆으로 번진다
+            float thin = (1.15f - 0.6f * ph) * (ph < 0.7f ? 1 : 1 - (ph - 0.7f) / 0.3f * 0.9f);              // 오를수록 옅다 · 끝에 사라진다
+            float cx = gx + 21.5f + sway, cy = gy + 10 - rise;
+            int sd = seed * 7 + q;
+            var halo = DownOf(SteamPuffImg(size + 6, sd), k);
+            var core = DownOf(SteamPuffImg(size, sd + 1), k);
+            Put(img, halo, FloorDiv((int)cx - (size + 6) / 2, k), FloorDiv((int)cy - (size + 6) / 2, k), false, Math.Min(0.95f, den * thin));
+            Put(img, core, FloorDiv((int)cx - size / 2, k), FloorDiv((int)cy - size / 2 - 1, k), false, Math.Min(0.95f, (den + 0.55f) * thin));   // 짙은 속
+        }
+    }
+
+    /// <summary>습한 방의 안개 (습도 0.9 넘는 바닥 칸): 흰 막 짙기 0.25 × (습도 − 0.9) / 0.1 · 4도트 덩이마다 배 자리의 부드러운 물결로 짙기가 달라 천천히 옆으로 흐른다
+    /// (칸 경계에서 이어진다 · 사람 위에 덮는다). (gx, gy)는 칸 자리 (32도트 그림판) · k는 줄임.</summary>
+    private void Fog(Img img, double rh, int c, int gx, int gy, int frame, int k = 1)
+    {
+        float a = 0.25f * (float)Math.Min(1, (rh - 0.9) / 0.1);
+        if (a <= 0.004f) return;
+        int bs = Math.Max(1, 4 / k), wx = L.X(c) * T, wy = L.Y(c) * T;
+        float drift = frame * 0.35f;
+        for (int by = 0; by < T; by += 4)
+            for (int bx = 0; bx < T; bx += 4)
+            {
+                float X = wx + bx + drift, Y = wy + by;
+                float wave = 0.85f + 0.15f * MathF.Sin(X * 0.11f + MathF.Sin(Y * 0.09f) * 1.6f) + 0.1f * MathF.Sin(Y * 0.07f - X * 0.05f);   // 0.6 ~ 1.1
+                img.Fill((gx + bx) / k, (gy + by) / k, bs, bs, FogTint, a * wave);
+            }
+    }
+
+    /// <summary>거울 김 서림 (세면대 칸 습도 0.85 넘게): 거울 사각(몸 그림 7..24, 1..9)에 흰 덮개 짙기 0.6 × (습도 − 0.85) / 0.15 · 맺힌 물이 흘러내린 줄 셋은 옅다 (32도트만 — 넓은 보기는 고른 덮개).
+    /// (gx, gy)는 몸 그림 자리 (32도트 그림판) · k는 줄임.</summary>
+    private static void MirrorFog(Img img, double rh, int fu, int gx, int gy, int k = 1)
+    {
+        float a = 0.6f * (float)Math.Min(1, (rh - 0.85) / 0.15);
+        if (a <= 0.004f) return;
+        if (k > 1)
+        {
+            int fx0 = FloorDiv(gx + 7, k), fy0 = FloorDiv(gy + 1, k);
+            img.Fill(fx0, fy0, FloorDiv(gx + 25, k) - fx0, FloorDiv(gy + 10, k) - fy0, FogTint, a);
+            return;
+        }
+        Span<int> dx = stackalloc int[3], dy = stackalloc int[3];
+        for (int d = 0; d < 3; d++) { dx[d] = 8 + (int)(DotHash.F(fu, d, 5) * 16); dy[d] = 2 + (int)(DotHash.F(fu, d, 6) * 4); }
+        for (int y = 1; y < 10; y++)
+            for (int x = 7; x < 25; x++)
+            {
+                bool drip = x == dx[0] && y >= dy[0] || x == dx[1] && y >= dy[1] || x == dx[2] && y >= dy[2];
+                img.Blend(gx + x, gy + y, FogTint, drip ? a * 0.35f : a);
+            }
+    }
+
+    /// <summary>김 · 안개 · 거울 김 서림 (장마다 — 32도트 Draw와 넓은 보기가 '떠 있는 물방울' 층 뒤에 함께 쓴다 · 습도는 이어지는 값이라 굽거나 캐시 열쇠에 넣지 않는다):
+    /// 거울 김 서림 → 바닥 칸 안개 → 샤워기 김. 칸 (x, y)의 그림판 자리는 ((x − x0) · 32, (y − y0) · 32) / k.</summary>
+    private void WashAir(Img img, Field f, Network? net, int x0, int y0, int w, int h, int frame, int k = 1)
+    {
+        foreach (int i in _washFix)
+        {
+            if (_washKind[i] != 2) continue;
+            var (bx, by, bw, bh) = _fixBox[i];
+            int kc = L.Furniture[i].Cells[0];
+            if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1 || !Mine(kc)) continue;
+            double rh = f.RelHumidity(kc);
+            if (rh > 0.85) MirrorFog(img, rh, i, (bx - x0) * T, (by - y0) * T - WashRise(2), k);
+        }
+        for (int y = y0; y < y0 + h; y++)
+            for (int x = x0; x < x0 + w; x++)
+            {
+                if (!L.In(x, y)) continue;
+                int c = L.Index(x, y);
+                if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
+                if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다
+                double rh = f.RelHumidity(c);
+                if (rh > 0.9) Fog(img, rh, c, (x - x0) * T, (y - y0) * T, frame, k);
+            }
+        if (net == null) return;
+        foreach (int i in _washFix)
+        {
+            if (_washKind[i] != 3) continue;
+            var (bx, by, bw, bh) = _fixBox[i];
+            int sc = L.Furniture[i].Cells[0];
+            if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 2 || !Mine(sc)) continue;   // 김은 두 칸 위까지 오른다 (화면 아래 두 줄의 샤워 칸 김도)
+            int d = DeviceOf(net, i);
+            if (d < 0 || !net.ShowerRunning(d) || !net.Working(d)) continue;   // 찬물 (온수기가 꺼졌다 · 전기가 없다)은 김이 없다
+            Steam(img, f.RelHumidity(sc), (bx - x0) * T, (by - y0) * T - WashRise(3), frame, i, k);
         }
     }
 
