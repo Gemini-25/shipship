@@ -206,10 +206,9 @@ public sealed partial class Painter
 
     private bool Space(int i) => _lk[i] is 1 or 3;
 
-    /// <summary>빛 지도를 그림에 곱한다 (칸 모서리 빛을 이어 부드럽게 · 벽 너머로 새지 않게 모서리는 빈 칸끼리만 고른다).</summary>
-    private void ApplyLight(Img img, int w, int h)
+    /// <summary>모서리 빛 (w+1)×(h+1): 둘레 네 칸 중 빈 칸의 고른 값 (32도트 · 넓은 보기가 함께 쓴다).</summary>
+    private void Corners(int w, int h)
     {
-        // 모서리 빛 (w+1)×(h+1): 둘레 네 칸 중 빈 칸의 고른 값
         int gw = w + 1, gh = h + 1;
         if (_cr.Length < gw * gh) { _cr = new float[gw * gh]; _cg = new float[gw * gh]; _cb = new float[gw * gh]; _crr = new float[gw * gh]; _crg = new float[gw * gh]; _crb = new float[gw * gh]; }
         var cr = _cr; var cg = _cg; var cb = _cb; var crr = _crr; var crg = _crg; var crb = _crb;
@@ -228,10 +227,16 @@ public sealed partial class Painter
                 if (cnt > 0) { cr[gi] = r / cnt; cg[gi] = g / cnt; cb[gi] = b / cnt; crr[gi] = rr / cnt; crg[gi] = rg / cnt; crb[gi] = rb / cnt; }
                 else cr[gi] = cg[gi] = cb[gi] = crr[gi] = crg[gi] = crb[gi] = 0;
             }
+    }
+
+    /// <summary>빛 지도를 그림에 곱한다 (칸 모서리 빛을 이어 부드럽게 · 벽 너머로 새지 않게 모서리는 빈 칸끼리만 고른다).</summary>
+    private void ApplyLight(Img img, int w, int h)
+    {
+        int gw = w + 1;
+        Corners(w, h);
+        var cr = _cr; var cg = _cg; var cb = _cb; var crr = _crr; var crg = _crg; var crb = _crb;
         int ax0 = _mx0 + 1, ay0 = _my0 + 1;   // 그리는 칸 (0, 0)의 도면 자리
         float ar = Ambient * AmbientTint.r, ag = Ambient * AmbientTint.g, ab = Ambient * AmbientTint.b, keep = 1 - Ambient;
-        // 고정 소수 (16.16 · 1.0 = 256): 도트마다 더하기 · 곱하기 · 밀기만
-        const float F = 256f * 65536f;
         int W = img.W;
         Parallel.For(0, h, vy =>
         {
@@ -321,56 +326,60 @@ public sealed partial class Painter
             o[6] = amb + keep * (t01 + q01 * pf[6]); o[7] = amb + keep * (tm2 + qm2 * pf[7]); o[8] = amb + keep * (t11 + q11 * pf[8]);
         }
 
-        // 한 칸의 한 줄 토막 (xoff부터 len 도트): 왼쪽 → 오른쪽 빛을 잇고 · 그림자(ao — 1.0 = 256에서 빼는 몫)를 곱한다
-        static void Row(Span<uint> d, int at, float r0, float g0, float b0, float r1, float g1, float b1, int aoRow, bool ww, bool we, int xoff = 0, int len = T)
+    }
+
+    /// <summary>고정 소수 빛 (16.16 · 1.0 = 256).</summary>
+    private const float Fix16 = 256f * 65536f;
+
+    // 한 칸의 한 줄 토막 (xoff부터 len 도트): 왼쪽 → 오른쪽 빛을 잇고 · 그림자(ao — 1.0 = 256에서 빼는 몫)를 곱한다
+    private static void Row(Span<uint> d, int at, float r0, float g0, float b0, float r1, float g1, float b1, int aoRow, bool ww, bool we, int xoff = 0, int len = T)
+    {
+        const int max = (int)(MaxLight * 256);
+        int vr = (int)((r0 + (r1 - r0) * (0.5f / len)) * Fix16), vg = (int)((g0 + (g1 - g0) * (0.5f / len)) * Fix16), vb = (int)((b0 + (b1 - b0) * (0.5f / len)) * Fix16);
+        int sr = (int)((r1 - r0) / len * Fix16), sg = (int)((g1 - g0) / len * Fix16), sb = (int)((b1 - b0) / len * Fix16);
+        bool shade = aoRow != 0 || ww || we;
+        int xx = 0;
+        if (Vector128.IsHardwareAccelerated && !NoVector)
         {
-            const int max = (int)(MaxLight * 256);
-            int vr = (int)((r0 + (r1 - r0) * (0.5f / len)) * F), vg = (int)((g0 + (g1 - g0) * (0.5f / len)) * F), vb = (int)((b0 + (b1 - b0) * (0.5f / len)) * F);
-            int sr = (int)((r1 - r0) / len * F), sg = (int)((g1 - g0) / len * F), sb = (int)((b1 - b0) / len * F);
-            bool shade = aoRow != 0 || ww || we;
-            int xx = 0;
-            if (Vector128.IsHardwareAccelerated && !NoVector)
+            // 네 점씩 (정수 셈 그대로 — 아래 한 점씩과 비트까지 같다)
+            var lane = Vector128.Create(0, 1, 2, 3);
+            Vector128<int> vR = Vector128.Create(vr) + lane * sr, vG = Vector128.Create(vg) + lane * sg, vB = Vector128.Create(vb) + lane * sb;
+            Vector128<int> sR = Vector128.Create(sr * 4), sG = Vector128.Create(sg * 4), sB = Vector128.Create(sb * 4);
+            Vector128<int> vmax = Vector128.Create(max), zero = Vector128<int>.Zero, ao0 = Vector128.Create(256 - aoRow);
+            Vector128<uint> m255 = Vector128.Create(255u), mFF = Vector128.Create(0xFFu), mA = Vector128.Create(0xFF000000u);
+            ref uint row = ref d[at];
+            for (; xx + 4 <= len; xx += 4, vR += sR, vG += sG, vB += sB)
             {
-                // 네 점씩 (정수 셈 그대로 — 아래 한 점씩과 비트까지 같다)
-                var lane = Vector128.Create(0, 1, 2, 3);
-                Vector128<int> vR = Vector128.Create(vr) + lane * sr, vG = Vector128.Create(vg) + lane * sg, vB = Vector128.Create(vb) + lane * sb;
-                Vector128<int> sR = Vector128.Create(sr * 4), sG = Vector128.Create(sg * 4), sB = Vector128.Create(sb * 4);
-                Vector128<int> vmax = Vector128.Create(max), zero = Vector128<int>.Zero, ao0 = Vector128.Create(256 - aoRow);
-                Vector128<uint> m255 = Vector128.Create(255u), mFF = Vector128.Create(0xFFu), mA = Vector128.Create(0xFF000000u);
-                ref uint row = ref d[at];
-                for (; xx + 4 <= len; xx += 4, vR += sR, vG += sG, vB += sB)
-                {
-                    Vector128<int> mr = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vR, 16), zero), vmax);
-                    Vector128<int> mg = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vG, 16), zero), vmax);
-                    Vector128<int> mb = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vB, 16), zero), vmax);
-                    if (shade)
-                    {
-                        var ao = ao0;
-                        if (ww) ao -= Vector128.LoadUnsafe(ref AoWi[xoff + xx]);
-                        if (we) ao -= Vector128.LoadUnsafe(ref AoWiRev[xoff + xx]);
-                        mr = Vector128.ShiftRightArithmetic(mr * ao, 8); mg = Vector128.ShiftRightArithmetic(mg * ao, 8); mb = Vector128.ShiftRightArithmetic(mb * ao, 8);
-                    }
-                    var v = Vector128.LoadUnsafe(ref row, (nuint)xx);
-                    var R = Vector128.Min(m255, ((v & mFF) * mr.AsUInt32()) >> 8);
-                    var G = Vector128.Min(m255, (((v >> 8) & mFF) * mg.AsUInt32()) >> 8);
-                    var B = Vector128.Min(m255, (((v >> 16) & mFF) * mb.AsUInt32()) >> 8);
-                    ((v & mA) | B << 16 | G << 8 | R).StoreUnsafe(ref row, (nuint)xx);
-                }
-                vr += xx * sr; vg += xx * sg; vb += xx * sb;
-            }
-            for (; xx < len; xx++, vr += sr, vg += sg, vb += sb)
-            {
-                int mr = Math.Clamp(vr >> 16, 0, max), mg = Math.Clamp(vg >> 16, 0, max), mb = Math.Clamp(vb >> 16, 0, max);
+                Vector128<int> mr = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vR, 16), zero), vmax);
+                Vector128<int> mg = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vG, 16), zero), vmax);
+                Vector128<int> mb = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(vB, 16), zero), vmax);
                 if (shade)
                 {
-                    int ao = 256 - aoRow - (ww ? AoWi[xoff + xx] : 0) - (we ? AoWi[T - 1 - xoff - xx] : 0);
-                    mr = mr * ao >> 8; mg = mg * ao >> 8; mb = mb * ao >> 8;
+                    var ao = ao0;
+                    if (ww) ao -= Vector128.LoadUnsafe(ref AoWi[xoff + xx]);
+                    if (we) ao -= Vector128.LoadUnsafe(ref AoWiRev[xoff + xx]);
+                    mr = Vector128.ShiftRightArithmetic(mr * ao, 8); mg = Vector128.ShiftRightArithmetic(mg * ao, 8); mb = Vector128.ShiftRightArithmetic(mb * ao, 8);
                 }
-                ref uint c = ref d[at + xx];
-                uint v = c;
-                uint R = Math.Min(255u, (v & 0xFF) * (uint)mr >> 8), G = Math.Min(255u, (v >> 8 & 0xFF) * (uint)mg >> 8), B = Math.Min(255u, (v >> 16 & 0xFF) * (uint)mb >> 8);
-                c = (v & 0xFF000000u) | B << 16 | G << 8 | R;
+                var v = Vector128.LoadUnsafe(ref row, (nuint)xx);
+                var R = Vector128.Min(m255, ((v & mFF) * mr.AsUInt32()) >> 8);
+                var G = Vector128.Min(m255, (((v >> 8) & mFF) * mg.AsUInt32()) >> 8);
+                var B = Vector128.Min(m255, (((v >> 16) & mFF) * mb.AsUInt32()) >> 8);
+                ((v & mA) | B << 16 | G << 8 | R).StoreUnsafe(ref row, (nuint)xx);
             }
+            vr += xx * sr; vg += xx * sg; vb += xx * sb;
+        }
+        for (; xx < len; xx++, vr += sr, vg += sg, vb += sb)
+        {
+            int mr = Math.Clamp(vr >> 16, 0, max), mg = Math.Clamp(vg >> 16, 0, max), mb = Math.Clamp(vb >> 16, 0, max);
+            if (shade)
+            {
+                int ao = 256 - aoRow - (ww ? AoWi[xoff + xx] : 0) - (we ? AoWi[T - 1 - xoff - xx] : 0);
+                mr = mr * ao >> 8; mg = mg * ao >> 8; mb = mb * ao >> 8;
+            }
+            ref uint c = ref d[at + xx];
+            uint v = c;
+            uint R = Math.Min(255u, (v & 0xFF) * (uint)mr >> 8), G = Math.Min(255u, (v >> 8 & 0xFF) * (uint)mg >> 8), B = Math.Min(255u, (v >> 16 & 0xFF) * (uint)mb >> 8);
+            c = (v & 0xFF000000u) | B << 16 | G << 8 | R;
         }
     }
 

@@ -9,6 +9,8 @@ public sealed class LiveFrame
 {
     public Img Img = null!;
     public float SrcX, SrcY, SrcW, SrcH;
+    /// <summary>그림의 칸 하나 도트 (32 · 넓은 보기 16 · 8 — docs/GRAPHICS.md §3 세밀도 단계).</summary>
+    public int Dot = Painter.T;
     public string Ship = "", Status = "", Story = "", Banner = "", Mood = "", Notice = "", Route = "";
     /// <summary>이 장에서 카메라가 끊어 넘겼다 (화면이 짧게 어두워졌다 밝아지게 할 수 있다).</summary>
     public bool Cut;
@@ -599,14 +601,26 @@ public sealed partial class LiveShow
     /// <summary>새로 잡은 그림판 수 (재기용).</summary>
     public static int NewCanvas;
     private readonly List<Img> _keep = new();
+    /// <summary>세밀도 단계 (docs/GRAPHICS.md §3): 보는 칸이 이보다 많으면 칸당 16 · 8도트 (1920 화면에서 한 픽셀에 도트가 하나 넘게 오지 않게) · 경계 ±FarGap칸은 지금 도트 그대로.</summary>
+    public const double Far16 = 60, Far8 = 120, FarGap = 3;
+    private int _dot = Painter.T;
+    /// <summary>보는 칸 수 w에 맞는 칸당 도트 (머뭇거림: 경계를 FarGap칸 넘어야 바꾼다).</summary>
+    public int DotFor(double w)
+    {
+        static int At(double w, double gap) => w > Far8 + gap ? 8 : w > Far16 + gap ? 16 : 32;
+        int fine = At(w, FarGap), coarse = At(w, -FarGap);   // 넓어질 때는 +gap을 넘어야 · 좁아질 때는 −gap 밑이어야
+        return _dot = Math.Clamp(_dot, coarse, fine);
+    }
+
     public LiveFrame Render()
     {
         var (left, top, w, h) = Camera();
         int x0 = (int)Math.Floor(left), y0 = (int)Math.Floor(top);
         int wc = (int)Math.Ceiling(w) + 1, hc = (int)Math.Ceiling(h) + 1; // 줌이 바뀔 때만 크기가 바뀐다 (텍스처를 덜 새로 만든다)
+        int D = DotFor(w);
         // 그림판은 넉넉히 (그리는 칸은 그대로) — 확대가 부드럽게 바뀌는 동안 장마다 새 그림판(몇 MB) · 새 텍스처를 만들지 않게:
         // 남은 그림판이 담을 수 있고 넓이가 1.5배 안이면 그대로 쓰고 (가장 작은 것) · 새로 잡을 때는 가로세로 1/8과 한 칸씩 더
-        int needW = wc * Painter.T, needH = hc * Painter.T;
+        int needW = wc * D, needH = hc * D;
         long needA = (long)needW * needH;
         Img? reuse = null;
         _keep.Clear();
@@ -618,7 +632,7 @@ public sealed partial class LiveShow
         }
         _keep.Sort((a, b) => ((long)b.W * b.H).CompareTo((long)a.W * a.H));
         for (int k = 0; k < _keep.Count && k < 2; k++) _spare.Add(_keep[k]);   // 큰 것을 남긴다 (다시 넓게 볼 때 쓴다)
-        if (reuse == null) { reuse = new Img((wc + wc / 8 + 1) * Painter.T, (hc + hc / 8 + 1) * Painter.T); NewCanvas++; } // 넓이 1.35배쯤 — 다음 장에 그대로 쓰인다
+        if (reuse == null) { reuse = new Img((wc + wc / 8 + 1) * D, (hc + hc / 8 + 1) * D); NewCanvas++; } // 넓이 1.35배쯤 — 다음 장에 그대로 쓰인다
         Painter.Show = Show; Painter.ChainCells = Show == Overlay.Chain ? ChainCellsNow() : null;
         // ④ 칸 강체: 틱 사이를 메운 몸의 자세 · 배의 자세(별)
         var stb = World.Find<Structure>();
@@ -632,19 +646,21 @@ public sealed partial class LiveShow
         }
         else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
         Painter.Sub = Math.Clamp(_carry, 0, 1);
-        var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
+        var img = D == Painter.T ? Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse) : Painter.FrameFar(World, x0, y0, wc, hc, (int)(_anim * AnimFps), D, reuse);
+        if (D == Painter.T) Painter.Prebake(World);   // 넓게 볼 때 첫 장에 굽기가 몰리지 않게 (장마다 덩어리 하나)
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         var (shx, shy) = Shake();
         var prows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows();
         SyncPick(prows);
         var latest = Dir.Highlights.Count > 0 ? Dir.Highlights[^1] : null;
-        float srcX = Math.Clamp((float)((left - x0) * Painter.T) + shx, 0, Math.Max(0, needW - (float)(w * Painter.T)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
-        float srcY = Math.Clamp((float)((top - y0) * Painter.T) + shy, 0, Math.Max(0, needH - (float)(h * Painter.T)));
+        float sk = D / (float)Painter.T;   // 흔들림은 32도트 자리
+        float srcX = Math.Clamp((float)((left - x0) * D) + shx * sk, 0, Math.Max(0, needW - (float)(w * D)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
+        float srcY = Math.Clamp((float)((top - y0) * D) + shy * sk, 0, Math.Max(0, needH - (float)(h * D)));
         return new LiveFrame
         {
             Img = img,
             SrcX = srcX, SrcY = srcY,
-            SrcW = (float)(w * Painter.T), SrcH = (float)(h * Painter.T),
+            SrcW = (float)(w * D), SrcH = (float)(h * D), Dot = D,
             Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood, Cut = Cut,
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
             Tick = World.Tick, Replay = _replayOf == null ? "" : ShotNow is { } sn ? $"{_replayOf.Title} · 컷 {_shots.IndexOf(sn) + 1}/{_shots.Count} {sn.Kind}" : _replayOf.Title,

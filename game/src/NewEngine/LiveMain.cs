@@ -96,6 +96,7 @@ void fragment() {
     private string? _shotDir;
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
     private int _shotN, _picsTotal, _pick = -1;
+    private double _view = -1;   // --view=칸 수 (0 = 배 전체) — 관찰 장면용 확대
     private PanelKind _openPanel;
     private bool _ignite;                                      // --ignite: 감은 뒤 침대 하나에 불씨 (화면 사진용 — 사건 띠 · 불 연출)
     private double _skipHours;                                 // --skip=시간: 띄우기 전에 그만큼 앞으로 감는다 (화면 사진용)
@@ -128,6 +129,7 @@ void fragment() {
             else if (a.StartsWith("--every=")) _shotEvery = double.Parse(a[8..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
+            else if (a.StartsWith("--view=")) _view = a[7..] == "all" ? 0 : double.TryParse(a[7..], out var vw) ? vw : -1;
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a == "--ignite") _ignite = true;
             else if (a == "--help") _helpOnce = true;
@@ -226,7 +228,7 @@ void fragment() {
         }
         if (pan != Vector2.Zero && _shown != null)
         {
-            double cells = _shown.SrcW / Painter.T * 0.8 * delta;
+            double cells = _shown.CamW * 0.8 * delta;
             double dx = pan.X * cells, dy = pan.Y * cells;
             _cmds.Enqueue(s => s.Pan(dx, dy));
         }
@@ -351,6 +353,7 @@ void fragment() {
         _runT += delta;
         if (_pick >= 0 && _runT > 3) { int who = _pick; _pick = -1; _cmds.Enqueue(s => s.SelectAgent(who)); }
         if (_openPanel != PanelKind.None && _runT > 3) { var k = _openPanel; _openPanel = PanelKind.None; _cmds.Enqueue(s => s.TogglePanel(k)); }
+        if (_view >= 0 && _runT > 2) { double v = _view; _view = -1; _cmds.Enqueue(s => { if (v == 0) s.Overview = true; else { s.ZoomBy(1); s.ViewW = v; } }); }
         if (_overlay != Overlay.None && _runT > 2) { var o = _overlay; _overlay = Overlay.None; _cmds.Enqueue(s => s.Show = o); }
         if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
@@ -1239,7 +1242,7 @@ void fragment() {
             {
                 _dragDist += mm.Relative.Length();
                 if (_dragging && _dragDist < 6) return;
-                double cellPx = GetViewportRect().Size.X / (_shown.SrcW / Painter.T);
+                double cellPx = GetViewportRect().Size.X / (_shown.CamW);
                 double dx = -mm.Relative.X / cellPx, dy = -mm.Relative.Y / cellPx;
                 _cmds.Enqueue(s => s.Pan(dx, dy));
             }
@@ -1255,7 +1258,7 @@ void fragment() {
         {
             var r = _hud.At(pg.Position.X / U, pg.Position.Y / U);
             if (r.Kind != RouteKind.World && _hud.Areas.ContainsKey("판") && _hud.Area("판").Contains(pg.Position.X / U, pg.Position.Y / U)) _hs.Scroll(pg.Delta.Y * 0.5, _hud.PanelTotal, _hud.PanelLast - _hud.PanelFirst);
-            else { double cellPx = GetViewportRect().Size.X / (_shown.SrcW / Painter.T); double dx = pg.Delta.X * 8 / cellPx, dy = pg.Delta.Y * 8 / cellPx; _cmds.Enqueue(s => s.Pan(dx, dy)); }
+            else { double cellPx = GetViewportRect().Size.X / (_shown.CamW); double dx = pg.Delta.X * 8 / cellPx, dy = pg.Delta.Y * 8 / cellPx; _cmds.Enqueue(s => s.Pan(dx, dy)); }
         }
     }
 

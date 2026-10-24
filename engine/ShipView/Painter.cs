@@ -302,7 +302,7 @@ public sealed partial class Painter
     }
 
     /// <summary>부스러기 알갱이 (배 틀 자리 · 무게만큼 2~6도트 · 날아가는 쪽 반대로 짧은 꼬리).</summary>
-    private static void Shards(Img img, Structure st, int x0, int y0)
+    private static void Shards(Img img, Structure st, int x0, int y0, int dots = T)
     {
         if (st.Shards.Count == 0) return;
         var body = Rgba.Hex("#9aa2b0"); var dark = Rgba.Hex("#3a404c");
@@ -311,26 +311,28 @@ public sealed partial class Painter
         foreach (var sh in st.Shards)
         {
             var (sx, sy) = st.LocalOf(0, sh.X, sh.Y);
-            int px = (int)Math.Round((sx - x0) * T), py = (int)Math.Round((sy - y0) * T);
+            int px = (int)Math.Round((sx - x0) * dots), py = (int)Math.Round((sy - y0) * dots);
             if (px < -8 || py < -8 || px > img.W + 8 || py > img.H + 8) continue;
-            int size = Math.Clamp((int)Math.Round(Math.Sqrt(sh.Kg) / 3), 2, 6);
+            int size = Math.Max(1, Math.Clamp((int)Math.Round(Math.Sqrt(sh.Kg) / 3), 2, 6) * dots / T);
             // 배에서 본 빠르기 쪽 반대로 꼬리
             double vx = sh.Vx - b0.Vx, vy = sh.Vy - b0.Vy, lvx = cs * vx - sn * vy, lvy = sn * vx + cs * vy, vl = Math.Sqrt(lvx * lvx + lvy * lvy);
-            if (vl > 0.5) for (int k = 1; k <= 4; k++) img.Blend(px - (int)(lvx / vl * k * 2), py - (int)(lvy / vl * k * 2), body, 0.5f - k * 0.1f);
+            double step = 2.0 * dots / T;
+            if (vl > 0.5) for (int k = 1; k <= 4; k++) img.Blend(px - (int)(lvx / vl * k * step), py - (int)(lvy / vl * k * step), body, 0.5f - k * 0.1f);
             img.Fill(px - size / 2 + 1, py - size / 2 + 1, size, size, dark, 0.6f);
             img.Fill(px - size / 2, py - size / 2, size, size, body);
         }
     }
 
     /// <summary>조각 그림을 배 틀에 붙인다: 화면 도트마다 거꾸로 돌려 조각 그림의 도트를 찾는다 (배 틀 q = R·p + t).</summary>
-    private static void Place(Img img, Img part, int bx0, int by0, int x0, int y0, double cs, double sn, double tx, double ty, double qx0, double qy0, double qx1, double qy1)
+    private static void Place(Img img, Img part, int bx0, int by0, int x0, int y0, double cs, double sn, double tx, double ty, double qx0, double qy0, double qx1, double qy1, int dots = T)
     {
-        int X0 = Math.Max(0, (int)Math.Floor((qx0 - x0) * T)), Y0 = Math.Max(0, (int)Math.Floor((qy0 - y0) * T));
-        int X1 = Math.Min(img.W, (int)Math.Ceiling((qx1 - x0) * T)), Y1 = Math.Min(img.H, (int)Math.Ceiling((qy1 - y0) * T));
+        // 그림판 도트 (dots — 넓은 보기는 16 · 8)마다 거꾸로 돌려 32도트 조각 그림의 도트를 찾는다
+        int X0 = Math.Max(0, (int)Math.Floor((qx0 - x0) * dots)), Y0 = Math.Max(0, (int)Math.Floor((qy0 - y0) * dots));
+        int X1 = Math.Min(img.W, (int)Math.Ceiling((qx1 - x0) * dots)), Y1 = Math.Min(img.H, (int)Math.Ceiling((qy1 - y0) * dots));
         for (int Y = Y0; Y < Y1; Y++)
             for (int X = X0; X < X1; X++)
             {
-                double qx = x0 + (X + 0.5) / T - tx, qy = y0 + (Y + 0.5) / T - ty;
+                double qx = x0 + (X + 0.5) / dots - tx, qy = y0 + (Y + 0.5) / dots - ty;
                 double px = cs * qx + sn * qy, py = -sn * qx + cs * qy;
                 int u = (int)Math.Floor((px - bx0) * T), v = (int)Math.Floor((py - by0) * T);
                 if ((uint)u >= (uint)part.W || (uint)v >= (uint)part.H) continue;
@@ -379,7 +381,7 @@ public sealed partial class Painter
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
         if (!part) Parallel.For(0, h, r => FillOpaque(img, 0, r * T, w * T, T, space));   // 그릴 칸만 (넉넉히 잡은 그림판의 나머지는 화면에 나가지 않는다) · 칸 줄마다 여러 코어에서
-        if (!part && _skyTh == 0)
+        if (!part && !_bake && _skyTh == 0)   // 굽는 덩어리엔 별이 없다 (넓은 보기가 장마다 — 배가 돌면 별도 돈다)
             for (int y = y0 - 1; y <= y0 + h; y++)
                 for (int x = x0 - 1; x <= x0 + w; x++)
                 {
@@ -389,7 +391,7 @@ public sealed partial class Painter
                     byte v = (byte)(90 + (u >> 24) % 140);
                     img.Set(sx, sy, new Rgba(v, v, (byte)Math.Min(255, v + 20)));
                 }
-        else if (!part)
+        else if (!part && !_bake)
         {
             // 하늘 틀 = 배 틀을 배의 자세만큼 돌린 것 — 하늘 칸마다 같은 해시의 별을 화면으로 되돌려 찍는다 (자세가 0이면 위와 같은 그림)
             double cs = Math.Cos(_skyTh), sn = Math.Sin(_skyTh);
@@ -520,6 +522,7 @@ public sealed partial class Painter
                 int c = L.Index(x, y);
                 double sg = f.SootGPerM2(c);
                 if (sg <= 0.05 || F(f, c).hole >= 2f || !Mine(c)) continue;
+                if (_bake) sg = SootStep(sg);   // 굽는 덩어리는 그을음 단으로 (불 동안 다시 굽기가 몰리지 않게)
                 bool face = KindAt(x, y + 1) == CellKind.Floor;
                 if (y >= y0) SootStain(img, Px(x), Py(y), T, face ? ArtWalls.CapH : T, sg, c);
                 if (face) SootStain(img, Px(x), Py(y) + ArtWalls.CapH, T, ArtWalls.FaceH, sg, c + 7);
@@ -529,21 +532,18 @@ public sealed partial class Painter
         lt = Lap("녹 · 실금", lt);
         foreach (var d in L.Doors)
         {
+            if (_bake) break;   // 문짝은 넓은 보기가 장마다 (굽는 덩어리엔 문턱만)
             int x = L.X(d.Cell), y = L.Y(d.Cell);
             if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h || !Mine(d.Cell)) continue;
-            float open = f.DoorOpen[d.Id];
-            int step = Math.Clamp((int)MathF.Round(open * 6f), 0, 6);
-            int kind = d.External ? 1 : d.Kind == "normal" ? 0 : 2;
-            bool jam = st != null && st.DoorJam[d.Id] != 0;
-            int lightKind = st != null && st.DoorPowered[d.Id] == 0 ? 2 : jam ? 3 : open > 0.05f ? 1 : 0;
-            Put(img, Cached(Key(4, d.Vertical ? 1 : 0, step, kind, lightKind), (d.Vertical, step, kind, lightKind), static q => ArtWalls.Door(q.Vertical, q.step, q.kind, q.lightKind, 0)), Px(x), Py(y));
+            Put(img, DoorTile(d, f, st), Px(x), Py(y));
             if (f.DoorBleed[d.Id] != 0) Hiss(img, Px(x) + T / 2, Py(y) + T / 2, frame); // 압력 맞춤 밸브
         }
 
         lt = Lap("문", lt);
-        // ── 외판 구멍 · 금 ──
-        for (int y = y0; y < y0 + h; y++)
-            for (int x = x0; x < x0 + w; x++)
+        // ── 외판 구멍 · 금 ── (굽는 덩어리는 둘레 한 칸까지 — 이웃 칸의 금이 덩어리 경계를 넘어온다)
+        int hb = _bake ? 1 : 0;
+        for (int y = y0 - hb; y < y0 + h + hb; y++)
+            for (int x = x0 - hb; x < x0 + w + hb; x++)
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
@@ -572,7 +572,7 @@ public sealed partial class Painter
                     if (L.Kind[j] == CellKind.Outside) { ox = nx - x; oy = ny - y; }
                     else if (L.Kind[j] == CellKind.Floor) inside = Math.Max(inside, f.Pressure(j));
                 }
-                if (inside > 5 && (ox != 0 || oy != 0))
+                if (inside > 5 && (ox != 0 || oy != 0) && !_bake)
                 {
                     float reach = (float)Math.Min(30, 6 + inside / 4);
                     for (int k = 0; k < 14; k++)
@@ -615,12 +615,10 @@ public sealed partial class Painter
                 Put(img, nbody, Px(bx), Py(by) - nrise);
                 if (nrise >= 6 && type != "Bed") _front.Add((nbody, Px(bx), Py(by) - nrise, by + bh - 1));
                 int ndev = DeviceOf(net, i);
-                var nst = ndev < 0 ? FixState.On : net!.IsBroken(ndev, Part.Electric) || net.IsBroken(ndev, Part.Mechanical) ? FixState.Broken : net.Working(ndev) ? FixState.On : FixState.Off;
-                int stIdx = nst == FixState.Off ? 0 : nst == FixState.Broken ? 2 : 1;
+                int stIdx = NewGlowState(net, i);
                 if (stIdx != 0)
                 {
-                    long gkey = (13L << 56) ^ ((long)(type.GetHashCode() & 0xFFFF) << 32) ^ ((long)bw << 24) ^ ((long)bh << 20) ^ ((long)face << 16) ^ ((long)stIdx << 12) ^ (frame & 15);
-                    var g = Cached(gkey, (type, bw, bh, face, stIdx, f16: frame & 15), static q => ArtFurniture.Glow(q.type, q.bw, q.bh, q.face, q.stIdx, q.f16) ?? new Img(1, 1));
+                    var g = NewGlow(type, bw, bh, face, stIdx, frame);
                     if (g.W > 1) { int gx = Px(bx), gy = Py(by) - nrise; if (Lighting) _emissive.Add(im => Put(im, g, gx, gy)); else Put(img, g, gx, gy); }
                 }
                 else if (ndev >= 0) img.Fill(Px(bx), Py(by) - nrise, bw * T, bh * T + nrise, Rgba.Hex("#000308"), 0.3f);
@@ -642,7 +640,7 @@ public sealed partial class Painter
             var state = dev < 0 ? FixState.On : net!.IsBroken(dev, Part.Electric) || net.IsBroken(dev, Part.Mechanical) ? FixState.Broken : net.Working(dev) ? FixState.On : FixState.Off;
             if (state != FixState.Off)
             {
-                var glow = Cached(Key(10, (int)ft, bw * 64 + bh, (int)state, frame & 7), (ft, bw, bh, state, f8: frame & 7), static q => DotMachines.Life(q.ft, q.bw, q.bh, q.state, q.f8, 1f));   // 같은 종류 · 크기 · 상태 · 장이면 같은 그림
+                var glow = OldGlow(ft, bw, bh, state, frame);   // 같은 종류 · 크기 · 상태 · 장이면 같은 그림
                 int gpx = px, gpy = py;   // 켜진 설비만 붙잡는다 (설비마다 갇힌 변수 묶음을 잡지 않게)
                 if (Lighting) _emissive.Add(im => Put(im, glow, gpx, gpy));   // 화면 · 불빛은 스스로 빛난다
                 else Put(img, glow, px, py);
@@ -652,7 +650,7 @@ public sealed partial class Painter
 
         lt = Lap("설비", lt);
         // ── 바닥에 놓인 · 날아온 물건 (④ — 문틀에 걸린 것은 문 위에) ──
-        if (mind != null)
+        if (mind != null && !_bake)
         {
             var count = new Dictionary<int, int>();
             foreach (var it in mind.Loose)
@@ -675,9 +673,11 @@ public sealed partial class Painter
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
+                if (_bake && L.Kind[c] == CellKind.Door) continue;   // 문 칸의 얼룩은 넓은 보기가 장마다 문짝 위에 (32도트와 같은 차례)
                 double sootG = f.SootGPerM2(c);
-                if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, sootG, c); // 바닥에 앉은 그을음
+                if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, _bake ? SootStep(sootG) : sootG, c); // 바닥에 앉은 그을음
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
+                if (_bake) continue;   // 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2) Put(img, Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
                 if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다 (기압 0으로 읽혀 늘 서리로 덮였다 — 하늘색 문)
@@ -692,6 +692,7 @@ public sealed partial class Painter
 
         lt = Lap("칸 덮개", lt);
         // ── 사람 · 로봇 (아래쪽이 앞) ──
+        if (_bake) return img;   // 굽는 덩어리는 여기까지 (사람 · 물방울 · 연기 · 빛 · 불은 넓은 보기가 장마다 — _front는 앞 가림에 남긴다)
         if (mind != null && life != null)
         {
             foreach (var a in mind.Agents.OrderBy(a => L.Y(a.C.Cell)).ThenBy(a => a.Id))
@@ -1100,12 +1101,12 @@ public sealed partial class Painter
 
     // ───────────────────────── 겹쳐 보기 ─────────────────────────
 
-    private void DrawOverlay(Img img, Field f, Network? net, int x0, int y0, int w, int h)
+    private void DrawOverlay(Img img, Field f, Network? net, int x0, int y0, int w, int h, int t = T)
     {
-        int Px(int x) => (x - x0) * T;
-        int Py(int y) => (y - y0) * T;
+        int Px(int x) => (x - x0) * t;
+        int Py(int y) => (y - y0) * t;
         var T2 = f.T;
-        if (Show == Overlay.Lines) { if (net != null) DrawLines(img, net, x0, y0, w, h); return; }
+        if (Show == Overlay.Lines) { if (net != null) DrawLines(img, net, x0, y0, w, h, t); return; }
         if (Show != Overlay.Chain)
             for (int y = y0; y < y0 + h; y++)
                 for (int x = x0; x < x0 + w; x++)
@@ -1119,23 +1120,23 @@ public sealed partial class Painter
                         case Overlay.Air:
                         {
                             // 진공은 파랗게 · 산소가 옅을수록 붉게 (19kPa 아래) · 일산화탄소는 보랏빛
-                            if (kpa < 5) { img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#2f55ff"), 0.45f); break; }
+                            if (kpa < 5) { img.Fill(Px(x), Py(y), t, t, Rgba.Hex("#2f55ff"), 0.45f); break; }
                             double o2 = f.Partial(T2.gO2, c), co = f.Ppm(T2.gCO, c);
-                            if (o2 < 19) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#ff3b30"), (float)Math.Min(0.55, 0.12 + (19 - o2) / 9 * 0.43));
-                            if (co > 100) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#b347ff"), (float)Math.Min(0.5, co / 1500));
+                            if (o2 < 19) img.Fill(Px(x), Py(y), t, t, Rgba.Hex("#ff3b30"), (float)Math.Min(0.55, 0.12 + (19 - o2) / 9 * 0.43));
+                            if (co > 100) img.Fill(Px(x), Py(y), t, t, Rgba.Hex("#b347ff"), (float)Math.Min(0.5, co / 1500));
                             break;
                         }
                         case Overlay.Heat:
                         {
                             double tc = f.Temp(c) - 273.15;
-                            if (tc > 30) img.Fill(Px(x), Py(y), T, T, tc > 60 ? Rgba.Hex("#ff2a1a") : Rgba.Hex("#ff9a1f"), (float)Math.Min(0.6, (tc - 30) / 80 + 0.12));
-                            else if (tc < 12) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#53c8ff"), (float)Math.Min(0.5, (12 - tc) / 30 + 0.1));
+                            if (tc > 30) img.Fill(Px(x), Py(y), t, t, tc > 60 ? Rgba.Hex("#ff2a1a") : Rgba.Hex("#ff9a1f"), (float)Math.Min(0.6, (tc - 30) / 80 + 0.12));
+                            else if (tc < 12) img.Fill(Px(x), Py(y), t, t, Rgba.Hex("#53c8ff"), (float)Math.Min(0.5, (12 - tc) / 30 + 0.1));
                             break;
                         }
                         case Overlay.Smoke:
                         {
                             double soot = f.Ppm(T2.gSoot, c);
-                            if (soot > 5) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#8a8f99"), (float)Math.Min(0.7, 0.1 + soot / 600));
+                            if (soot > 5) img.Fill(Px(x), Py(y), t, t, Rgba.Hex("#8a8f99"), (float)Math.Min(0.7, 0.1 + soot / 600));
                             break;
                         }
                     }
@@ -1143,19 +1144,19 @@ public sealed partial class Painter
         if (Show == Overlay.Chain && ChainCells != null && ChainCells.Count > 0)
         {
             var col = Rgba.Hex("#5ff0ff");
-            (int, int) Mid(int c) => (Px(L.X(c)) + T / 2, Py(L.Y(c)) + T / 2);
+            (int, int) Mid(int c) => (Px(L.X(c)) + t / 2, Py(L.Y(c)) + t / 2);
             for (int i = 1; i < ChainCells.Count; i++) Line(img, Mid(ChainCells[i - 1]), Mid(ChainCells[i]), col);
             for (int i = 0; i < ChainCells.Count; i++)
             {
                 var (mx, my) = Mid(ChainCells[i]);
-                int r = i == ChainCells.Count - 1 ? 5 : 3;
+                int r = Math.Max(1, (i == ChainCells.Count - 1 ? 5 : 3) * t / T);
                 img.Fill(mx - r, my - r, 2 * r, 2 * r, i == ChainCells.Count - 1 ? Rgba.Hex("#ffffff") : col, 0.9f);
             }
         }
     }
 
     /// <summary>겹쳐 보기 '선과 관' (⑥ 바퀴 3): 전선 노랑 · 냉각관 하늘 · 물관 파랑 · 센서 선 초록 — 갈래마다 칸 안에서 조금씩 비켜 나란히 · 끊긴 칸 빨간 X · 새는 칸 보라.</summary>
-    private void DrawLines(Img img, Network net, int x0, int y0, int w, int h)
+    private void DrawLines(Img img, Network net, int x0, int y0, int w, int h, int t = T)
     {
         var cols = new[] { Rgba.Hex("#ffd23f"), Rgba.Hex("#6fe3ff"), Rgba.Hex("#3a7bff"), Rgba.Hex("#4fd17a") };
         var red = Rgba.Hex("#ff3b30"); var leak = Rgba.Hex("#c04dff");
@@ -1165,27 +1166,28 @@ public sealed partial class Painter
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (net.LineAt[c] == 0 || !Mine(c)) continue;
-                int px = (x - x0) * T, py = (y - y0) * T;
+                int px = (x - x0) * t, py = (y - y0) * t;
                 for (int k = 0; k < 4; k++)
                 {
                     if ((net.LineAt[c] & (1 << k)) == 0) continue;
-                    int off = (int)((k - 1.5) * T / 8), mx = px + T / 2 + off, my = py + T / 2 + off;
+                    int off = (k * 2 - 3) * Math.Max(1, t / 16), mx = px + t / 2 + off, my = py + t / 2 + off;   // 32 · 16도트는 예전과 같고 8도트에서도 넷이 갈린다
                     int dirs = net.LineDir[c * 4 + k];
                     var col = cols[k];
-                    if (dirs == 0) img.Fill(mx - 2, my - 2, 4, 4, col, 0.9f);
-                    if ((dirs & 1) != 0) img.Fill(mx - 1, py, 3, my - py + 1, col, 0.85f);
-                    if ((dirs & 4) != 0) img.Fill(mx - 1, my, 3, py + T - my, col, 0.85f);
-                    if ((dirs & 8) != 0) img.Fill(px, my - 1, mx - px + 1, 3, col, 0.85f);
-                    if ((dirs & 2) != 0) img.Fill(mx, my - 1, px + T - mx, 3, col, 0.85f);
+                    int q = Math.Max(1, 3 * t / T), q2 = Math.Max(1, 4 * t / T);   // 선 굵기 · 점 (넓은 보기는 도트만큼 가늘게)
+                    if (dirs == 0) img.Fill(mx - q2 / 2, my - q2 / 2, q2, q2, col, 0.9f);
+                    if ((dirs & 1) != 0) img.Fill(mx - q / 3, py, q, my - py + 1, col, 0.85f);
+                    if ((dirs & 4) != 0) img.Fill(mx - q / 3, my, q, py + t - my, col, 0.85f);
+                    if ((dirs & 8) != 0) img.Fill(px, my - q / 3, mx - px + 1, q, col, 0.85f);
+                    if ((dirs & 2) != 0) img.Fill(mx, my - q / 3, px + t - mx, q, col, 0.85f);
                 }
                 bool cut = net.LineCut[c] != 0 || net.DataCutAt(c);
                 if (cut)
                 {
-                    int a = T / 4;
-                    Line(img, (px + a, py + a), (px + T - a, py + T - a), red);
-                    Line(img, (px + T - a, py + a), (px + a, py + T - a), red);
+                    int a = t / 4;
+                    Line(img, (px + a, py + a), (px + t - a, py + t - a), red);
+                    Line(img, (px + t - a, py + a), (px + a, py + t - a), red);
                 }
-                if (net.LeakAt(c, LineKind.Coolant) > 0 || net.LeakAt(c, LineKind.Water) > 0) img.Fill(px + T / 2 - 5, py + T / 2 - 5, 10, 10, leak, 0.8f);
+                if (net.LeakAt(c, LineKind.Coolant) > 0 || net.LeakAt(c, LineKind.Water) > 0) img.Fill(px + t / 2 - 5 * t / T, py + t / 2 - 5 * t / T, 10 * t / T, 10 * t / T, leak, 0.8f);
             }
     }
 

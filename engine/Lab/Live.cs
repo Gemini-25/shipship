@@ -117,20 +117,20 @@ public static partial class Program
         // 확대마다 한 장 그리기 (손 카메라 · 세계는 멈춘 채 열 장씩 · 가운데 값)
         var zoomRow = new List<string>();
         show.Paused = true;
-        foreach (double vw in new[] { LiveShow.MinView, 20, LiveShow.FollowMax, 64, LiveShow.MaxView, -1 })
+        foreach (double vw in new[] { LiveShow.MinView, 20, LiveShow.FollowMax, LiveShow.Far16, 64, LiveShow.MaxView, -1 })
         {
             if (vw < 0) show.Overview = true; else { show.ZoomBy(1); show.ViewW = vw; }
             for (int k = 0; k < 120; k++) show.Advance(dt);   // 카메라가 자리 잡게
-            var ms = new List<double>(); int cw = 0, ch = 0;
+            var ms = new List<double>(); int cw = 0, ch = 0, dot = 0;
             Painter.Prof = new();
             for (int k = 0; k < 10; k++)
             {
                 sw.Restart(); var lf = show.Render(); ms.Add(sw.Elapsed.TotalMilliseconds);
-                cw = (int)(lf.SrcW / Painter.T); ch = (int)(lf.SrcH / Painter.T);
+                cw = (int)Math.Round(lf.CamW); ch = (int)Math.Round(lf.CamH); dot = lf.Dot;
                 show.Recycle(lf.Img);
             }
-            zoomRow.Add($"{(vw < 0 ? "배 전체" : $"{vw:0}칸")} ({cw}×{ch}) {P(ms, 0.5):0.0}ms");
-            if (vw < 0 || vw >= LiveShow.MaxView) Console.WriteLine($"    {(vw < 0 ? "배 전체" : $"{vw:0}칸")} 단계: " + string.Join(" · ", Painter.Prof.OrderByDescending(x => x.Value).Take(8).Select(x => $"{x.Key} {x.Value / 10:0.0}")));
+            zoomRow.Add($"{(vw < 0 ? "배 전체" : $"{vw:0}칸")} ({cw}×{ch} · {dot}도트) {P(ms, 0.5):0.0}ms (첫 장 {ms[0]:0.0})");
+            if (vw < 0 || vw >= LiveShow.MaxView) Console.WriteLine($"    {(vw < 0 ? "배 전체" : $"{vw:0}칸")} 단계: " + string.Join(" · ", Painter.Prof.OrderByDescending(x => x.Value).Take(12).Select(x => $"{x.Key} {x.Value / 10:0.0}")));
             Painter.Prof = null;
         }
         show.Paused = false; show.Overview = false; show.Follow = true;

@@ -149,6 +149,21 @@ public static partial class Program
         }
         var (th, _) = Measure("Hannuri", 100, 30, 150);
         Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");
+        // 그리기 예산 (6단 60프레임 · docs/GRAPHICS.md §3): 세계 스레드가 나아가기 + 그리기를 1/60초 안에 — 넓은 보기는 칸당 16 · 8도트 (굽은 덩어리)
+        {
+            var s = ShipWorld.Crewed("Saetteul", 9, 40, 16, 4);
+            s.Run(300);
+            var p = new ShipView.Painter(s.Layout);
+            int W = s.Layout.W, H = s.Layout.H;
+            var into = new ShipSim.Art.Img(97 * 32, 55 * 32);
+            double Med(Action f) { for (int k = 0; k < 40; k++) f(); var ms = new List<double>(); for (int k = 0; k < 12; k++) { var sw = Stopwatch.StartNew(); f(); ms.Add(sw.Elapsed.TotalMilliseconds); } ms.Sort(); return ms[ms.Count / 2]; }   // 40장 먼저 (단계 번역이 끝나게 — 관전 화면은 1초에 60장)
+            p.FrameFar(s, -1, -1, W + 2, H + 2, 0, 8, into);   // 처음 한 번 모두 굽는다 (관전 화면은 32도트로 보는 동안 미리 굽는다)
+            double near = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into));
+            double far16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into));
+            double far8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Check("그리기 예산: 새뜰호 41×24칸 32도트 ≤ 6ms · 97×55칸 16도트 ≤ 8ms · 배 전체 8도트 ≤ 8ms (가운데 값 — 세계 스레드가 1/60초 안에)",
+                near <= 6 && far16 <= 8 && far8 <= 8, $"{near:0.0} · {far16:0.0} · {far8:0.0}ms (덩어리 {p.Baked})");
+        }
     }
 
     /// <summary>배 하나 · 엔진마다 한 틱 시간 (--profile 배 사람 로봇 [틱]) — 시험이 많이 쓰는 배가 어디에 시간을 쓰나.</summary>

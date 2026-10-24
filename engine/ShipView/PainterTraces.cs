@@ -15,13 +15,15 @@ public sealed partial class Painter
     private void WallTraces(Img img, Structure st, int x0, int y0, int w, int h)
     {
         var rust = Rgba.Hex("#8a4a22"); var rustDark = Rgba.Hex("#5c2e14"); var crack = Rgba.Hex("#14171c");
-        for (int y = y0 - 1; y < y0 + h; y++)
-            for (int x = x0; x < x0 + w; x++)
+        int hb = _bake ? 1 : 0;   // 굽는 덩어리는 둘레 한 칸까지 (이웃 칸의 실금이 덩어리 경계를 넘어온다)
+        for (int y = y0 - 1; y < y0 + h + hb; y++)
+            for (int x = x0 - hb; x < x0 + w + hb; x++)
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (L.Kind[c] != CellKind.Wall || !Mine(c)) continue;
                 float cor = st.Corrode[c], fat = st.Fatigue[c];
+                if (_bake) { cor = (int)(cor * 40) / 40f; fat = (int)(fat * 84) / 84f; }   // 굽는 덩어리는 도장과 같은 단으로 (그림이 도장만으로 정해진다)
                 int px = (x - x0) * T, py = (y - y0) * T;
                 if (cor >= RustMin)
                 {
@@ -45,7 +47,7 @@ public sealed partial class Painter
                             img.Blend(sx - 1, py + ArtWalls.CapH + ArtWalls.FaceH - 3, rust, a * 0.5f); img.Blend(sx + 1, py + ArtWalls.CapH + ArtWalls.FaceH - 3, rust, a * 0.5f);   // 굽도리에 고인다
                         }
                 }
-                if (fat >= CrackMin && y >= y0)
+                if (fat >= CrackMin && y >= y0 - hb)
                 {
                     // 실금: 피로가 클수록 길고 많다 (꺾이며 뻗는다)
                     int n = 1 + (int)((fat - CrackMin) * 6);
