@@ -539,16 +539,13 @@ public sealed partial class Mind
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(10)) return;
         {
-            int x0 = L.X(cell), y0 = L.Y(cell);
+            // 둘레 3×3을 닦는다 — 곰팡이 · 고인 물 (닦는 것은 ⑦에 요청)
+            Span<int> around = stackalloc int[9];
+            int n = 0, x0 = L.X(cell), y0 = L.Y(cell);
             for (int y = Math.Max(0, y0 - 1); y <= Math.Min(L.H - 1, y0 + 1); y++)
                 for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++)
-                {
-                    int k = L.Index(x, y);
-                    if (_life != null) _life.Mold[k] = 0;
-                    // 고인 물을 닦아 오수 통으로 (재활용 장치가 걸러 다시 쓴다)
-                    double w = F.Stored(T.sWater, k);
-                    if (w > 0 && _net != null) _net.WasteWater += F.TakeStore(k, T.sWater, w);
-                }
+                    around[n++] = L.Index(x, y);
+            _life?.Mop(around[..n], MopKind.Mold | MopKind.Water);
         }
         if (_work != null) _work.Cleaned++;
         JobDone(a, t);

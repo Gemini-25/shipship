@@ -702,18 +702,44 @@ public sealed partial class Life : IEngine
             double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, t)));
             if (rh < 0.5 && Mold[c] < 0.1) continue;
             double rate = 0.01 / 86400 * Math.Pow(2, (t - 293) / 10) * (1 + 3 * Mold[c]);
-            double xi = food * rate * dt;
-            bool anaerobic = F.Partial(T.gO2, c) < 2;
-            var r = anaerobic ? _ferment : _rot;
-            if (!anaerobic) xi = Math.Min(xi, F.Gas(T.gO2, c) * 0.3 / 6);
-            if (xi <= 1e-9) continue;
-            double q = r.Heat(T, t) * xi;
+            double xi = Decompose(sim, c, F.Partial(T.gO2, c) < 2 ? _ferment : _rot, food * rate * dt, t);
+            if (xi <= 0) continue;
             F.TakeStore(c, T.sFood, xi);
             FoodRotted += xi; sim.Book.Add(Res.Food, Flow.Rotted, -xi);
-            foreach (var x in r.In) { var s = T.Substances[x.S]; if (s.Gas >= 0) { F.RemoveGas(c, s.Gas, x.Nu * xi); if (s.Gas == T.gO2) sim.Book.Add(Res.O2, Flow.Rotted, -x.Nu * xi); } }
-            foreach (var x in r.Out) { var s = T.Substances[x.S]; if (s.Gas >= 0) F.AddGas(c, s.Gas, x.Nu * xi, t); }
-            F.AddHeat(c, q);
         }
+    }
+
+    /// <summary>
+    /// 썩힘 (음식 상함 · 오물): 칸 cell에서 반응 r을 mol몰 일으킨다 — 산소를 쓰는 반응은 칸 산소의 30%까지 · 기체를 빼고 더하고 (온도 temp의 기체) · 반응열.
+    /// 실제로 일어난 몰을 돌려준다 (1e-9 아래면 0). 썩은 고체(양분 · 오물)를 빼고 장부에 적는 것은 부른 쪽.
+    /// </summary>
+    public double Decompose(Sim sim, int cell, Reaction r, double mol, double temp)
+    {
+        foreach (var x in r.In) if (T.Substances[x.S].Gas == T.gO2) mol = Math.Min(mol, F.Gas(T.gO2, cell) * 0.3 / x.Nu);
+        if (mol <= 1e-9) return 0;
+        double q = r.Heat(T, temp) * mol;
+        foreach (var x in r.In) { var s = T.Substances[x.S]; if (s.Gas >= 0) { F.RemoveGas(cell, s.Gas, x.Nu * mol); if (s.Gas == T.gO2) sim.Book.Add(Res.O2, Flow.Rotted, -x.Nu * mol); } }
+        foreach (var x in r.Out) { var s = T.Substances[x.S]; if (s.Gas >= 0) F.AddGas(cell, s.Gas, x.Nu * mol, temp); }
+        F.AddHeat(cell, q);
+        return mol;
+    }
+
+    /// <summary>
+    /// ⑧의 요청: 칸들을 닦았다 (청소 · 쏟은 것 닦기 · 소독이 함께 쓴다) — what의 갈래만: 곰팡이를 걷어 낸다 · 고인 물을 닦아 오수 통으로 (재활용 장치가 걸러 다시 쓴다).
+    /// 닦아 낸 물 (몰)을 돌려준다.
+    /// </summary>
+    public double Mop(ReadOnlySpan<int> cells, MopKind what)
+    {
+        double wiped = 0;
+        foreach (int k in cells)
+        {
+            if (k < 0 || k >= L.N) continue;
+            if ((what & MopKind.Mold) != 0) Mold[k] = 0;
+            if ((what & MopKind.Water) == 0 || _net == null) continue;
+            double w = F.Stored(T.sWater, k);
+            if (w > 0) { double got = F.TakeStore(k, T.sWater, w); _net.WasteWater += got; wiped += got; }
+        }
+        return wiped;
     }
 
     /// <summary>에너지 장부: 몸의 양분 · 물(생성 엔탈피) + 몸의 열.</summary>
@@ -735,3 +761,7 @@ public sealed partial class Life : IEngine
     public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); w.Tag("변기"); w.Arr(Tank); w.Arr(Bowl); w.Arr(Heap); w.Arr(Clogged); w.Arr(ClogCause); w.Arr(Grime); w.Arr(Flushes); w.Arr(ScrubbedAt); w.I64(Clogs); w.I64(Overflows); w.F64(WasteCarried); }
     public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); r.Tag("변기"); Tank = r.Arr<double>(); Bowl = r.Arr<double>(); Heap = r.Arr<double>(); Clogged = r.Arr<byte>(); ClogCause = r.Arr<int>(); Grime = r.Arr<float>(); Flushes = r.Arr<int>(); ScrubbedAt = r.Arr<int>(); Clogs = r.I64(); Overflows = r.I64(); WasteCarried = r.F64(); }
 }
+
+/// <summary>닦는 갈래 (Life.Mop — 겹쳐 쓴다).</summary>
+[Flags]
+public enum MopKind : byte { None = 0, Mold = 1, Water = 2 }
