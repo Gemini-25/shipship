@@ -5,13 +5,12 @@ namespace ShipEngine;
 /// 선 승객의 균형 한계 0.1~0.15g (대중교통 연구 · Hoberock 1977 — 저크 0.3g/s 아래): 넘어질 몫 = ((한 틱에 오른 가속 − 0.08g) ÷ 0.25g)를 0~1로 —
 /// 저크가 0.3g/s 아래면 (정해진 점화는 20초에 걸쳐 올린다) 몸이 따라가 (저크/0.3)²만큼만 · 갑자기 다 켜면(운석 비키기) 그대로.
 /// 방송을 듣고 붙잡았으면 ×0.05 (10초 넘게 앞서 들었으면 · 막 들었으면 ×0.5) · 앉아 일하거나 먹는 중 ×0.3 · 젖은 바닥 ×2 · 사람이나 무거운 것을 들었으면 ×1.5 · 누운 이(자는 이 · 쓰러진 이)는 0.
-/// 넘어지면 타박 (3% + (가속 − 0.2g)×20%로 뼈가 다친다) · 업던 사람 · 든 것을 놓친다.
+/// 넘어지면 타박 (3% + (가속 − 0.2g)×20%로 뼈가 다친다 — 몸은 ⑦ Life.Fall이 셈한다) · 업던 사람 · 든 것을 놓친다.
 /// </summary>
 public sealed partial class Mind
 {
     public long Falls, BracedOnBurn;
     public const double JerkG = 0.3;   // 선 승객이 버티는 저크 (g/s — Hoberock 1977)
-    public const double JoltSec = 1.0; // 덜컹임이 이어지는 때 (초)
     private double _lastG;
     private Outside? _out;
 
@@ -62,8 +61,7 @@ public sealed partial class Mind
         foreach (var a in Agents)
         {
             if (!a.IsPerson || a.C.Up == 0 || a.C.Body < 0 || a.C.CarriedBy >= 0) continue;
-            var (jx, jy) = _st.JoltDv(a.C.Cell);
-            double g = Math.Max(Math.Sqrt(jx * jx + jy * jy) / JoltSec, _st.BumpAt(a.C.Cell) / Structure.BumpSec) / Outside.G0;   // 바닥이 1초 남짓에 그만큼 빠르기를 바꾼 것으로 (감압 · 밀림) · 부딪힘은 0.2초에
+            double g = _st.JoltG(a.C.Cell);   // 그 자리 바닥의 덜컹임 (④가 셈한다)
             double p = FallChance(g);
             if (p <= 0) continue;
             var b = _life[a.C.Body];
@@ -92,27 +90,17 @@ public sealed partial class Mind
         return false;
     }
 
+    /// <summary>넘어졌다: 몸은 월드가 셈하고 (⑦ Life.Fall — 타박 · 뼈 · 업혀 있던 이 · 사실) · 마음은 겁이 나고 든 것을 떨군다.</summary>
     private void FallDown(Sim sim, Agent a, double g, string how, int parent, bool showG = true)
     {
         long t = sim.Tick;
-        int cell = a.C.Cell;
-        double u = Rng.Unit(sim.Seed, Rng.Key("넘어져 다침"), t, a.Id);
-        float boneLoss = a.IsPerson && a.C.Body >= 0 ? _life![a.C.Body].BoneLoss : 0;   // 무중력에서 약해진 뼈는 잘 부러진다 (4%를 잃으면 두 배)
-        bool bone = Rng.Unit(sim.Seed, Rng.Key("뼈"), t, a.Id) < (0.03 + 0.2 * Math.Max(0, g - 0.2)) * (boneLoss > 0 ? 1 + boneLoss / 0.04 : 1);
-        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {how} 넘어졌다{(showG ? $" ({g:0.00}g)" : "")}{(bone ? boneLoss > 0.02f ? " — 무중력에 약해진 뼈가 부러졌다" : " — 뼈를 다쳤다" : "")}", t, cell, parent, 0, a.Id);
-        float blunt = (float)(0.05 + 0.2 * g * u + (bone ? 0.35 : 0));
-        if (a.C.Carrying >= 0)
-        {
-            int vb = a.C.Carrying;
-            DropCarried(sim, a, false);
-            _life!.Strike(sim, vb, 0.1f, 0, cause);   // 업혀 있던 이도 바닥에
-        }
+        int cell = a.C.Cell, vb = a.C.Carrying;
+        if (vb >= 0) DropCarried(sim, a, false);   // 업던 이를 놓친다 (바닥에 부딪힌 몸은 월드가)
+        _life!.Fall(sim, a.C.Body, g, how, parent, a.Id, NameOf(a.Id), a.Id, showG, vb);
         if (a.C.Holding != 255) { if (a.C.Holding == iWaste && !WasteDown.Contains(cell)) WasteDown.Add(cell); Loose.Add(new LooseItem { Item = a.C.Holding, Cell = cell, Charge = a.C.HoldCharge }); a.C.Holding = 255; a.C.HoldCharge = 0; }
-        _life!.Strike(sim, a.C.Body, blunt, 0, cause);
         a.C.MoveBudget = 0; a.C.StepStart = t;
         a.C.Fear = Math.Min(1, a.C.Fear + 0.2f);
         Falls++;
-        sim.Facts.Emit(t, FactKind.Fell, cell, (float)g, cause, a.Id);
     }
 
     /// <summary>⑩ 반가운 교신 (지나가는 배와 소식을 나눴다): 배 사람 모두 기쁨이 조금 오르고 외로움이 준다.</summary>

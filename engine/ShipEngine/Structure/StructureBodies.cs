@@ -236,6 +236,19 @@ public sealed partial class Structure
     /// <summary>칸 c의 몸이 이번 틱에 부딪혀 바뀐 빠르기 (m/s).</summary>
     public double BumpAt(int c) { int b = BodyOf(c); return b >= 0 && b < Bodies.Count ? Bodies[b].Bump : 0; }
 
+    /// <summary>덜컹임이 이어지는 때 (초) · 표준 중력 (m/s² — ⑤ 바깥의 G0와 같은 값 · 위층을 읽지 않으려 따로 둔다).</summary>
+    public const double JoltSec = 1.0, G0 = 9.80665;
+
+    /// <summary>
+    /// 칸 c에 선 이가 느끼는 덜컹임의 세기 (g): 바닥이 1초 남짓에 그만큼 빠르기를 바꾼 것으로 (뿜는 공기 · 갈라짐 · 밀림) · 부딪힘은 0.2초에 —
+    /// 둘 가운데 센 쪽. 넘어질지는 이 세기로 정한다 (⑧이 읽는다).
+    /// </summary>
+    public double JoltG(int c)
+    {
+        var (jx, jy) = JoltDv(c);
+        return Math.Max(Math.Sqrt(jx * jx + jy * jy) / JoltSec, BumpAt(c) / BumpSec) / G0;
+    }
+
     /// <summary>칸 c의 몸을 흔든 원인: 돌기 시작한 마디 → 민 것 → 갈라짐.</summary>
     public int BodyCause(int c)
     {

@@ -86,13 +86,8 @@ public sealed partial class Mind
         return _washDev[fu];
     }
 
-    /// <summary>마려움 (0~1 — 1이면 참지 못한다): 방광 · 장 가운데 더 찬 쪽 (몸이 안다).</summary>
-    public float Urge(Agent a)
-    {
-        if (!a.IsPerson || _life == null) return 0;
-        ref var b = ref _life[a.C.Body];
-        return (float)Math.Max(b.Bladder / Life.BladderMax, b.Bowel / Life.BowelMax);
-    }
+    /// <summary>마려움 (0~1 — 1이면 참지 못한다 · 몸이 안다 — ⑦ Life.Urge가 셈한다).</summary>
+    public float Urge(Agent a) => !a.IsPerson || _life == null ? 0 : _life.Urge(a.C.Body);
 
     /// <summary>변기를 쓸 수 있나 (흡입 팬이 멀쩡하고 전기가 들어온다 — 고장 등이 켜져 있으면 안다 · 주컴퓨터가 '사용 금지' 불을 켜지 않았다).</summary>
     private bool ToiletOk(int fu) { int d = WashDev(fu); return (d < 0 || _net!.Working(d)) && (fu >= WashSign.Length || WashSign[fu] == 0); }
