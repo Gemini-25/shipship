@@ -414,6 +414,62 @@ public static partial class Program
                 $"조각 안 칸 보기 {looked} · 한 틱에 가장 멀리 {tickMove:0.00}칸 · 화면 한 장에 가장 멀리 {jump:0.00}칸 · 조각 그려진 자리 {fx:0},{fy:0} (도면 {lay.W}×{lay.H}) · 카메라 {cam.left:0},{cam.top:0} {cam.w:0}×{cam.h:0}");
         }
 
+        // ── (사) 도는 조각 그림 각: 한 틱(2.4초)에 반 바퀴 넘게 도는 조각 · 배(별)도 틱 사이를 감지 않은 각으로 메운다 — 도는 쪽으로만 · 고르게 (감으면 4.8rad가 −1.48rad가 되어 거꾸로 돈다) ──
+        {
+            var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s = Worlds.Full(lay, 2);
+            s.Get<Mind>().Crew(s, 2, 0, 0);
+            var st = s.Get<Structure>();
+            s.Run(Time.Minutes(1));
+            for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), 0);
+            s.Run(3);
+            var show = new ShipView.LiveShow(s, "아령") { SpeedOverride = 1, Follow = false };
+            static void SpinTo(Structure st, int b, double w) { var o = st.Bodies[b]; double j = (o.W - w) * o.Inertia / 2; st.Push(b, o.X, o.Y + 1, j, 0); st.Push(b, o.X, o.Y - 1, -j, 0); }   // 짝힘 — 각속도를 w로
+            void Spin(int b, double w) => SpinTo(st, b, w);
+            double Rel1() => st.Bodies[1].Th - st.Bodies[0].Th;
+            // 조각: 배에 대해 2.0rad/s
+            Spin(1, st.Bodies[0].W + 2.0);
+            double w1 = st.Bodies[1].W - st.Bodies[0].W, r0 = Rel1();
+            int ran = show.Advance(1.0);
+            double turned = Rel1() - r0;
+            var th = new[] { 0, 0.25, 0.5, 0.75, 1 }.Select(f => show.DrawnTh(1, f)).ToArray();
+            double worst = 0; bool forward = true;
+            for (int k = 1; k < th.Length; k++) { double d = th[k] - th[k - 1]; forward &= d * w1 > 0; worst = Math.Max(worst, Math.Abs(d - w1 * Time.SecondsPerTick * 0.25)); }
+            // 배: 2.0rad/s — 별이 도는 각
+            Spin(0, 2.0);
+            double w0 = st.Bodies[0].W, sky0 = st.Bodies[0].Th;
+            ran += show.Advance(1.0);
+            double skyTurn = st.Bodies[0].Th - sky0;
+            ran += show.Advance(0.25);   // 틱 사이 4분의 1 (틱은 돌지 않는다)
+            show.Render();
+            double sky = show.Painter.SkyTh - sky0;
+            Check("도는 조각 그림 각: 한 틱에 4.8rad (반 바퀴 넘게) 도는 조각은 틱 사이 장마다 도는 쪽으로만 · 고르게 돈다 (W · 2.4초 · 틱 사이 몫) · 배가 그만큼 돌면 별도 감지 않고 4분의 1만큼",
+                ran == 2 && st.Bodies.Count == 2 && Math.Abs(w1 - 2.0) < 1e-9 && Math.Abs(turned) > Math.PI && forward && worst < 1e-6 &&
+                Math.Abs(w0 - 2.0) < 1e-9 && skyTurn > Math.PI && Math.Abs(sky - w0 * Time.SecondsPerTick * 0.25) < 1e-6,
+                $"조각 배에 대해 {w1:0.000}rad/s · 한 틱에 {turned:0.000}rad · 장마다 각 {string.Join(" → ", th.Select(t => (t - th[0]).ToString("0.000")))} (틱 사이 몫 0.25마다 {w1 * Time.SecondsPerTick * 0.25:0.000} · 가장 큰 어긋남 {worst:0.0e0}) · " +
+                $"배 {w0:0.000}rad/s · 한 틱에 {skyTurn:0.000}rad · 4분의 1에 별 {sky:0.000}rad (기대 {w0 * Time.SecondsPerTick * 0.25:0.000})");
+
+            // 돌던 조각이 또 갈라지면: 새 몸은 이번 틱에 났다 (지난 틱 자세가 없다) — 붙어 있던 자리 · 지금 각에 가장 가까운 온 바퀴에서 메운다 (각을 감지 않아도 한 장에 몇 바퀴를 돌지 않는다)
+            var lay3 = Worlds.Ascii(Triple, Worlds.MindLegend);
+            var s3 = Worlds.Full(lay3, 2);
+            var st3 = s3.Get<Structure>();
+            s3.Run(3);
+            for (int y = 1; y <= 3; y++) st3.Destroy(s3, Worlds.At(lay3, 34, y), 0);
+            s3.Run(3);
+            var f3 = st3.Bodies[1];
+            st3.Push(1, f3.X, f3.Y, f3.Mass, 0);   // 배에서 1m/s로 멀어지며 (돌다 배에 닿지 않게)
+            SpinTo(st3, 1, st3.Bodies[0].W + 1.0);
+            s3.Run(2);
+            double was3 = st3.Bodies[1].Th - st3.Bodies[0].Th;
+            var show3 = new ShipView.LiveShow(s3, "세 방") { SpeedOverride = 1, Follow = false };
+            for (int y = 1; y <= 3; y++) st3.Destroy(s3, Worlds.At(lay3, 46, y), 0);
+            int ran3 = show3.Advance(1.0);   // 이 틱에 조각의 통로가 끊겨 또 갈라진다
+            double new0 = show3.DrawnTh(2, 0), new1 = show3.DrawnTh(2, 1);
+            Check("도는 조각 그림 각 — 또 갈라진 몸: 배에 대해 반 바퀴 넘게 돈 조각에서 이번 틱에 갈라져 나온 몸은 지금 각에 가장 가까운 온 바퀴에서 메운다 (한 장에 몇 바퀴를 돌지 않는다)",
+                ran3 == 1 && st3.Bodies.Count == 3 && Math.Abs(was3) > Math.PI && Math.Abs(new1 - new0) <= Math.PI + 1e-9,
+                $"몸 {st3.Bodies.Count} · 갈라지기 전 조각 각 {was3:0.000}rad · 새 몸 틱 사이 {new0:0.000} → {new1:0.000}rad");
+        }
+
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──
         {
             var lay = Worlds.Ascii(Sealed);

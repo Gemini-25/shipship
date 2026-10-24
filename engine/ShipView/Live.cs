@@ -298,7 +298,7 @@ public sealed partial class LiveShow
     }
 
     /// <summary>마지막 틱 앞: 지금 칸과 앞으로 걸을 길(몇 칸)을 적어 둔다.</summary>
-    // ④ 칸 강체: 지난 틱 끝의 몸마다 배 틀 무게중심 자리 · 자세 (틱 사이를 메운다 — 걸음처럼 한 틱 늦게) · 배의 자세
+    // ④ 칸 강체: 지난 틱 끝의 몸마다 배 틀 무게중심 자리 · 자세 (틱 사이를 메운다 — 걸음처럼 한 틱 늦게 · 각은 감지 않은 값: 한 틱에 반 바퀴 넘게 도는 몸도 도는 쪽으로) · 배의 자세
     private (double qx, double qy, double th)[] _prevPose = Array.Empty<(double, double, double)>();
     private double _prevSky;
     private long _prevTick = long.MinValue;
@@ -425,13 +425,13 @@ public sealed partial class LiveShow
         return (cs * o.Lx - sn * o.Ly + tx, sn * o.Lx + cs * o.Ly + ty);
     }
 
-    /// <summary>몸 b의 지금 배 틀 무게중심 자리 · 배에 대한 자세.</summary>
+    /// <summary>몸 b의 지금 배 틀 무게중심 자리 · 배에 대한 자세 (몸 각 − 배 각 그대로 — 감지 않는다).</summary>
     private static (double qx, double qy, double th) PoseNow(Structure st, int b)
     {
         if (b <= 0) return (0, 0, 0);
         var o = st.Bodies[b];
         var (cs, sn, tx, ty) = st.ToShipFrame(b);
-        return (cs * o.Lx - sn * o.Ly + tx, sn * o.Lx + cs * o.Ly + ty, Math.Atan2(sn, cs));
+        return (cs * o.Lx - sn * o.Ly + tx, sn * o.Lx + cs * o.Ly + ty, o.Th - st.Bodies[0].Th);
     }
 
     /// <summary>몸 b를 그릴 배 틀 자세: 지난 틱 끝 → 지금을 틱 사이 비율만큼 (무게중심 자리 · 자세를 따로 — 도는 조각이 흔들리지 않게). 이번 틱에 떨어져 나간 조각은 붙어 있던 자리에서.</summary>
@@ -439,14 +439,27 @@ public sealed partial class LiveShow
     {
         if (b <= 0 || b >= st.Bodies.Count) return (1, 0, 0, 0);
         var o = st.Bodies[b];
-        var now = PoseNow(st, b);
-        bool knew = World.Tick == _prevTick + 1 && _prevPose.Length > 0;   // 바로 지난 틱을 안다 (앞으로 감기 · 다시보기로 건너뛰었으면 지금 그대로)
-        (double qx, double qy, double th) was = !knew ? now : b < _prevPose.Length ? _prevPose[b] : (o.Lx, o.Ly, 0.0);
-        double f = Math.Clamp(_carry, 0, 1);
-        double dth = Math.IEEERemainder(now.th - was.th, 2 * Math.PI);
-        double th = was.th + dth * f, qx = was.qx + (now.qx - was.qx) * f, qy = was.qy + (now.qy - was.qy) * f;
+        var (qx, qy, th) = PoseAt(st, b, Math.Clamp(_carry, 0, 1));
         double cs = Math.Cos(th), sn = Math.Sin(th);
         return (cs, sn, qx - (cs * o.Lx - sn * o.Ly), qy - (sn * o.Lx + cs * o.Ly));
+    }
+
+    /// <summary>시험용: 몸 b를 틱 사이 비율 f (0 지난 틱 끝 ~ 1 지금)에 그리는 배 틀 각 (rad).</summary>
+    public double DrawnTh(int b, double f)
+    {
+        var st = World.Find<Structure>();
+        return st == null || b <= 0 || b >= st.Bodies.Count ? 0 : PoseAt(st, b, f).th;
+    }
+
+    /// <summary>몸 b의 틱 사이 f의 배 틀 무게중심 자리 · 자세 — 각은 지난 틱 끝 각에서 지금 각까지 곧게 (감지 않는다: 한 틱에 4.8rad 도는 몸을 −1.48rad로 거꾸로 돌리지 않는다).</summary>
+    private (double qx, double qy, double th) PoseAt(Structure st, int b, double f)
+    {
+        var o = st.Bodies[b];
+        var now = PoseNow(st, b);
+        bool knew = World.Tick == _prevTick + 1 && _prevPose.Length > 0;   // 바로 지난 틱을 안다 (앞으로 감기 · 다시보기로 건너뛰었으면 지금 그대로)
+        (double qx, double qy, double th) was = !knew ? now : b < _prevPose.Length ? _prevPose[b]
+            : (o.Lx, o.Ly, now.th - Math.IEEERemainder(now.th, 2 * Math.PI));   // 이번 틱에 났다: 붙어 있던 자리 · 지금 각에 가장 가까운 온 바퀴에서 (돌던 조각에서 또 갈라진 몸이 한 장에 몇 바퀴를 돌지 않게)
+        return (was.qx + (now.qx - was.qx) * f, was.qy + (now.qy - was.qy) * f, was.th + (now.th - was.th) * f);
     }
 
     /// <summary>카메라가 갈 수 있는 곳: 배 둘레 + 떨어져 나간 조각들의 그려진 자리 (200칸 안 — 멀리 간 것은 따라가지 않는다).</summary>
@@ -645,7 +658,7 @@ public sealed partial class LiveShow
             for (int b = 0; b < poses.Length; b++) poses[b] = PoseDrawn(stb, b);
             Painter.Poses = poses;
             double th0 = stb.Bodies[0].Th;
-            Painter.SkyTh = _prevPose.Length > 0 && World.Tick == _prevTick + 1 ? _prevSky + Math.IEEERemainder(th0 - _prevSky, 2 * Math.PI) * Math.Clamp(_carry, 0, 1) : th0;
+            Painter.SkyTh = _prevPose.Length > 0 && World.Tick == _prevTick + 1 ? _prevSky + (th0 - _prevSky) * Math.Clamp(_carry, 0, 1) : th0;   // 감지 않는다 (빨리 도는 배의 별도 도는 쪽으로)
         }
         else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
         Painter.Sub = Math.Clamp(_carry, 0, 1);
