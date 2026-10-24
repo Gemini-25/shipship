@@ -208,6 +208,25 @@ public static partial class Program
                 Check("곰팡이 문 아래 칸: 가로 벽 문짝이 드리운 줄 (위 10줄)은 그 칸의 곰팡이를 가린다 · 그 밑에는 핀다 (32 · 16도트 같은 차례)",
                     closed && hang == 0 && under > 20 && hangF == 0 && underF > 4 && Cell(f0, h2, below, 16, 0, 16, Changed) == 0,
                     $"닫힌 문 {closed} · 드리운 줄 바뀐 점 32도트 {hang} · 16도트 {hangF} · 그 밑 검푸른 점 {under} · 어두워진 점 {underF}");
+                // 넓은 보기 문 칸의 구운 곰팡이 판 (예산 고침): 곰팡이만 있는 문 칸은 곰팡이 칸마다 한 번 구운 판을 줄여 얹는다 —
+                // 장마다 32도트 판을 지우고 섞어 줄이던 길 (Painter.NoMoldTile)과 같은 그림 (곰팡이 단 여섯 · 16 · 8도트 · 그림 전체)
+                Img Far8() { p.FrameFar(s, 0, 0, W, H, 0, 8); return Copy(p.FrameFar(s, 0, 0, W, H, 0, 8)); }
+                static bool SameImg(Img a, Img b) => a.Px.AsSpan().SequenceEqual(b.Px);
+                var e0 = Far8();
+                bool sameTile = true; int tileDots = 0;
+                foreach (float m in new[] { 0.05f, 0.1f, 0.25f, 0.5f, 0.8f, 1f })
+                {
+                    life.Mold[dc] = m;
+                    var t16 = Far(); var t8 = Far8();
+                    Painter.NoMoldTile = true;
+                    var o16 = Far(); var o8 = Far8();
+                    Painter.NoMoldTile = false;
+                    sameTile &= SameImg(t16, o16) && SameImg(t8, o8);
+                    tileDots += Cell(f0, t16, dc, 16, 0, 16, Changed) + Cell(e0, t8, dc, 8, 0, 8, Changed);
+                }
+                life.Mold[dc] = 0;
+                Check("곰팡이 문 칸 넓은 보기: 구운 곰팡이 판을 줄여 얹은 그림이 장마다 섞어 줄인 그림과 같다 (곰팡이 0.05 ~ 1 · 16 · 8도트 · 그림 전체)",
+                    sameTile && tileDots > 30, $"같다 {sameTile} · 문 칸 바뀐 점 {tileDots}");
             }
             finally { Painter.FarBakeMs = bakeMs; Painter.FarBakeMax = bakeMax; }
         }

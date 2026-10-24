@@ -104,10 +104,33 @@ public sealed partial class Painter
     /// <summary>칸 c의 곰팡이 점 목록 (없으면 null) — 32도트 Draw는 칸을 고르는 고리 (한 스레드)에서 고르고 바닥 타일과 함께 칸 줄마다 여러 코어에서 찍는다.</summary>
     private MoldDot[]? MoldMarksAt(Life? life, int c)
     {
+        int i = MoldSlot(life, c);
+        if (i < 0) return null;
+        return MoldMarks[i] ??= MoldBake(MoldSteps[i >> 7], i >> 1 & 63, (i & 1) != 0);   // 다른 스레드가 함께 구워도 같은 목록 (참조 쓰기는 한 번에)
+    }
+
+    /// <summary>칸 c의 곰팡이 칸 (단 × 칸 무늬 64 × 화장실 설비 칸 — (단 · 64 + 무늬) · 2 + 설비) · 곰팡이가 없으면 −1.</summary>
+    private int MoldSlot(Life? life, int c)
+    {
         float m = MoldAt(life, c);
-        if (m <= 0) return null;
+        if (m <= 0) return -1;
         int idx = MoldIdx(m) - 1, seed = (L.X(c) & 7) | (L.Y(c) & 7) << 3, fix = L.FurnitureAt[c] >= 0 ? 1 : 0;
-        return MoldMarks[(idx * 64 + seed) * 2 + fix] ??= MoldBake(MoldSteps[idx], seed, fix != 0);   // 다른 스레드가 함께 구워도 같은 목록 (참조 쓰기는 한 번에)
+        return (idx * 64 + seed) * 2 + fix;
+    }
+
+    /// <summary>구운 곰팡이 판 (투명한 칸 판에 점 목록을 섞은 것 — 곰팡이 칸마다 한 번): 넓은 보기 문 칸이 줄여 얹는다 (DownOf — 장마다 32도트 판을 지우고 섞어 줄이던 것과 같은 그림 ·
+    /// 예산 고침: 곰팡이 1 · 안개인 새뜰호 넓은 보기 '문 · 물건 · 칸 덮개' 단계 16 · 8도트 0.55 · 0.65~0.77 → 0.32~0.38 · 0.26~0.44ms).</summary>
+    private static readonly Img?[] MoldTiles = new Img?[6 * 64 * 2];
+    /// <summary>시험용: 넓은 보기 문 칸 곰팡이를 예전처럼 장마다 32도트 판에 섞어 줄인다 (구운 판과 같은 그림인지 견준다).</summary>
+    public static bool NoMoldTile;
+    private Img? MoldTileAt(Life? life, int c)
+    {
+        int i = MoldSlot(life, c);
+        if (i < 0) return null;
+        if (MoldTiles[i] is { } done) return done;
+        var t = new Img(T, T);
+        MoldPut(t, MoldMarksAt(life, c)!, 0, 0);
+        return MoldTiles[i] = t;
     }
 
     /// <summary>칸 c (자리 px, py)의 곰팡이 — 문 칸 (32도트 칸 덮개 · 넓은 보기 DoorStain)이 쓴다 (바닥 칸은 Draw가 바닥 타일과 함께).</summary>

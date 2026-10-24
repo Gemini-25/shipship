@@ -373,7 +373,7 @@ public static partial class Program
             int s95 = SteamGain(0.95), s50 = SteamGain(rh0);
             Check("화장실 그림: 김 — 습한 방(0.95)의 김은 처음 습도 방보다 많고 짙다 (샤워기 위에서 밝아진 점 — 같은 틱 · 찬물 그림과의 차)",
                 s95 >= s50 * 3 / 2 + 20, $"밝아진 점 습도 {rh0:0.00} {s50} → 0.95 {s95}");
-            // (h) 안개의 네 점씩 섞기 (정수 — 빠른 길)가 한 점씩 섞기와 같은 그림 (Painter.NoVector · 습도 0.97 · 32 · 16 · 8도트)
+            // (h) 안개의 여덟 · 네 점씩 섞기 (정수 — 빠른 길)가 한 점씩 섞기와 같은 그림 (Painter.NoVector · 습도 0.97 · 32 · 16 · 8도트)
             Humid(0.97);
             var v32 = Shot(); var v16 = Far(); var v8 = p.FrameFar(s, 0, 0, W, H, 0, 8);
             Painter.NoVector = true;
@@ -381,8 +381,30 @@ public static partial class Program
             Painter.NoVector = false;
             Humid(rh0);
             bool sameVec = SameRoom(v32, o32, 32) && SameRoom(v16, o16, 16) && SameRoom(v8, o8, 8);
-            Check("화장실 그림: 안개 — 네 점씩 섞은 그림이 한 점씩 섞은 그림과 같다 (습도 0.97 · 32 · 16 · 8도트)",
+            Check("화장실 그림: 안개 — 여덟 · 네 점씩 섞은 그림이 한 점씩 섞은 그림과 같다 (습도 0.97 · 32 · 16 · 8도트)",
                 sameVec && FloorMean(v32, 32) > m0 + 8, $"같다 {sameVec} · 바닥 밝기 {m0:0.0} → {FloorMean(v32, 32):0.0}");
+            // (i) 안개 칸 거름 (예산 고침 — exp 없는 빠른 거름 · 거른 칸만 습도를 바로 셈 · Painter.NoFogSieve): 방 칸마다 온도 (245 ~ 480K · 소수 자리)와 습도 (0.903 ~ 0.948 — 문턱 바로 위)를 달리 해도
+            //     거름을 끈 그림 (칸마다 RelHumidity)과 같다 (32 · 16 · 8도트) — 거름은 넘을 수 없는 칸만 뺀다 · 245K (표 밖)는 RelHumidity 그대로
+            var keepN = (double[])f.N.Clone(); var keepU = (double[])f.U.Clone();
+            var airCells = room.Cells.Where(c => lay.Kind[c] is CellKind.Floor or CellKind.Door).ToArray();
+            int fogged = 0;
+            for (int i = 0; i < airCells.Length; i++)
+            {
+                int c = airCells[i];
+                double t = 245 + i * 37.31 % 235, rh = 0.903 + i * 7 % 10 * 0.005;
+                f.U[c] = f.GasC(c) * t;
+                double want = rh * Water.SatKPa(Math.Max(250, t)) * 1000 * Field.CellVolume / (Field.R * t), have = f.Gas(f.T.gH2O, c);
+                if (want > have) f.AddGas(c, f.T.gH2O, want - have, t); else f.RemoveGas(c, f.T.gH2O, have - want);
+                if (f.RelHumidity(c) > Painter.FogRh) fogged++;
+            }
+            var q32 = Shot(); var q16 = Far(); var q8 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Painter.NoFogSieve = true;
+            var r32 = Shot(); var r16 = Far(); var r8 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Painter.NoFogSieve = false;
+            Array.Copy(keepN, f.N, keepN.Length); Array.Copy(keepU, f.U, keepU.Length);
+            bool sameSieve = SameRoom(q32, r32, 32) && SameRoom(q16, r16, 16) && SameRoom(q8, r8, 8);
+            Check("화장실 그림: 안개 칸 거름 — 칸마다 온도 245 ~ 480K · 습도 0.903 ~ 0.948로 달리 해도 거름을 끈 그림과 같다 (32 · 16 · 8도트 — 넘을 수 없는 칸만 뺀다)",
+                sameSieve && fogged == airCells.Length && FloorMean(q32, 32) > m0 + 4, $"같다 {sameSieve} · 안개 칸 {fogged}/{airCells.Length} · 바닥 밝기 {m0:0.0} → {FloorMean(q32, 32):0.0}");
         }
 
         // ── 벽 너머로 새지 않는 김 (A2 검토): 선체 벽 바로 아래 샤워 칸 (두 칸 위는 바깥) · 안쪽 벽 바로 아래 샤워 칸 (두 칸 위는 옆방 바닥) ──

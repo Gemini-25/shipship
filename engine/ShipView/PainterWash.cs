@@ -1,5 +1,7 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using ShipEngine;
 using ShipSim.Art;
 
@@ -313,6 +315,49 @@ public sealed partial class Painter
 
     /// <summary>안개 · 거울 김 서림이 서는 습도 (넘으면 — 관찰 장면 · 그리기 예산도 같은 값으로 센다).</summary>
     public const double FogRh = 0.9, MirrorRh = 0.85;
+    /// <summary>포화 수증기압의 1K 표 (250 ~ 499K · <see cref="Water.SatKPa"/>): 칸 온도의 내림 자리 값 — 포화 수증기압은 온도가 오를수록 크니 그 칸의 값보다 작거나 같다.</summary>
+    private static readonly double[] SatFloor = Enumerable.Range(250, 250).Select(t => Water.SatKPa(t)).ToArray();
+
+    /// <summary>안개를 볼 칸의 상대 습도 (장마다 칸마다 — 먼저 exp · 나눗셈 여럿 없이 거른다 · <see cref="FogSieve"/>): 습도가 FogRh를 넘을 수 없는 칸은 0 ·
+    /// 나머지는 수증기 분압 ÷ 포화 수증기압 (<see cref="Field.RelHumidity"/>와 같은 식 — 열용량을 성분 넷씩 함께 더하는 차례만 달라 1e-15 안쪽) · 기체가 거의 없거나 표 밖 온도 (드물다)는 RelHumidity 그대로.
+    /// (예산 고침 — 바닥 칸마다 RelHumidity (나눗셈 여럿 · exp)를 셈했다: 평시 판 '김 · 안개' 단계 16 · 8도트 0.11~0.16 · 0.15~0.22 → 0.06~0.07 · 0.06~0.08ms ·
+    /// 바닥 모두 안개인 배의 훑기는 거름 뒤 RelHumidity를 또 부르던 것보다 0.18 · 0.22 → 0.11 · 0.15ms)</summary>
+    private double FogRhAt(Field f, int c)
+    {
+        if (NoFogSieve) return f.RelHumidity(c);
+        if (!FogSieve(f, c, out double p, out double t)) return 0;   // 거의 모든 칸이 여기서 빠진다
+        return double.IsNaN(t) ? f.RelHumidity(c) : p / Water.SatKPa(t);
+    }
+
+    /// <summary>안개 칸 거름: false면 습도가 FogRh를 넘을 수 없다 (수증기 분압 ≤ FogRh × 내림 온도의 포화 수증기압 — 맺음 끝 1e-9) · true면 p (수증기 분압 kPa) · t (기체 온도 K)를 건넨다
+    /// (기체가 거의 없거나 표 밖 온도면 t = NaN — RelHumidity로). 따로 둔 메서드 — 256비트 셈이 끝나면 위쪽 절반을 비우고 돌아간다 (같은 메서드 안에서 이어 부른 exp는 SSE 전환 값으로 몇 배 느렸다).</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private bool FogSieve(Field f, int c, out double p, out double t)
+    {
+        var cv = _gasCv ??= f.T.Gases.Select(g => g.C).ToArray();   // Field의 성분별 cv와 같은 표
+        int G = f.G, g0 = 0;
+        ref double nc = ref f.N[c * G];
+        double gc = 0;
+        if (Vector256.IsHardwareAccelerated && !NoVector)
+        {
+            var acc = Vector256<double>.Zero;
+            ref double cv0 = ref cv[0];
+            for (; g0 + 4 <= G; g0 += 4) acc += Vector256.LoadUnsafe(ref nc, (nuint)g0) * Vector256.LoadUnsafe(ref cv0, (nuint)g0);
+            gc = Vector256.Sum(acc);
+        }
+        for (; g0 < G; g0++) gc += Unsafe.Add(ref nc, g0) * cv[g0];
+        p = t = double.NaN;
+        if (!(gc > 2e-6)) return true;   // 기체가 거의 없다 (RelHumidity는 1e-6 아래면 바닥 온도 — 그 언저리는 그대로 셈한다) · NaN
+        double tk = f.U[c] / gc;
+        if (!(tk >= 250 && tk < 499)) return true;
+        t = tk;
+        p = f.N[c * G + f.T.gH2O] * Field.R * tk / Field.CellVolume / 1000;   // 수증기 분압 kPa (= 압력 × 몰 분율 — 셈 차례만 다르다)
+        return p > FogRh * SatFloor[(int)tk - 250] * (1 - 1e-9);
+    }
+    private double[]? _gasCv;
+    /// <summary>시험용: 안개 칸 거름을 끈다 (칸마다 RelHumidity — 거름 · 빠른 습도 셈이 그림을 바꾸지 않는지 견준다).</summary>
+    public static bool NoFogSieve;
+
     /// <summary>이 장에 안개를 칠할 칸 (칸 x · 짙기 /256 — 칸 줄 차례) · 칸 줄 (첫 자리 · 칸 수 · y): 습도는 한 스레드로 훑고 (칸마다 한 번 · 싸다) 칠하기만 나눈다.</summary>
     private readonly List<(int x, uint aq)> _fog = new();
     private readonly List<(int start, int n, int y)> _fogRows = new();
@@ -335,14 +380,33 @@ public sealed partial class Painter
     }
 
     /// <summary>안개 빛 (FogTint)을 한 줄 토막 (그림판 py줄 · px0 + xa .. px0 + xb − 1)에 섞는다 — 점 x의 짙기는 덩이 짙기 wb[x ≫ sh] / 256 (덩이 하나 = 2^sh 도트):
-    /// 불투명한 바탕은 정수로 (네 점씩 — 한 점씩과 비트까지 같다 · <see cref="Img.Blend"/>와는 1 안쪽 차) · 반투명 바탕 (드물다)은 예전처럼 <see cref="Img.Blend"/>.</summary>
+    /// 불투명한 바탕은 정수로 (AVX2면 여덟 점씩 — 덩이 짙기를 한 번 읽어 여덟 점으로 편다 · 아니면 네 점씩 · 한 점씩과 비트까지 같다 · <see cref="Img.Blend"/>와는 1 안쪽 차) ·
+    /// 반투명 바탕 (드물다)은 예전처럼 <see cref="Img.Blend"/>. (예산 고침 — 네 점마다 덩이 짙기를 하나씩 모아 만들던 것: 같은 판에서 번갈아 잰 '김 · 안개' 단계 16 · 8도트 0.82~1.02 · 0.66~0.91 → 0.66~0.77 · 0.48~0.75ms)</summary>
     private static void VeilRow(Img img, Span<uint> d, int px0, int py, ReadOnlySpan<uint> wb, int sh, int xa, int xb)
     {
         uint crb = FogTint.R | (uint)FogTint.B << 16, cg = FogTint.G;
         int at = py * img.W + px0, x = xa;
-        if (Vector128.IsHardwareAccelerated && !NoVector)
+        if (Avx2.IsSupported && !NoVector && xb - xa >= 8)
         {
-            for (; x < xb && (x & 3) != 0; x++) VeilDot(img, d, at + x, px0 + x, py, wb[x >> sh], crb, cg);   // 네 점 자리에 맞춘다 (왼쪽 끝이 잘린 칸)
+            for (; x < xb && (x & 7) != 0; x++) VeilDot(img, d, at + x, px0 + x, py, wb[x >> sh], crb, cg);   // 여덟 점 자리에 맞춘다 (왼쪽 끝이 잘린 칸)
+            Vector256<uint> vRB = Vector256.Create(0x00FF00FFu), vA = Vector256.Create(0xFF000000u), vFF = Vector256.Create(0xFFu), v256 = Vector256.Create(256u), vcrb = Vector256.Create(crb), vcg = Vector256.Create(cg);
+            Vector256<uint> spread = sh == 1 ? Vector256.Create(0u, 0, 1, 1, 2, 2, 3, 3) : Vector256.Create(0u, 0, 0, 0, 1, 1, 1, 1);   // 덩이 → 점 (2 · 4점 덩이)
+            ref uint row = ref d[at];
+            ref uint wr = ref MemoryMarshal.GetReference(wb);
+            for (; x + 8 <= xb; x += 8)
+            {
+                var q = Vector256.LoadUnsafe(ref row, (nuint)x);
+                if (!Vector256.EqualsAll(q & vA, vA)) { for (int j = x; j < x + 8; j++) VeilDot(img, d, at + j, px0 + j, py, wb[j >> sh], crb, cg); continue; }
+                var w = sh == 0 ? Vector256.LoadUnsafe(ref wr, (nuint)x)
+                    : sh == 1 ? Avx2.PermuteVar8x32(Vector128.LoadUnsafe(ref wr, (nuint)(x >> 1)).ToVector256Unsafe(), spread)   // 덩이 넷
+                    : Avx2.PermuteVar8x32(Vector128.CreateScalarUnsafe(Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<uint, byte>(ref Unsafe.Add(ref wr, x >> 2)))).AsUInt32().ToVector256Unsafe(), spread);   // 덩이 둘
+                var inv = v256 - w;
+                ((((q & vRB) * inv + vcrb * w) >> 8 & vRB) | (((q >> 8) & vFF) * inv + vcg * w) >> 8 << 8 | vA).StoreUnsafe(ref row, (nuint)x);
+            }
+        }
+        else if (Vector128.IsHardwareAccelerated && !NoVector)
+        {
+            for (; x < xb && (x & 3) != 0; x++) VeilDot(img, d, at + x, px0 + x, py, wb[x >> sh], crb, cg);   // 네 점 자리에 맞춘다
             Vector128<uint> vRB = Vector128.Create(0x00FF00FFu), vA = Vector128.Create(0xFF000000u), vFF = Vector128.Create(0xFFu), v256 = Vector128.Create(256u), vcrb = Vector128.Create(crb), vcg = Vector128.Create(cg);
             ref uint row = ref d[at];
             for (; x + 4 <= xb; x += 4)
@@ -370,14 +434,18 @@ public sealed partial class Painter
     private int _fogDrift = -1;
 
     /// <summary>습한 방의 안개 (습도 0.9 넘는 바닥 칸): 흰 막 짙기 0.25 × (습도 − 0.9) / 0.1 · 4도트 덩이마다 배 자리의 부드러운 물결 (<see cref="FogWave"/>)로 짙기가 달라 천천히 옆으로 흐른다
-    /// (칸 경계에서 이어진다 · 사람 위에 덮는다). 한 칸 줄 y의 안개 칸 (_fog[start .. start + n) — x 차례)을 그림판 줄째로 칠한다: 덩이 짙기만 셈하고 (점마다 펴지 않는다)
+    /// (칸 경계에서 이어진다 · 사람 위에 덮는다). 한 칸 줄 y의 안개 칸 (_fog[start .. start + n) — x 차례)을 그림판 줄째로 칠한다: 덩이 짙기만 셈하고 (점마다 펴지 않는다 — 칠하기가 덩이를 읽어 편다)
     /// 이웃한 안개 칸은 한 토막으로 이어 칠한다 (칸 줄마다 여러 코어에서 부른다). (x0, y0)은 보는 창 · k는 줄임.</summary>
     private void FogRow(Img img, int start, int n, int y, int x0, int y0, int k)
     {
         int D = T / k, sh = k == 1 ? 2 : k == 2 ? 1 : 0, py0 = (y - y0) * D;   // 덩이 하나 = 4 / k 도트 (2^sh)
-        Span<uint> wb = n * 8 <= 1024 ? stackalloc uint[n * 8] : new uint[n * 8];   // 칸마다 이 덩이 줄의 덩이 짙기 (/256)
+        Span<uint> wb = n * 8 <= 2048 ? stackalloc uint[n * 8] : new uint[n * 8];   // 칸마다 이 덩이 줄의 덩이 짙기 (/256)
         var d = MemoryMarshal.Cast<byte, uint>(img.Px.AsSpan());
         var fog = CollectionsMarshal.AsSpan(_fog).Slice(start, n);
+        bool vec = Vector256.IsHardwareAccelerated && !NoVector;
+        var half = Vector256.Create(128u);   // 반올림
+        ref uint wbr = ref MemoryMarshal.GetReference(wb);
+        ref int wave = ref _fogWave[0];
         for (int by = 0; by < 8; by++)
         {
             int row = ((y * 8 + by) & 63) * 64;
@@ -385,7 +453,8 @@ public sealed partial class Painter
             {
                 var (x, aq) = fog[j];
                 int wv = row + (x & 7) * 8;
-                for (int bx = 0; bx < 8; bx++) wb[j * 8 + bx] = (aq * (uint)_fogWave[wv + bx] + 128) >> 8;
+                if (vec) ((Vector256.LoadUnsafe(ref wave, (nuint)wv).AsUInt32() * aq + half) >> 8).StoreUnsafe(ref wbr, (nuint)(j * 8));   // 덩이 여덟을 한 번에 (같은 정수 셈)
+                else for (int bx = 0; bx < 8; bx++) wb[j * 8 + bx] = (aq * (uint)_fogWave[wv + bx] + 128) >> 8;
             }
             for (int r = 0; r < 1 << sh; r++)
             {
@@ -439,16 +508,17 @@ public sealed partial class Painter
             if (rh > MirrorRh) MirrorFog(img, rh, i, (bx - x0) * T, (by - y0) * T - WashRise(2), k);
         }
         _fog.Clear(); _fogRows.Clear();
-        for (int y = y0; y < y0 + h; y++)   // 칸 줄마다 안개 칸을 모은다
+        var kind = L.Kind;
+        int xa = Math.Max(0, x0), xe = Math.Min(L.W, x0 + w);   // 도면 안 칸만 (넓은 보기 창은 도면 밖 한 칸까지)
+        for (int y = Math.Max(0, y0); y < Math.Min(L.H, y0 + h); y++)   // 칸 줄마다 안개 칸을 모은다
         {
             int start = _fog.Count;
-            for (int x = x0; x < x0 + w; x++)
+            for (int x = xa; x < xe; x++)
             {
-                if (!L.In(x, y)) continue;
-                int c = L.Index(x, y);
-                if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
+                int c = y * L.W + x;
+                if (kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다
-                double rh = f.RelHumidity(c);
+                double rh = FogRhAt(f, c);
                 if (rh <= FogRh) continue;
                 uint aq = (uint)MathF.Round(64 * (float)Math.Min(1, (rh - FogRh) / 0.1));   // 짙기 0.25 × (습도 − 0.9) / 0.1 (/256)
                 if (aq > 1) _fog.Add((x, aq));

@@ -489,7 +489,9 @@ public sealed partial class Painter
         int k = T / D;
         bool Stained(int cell) => f.SootGPerM2(cell) > 0.05 || L.FurnitureAt[cell] < 0 && (f.T.sNH3l >= 0 && f.Stored(f.T.sNH3l, cell) >= 0.5 || f.T.sEC >= 0 && f.Stored(f.T.sEC, cell) >= 0.5);
         var sc = _stainInto!;
-        if (Stained(c) || MoldAt(life, c) > 0)
+        bool stained = Stained(c);
+        if (!stained && !NoMoldTile && MoldTileAt(life, c) is { } mold) Put(img, DownOf(mold, k), (x - x0) * D, (y - y0) * D);   // 곰팡이만: 구운 곰팡이 판을 줄여 얹는다 (아래 길과 같은 그림 — 예산 고침)
+        else if (stained || MoldAt(life, c) > 0)
         {
             Array.Clear(sc.Px);
             double sg = f.SootGPerM2(c);

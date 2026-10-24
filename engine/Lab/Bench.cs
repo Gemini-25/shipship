@@ -150,19 +150,30 @@ public static partial class Program
         var (th, _) = Measure("Hannuri", 100, 30, 150);
         Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");
         // 그리기 예산 (6단 60프레임 · docs/GRAPHICS.md §3): 세계 스레드가 나아가기 + 그리기를 1/60초 안에 — 넓은 보기는 칸당 16 · 8도트 (굽은 덩어리)
+        // 줄마다 세 번 재어 가장 작은 가운데 값으로 판정한다 (예산 고침 — 한가한 기계 · 같은 판에서도 한 번 잰 값이 4.2 ~ 7.1ms로 흔들렸다: 다른 일 · VM 빼앗김은 시간을 더할 뿐 빼지 않는다).
+        // 기준 숫자는 그대로 (느슨하게 하는 것이 아니라 잡음을 뺀다) · 줄에는 고른 값 (세 가운데 값)을 함께 적는다 · DRAW_PROF=1이면 넓은 보기 단계마다 (조사용)
         {
             var s = ShipWorld.Crewed("Saetteul", 9, 40, 16, 4);
             s.Run(300);
             var p = new ShipView.Painter(s.Layout);
             int W = s.Layout.W, H = s.Layout.H;
             var into = new ShipSim.Art.Img(97 * 32, 55 * 32);
-            double Med(Action f) { for (int k = 0; k < 40; k++) f(); var ms = new List<double>(); for (int k = 0; k < 12; k++) { var sw = Stopwatch.StartNew(); f(); ms.Add(sw.Elapsed.TotalMilliseconds); } ms.Sort(); return ms[ms.Count / 2]; }   // 40장 먼저 (단계 번역이 끝나게 — 관전 화면은 1초에 60장)
+            bool prof = Environment.GetEnvironmentVariable("DRAW_PROF") == "1";
+            void Near() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into);
+            void Far16() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into);
+            void Far8() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into);
+            Three Med(Action f) => Thrice(f, () => { var sw = Stopwatch.StartNew(); f(); return sw.Elapsed.TotalMilliseconds; });   // 한 장의 가운데 값
+            Three Stage(Action f, string key) => Thrice(f, () => { ShipView.Painter.Prof = new(); f(); double v = ShipView.Painter.Prof.GetValueOrDefault(key); ShipView.Painter.Prof = null; return v; });   // 그 단계의 가운데 값 (Painter.Prof — 실험실만)
             p.FrameFar(s, -1, -1, W + 2, H + 2, 0, 8, into);   // 처음 한 번 모두 굽는다 (관전 화면은 32도트로 보는 동안 미리 굽는다)
-            double near = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into));
-            double far16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into));
-            double far8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Three near = Med(Near), far16 = Med(Far16), far8 = Med(Far8);
+            if (prof) { StageProf("평시 16도트", Far16); StageProf("평시 8도트", Far8); }
             Check("그리기 예산: 새뜰호 41×24칸 32도트 ≤ 6ms · 97×55칸 16도트 ≤ 8ms · 배 전체 8도트 ≤ 8ms (가운데 값 — 세계 스레드가 1/60초 안에)",
                 near <= 6 && far16 <= 8 && far8 <= 8, $"{near:0.0} · {far16:0.0} · {far8:0.0}ms (덩어리 {p.Baked})");
+            // 평시 판 (습도 · 곰팡이가 없다 — 300틱은 안개 칸이 하나뿐): 5단 A2가 더한 '김 · 안개' 단계가 장마다 0에 가깝다 — 남는 것은 바닥 칸마다 기체 성분을 한 번 읽는 값 (배 전체 8도트 약 0.05ms)
+            //    (예산 고침 — 바닥 칸마다 RelHumidity (나눗셈 여럿 · exp)를 셈하던 것: 32 · 16 · 8도트 0.03 · 0.12 · 0.15ms)
+            Three qNear = Stage(Near, "김 · 안개"), qFar16 = Stage(Far16, "넓은: 김 · 안개"), qFar8 = Stage(Far8, "넓은: 김 · 안개");
+            Check("그리기 예산: 평시 판 (습도 · 곰팡이 없음) — '김 · 안개' 단계가 0에 가깝다 (32 · 16 · 8도트 ≤ 0.1ms)",
+                qNear <= 0.1 && qFar16 <= 0.1 && qFar8 <= 0.1, $"{qNear:0.000} · {qFar16:0.000} · {qFar8:0.000}ms");
             // 습한 판 (5단 A2 검토 — 평시 300틱은 안개 칸이 하나뿐이라 안개 비용을 못 봤다 · 3000틱이면 100칸): 칸의 수증기를 습도 0.97로 (RulesCracks 응력 부식의 식)
             // ① 평시에 습한 방 (화장실 · 운동실 · 재배 갑판 · 휴게실 — 새뜰호 3000틱의 안개 칸이 여기에)의 바닥 — 같은 창 · 같은 예산
             // ② 제습기가 멈춘 배 (바닥 칸 모두 — 보이는 바닥마다 안개): '김 · 안개' 단계만 잰다 (다른 층의 흔들림에 묻히지 않게 · 고치기 전 10.4 · 18.2 · 12.5ms)
@@ -178,69 +189,137 @@ public static partial class Program
                 }
                 return n;
             }
-            double Stage(Action f, string key)   // 그 단계의 가운데 값 (Painter.Prof — 실험실만)
-            {
-                for (int k = 0; k < 40; k++) f();
-                var ms = new List<double>();
-                for (int k = 0; k < 12; k++) { ShipView.Painter.Prof = new(); f(); ms.Add(ShipView.Painter.Prof.GetValueOrDefault(key)); }
-                ShipView.Painter.Prof = null;
-                ms.Sort(); return ms[ms.Count / 2];
-            }
             bool IsFloor(int c) => s.Layout.Kind[c] == CellKind.Floor;
             int wet = Humid(s.Layout.Rooms.Where(r => r.Type is "Washroom" or "Gym" or "Hydroponics" or "Lounge").SelectMany(r => r.Cells).Where(IsFloor));
-            double hNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into));
-            double hFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into));
-            double hFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Three hNear = Med(Near), hFar16 = Med(Far16), hFar8 = Med(Far8);
             Check("그리기 예산: 습한 판 — 평시에 습한 방 (화장실 · 운동실 · 재배 갑판 · 휴게실) 바닥을 습도 0.97로 (안개) · 같은 창 · 같은 예산 (32도트 ≤ 6 · 16 · 8도트 ≤ 8ms)",
-                wet >= 600 && hNear <= 6 && hFar16 <= 8 && hFar8 <= 8, $"안개 칸 {wet} · {hNear:0.0} · {hFar16:0.0} · {hFar8:0.0}ms (평시 {near:0.0} · {far16:0.0} · {far8:0.0})");
+                wet >= 600 && hNear <= 6 && hFar16 <= 8 && hFar8 <= 8, $"안개 칸 {wet} · {hNear:0.0} · {hFar16:0.0} · {hFar8:0.0}ms (평시 {near.V:0.0} · {far16.V:0.0} · {far8.V:0.0})");
             var floors = Enumerable.Range(0, s.Layout.N).Where(IsFloor).ToArray();
             int all = Humid(floors);
-            double sNear = Stage(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into), "김 · 안개");
-            double sFar16 = Stage(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into), "넓은: 김 · 안개");
-            double sFar8 = Stage(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into), "넓은: 김 · 안개");
-            double aNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into)), aFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into)), aFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Three sNear = Stage(Near, "김 · 안개"), sFar16 = Stage(Far16, "넓은: 김 · 안개"), sFar8 = Stage(Far8, "넓은: 김 · 안개");
+            Three aNear = Med(Near), aFar16 = Med(Far16), aFar8 = Med(Far8);
+            if (prof) StageProf("안개 16도트", Far16);
             Check("그리기 예산: 제습기가 멈춘 배 (바닥 칸 모두 습도 0.97 — 보이는 바닥마다 안개) — '김 · 안개' 단계 32도트 ≤ 1.5 · 16 · 8도트 ≤ 2ms",
                 all >= floors.Length * 9 / 10 && sNear <= 1.5 && sFar16 <= 2 && sFar8 <= 2, $"안개 칸 {all}/{floors.Length} · 단계 {sNear:0.00} · {sFar16:0.00} · {sFar8:0.00}ms (한 장 {aNear:0.0} · {aFar16:0.0} · {aFar8:0.0}ms)");
             // ③ 곰팡이 핀 배 (5단 A3 검토 — 제습기가 멈춘 배는 278~310K이면 하루 0.7배씩 자라 약 일주일 뒤 바닥이 모두 곰팡이 1 · 안개도 그대로): 바닥 · 문 칸 모두 Mold 1
             //    32도트: 곰팡이를 그리는 단계 (바닥 · 벽 · 문 + 칸 덮개)가 곰팡이 0보다 0.5ms 안 · 한 장 ≤ 6ms
             //    넓은 보기: 곰팡이 단이 바뀐 덩어리는 다시 굽는다 (한 장에 FarBakeMs까지 — 덩어리 하나는 늘 굽는다) → 덩어리 하나를 굽는 곰팡이 단계가 곰팡이 0보다 0.06ms 안 · 다 구운 뒤 16 · 8도트 ≤ 8ms
             //    (고치기 전 — 칸마다 점 수백 개를 소수로 섞었다: 단계 0.59 → 3.92ms · 덩어리 0.082 → 0.197ms)
+            //    넓은 보기 한 장은 평시 판 + 1ms 안 (예산 고침 — 문 칸 곰팡이를 장마다 32도트 판에 섞어 줄이고 · 안개 칸마다 습도를 두 번 셈하고 · 네 점씩 섞던 것: 16 · 8도트 +0.8~1.4 · +0.7~1.0ms)
             var lf = s.Get<Life>();
             var moldy = Enumerable.Range(0, s.Layout.N).Where(c => s.Layout.Kind[c] is CellKind.Floor or CellKind.Door).ToArray();
             void Mold(float v) { foreach (int c in moldy) lf.Mold[c] = v; }
             string[] moldStages = { "바닥 · 벽 · 문", "칸 덮개" };   // 곰팡이를 그리는 단계 (바닥 칸은 바닥 타일과 함께 · 문 칸은 칸 덮개 — 굽는 덩어리도 같은 Draw)
             double MoldMs() => moldStages.Sum(key => ShipView.Painter.Prof!.GetValueOrDefault(key));
             static double Mid(List<double> v) { v.Sort(); return v.Count == 0 ? double.NaN : v[v.Count / 2]; }
-            // 곰팡이 0 · 1을 한 장씩 번갈아 잰다 (함께 쓰는 기계의 흔들림이 두 쪽에 같게) — 32도트 곰팡이 단계 합의 가운데 값
-            var near0 = new List<double>(); var near1 = new List<double>();
-            for (int k = 0; k < 40; k++) { Mold(k % 2); p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into); }
-            for (int k = 0; k < 24; k++) { Mold(k % 2); ShipView.Painter.Prof = new(); p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into); (k % 2 == 0 ? near0 : near1).Add(MoldMs()); }
+            // 곰팡이 0 · 1을 한 장씩 번갈아 잰다 (함께 쓰는 기계의 흔들림이 두 쪽에 같게) — 32도트 곰팡이 단계 합의 가운데 값 (24장을 세 번 — 쪽마다 가장 작은 값)
+            var m0s = new double[3]; var m1s = new double[3];
+            for (int k = 0; k < 40; k++) { Mold(k % 2); Near(); }
+            for (int r = 0; r < 3; r++)
+            {
+                var near0 = new List<double>(); var near1 = new List<double>();
+                for (int k = 0; k < 24; k++) { Mold(k % 2); ShipView.Painter.Prof = new(); Near(); (k % 2 == 0 ? near0 : near1).Add(MoldMs()); }
+                m0s[r] = Mid(near0); m1s[r] = Mid(near1);
+            }
             ShipView.Painter.Prof = null;
-            double m0 = Mid(near0), m1 = Mid(near1);
-            // 넓은 보기: 곰팡이 0 ↔ 1을 번갈아 두면 곰팡이 단이 바뀐 덩어리를 그 장에 모두 다시 굽는다 (FarBakeMs 0) — 덩어리 하나를 굽는 곰팡이 단계 (합 ÷ 구운 수)의 가운데 값
-            var bake0 = new List<double>(); var bake1 = new List<double>();
+            var m0 = new Three(m0s[0], m0s[1], m0s[2]); var m1 = new Three(m1s[0], m1s[1], m1s[2]);
+            // 넓은 보기: 곰팡이 0 ↔ 1을 번갈아 두면 곰팡이 단이 바뀐 덩어리를 그 장에 모두 다시 굽는다 (FarBakeMs 0) — 덩어리 하나를 굽는 곰팡이 단계 (합 ÷ 구운 수)의 가운데 값 (첫 장 뒤 12장을 세 번)
+            var b0s = new double[3]; var b1s = new double[3];
             double keepMs = ShipView.Painter.FarBakeMs; int keepMax = ShipView.Painter.FarBakeMax;
             ShipView.Painter.FarBakeMs = 0; ShipView.Painter.FarBakeMax = 0;
             try
             {
-                for (int k = 0; k < 13; k++)
+                var bake0 = new List<double>(); var bake1 = new List<double>();
+                for (int k = 0; k <= 36; k++)
                 {
                     Mold(k % 2);
                     ShipView.Painter.Prof = new(); int b0 = p.Baked;
-                    p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into);
+                    Far16();
                     int nb = p.Baked - b0;
                     if (k > 0 && nb > 0) (k % 2 == 0 ? bake0 : bake1).Add(MoldMs() / nb);
+                    if (k > 0 && k % 12 == 0) { b0s[k / 12 - 1] = Mid(bake0); b1s[k / 12 - 1] = Mid(bake1); bake0.Clear(); bake1.Clear(); }
                 }
             }
             finally { ShipView.Painter.Prof = null; ShipView.Painter.FarBakeMs = keepMs; ShipView.Painter.FarBakeMax = keepMax; }
-            double b0ne = Mid(bake0), b1ne = Mid(bake1);
+            var b0ne = new Three(b0s[0], b0s[1], b0s[2]); var b1ne = new Three(b1s[0], b1s[1], b1s[2]);
+            int rebaked;
             Mold(1);
-            double mNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into)), mFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into)), mFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            // 다 구운 뒤에 잰다 (예산 고침 — 데우기 40장 동안 장마다 FarBakeMs씩 다시 굽던 덩어리 (16도트 창에 87개)가 느린 판에서는 잰 장까지 남아 16도트 한 장이 9.3ms로 보였다): 배 전체 한 장에 바뀐 덩어리를 모두
+            ShipView.Painter.FarBakeMs = 0;
+            try { int b0 = p.Baked; Far8(); rebaked = p.Baked - b0; }
+            finally { ShipView.Painter.FarBakeMs = keepMs; }
+            Three mNear = Med(Near), mFar16 = Med(Far16), mFar8 = Med(Far8);
+            if (prof) { StageProf("곰팡이 16도트", Far16); StageProf("곰팡이 8도트", Far8); }
+            // 평시 판 + 1ms: 같은 시드 · 같은 틱의 평시 판을 하나 더 띄워 (화가도 따로 — 덩어리를 따로 굽는다) 한 장씩 번갈아 잰다 (몇 초씩 이어지는 다른 일의 흔들림이 두 쪽에 같게 — 맨 처음 잰 평시 판 값은 6.4 · 5.6 · 4.9ms로 흔들렸다)
+            var s0 = ShipWorld.Crewed("Saetteul", 9, 40, 16, 4);
+            s0.Run(300);
+            var p0 = new ShipView.Painter(s0.Layout);
+            p0.FrameFar(s0, -1, -1, W + 2, H + 2, 0, 8, into);
+            var (c16, g16) = Pair(() => p0.FrameFar(s0, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into), Far16);
+            var (c8, g8) = Pair(() => p0.FrameFar(s0, -1, -1, W + 2, H + 2, 3, 8, into), Far8);
             Mold(0);
             Check("그리기 예산: 곰팡이 핀 배 (바닥 · 문 칸 모두 곰팡이 1 · 안개도) — 32도트 곰팡이 단계 (바닥 · 벽 · 문 + 칸 덮개) +0.5ms 안 · 한 장 ≤ 6ms · 덩어리 하나 다시 굽기 +0.06ms 안 · 16 · 8도트 ≤ 8ms",
                 m1 - m0 <= 0.5 && mNear <= 6 && b1ne - b0ne <= 0.06 && mFar16 <= 8 && mFar8 <= 8,
-                $"곰팡이 칸 {moldy.Length} · 단계 {m0:0.00} → {m1:0.00}ms · 덩어리 굽기 {b0ne:0.000} → {b1ne:0.000}ms · 한 장 {mNear:0.0} · {mFar16:0.0} · {mFar8:0.0}ms");
+                $"곰팡이 칸 {moldy.Length} · 단계 {m0:0.00} → {m1:0.00}ms · 덩어리 굽기 {b0ne:0.000} → {b1ne:0.000}ms · 다시 구운 덩어리 {rebaked} · 한 장 {mNear:0.0} · {mFar16:0.0} · {mFar8:0.0}ms");
+            Check("그리기 예산: 곰팡이 핀 배 넓은 보기 한 장 — 평시 판 + 1ms 안 (16 · 8도트 — 곰팡이 · 안개가 장마다 드는 몫 · 평시 판과 한 장씩 번갈아)",
+                g16 - c16 <= 1 && g8 - c8 <= 1, $"16도트 {c16:0.0} → {g16:0.0}ms · 8도트 {c8:0.0} → {g8:0.0}ms");
         }
+    }
+
+    /// <summary>세 번 잰 가운데 값 (그리기 예산): 판정은 가장 작은 값 — 다른 일 · VM 빼앗김은 시간을 더할 뿐 빼지 않는다. 글에는 '고른 값 (셋)'.</summary>
+    private readonly record struct Three(double A, double B, double C) : IFormattable
+    {
+        public double V => Math.Min(A, Math.Min(B, C));
+        public static implicit operator double(Three t) => t.V;
+        public string ToString(string? format, IFormatProvider? fp) => $"{V.ToString(format, fp)} ({A.ToString(format, fp)}/{B.ToString(format, fp)}/{C.ToString(format, fp)})";
+    }
+
+    /// <summary>두 그리기를 한 장씩 번갈아 (데우기 40번 · 장 12쌍의 가운데 값을 세 번 — 쪽마다 가장 작은 값): 다른 일의 흔들림이 두 쪽에 같게.</summary>
+    private static (Three a, Three b) Pair(Action fa, Action fb)
+    {
+        for (int k = 0; k < 40; k++) { fa(); fb(); }
+        var ma = new double[3]; var mb = new double[3];
+        for (int r = 0; r < 3; r++)
+        {
+            var la = new List<double>(); var lb = new List<double>();
+            for (int k = 0; k < 12; k++)
+            {
+                var sw = Stopwatch.StartNew(); fa(); la.Add(sw.Elapsed.TotalMilliseconds);
+                sw.Restart(); fb(); lb.Add(sw.Elapsed.TotalMilliseconds);
+            }
+            la.Sort(); lb.Sort(); ma[r] = la[la.Count / 2]; mb[r] = lb[lb.Count / 2];
+        }
+        return (new Three(ma[0], ma[1], ma[2]), new Three(mb[0], mb[1], mb[2]));
+    }
+
+    /// <summary>데우기 40장 (단계 번역이 끝나게 — 관전 화면은 1초에 60장)은 한 번 · 장 12개의 가운데 값을 세 번 (묶음 시간이 늘지 않게 장 수는 그대로 · 데우기만 한 번).</summary>
+    private static Three Thrice(Action warm, Func<double> one)
+    {
+        for (int k = 0; k < 40; k++) warm();
+        var m = new double[3];
+        for (int r = 0; r < 3; r++)
+        {
+            var ms = new List<double>();
+            for (int k = 0; k < 12; k++) ms.Add(one());
+            ms.Sort(); m[r] = ms[ms.Count / 2];
+        }
+        return new Three(m[0], m[1], m[2]);
+    }
+
+    /// <summary>조사용 (DRAW_PROF=1): 그리기 한 장의 단계마다 가운데 값 (데운 뒤 12장 · Painter.Prof).</summary>
+    private static void StageProf(string name, Action f)
+    {
+        for (int k = 0; k < 40; k++) f();
+        var per = new Dictionary<string, List<double>>(); var all = new List<double>();
+        for (int k = 0; k < 12; k++)
+        {
+            ShipView.Painter.Prof = new();
+            var sw = Stopwatch.StartNew(); f(); all.Add(sw.Elapsed.TotalMilliseconds);
+            foreach (var kv in ShipView.Painter.Prof) (per.TryGetValue(kv.Key, out var l) ? l : per[kv.Key] = new()).Add(kv.Value);
+        }
+        ShipView.Painter.Prof = null;
+        static double Mid(List<double> v) { v.Sort(); return v[v.Count / 2]; }
+        Console.WriteLine($"    {name} {Mid(all):0.00}ms: " + string.Join(" · ", per.Select(kv => (kv.Key, m: Mid(kv.Value))).Where(x => x.m >= 0.01).OrderByDescending(x => x.m).Select(x => $"{x.Key} {x.m:0.00}")));
     }
 
     /// <summary>배 하나 · 엔진마다 한 틱 시간 (--profile 배 사람 로봇 [틱]) — 시험이 많이 쓰는 배가 어디에 시간을 쓰나.</summary>
