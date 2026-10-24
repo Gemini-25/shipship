@@ -37,6 +37,27 @@ public partial class LiveMain : Node2D
     private double _aspect = 9.0 / 16.0;                       // 화면 세로/가로 (메인이 쓰고 작업 스레드가 읽는다)
 
     // ── 메인 스레드 ──
+    private LiveWorldPic? _pic;
+    /// <summary>샤프 확대 (도트 안쪽은 그대로 · 도트 경계 1픽셀만 섞는다 — docs/GRAPHICS.md T1).</summary>
+    private const string SharpShader = @"shader_type canvas_item;
+void fragment() {
+    vec2 tex = 1.0 / TEXTURE_PIXEL_SIZE;
+    vec2 texel = UV * tex;
+    vec2 scale = max(1.0 / fwidth(texel), vec2(1.0));
+    vec2 c = fract(texel) - 0.5;
+    vec2 r = 0.5 - 0.5 / scale;
+    vec2 f = (c - clamp(c, -r, r)) * scale + 0.5;
+    COLOR = texture(TEXTURE, (floor(texel) + f) / tex);
+}";
+
+    /// <summary>자식이 부르는 관전 그림 그리기 (메인 스레드).</summary>
+    internal void DrawWorld(CanvasItem on)
+    {
+        if (_tex == null || _shown == null) return;
+        var f = _shown;
+        on.DrawTextureRectRegion(_tex, new Rect2(Vector2.Zero, GetViewportRect().Size), new Rect2(f.SrcX, f.SrcY, f.SrcW, f.SrcH));
+    }
+
     private Image? _image;
     private ImageTexture? _tex;
     private LiveFrame? _shown;
@@ -89,6 +110,9 @@ public partial class LiveMain : Node2D
         Warmup.Start();   // 큰 메서드를 처음 부를 때의 멈칫(20~40ms)을 미리 — 낮은 우선순위 스레드
         LoadFonts();
         TextureFilter = TextureFilterEnum.Nearest;
+        // 관전 그림은 자식이 그린다 (텍스처 T1 — 샤프 확대): 1.875배 같은 비정수 배율에서도 도트 너비가 고르고 경계 1픽셀만 섞인다 · 글 · 판은 부모가 위에
+        _pic = new LiveWorldPic { Owner = this, ShowBehindParent = true, TextureFilter = TextureFilterEnum.Linear, Material = new ShaderMaterial { Shader = new Shader { Code = SharpShader } } };
+        AddChild(_pic);
         var player = new AudioStreamPlayer { Stream = new AudioStreamGenerator { MixRate = Dsp.Rate, BufferLength = 0.2f } };
         AddChild(player);
         player.Play();
@@ -243,6 +267,7 @@ public partial class LiveMain : Node2D
         _meterT += delta;
         if (_meterT >= 1) { _picPerSec = _gotFrames; _screenPerSec = _fpsFrames; _gotFrames = _fpsFrames = 0; _meterT = 0; }
         QueueRedraw();
+        _pic?.QueueRedraw();
         if (_shotDir != null || _runFor > 0) Check(delta);
     }
 
@@ -391,8 +416,7 @@ public partial class LiveMain : Node2D
             DrawCentered("새 엔진으로 배를 띄우는 중…", vp / 2, 26, new Color(0.8f, 0.85f, 0.95f));
             return;
         }
-        var f = _shown;
-        DrawTextureRectRegion(_tex, new Rect2(Vector2.Zero, vp), new Rect2(f.SrcX, f.SrcY, f.SrcW, f.SrcH));
+        var f = _shown;   // 관전 그림 자체는 자식 (LiveWorldPic)이 뒤에 그린다
         if (_cutDip > 0) DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, (float)(0.7 * _cutDip / CutDipSec)));   // 컷 전환
         if (f.Replay.Length > 0) DrawRect(new Rect2(0, 44 * U, vp.X, vp.Y - 44 * U), new Color(0.95f, 0.78f, 0.45f, 0.75f), false, 4);   // 다시보기: 가장자리를 옛 필름 빛으로
         long t = Stopwatch.GetTimestamp();
@@ -1394,4 +1418,11 @@ public partial class LiveMain : Node2D
             FontWeight = weight,
         };
     }
+}
+
+/// <summary>관전 그림 노드 (LiveMain의 자식 · 부모 뒤에 그린다 — 샤프 확대 셰이더 · 선형 거르기).</summary>
+public partial class LiveWorldPic : Node2D
+{
+    internal LiveMain Owner = null!;
+    public override void _Draw() => Owner.DrawWorld(this);
 }
