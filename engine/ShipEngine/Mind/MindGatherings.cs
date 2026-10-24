@@ -352,7 +352,7 @@ public sealed partial class Mind
         {
             bool Forgot(int j) => stoves.Any(x => x.who == j);
             int caller = soc.Rep >= 0 && PersonAlive(soc.Rep) && !Forgot(soc.Rep) ? soc.Rep : people.OrderBy(j => Forgot(j) ? 1 : 0).ThenByDescending(j => Agents[j].C.Consc).ThenBy(j => j).First();
-            return Call(sim, CouncilKind.Rule, caller, -1, -1, $"{Ko.I(NameOf(caller))} 회의를 소집했다 — 조리대를 켜 둔 채 떠나는 일이 잦다, 규칙을 정하자", stoves[^1].cause, 2) == null;
+            if (Call(sim, CouncilKind.Rule, caller, -1, -1, $"{Ko.I(NameOf(caller))} 회의를 소집했다 — 조리대를 켜 둔 채 떠나는 일이 잦다, 규칙을 정하자", stoves[^1].cause, 2) == null) return true;
         }
         return false;
     }
@@ -396,18 +396,28 @@ public sealed partial class Mind
     {
         var soc = _soc!;
         ref var c = ref Agents[a].C;
-        if (rule == 1)
+        switch (rule)
         {
-            int woken = soc.WakeLog.Count(x => x.woken == a), waker = soc.WakeLog.Count(x => x.by == a);
-            return 0.5f * Math.Min(1, woken / 2f) - 0.4f * Math.Min(1, waker / 2f) + 0.5f * (c.Consc - 0.5f) - 0.6f * (c.Extra - 0.5f) + 0.05f;
+            case 1:
+            {
+                int woken = soc.WakeLog.Count(x => x.woken == a), waker = soc.WakeLog.Count(x => x.by == a);
+                return 0.5f * Math.Min(1, woken / 2f) - 0.4f * Math.Min(1, waker / 2f) + 0.5f * (c.Consc - 0.5f) - 0.6f * (c.Extra - 0.5f) + 0.05f;
+            }
+            case 2:
+            {
+                int forgot = soc.StoveLog.Count(x => x.who == a);
+                return 0.15f + 0.5f * (c.Consc - 0.5f) - 0.3f * Math.Min(1, forgot) + 0.2f * c.LessonFire;
+            }
+            default: return 0;
         }
-        int forgot = soc.StoveLog.Count(x => x.who == a);
-        return 0.15f + 0.5f * (c.Consc - 0.5f) - 0.3f * Math.Min(1, forgot) + 0.2f * c.LessonFire;
     }
 
-    private static string RuleLine(int rule, float op) => rule == 1
-        ? (op > 0.3f ? "밤엔 조용히 하자 — 잠 좀 자자" : op > 0 ? "자는 사람 곁에서만이라도 말을 아끼자" : "말 한마디도 못 하면 숨이 막힌다")
-        : (op > 0.3f ? "조리대 켜 둔 채 떠나는 일, 이제 그만하자" : op > 0 ? "끄고 가는 것쯤은 지킬 수 있다" : "규칙까지 만들 일은 아니다");
+    private static string RuleLine(int rule, float op) => rule switch
+    {
+        1 => op > 0.3f ? "밤엔 조용히 하자 — 잠 좀 자자" : op > 0 ? "자는 사람 곁에서만이라도 말을 아끼자" : "말 한마디도 못 하면 숨이 막힌다",
+        2 => op > 0.3f ? "조리대 켜 둔 채 떠나는 일, 이제 그만하자" : op > 0 ? "끄고 가는 것쯤은 지킬 수 있다" : "규칙까지 만들 일은 아니다",
+        _ => "",
+    };
 
     private string MemorialLine(Sim sim, int a, in Council m)
     {

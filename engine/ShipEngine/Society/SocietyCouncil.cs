@@ -167,7 +167,7 @@ public sealed partial class Society
                 break;
             }
             case CouncilKind.Rule:
-                if (act.Arg == 1) _askQuiet = sim.Tick; else _askStove = sim.Tick;
+                switch (act.Arg) { case 1: _askQuiet = sim.Tick; break; case 2: _askStove = sim.Tick; break; }
                 break;
             case CouncilKind.Memorial:
                 _mourn.RemoveAll(x => x.dead == act.Target); _mournDeferred.Remove(act.Target);

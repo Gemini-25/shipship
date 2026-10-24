@@ -347,7 +347,13 @@ public sealed partial class Society
 
     // ───────────────────────── 배의 규칙 ─────────────────────────
 
-    public static string RuleText(int rule) => rule == 1 ? "밤 10시부터 아침 6시까지 자는 이 곁에서는 말하지 않는다" : "조리대를 떠날 땐 끄고 간다";
+    /// <summary>배의 규칙 번호: 1 밤 · 2 조리대 · 3 (아직 없다 — 5단 C39 '샤워는 5분').</summary>
+    public static string RuleText(int rule) => rule switch
+    {
+        1 => "밤 10시부터 아침 6시까지 자는 이 곁에서는 말하지 않는다",
+        2 => "조리대를 떠날 땐 끄고 간다",
+        _ => "",
+    };
 
     private void RuleDecide(Sim sim, in Council m)
     {
@@ -357,7 +363,11 @@ public sealed partial class Society
         if (pass)
         {
             RulesMade++;
-            if (m.Arg == 1) QuietRule = true; else { StoveRule = true; _mind!.StoveRule = true; }
+            switch (m.Arg)
+            {
+                case 1: QuietRule = true; break;
+                case 2: StoveRule = true; _mind!.StoveRule = true; break;
+            }
             Culture(sim, CultureEvent.Rule, $"배의 규칙이 되었다 — '{RuleText(m.Arg)}' ({_attend.Count}명 가운데 {yes}명 찬성)", m.Cell, m.Cause, m.Caller, m.Arg);
         }
         else
@@ -374,7 +384,14 @@ public sealed partial class Society
     }
     /// <summary>시험용: 지금 그 시각의 관습 · 규칙을 정한다.</summary>
     public void SetCustomNow(int hour) { MealCustom = hour; _mind?.SetMealCustom(hour); }
-    public void SetRuleNow(int rule) { if (rule == 1) QuietRule = true; else { StoveRule = true; if (_mind != null) _mind.StoveRule = true; } }
+    public void SetRuleNow(int rule)
+    {
+        switch (rule)
+        {
+            case 1: QuietRule = true; break;
+            case 2: StoveRule = true; if (_mind != null) _mind.StoveRule = true; break;
+        }
+    }
 
     private void SaveCulture(StateWriter w)
     {
