@@ -55,6 +55,7 @@ public sealed partial class Work : IEngine
     }
     private Life? _life;
     private Field? _f;
+    private Structure? _st;
     public float[] MakerProgress = Array.Empty<float>();   // 설비마다 만드는 중 (시간)
     public long Crafted, Maintained, Cleaned, Made, Harvested;
     public long Recycled, ChipsSaved;
@@ -63,7 +64,7 @@ public sealed partial class Work : IEngine
 
     public Work(Layout layout, Tables tables) { L = layout; T = tables; }
 
-    public void Bind(Sim sim) { _mind = sim.Find<Mind>(); _net = sim.Find<Network>(); _life = sim.Find<Life>(); _f = sim.Find<Field>(); }
+    public void Bind(Sim sim) { _mind = sim.Find<Mind>(); _net = sim.Find<Network>(); _life = sim.Find<Life>(); _f = sim.Find<Field>(); _st = sim.Find<Structure>(); }
 
     public void Step(Sim sim, double dt)
     {
@@ -105,7 +106,7 @@ public sealed partial class Work : IEngine
                 if (_mind != null)
                 {
                     foreach (var a in _mind.Agents) if (_mind.IsFood(a.C.Holding)) food += a.C.HoldCharge;
-                    foreach (var x in _mind.Loose) if (_mind.IsFood(x.Item)) food += x.Charge;
+                    if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && _mind.IsFood((byte)x.What)) food += x.Charge;   // 바닥에 놓인 식량 (④ 물체 장부)
                 }
                 return food;
             }

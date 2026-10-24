@@ -30,7 +30,7 @@ public static partial class Program
             long ext0 = m.Extinguished;
             s.Run(Time.Hours(2));
             int box1 = ExtInBoxes(s), held = ExtHeld(m);
-            int floor = m.Loose.Count(x => x.Item == m.iExt || x.Item == m.iCO2);
+            int floor = Worlds.Items(s).Count(x => x.Item == m.iExt || x.Item == m.iCO2);
             Check("불 뒤 돌려놓기: 불을 끈 뒤 2시간 — 손에 든 소화기 0 · 보관함 소화기가 처음만큼 (예전엔 로봇 · 사람이 든 채로 남아 11 → 5)",
                 m.Extinguished > ext0 && held == 0 && floor == 0 && box1 == box0, $"끔 {m.Extinguished - ext0} · 보관함 {box0} → {box1} · 손 {held} · 바닥 {floor}");
         }
@@ -64,7 +64,7 @@ public static partial class Program
             long patched0 = m.Patched;
             s.Run(Time.Minutes(30));
             Check("든 채 급한 일: 소화기를 든 사람이 곁 외판의 구멍을 보면 그 자리에 내려놓고 봉합 꾸러미를 가져와 막는다 (예전엔 손이 차 30분 동안 막지 못했다)",
-                m.Patched > patched0 && f.Hole[hull] <= 0, $"막음 {m.Patched - patched0} · 구멍 {f.Hole[hull] * 1e4:0.0}cm² · 바닥 소화기 {m.Loose.Count(x => x.Item == m.iExt)}");
+                m.Patched > patched0 && f.Hole[hull] <= 0, $"막음 {m.Patched - patched0} · 구멍 {f.Hole[hull] * 1e4:0.0}cm² · 바닥 소화기 {Worlds.Items(s).Count(x => x.Item == m.iExt)}");
         }
         // ── 우주복은 걸어가 넣는다: 숨쉴 만한 방에서 벗으면 손에 들고 보관함으로 (남은 산소 그대로) — 예전엔 벗는 순간 보관함으로 옮아 갔고 꺼내면 가득 찼다 ──
         {
@@ -96,10 +96,10 @@ public static partial class Program
             life[p.C.Body].Suit = 1; life[p.C.Body].SuitO2 = 40; p.C.Consc = 0.1f;
             p.C.Goal = GoalKind.Idle; p.Plan.Clear();
             bool laid = false;
-            for (long t = 0; t < Time.Hours(3); t++) { s.Step(); if (m.Loose.Any(x => x.Item == m.iSuit)) laid = true; }
+            for (long t = 0; t < Time.Hours(3); t++) { s.Step(); if (Worlds.Items(s).Any(x => x.Item == m.iSuit)) laid = true; }
             int suits1 = lockers.Sum(fu => m.Stock[fu * m.ItemCount + m.iSuit]);
             Check("덤벙대는 이의 우주복: 그 자리에 내려놓은 우주복을 주컴퓨터가 카메라로 보고 · 로봇이 없으면 일하는 사람에게 줍기를 맡겨 제자리로",
-                laid && suits1 == suits0 + 1 && !m.Loose.Any(x => x.Item == m.iSuit), $"내려놓음 {laid} · 보관함 {suits0} → {suits1} · 주움 {m.Gathered} · 바닥 {m.Loose.Count(x => x.Item == m.iSuit)} · 든 이 {string.Join(",", m.Agents.Where(a => a.C.Holding == m.iSuit).Select(a => $"{m.NameOf(a.Id)}({a.C.Consc:0.0} {a.C.Goal} {m.Thought(a.Id)})"))}");
+                laid && suits1 == suits0 + 1 && !Worlds.Items(s).Any(x => x.Item == m.iSuit), $"내려놓음 {laid} · 보관함 {suits0} → {suits1} · 주움 {m.Gathered} · 바닥 {Worlds.Items(s).Count(x => x.Item == m.iSuit)} · 든 이 {string.Join(",", m.Agents.Where(a => a.C.Holding == m.iSuit).Select(a => $"{m.NameOf(a.Id)}({a.C.Consc:0.0} {a.C.Goal} {m.Thought(a.Id)})"))}");
         }
         // ── 쓴 소화기 채우기: 반쯤 쓴 소화기 → 보관함 (남은 양) → 주컴퓨터가 채우기를 맡긴다 → 로봇이 물꼭지에서 물탱크 물로 채워 되돌린다 (장부 '소화기에 담았다') ──
         {
@@ -125,11 +125,11 @@ public static partial class Program
             var r0 = m.Agents.First(a => a.C.Kind == AgentKind.Robot);
             int c2 = lay.Rooms[lay.Room[r0.C.Cell]].Cells.First(c => c != r0.C.Cell && lay.Kind[c] == CellKind.Floor && lay.FurnitureAt[c] < 0);
             int box0 = ExtInBoxes(s);
-            m.Loose.Add(new LooseItem { Item = m.iExt, Cell = c1, Charge = 500 });
-            m.Loose.Add(new LooseItem { Item = m.iMedkit, Cell = c2, Charge = 0 });
+            Worlds.PutItem(s, m.iExt, c1, 500);
+            Worlds.PutItem(s, m.iMedkit, c2, 0);
             s.Run(Time.Hours(1));
-            bool extBack = !m.Loose.Any(x => x.Item == m.iExt) && ExtInBoxes(s) == box0 + 1 && ExtHeld(m) == 0;
-            bool kitBack = !m.Loose.Any(x => x.Item == m.iMedkit) && m.Agents.All(a => a.C.Holding != m.iMedkit);
+            bool extBack = !Worlds.Items(s).Any(x => x.Item == m.iExt) && ExtInBoxes(s) == box0 + 1 && ExtHeld(m) == 0;
+            bool kitBack = !Worlds.Items(s).Any(x => x.Item == m.iMedkit) && m.Agents.All(a => a.C.Holding != m.iMedkit);
             Check("바닥 물건 줍기: 통로의 소화기는 주컴퓨터가 보고 줍기를 맡기고 · 로봇 곁의 구급 상자는 로봇이 보고 줍는다 — 둘 다 제자리에 (예전엔 아무도 줍지 않았다)",
                 extBack && kitBack, $"소화기 {extBack} · 구급 상자 {kitBack} · 주움 {m.Gathered}");
         }
@@ -145,10 +145,10 @@ public static partial class Program
             bool carefulLaid = false, carelessLaid = false;
             for (long t = 0; t < Time.Minutes(30); t++)
             {
-                int n0 = m.Loose.Count(x => x.Item == m.iExt);
+                int n0 = Worlds.Items(s).Count(x => x.Item == m.iExt);
                 byte h0 = ps[0].C.Holding, h1 = ps[1].C.Holding;
                 s.Step();
-                if (m.Loose.Count(x => x.Item == m.iExt) > n0) { if (h0 == m.iExt && ps[0].C.Holding == 255) carefulLaid = true; if (h1 == m.iExt && ps[1].C.Holding == 255) carelessLaid = true; }
+                if (Worlds.Items(s).Count(x => x.Item == m.iExt) > n0) { if (h0 == m.iExt && ps[0].C.Holding == 255) carefulLaid = true; if (h1 == m.iExt && ps[1].C.Holding == 255) carelessLaid = true; }
             }
             Check("꼼꼼한 이와 덤벙대는 이: 소화기를 든 채 배가 고프면 꼼꼼한 이는 제자리에 넣고 먹으러 가고 · 덤벙대는 이는 그 자리에 내려놓는다",
                 !carefulLaid && carelessLaid && ps[0].C.Holding == 255 && ExtInBoxes(s) >= box0 + 1, $"꼼꼼 내려놓음 {carefulLaid} · 덤벙 내려놓음 {carelessLaid} · 보관함 {box0} → {ExtInBoxes(s)}");

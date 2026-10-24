@@ -265,7 +265,7 @@ public static partial class Program
         s.Run(3);   // 배전반이 조종대에 전기를 보낸다 (화면 빛) — 드론은 그 뒤에 태운다 (일감 없이 멈춘 장 0)
         var m = s.Get<Mind>();
         int dr = m.AddRobot(s, droneCell, AgentKind.Drone, droneCell);
-        void Drop() { if (m.Loose.Count == 0) m.Loose.Add(new LooseItem { Item = (byte)m.iExt, Cell = itemCell, Charge = 500 }); }
+        void Drop() { if (!Worlds.Items(s).Any()) Worlds.PutItem(s, (byte)m.iExt, itemCell, 500); }
         var want = DotBots.Drone(DotDroneKind.Repair, DotBotState.Ok, 0);
         // 드론 그림 자리 (DrawBot과 같다 — 칸 가운데 · 8도트 떠 있다)의 불투명 도트가 드론 그림 그대로인가
         (int bad, int n) Drone(Img im)
@@ -287,7 +287,7 @@ public static partial class Program
         var iconFirst = new Painter(lay) { Lighting = false };
         var a1 = iconFirst.Frame(s, 0, 0, lay.W, lay.H, 0);
         var (bad, n) = Drone(a1);
-        m.Loose.Clear();
+        Worlds.ClearItems(s);
         var droneFirst = new Painter(lay) { Lighting = false };
         droneFirst.Frame(s, 0, 0, lay.W, lay.H, 0);
         Drop();
@@ -304,7 +304,7 @@ public static partial class Program
             Drop();
             var farOnly = new Painter(lay);
             var c1 = farOnly.FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
-            m.Loose.Clear();
+            Worlds.ClearItems(s);
             var droneOnly = new Painter(lay);
             droneOnly.Frame(s, lay.X(droneCell) - 1, lay.Y(droneCell) - 1, 3, 2, 0);   // 드론만 (조종대 · 배전반 · 배터리는 창 밖)
             Drop();
@@ -314,7 +314,7 @@ public static partial class Program
             int con = lay.Furniture.FindIndex(fu => fu.Type == "Console"), screen = 0, glow = 0, D = 16;
             var box = lay.Furniture[con].Cells;
             int bx0 = box.Min(lay.X) * D, by0 = Math.Max(0, box.Min(lay.Y) * D - D), bx1 = (box.Max(lay.X) + 1) * D, by1 = (box.Max(lay.Y) + 1) * D;
-            m.Loose.Clear();
+            Worlds.ClearItems(s);
             var c4 = new Painter(lay).FrameFar(s, 0, 0, lay.X(droneCell) - 1, lay.H, 0, 16);   // 창 오른쪽 끝 밖의 드론은 그리지 않는다
             Drop();
             for (int y = by0; y < by1; y++) for (int x = bx0; x < bx1; x++)
@@ -329,7 +329,7 @@ public static partial class Program
             var c0 = new Painter(lay).FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
             m[dr].C.Cell = dCell;
             // 바닥 물건이 없는 장을 처음 그린 화가의 드론 (아이콘이 캐시에 든 적이 없다)과 같은 드론
-            m.Loose.Clear();
+            Worlds.ClearItems(s);
             var c3 = new Painter(lay).FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
             Drop();
             int drone = 0, own = 0;
@@ -343,7 +343,7 @@ public static partial class Program
                 far == 0 && screen > 4 && glow == 0 && drone > 20 && own == 0,
                 $"차례를 바꾼 두 장의 다른 도트 {far} · 조종대 화면 빛 도트 {screen} · 조종대 둘레가 드론 · 물건 없는 장과 다른 도트 {glow} · 드론 자리 도트 {drone} · 물건 없이 그린 드론과 다른 도트 {own}");
         }
-        m.Loose.Clear();
+        Worlds.ClearItems(s);
 
         // 3 · 로봇 (갈래 8): 열쇠와 그림이 같은 값을 본다 — 예전엔 열쇠가 Id & 7 · 그림은 Id 전체 (그을음 · 불꽃의 씨앗)라 Id가 8 차이 나는 두 로봇 (모양 Id % 4도 같다)이 한 열쇠를 쓰고
         //     뒤 로봇에게 먼저 그린 로봇의 그림이 나왔다 (새뜰호 40 · 48 · 한누리호 더 많이). 망가진 정비 로봇 Id 0을 먼저 그린 화가의 Id 8 자리 = Id 8 그림
@@ -386,6 +386,6 @@ public static partial class Program
                 rm[0].Id == 0 && rm[8].Id == 8 && rm[8].C.Kind == AgentKind.Robot && seeds >= 9 && n0 > 300 && b0 == 0 && n8 > 300 && b8 == 0,
                 $"Id {rm[0].Id} · {rm[8].Id} · 두 그림의 다른 도트 {seeds} · Id 0 자리 다른 도트 {b0}/{n0} · Id 8 자리 다른 도트 {b8}/{n8}");
         }
-        m.Loose.Clear();
+        Worlds.ClearItems(s);
     }
 }

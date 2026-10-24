@@ -42,7 +42,7 @@ public static partial class Program
             s.Run(Time.Hours(3));
             double fridge1 = fridge.Sum(c => s.Get<Field>().Stored(s.Tables.sFood, c));
             double got = s.Book.Of(Res.Food, Flow.Harvest);
-            bool holding = m.Agents.Any(a => a.C.Holding == m.iHarvest) || m.Loose.Any(x => x.Item == m.iHarvest);
+            bool holding = m.Agents.Any(a => a.C.Holding == m.iHarvest) || Worlds.Items(s).Any(x => x.Item == m.iHarvest);
             Check("거두기: 다 자란 작물을 로봇이 거둬 냉장고에 넣는다 (식량 장부에 '거둠' · 손에 남은 것 없음)",
                 got >= crops * 0.5 - 1e-3 && work.Harvested >= crops && !holding && fridge1 > fridge0 + crops * 0.4 && Math.Abs(work.Other(s, (int)Res.Food)) < 1e-9,
                 $"거둔 것 {got:0.00}몰 ({work.Harvested}번 / 작물 {crops}) · 냉장고 {fridge0:0.0} → {fridge1:0.0}몰 · 손에 남음 {holding}");

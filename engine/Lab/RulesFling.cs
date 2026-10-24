@@ -29,8 +29,8 @@ public static partial class Program
             var m = s.Get<Mind>(); var st = s.Get<Structure>(); var f = s.Get<Field>(); var w = s.Get<Work>();
             int door = lay.DoorAt[At(6, 2)];
             byte box = (byte)m.ItemIndex("식량 상자"), kit = (byte)m.ItemIndex("수리 꾸러미");
-            if (crate) m.Loose.Add(new LooseItem { Item = box, Cell = At(7, 2) });
-            m.Loose.Add(new LooseItem { Item = kit, Cell = At(1, 2) });
+            if (crate) Worlds.PutItem(s, box, At(7, 2));
+            Worlds.PutItem(s, kit, At(1, 2));
             st.RequestDoor(door, 1); // 평소처럼 열어 둔 문
             s.Run(10);
             int cause = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 파편이 박혔다", s.Tick);
@@ -39,10 +39,10 @@ public static partial class Program
             {
                 if (k == 1) st.RequestDoor(door, 0); // 한 틱 뒤 문을 닫으려 한다 (주컴퓨터의 봉쇄처럼)
                 s.Step();
-                if (Debug && k < 4) Console.WriteLine($"    {k}틱 물건 {string.Join(",", m.Loose.Select(x => $"{m.ItemNames[x.Item]}@{x.Cell}"))} · 문 곁 돌풍 {f.WindPa[At(7, 2)]:0}Pa · 문 {f.DoorOpen[door]:0.0} 끼임 {st.DoorJam[door]}");
+                if (Debug && k < 4) Console.WriteLine($"    {k}틱 물건 {string.Join(",", Worlds.Items(s).Select(x => $"{m.ItemNames[x.Item]}@{x.Cell}"))} · 문 곁 돌풍 {f.WindPa[At(7, 2)]:0}Pa · 문 {f.DoorOpen[door]:0.0} 끼임 {st.DoorJam[door]}");
             }
-            int crateCell = m.Loose.FirstOrDefault(x => x.Item == box, new LooseItem { Cell = -1 }).Cell;
-            return (st.DoorJam[door] != 0, f.DoorOpen[door], s.Causes.Story(st.DamageCause[At(6, 2)]), crateCell, !m.Loose.Any(x => x.Item == kit),
+            int crateCell = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0)).Cell;
+            return (st.DoorJam[door] != 0, f.DoorOpen[door], s.Causes.Story(st.DamageCause[At(6, 2)]), crateCell, !Worlds.Items(s).Any(x => x.Item == kit),
                 s.Book.OfItem(kit, Flow.Spaced), w.Other(s, Book.Bulk + kit), m.Spaced);
         }
         var with = Run(true); var without = Run(false);

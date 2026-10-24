@@ -83,6 +83,7 @@ public struct Body
     public float GutHours;                       // 그 단계에 든 지 (시간)
     public int GutCause;                         // 배탈의 원인 마디
     public float Spore;                          // 마시는 곰팡이 포자 (그 방 몫 — 마스크 · 우주복이면 0)
+    public int PropId;                           // ④ 제 힘을 잃은 동안의 물체 Id (0 없음 — docs/PHYSICS.md PH14)
 }
 
 /// <summary>재배대의 작물.</summary>

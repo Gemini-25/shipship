@@ -272,16 +272,6 @@ public struct AgentCore
     public long ChargeAt;
 }
 
-/// <summary>바닥에 떨어진 · 놓인 물건.</summary>
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct LooseItem
-{
-    public byte Item;
-    public int Cell;
-    public float Charge;
-    public int PlugAt;   // ③ 빨려 붙어 막은 구멍 칸 + 1 (0: 없음)
-}
-
 /// <summary>보관함에 돌려놓은 쓰다 남은 물건 (소화기 물 · 이산화탄소 · 우주복 · 마스크 산소가 덜 찼다) — 꺼낼 때 그 양으로 · 채우기 일감의 대상.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct SpentItem

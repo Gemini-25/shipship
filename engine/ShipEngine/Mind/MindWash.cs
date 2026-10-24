@@ -401,7 +401,8 @@ public sealed partial class Mind
         if (c.AssignedGoal == GoalKind.ToiletCare && c.AssignedArg == 3)   // 바닥에 내려놓인 오물 통 (대상: 칸) — 주워 비울 곳으로
         {
             int at = c.AssignedTarget, dump = WasteDump(at);
-            if (at < 0 || dump < 0 || !Loose.Any(x => x.Item == iWaste && x.Cell == at)) return false;
+            var book = _st!;
+            if (at < 0 || dump < 0 || !book.Props.Any(x => x.Kind == 0 && x.What == iWaste && book.CellOf(x) == at)) return false;
             plan.Add(Go(at, 1));
             plan.Add(new PlanStep { Kind = StepKind.Sanitize, Cell = at, Target = -1, Arg = 4 });
             plan.Add(Go(L.Furniture[dump].Cells[0], 1));
@@ -433,12 +434,14 @@ public sealed partial class Mind
         if (st.Arg == 4)   // 바닥에 내려놓인 오물 통을 줍는다 (일이 끊겨 내려놓았던 것)
         {
             if (Dist(c.Cell, st.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-            int li = Loose.FindIndex(x => x.Item == iWaste && x.Cell == st.Cell);
+            var book = _st!; var props = book.Props;
+            int li = props.FindIndex(x => x.Kind == 0 && x.What == iWaste && book.CellOf(x) == st.Cell);
             WasteDown.Remove(st.Cell);   // 가 보았다 — 알린 자리는 지운다
             if (li < 0) { a.C.AssignedUntil = t; EndPlan(a); return; }   // 누가 벌써 주웠다 — 쏟기 걸음으로 넘어가지 않는다
+            var bin = props[li];
             if (c.Holding != 255) DropHeld(a);
-            c.Holding = iWaste; c.HoldCharge = Loose[li].Charge;
-            Loose.RemoveAt(li);
+            c.Holding = iWaste; c.HoldCharge = bin.Charge;
+            book.TakeItem(bin.Id);
             Next(a, t);
             return;
         }

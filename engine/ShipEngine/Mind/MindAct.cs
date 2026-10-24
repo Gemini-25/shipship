@@ -195,7 +195,7 @@ public sealed partial class Mind
     {
         if (a.C.Holding == 255) return;
         if (a.C.Holding == iWaste && !WasteDown.Contains(a.C.Cell)) WasteDown.Add(a.C.Cell);   // 오물 통을 내려놓으면 주컴퓨터에 알린다 (주워 비우게)
-        Loose.Add(new LooseItem { Item = a.C.Holding, Cell = a.C.Cell, Charge = a.C.HoldCharge });
+        _st!.PutItem(a.C.Holding, a.C.HoldCharge, a.C.Cell);   // 바닥에 내려놓는다 (④ 물체 장부에 요청)
         a.C.Holding = 255; a.C.HoldCharge = 0;
     }
 

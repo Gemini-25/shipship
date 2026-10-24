@@ -12,6 +12,9 @@ public struct Shard
     public long Born;
     /// <summary>제 회전 각운동량 (떨어져 나온 판 조각이 몸과 함께 돌던 몫 — m·a²/6·ω · 장부).</summary>
     public double Spin;
+    /// <summary>만든 차례 (그림의 자취 열쇠 — PH5가 채운다) · 난 때 (틱 안 0~255).</summary>
+    public int Id;
+    public byte Sub;
 }
 
 /// <summary>

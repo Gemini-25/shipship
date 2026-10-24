@@ -125,4 +125,19 @@ public static class Worlds
     public static Dictionary<char, string> Seats => new() { ['a'] = "Seat", ['b'] = "Seat", ['c'] = "Seat", ['d'] = "Seat", ['e'] = "Bed", ['f'] = "Fridge" };
 
     public static int At(Layout l, int x, int y) => l.Index(x + 1, y + 1); // 글자 그림 좌표(둘레 한 줄 덧댐을 뺀)
+
+    /// <summary>바닥에 물건을 놓는다 (④ 물체 장부 — 시험 차림) · 물체 Id.</summary>
+    public static int PutItem(Sim s, int item, int cell, float charge = 0) => s.Get<Structure>().PutItem(item, charge, cell);
+    public static int PutItem(Sim s, string name, int cell, float charge = 0) => PutItem(s, s.Get<Mind>().ItemNames.ToList().IndexOf(name), cell, charge);
+
+    /// <summary>바닥에 놓인 물건 (물체 장부의 물건 몫 — Id 차례 · 시험이 읽기 쉽게 옛 꼴로).</summary>
+    public readonly record struct FloorItem(int Id, byte Item, int Cell, float Charge, int PlugAt);
+    public static IEnumerable<FloorItem> Items(Sim s)
+    {
+        var st = s.Get<Structure>();
+        foreach (var p in st.Props) if (p.Kind == 0) yield return new FloorItem(p.Id, (byte)p.What, st.CellOf(p), p.Charge, p.PlugAt);
+    }
+
+    /// <summary>바닥 물건을 모두 치운다 (시험 차림).</summary>
+    public static void ClearItems(Sim s) => s.Get<Structure>().Props.RemoveAll(p => p.Kind == 0);
 }

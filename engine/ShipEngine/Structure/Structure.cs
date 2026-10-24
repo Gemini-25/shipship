@@ -96,6 +96,7 @@ public sealed partial class Structure : IEngine
         BuildCrackGeometry();
         BuildFrames();
         BuildSub();
+        PropArrays();
     }
     private readonly bool[] _lockWall;
 
@@ -614,6 +615,7 @@ public sealed partial class Structure : IEngine
         w.Tag("열 · 진동"); w.Arr(ThTurn); w.Arr(ThRun); w.I64(VibGrowths); w.I64(ThermalCracks);
         w.Tag("열 수축"); w.Arr(TsSlip); w.I64(ThermalTicks);
         SaveBodies(w);
+        SaveProps(w);
     }
 
     public void Load(StateReader r)
@@ -627,6 +629,7 @@ public sealed partial class Structure : IEngine
         r.Tag("열 · 진동"); r.ArrInto(ThTurn); r.ArrInto(ThRun); VibGrowths = r.I64(); ThermalCracks = r.I64();
         r.Tag("열 수축"); TsSlip = r.Arr<float>(); ThermalTicks = r.I64();
         LoadBodies(r);
+        LoadProps(r);
         Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)
     }
 }

@@ -87,13 +87,13 @@ public static partial class Program
                 var (s, st, m, p) = Split();
                 byte box = (byte)m.ItemIndex("식량 상자");
                 int start = Worlds.At(layD, 16, 4);
-                m.Loose.Add(new LooseItem { Item = box, Cell = start });
+                Worlds.PutItem(s, box, start);
                 var o = st.Bodies[1];
                 int hit = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 들이받았다", s.Tick);
                 st.Push(1, o.X, o.Y, o.Mass * 3, 0, hit);
                 s.Step();
                 s.Run(2);
-                var it = m.Loose.FirstOrDefault(x => x.Item == box, new LooseItem { Cell = -1 });
+                var it = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0));
                 int moved = it.Cell < 0 ? 0 : layD.X(start) - layD.X(it.Cell);
                 var fell = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Fell && x.Actor == p);
                 string story = fell.Kind == FactKind.Fell ? s.Causes.Story(fell.Cause) : "";
@@ -106,7 +106,7 @@ public static partial class Program
                 var (s, st, m, _) = Split();
                 byte box = (byte)m.ItemIndex("식량 상자");
                 int start = Worlds.At(layD, 18, 3);
-                m.Loose.Add(new LooseItem { Item = box, Cell = start });
+                Worlds.PutItem(s, box, start);
                 var o = st.Bodies[1];
                 double j = 1.5 * o.Inertia / 2;   // 짝힘 — 분에 14바퀴
                 int spin = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각 끝을 스치고 지나갔다", s.Tick);
@@ -114,7 +114,7 @@ public static partial class Program
                 double R(int c) { var b = st.Bodies[1]; double dx = layD.X(c) + 0.5 - b.Lx, dy = layD.Y(c) + 0.5 - b.Ly; return Math.Sqrt(dx * dx + dy * dy); }
                 double r0 = R(start);
                 s.Run(12);
-                var it = m.Loose.FirstOrDefault(x => x.Item == box, new LooseItem { Cell = -1 });
+                var it = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0));
                 double r1 = it.Cell >= 0 ? R(it.Cell) : 0;
                 Span<int> nb = stackalloc int[4];
                 bool byWall = false;

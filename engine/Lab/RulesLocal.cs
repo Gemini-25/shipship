@@ -146,14 +146,14 @@ public static partial class Program
                 var s = Worlds.Full(lay, 1);
                 var m = s.Get<Mind>(); var st = s.Get<Structure>(); var f = s.Get<Field>();
                 byte it = (byte)m.ItemIndex(item);
-                m.Loose.Add(new LooseItem { Item = it, Cell = At(1, 2) });
+                Worlds.PutItem(s, it, At(1, 2));
                 st.RequestDoor(lay.DoorAt[At(6, 2)], 0);
                 s.Run(10);
                 int cause = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 작은 파편이 박혔다", s.Tick);
                 st.DamageCause[At(0, 2)] = cause; f.SetHole(At(0, 2), 0.06f);
                 s.Run(Time.Minutes(1));
-                bool gone = !m.Loose.Any(x => x.Item == it);
-                bool plugged = m.Loose.Any(x => x.Item == it && x.PlugAt != 0);
+                bool gone = !Worlds.Items(s).Any(x => x.Item == it);
+                bool plugged = Worlds.Items(s).Any(x => x.Item == it && x.PlugAt != 0);
                 string story = s.Facts.Since(0).Where(x => x.Kind == FactKind.ObjectFlung).Select(x => s.Causes.Story(x.Cause)).LastOrDefault() ?? "";
                 return (f.Pressure(At(3, 2)), plugged, gone, story);
             }

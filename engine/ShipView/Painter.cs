@@ -785,14 +785,16 @@ public sealed partial class Painter
         if (mind != null && !_bake)
         {
             var count = new Dictionary<int, int>();
-            foreach (var it in mind.Loose)
+            if (st != null)
+            foreach (var it in st.Props)   // ④ 물체 장부의 물건 몫
             {
-                int c = it.Cell;
+                if (it.Kind != 0) continue;
+                int c = st.CellOf(it);
                 if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
                 int n = count.GetValueOrDefault(c); count[c] = n + 1;
-                var icon = Cached(Key(9, it.Item), mind.ItemNames[it.Item], static nm => LooseIcon(nm));
+                var icon = Cached(Key(9, it.What), mind.ItemNames[it.What], static nm => LooseIcon(nm));
                 Put(img, icon, Px(x) + T / 2 - icon.W / 2 + (n % 3 - 1) * 7, Py(y) + T / 2 - icon.H / 2 + n / 3 * 6);
             }
         }

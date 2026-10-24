@@ -34,7 +34,6 @@ public sealed partial class Mind : IEngine
     public readonly List<Agent> Agents = new();
     /// <summary>설비 × 물건 → 남은 개수.</summary>
     public int[] Stock;
-    public List<LooseItem> Loose = new();
     public readonly string[] ItemNames;
     public readonly string[] RoleNames;
     public readonly int ItemCount;
@@ -391,7 +390,7 @@ public sealed partial class Mind : IEngine
     public int CountAll(int item)
     {
         int n = TotalOf(item);
-        foreach (var x in Loose) if (x.Item == item) n++;
+        if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && x.What == item) n++;   // 바닥에 놓인 것 (④ 물체 장부)
         return n;
     }
 
@@ -752,7 +751,7 @@ public sealed partial class Mind : IEngine
             w.List(new List<AgentCore> { a.C });
             w.List(a.Beliefs); w.List(a.Plan); w.List(a.Path); w.I32(a.PathIdx); w.List(a.Avoid); w.List(a.Doubts); w.List(a.Own);
         }
-        w.Arr(Stock); w.List(Loose);
+        w.Arr(Stock);
         w.I32(_said.Count);
         foreach (var (ev, tick, sp, b) in _said) { w.I32(ev); w.I64(tick); w.I32(sp); w.List(new List<Belief> { b }); }
         w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
@@ -773,7 +772,7 @@ public sealed partial class Mind : IEngine
             a.Beliefs = r.List<Belief>(); a.Plan = r.List<PlanStep>(); a.Path = r.List<int>(); a.PathIdx = r.I32(); a.Avoid = r.List<AvoidEntry>(); a.Doubts = r.List<Doubt>(); a.Own = r.List<PlanStep>();
             Agents.Add(a);
         }
-        r.ArrInto(Stock); Loose = r.List<LooseItem>();
+        r.ArrInto(Stock);
         _said.Clear();
         int m = r.I32();
         for (int i = 0; i < m; i++) { int ev = r.I32(); long t = r.I64(); int sp = r.I32(); var b = r.List<Belief>()[0]; _said.Add((ev, t, sp, b)); }

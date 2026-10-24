@@ -50,7 +50,7 @@ public static partial class Program
         {
             var s = ShipWorld.Crewed(ship, 7, people, robots);
             ShipWorld.Embark(s, ShipWorld.DefaultRoute);   // 항해 중 — 자연 사건 · 사고가 난다
-            var mind = s.Get<Mind>();
+            var mind = s.Get<Mind>(); var st = s.Get<Structure>();
             ulong h = 1469598103934665603UL, act = 1469598103934665603UL, things = 1469598103934665603UL; long cursor = 0, n = 0;
             void Mix(long v) { h ^= (ulong)v; h *= 1099511628211UL; }
             void Act(long v) { act ^= (ulong)v; act *= 1099511628211UL; }
@@ -60,8 +60,8 @@ public static partial class Program
             {
                 s.Step();
                 foreach (var a in mind.Agents) { Act(a.C.Cell); Act((long)a.C.Goal); Act(a.C.GoalTarget); }   // 행동: 사람 · 로봇이 어디서 무엇을 하나 (틱마다)
-                loose.Clear();   // 물건: 바닥에 놓인 것 (차례는 장부 차례가 아니라 정렬 — PH3a가 물체 장부에서 같은 값을 내야 한다)
-                foreach (var it in mind.Loose) loose.Add((it.Cell, it.Item, BitConverter.SingleToInt32Bits(it.Charge), it.PlugAt));
+                loose.Clear();   // 물건: 바닥에 놓인 것 (④ 물체 장부 — 차례는 장부 차례가 아니라 정렬: 옛 마음 목록과 같은 값을 낸다)
+                foreach (var it in st.Props) if (it.Kind == 0) loose.Add((st.CellOf(it), (byte)it.What, BitConverter.SingleToInt32Bits(it.Charge), it.PlugAt));
                 loose.Sort();
                 foreach (var (cell, item, charge, plug) in loose) { Thing(cell); Thing(item); Thing(charge); Thing(plug); }
                 Thing(-1);   // 틱 끝 (물건이 없는 틱도 센다)

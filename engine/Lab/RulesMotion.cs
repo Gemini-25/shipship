@@ -226,13 +226,13 @@ public static partial class Program
                 o.DryKg = o.PropellantKg = o.Engines * o.EngineN / (g * Outside.G0) / 2;
                 byte box = (byte)m.ItemIndex("식량 상자");
                 int start = At(12, 7);
-                m.Loose.Add(new LooseItem { Item = box, Cell = start });
+                Worlds.PutItem(s, box, start);
                 if (wet) f.AddStore(start, f.T.sWater, 300);
                 s.Run(3);
                 int c = s.Causes.Add(CauseKind.Route, "항로 고침", s.Tick);
                 o.Burn(s, BurnKind.Correct, 1, 0, 100, 0, 30, 0, false, o.Engines, c);
                 s.Run(15);
-                var it = m.Loose.FirstOrDefault(x => x.Item == box, new LooseItem { Cell = -1 });
+                var it = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0));
                 return (it.Cell < 0 ? 99 : lay.X(start) - lay.X(it.Cell), "");
             }
             var dry2 = Run(0.2, false); var wet2 = Run(0.2, true); var dry4 = Run(0.4, false);

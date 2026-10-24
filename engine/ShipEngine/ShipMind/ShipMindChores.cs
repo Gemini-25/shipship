@@ -154,13 +154,16 @@ public sealed partial class ShipMind
     private void PlanGathers(Sim sim)
     {
         var mind = _mind!;
-        foreach (var x in mind.Loose)
+        if (_st == null) return;
+        foreach (var p in _st.Props)   // 바닥에 놓인 물건 (④ 물체 장부)
         {
-            if (x.PlugAt != 0 || x.Item == mind.iWaste || mind.ItemKg(x.Item) < 5 || mind.HomeFor(x.Item, x.Cell) < 0) continue;
-            int room = L.Room[x.Cell];
+            if (p.Kind != 0) continue;
+            int cell = _st.CellOf(p); byte item = (byte)p.What;
+            if (p.PlugAt != 0 || item == mind.iWaste || mind.ItemKg(item) < 5 || mind.HomeFor(item, cell) < 0) continue;
+            int room = L.Room[cell];
             if (room < 0 || _net != null && !_net.RoomPowered(room)) continue;   // 카메라가 꺼진 방은 모른다
-            if (Jobs.Any(j => j.Kind == GoalKind.Gather && j.Target == x.Cell && j.Arg == x.Item)) continue;
-            Post(sim, new Job { Kind = GoalKind.Gather, Target = x.Cell, Arg = x.Item }, x.Cell, person => true);
+            if (Jobs.Any(j => j.Kind == GoalKind.Gather && j.Target == cell && j.Arg == item)) continue;
+            Post(sim, new Job { Kind = GoalKind.Gather, Target = cell, Arg = item }, cell, person => true);
         }
     }
 
@@ -168,7 +171,7 @@ public sealed partial class ShipMind
     private bool GatherDone(int cell, int item, int agent)
     {
         var mind = _mind!;
-        foreach (var x in mind.Loose) if (x.Cell == cell && x.Item == item && x.PlugAt == 0) return false;
+        if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && x.What == item && x.PlugAt == 0 && _st.CellOf(x) == cell) return false;
         return agent < 0 || agent >= mind.Agents.Count || mind.Agents[agent].C.Holding != item;
     }
 

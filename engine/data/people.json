@@ -69,7 +69,13 @@
     "헌 전기 부품": { "minutes": 0, "kg": 2, "size": [0.19, 0.12, 0.12], "mat": "copper" },
     "외장 틀":     { "minutes": 90, "kg": 15, "size": [1.0, 0.12, 0.12], "mat": "aluminum" },
     "방화 담요":   { "minutes": 0.1, "kg": 2, "size": [0.31, 0.22, 0.06], "mat": "fabric" },
-    "오물 통":     { "minutes": 0, "kg": 30, "size": [0.38, 0.38, 0.5], "mat": "polymer", "round": true }
+    "오물 통":     { "minutes": 0, "kg": 30, "size": [0.38, 0.38, 0.5], "mat": "polymer", "round": true },
+    "컵":         { "minutes": 0, "kg": 0.3 },
+    "물병":       { "minutes": 0, "kg": 0.6 },
+    "유리병":     { "minutes": 0, "kg": 0.5 },
+    "접시":       { "minutes": 0, "kg": 0.4 },
+    "공구 상자":  { "minutes": 0, "kg": 5 },
+    "책":         { "minutes": 0, "kg": 0.5 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

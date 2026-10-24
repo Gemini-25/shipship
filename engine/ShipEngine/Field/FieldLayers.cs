@@ -17,7 +17,7 @@ public sealed partial class Field
 
     private void InitLayers()
     {
-        Strat = new float[Cells]; Plug = new float[Cells];
+        Strat = new float[Cells]; PlugBody = new float[Cells]; PlugProp = new float[Cells];
         _hotMember = new bool[G]; _heavyMember = new bool[G];
         foreach (int g in new[] { T.gSoot, T.gCO, T.gCO2, T.gHCN, T.gHCl, T.gHF, T.gPF5, T.gPOF3 }) if (g >= 0 && g < G) _hotMember[g] = true;
         for (int g = 0; g < G; g++) _heavyMember[g] = _molar[g] > LayerHeavy * AirMolar;
@@ -25,24 +25,31 @@ public sealed partial class Field
 
     /// <summary>뜨거운 층에 실리는 기체인가 (불의 산물) · 무거운 층에 실리는 기체인가 (공기보다 1.2배 넘게 무겁다).</summary>
     /// <summary>
-    /// ③ 국소 현상 (나 · 다): 구멍을 막은 넓이 (m² — 칸마다 · 찍는다). 구멍에 빨려 붙은 몸 · 물건 대신 마음이 요청한다.
-    /// 구멍 틈의 넓이 = 구멍 − 막은 넓이 (빨려 붙은 몸 · 상자 둘레의 틈은 요청하는 쪽이 셈에 넣는다).
+    /// ③ 국소 현상 (나 · 다): 구멍을 막은 넓이 (m² — 칸마다 · 찍는다) 두 벌 — 빨려 붙은 몸 (⑧이 요청) · 물체 (④가 요청 — PH4c).
+    /// 구멍 틈의 넓이 = 구멍 − 둘 가운데 큰 것 (<see cref="PlugOf"/> — 몸 · 상자 둘레의 틈은 요청하는 쪽이 셈에 넣는다).
     /// </summary>
-    public float[] Plug = Array.Empty<float>();
+    public float[] PlugBody = Array.Empty<float>(), PlugProp = Array.Empty<float>();
 
+    /// <summary>그 칸 구멍을 막은 넓이 (몸 · 물체 가운데 큰 것).</summary>
+    public float PlugOf(int cell) => Math.Max(cell < PlugBody.Length ? PlugBody[cell] : 0f, cell < PlugProp.Length ? PlugProp[cell] : 0f);
+
+    /// <summary>몸 막음을 요청한다 (⑧ — 바닥 물건 몫도 아직 이리로: 다리 · PH4c가 물체 막음으로 옮긴다).</summary>
     public void SetPlug(int cell, float sealedArea)
     {
-        if (Plug.Length != Cells) Plug = new float[Cells];
-        Plug[cell] = Math.Max(0f, sealedArea);
+        if (PlugBody.Length != Cells) PlugBody = new float[Cells];
+        PlugBody[cell] = Math.Max(0f, sealedArea);
     }
 
     /// <summary>틱마다 흐르기 전에: 구멍 틈의 넓이를 막은 만큼 줄인다 (막음이 풀리면 처음 넓이로).</summary>
     private void PlugLinks()
     {
-        if (Plug.Length != Cells) return;
+        if (PlugBody.Length != Cells) return;
         foreach (var k in Links)
             if (k.Kind is LinkKind.Breach or LinkKind.Crack && k.Via >= 0)
-                k.Area = Plug[k.Via] > 0 ? Math.Max(0.0, k.Area0 - Plug[k.Via]) : k.Area0;
+            {
+                float plug = PlugOf(k.Via);
+                k.Area = plug > 0 ? Math.Max(0.0, k.Area0 - plug) : k.Area0;
+            }
     }
 
     public bool HotLayered(int g) => _hotMember[g];

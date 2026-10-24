@@ -109,7 +109,7 @@ public static partial class Program
             m[r].C.Holding = ext; m[r].C.HoldCharge = 300;   // 불을 끄고 남은 소화기를 든 로봇 (찾아 고친 결함 — 손이 비어야 계획을 짜서 맡은 손질을 끝내 못 했다)
             bool held = false;
             for (long k = 0; k < Time.Minutes(40) && m.Emptied == 0; k++) { s.Step(); held |= m[r].C.Holding == m.iWaste; }
-            bool setDown = m.Loose.Any(x => x.Item == ext && Math.Abs(x.Charge - 300) < 1e-3 && Math.Abs(lay.X(x.Cell) - lay.X(lay.Furniture[near].Cells[0])) + Math.Abs(lay.Y(x.Cell) - lay.Y(lay.Furniture[near].Cells[0])) <= 2);
+            bool setDown = Worlds.Items(s).Any(x => x.Item == ext && Math.Abs(x.Charge - 300) < 1e-3 && Math.Abs(lay.X(x.Cell) - lay.X(lay.Furniture[near].Cells[0])) + Math.Abs(lay.Y(x.Cell) - lay.Y(lay.Furniture[near].Cells[0])) <= 2);
             Check("오물 통: 80% 넘게 차면 주컴퓨터가 비우기를 맡긴다 → 로봇이 꽉 찬 통을 들고 (빈 통으로 바꿔 끼우고) 퇴비통에 쏟는다 — 질량 그대로 · 들고 있던 소화기는 변기 곁에 내려놓는다",
                 m.Emptied == 1 && held && setDown && life.Tank[near] < 1e-9 && Math.Abs(life.Heap[bin] - kg) < 1e-6 && m[r].C.Holding == 255 && m.WashSign[near] == 0,
                 $"비움 {m.Emptied} · 통을 든 적 {held} · 소화기 내려놓음 {setDown} · 통 {life.Tank[near]:0.00}kg · 퇴비통 {life.Heap[bin]:0.00}/{kg:0.00}kg · 손 {m[r].C.Holding}");
@@ -132,8 +132,8 @@ public static partial class Program
             for (long k = 0; k < Time.Minutes(60) && m.Emptied == 0; k++) { s.Step(); dropped |= m.WasteDown.Count > 0; }
             double ledger = Enumerable.Range(0, (int)Flow.Count).Sum(f => s.Book.OfItem(m.iWaste, (Flow)f));   // 떼어 낸 통 +1 · 비운 통 −1
             Check("통을 든 로봇이 멈추면 통은 그 자리에 떨어지고 그 자리를 알린다 → 다른 로봇이 주워 퇴비통에 쏟는다 — 질량 · 물건 장부 그대로",
-                carrier >= 0 && dropped && m.Emptied == 1 && Math.Abs(life.Heap[bin] - kg) < 1e-9 && life.WasteCarried < 1e-9 && !m.Loose.Any(x => x.Item == m.iWaste) && m.WasteDown.Count == 0 && Math.Abs(ledger) < 1e-9,
-                $"든 로봇 {carrier} · 알림 {dropped} · 비움 {m.Emptied} · 퇴비통 {life.Heap[bin]:0.000}/{kg:0.000}kg · 옮기는 중 {life.WasteCarried:0.000} · 바닥 통 {m.Loose.Count(x => x.Item == m.iWaste)} · 장부 {ledger}");
+                carrier >= 0 && dropped && m.Emptied == 1 && Math.Abs(life.Heap[bin] - kg) < 1e-9 && life.WasteCarried < 1e-9 && !Worlds.Items(s).Any(x => x.Item == m.iWaste) && m.WasteDown.Count == 0 && Math.Abs(ledger) < 1e-9,
+                $"든 로봇 {carrier} · 알림 {dropped} · 비움 {m.Emptied} · 퇴비통 {life.Heap[bin]:0.000}/{kg:0.000}kg · 옮기는 중 {life.WasteCarried:0.000} · 바닥 통 {Worlds.Items(s).Count(x => x.Item == m.iWaste)} · 장부 {ledger}");
         }
 
         // ── 통이 가득 차서 막힌 변기: 뚫어도 내려갈 데가 없다 — 주컴퓨터는 비우기부터 맡기고 그다음 뚫기 → 불이 꺼진다 (찾아 고친 결함 — 뚫기만 되풀이했다) ──

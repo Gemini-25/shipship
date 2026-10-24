@@ -126,18 +126,21 @@ public sealed partial class Mind
         if (c.Holding != 255 && !assigned) return;
         if (a.IsPerson && !assigned && c.Consc < 0.6f) return;
         int room = RoomOf(here), best = -1, bd = int.MaxValue;
-        for (int i = 0; i < Loose.Count; i++)
+        var book = _st!; var props = book.Props;   // 바닥에 놓인 물건 (④ 물체 장부 — 놓은 차례)
+        for (int i = 0; i < props.Count; i++)
         {
-            var x = Loose[i];
-            if (x.Item == iWaste || x.PlugAt != 0 || HomesOf(x.Item).Length == 0 && !IsFood(x.Item)) continue;
-            bool mine = assigned && x.Cell == c.AssignedTarget && x.Item == c.AssignedArg;
-            if (!mine && (room < 0 || RoomOf(x.Cell) != room)) continue;   // 제 눈에 보이는 것 (같은 방)
-            int d = mine ? -1 : PathDist(here, x.Cell);
+            var x = props[i];
+            if (x.Kind != 0) continue;
+            int xc = book.CellOf(x); byte xi = (byte)x.What;
+            if (xi == iWaste || x.PlugAt != 0 || HomesOf(xi).Length == 0 && !IsFood(xi)) continue;
+            bool mine = assigned && xc == c.AssignedTarget && xi == c.AssignedArg;
+            if (!mine && (room < 0 || RoomOf(xc) != room)) continue;   // 제 눈에 보이는 것 (같은 방)
+            int d = mine ? -1 : PathDist(here, xc);
             if (d < bd) { bd = d; best = i; }
         }
         if (best < 0) return;
-        var it = Loose[best];
-        Add(GoalKind.Gather, it.Cell, it.Cell, assigned && it.Cell == c.AssignedTarget ? 1.2f : a.IsPerson ? 0.6f * c.Consc : 0.8f);
+        int at = book.CellOf(props[best]);
+        Add(GoalKind.Gather, at, at, assigned && at == c.AssignedTarget ? 1.2f : a.IsPerson ? 0.6f * c.Consc : 0.8f);
     }
 
     /// <summary>돌려놓기 계획: 제자리로 가서 넣는다.</summary>
@@ -152,9 +155,10 @@ public sealed partial class Mind
     /// <summary>줍기 계획: 그 칸으로 가서 줍고 → 제자리 (손이 차 있으면 먼저 비운다).</summary>
     private bool PlanGather(Agent a, Option o, int here, List<PlanStep> plan)
     {
-        int li = Loose.FindIndex(x => x.Cell == o.Target && x.Item != iWaste && x.PlugAt == 0);
+        var book = _st!;
+        int li = book.Props.FindIndex(x => x.Kind == 0 && x.What != iWaste && x.PlugAt == 0 && book.CellOf(x) == o.Target);
         if (li < 0) return false;
-        byte item = Loose[li].Item;
+        byte item = (byte)book.Props[li].What;
         FreeHands(a, ref here, plan, false);
         plan.Add(Go(o.Target, 0));
         plan.Add(new PlanStep { Kind = StepKind.Gather, Cell = o.Target, Arg = item });
@@ -267,12 +271,14 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         long t = sim.Tick;
-        int li = Loose.FindIndex(x => x.Cell == st.Cell && x.Item == st.Arg && x.PlugAt == 0);
+        var book = _st!; var props = book.Props;
+        int li = props.FindIndex(x => x.Kind == 0 && x.What == st.Arg && x.PlugAt == 0 && book.CellOf(x) == st.Cell);
         if (li < 0) { if (c.AssignedGoal == GoalKind.Gather) JobDone(a, t); else EndPlan(a); return; }
         if (Dist(c.Cell, st.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        var got = props[li];
         if (c.Holding != 255) DropHeld(a);
-        c.Holding = Loose[li].Item; c.HoldCharge = Loose[li].Charge;
-        Loose.RemoveAt(li);
+        c.Holding = (byte)got.What; c.HoldCharge = got.Charge;
+        book.TakeItem(got.Id);
         Gathered++;
         Next(a, t);
     }
@@ -300,7 +306,7 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (c.Holding == 255) { c.Holding = item; c.HoldCharge = charge; return; }
-        Loose.Add(new LooseItem { Item = item, Cell = c.Cell, Charge = charge });
+        _st!.PutItem(item, charge, c.Cell);
         Laid++;
     }
 

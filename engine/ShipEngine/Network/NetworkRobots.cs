@@ -14,6 +14,7 @@ public struct RobotBody
     public byte Docked;                              // 마음의 요청: 충전독에 붙었다
     public float ImpactSeen;                         // 그 칸에서 이미 받은 충격 에너지 (구조의 장부는 몇 틱 쌓인다)
     public long ShockAt;                             // 마지막 감전 (1분에 한 번)
+    public int PropId;                               // ④ 제 힘을 잃은 동안의 물체 Id (0 없음 — docs/PHYSICS.md PH14)
 }
 
 public enum RobotPart : byte { Legs, Arms, Eyes, Core }

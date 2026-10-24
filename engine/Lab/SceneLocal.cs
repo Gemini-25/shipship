@@ -51,7 +51,7 @@ public static partial class Program
             var painter = new Painter(lay);
             int cause = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 파편이 박혔다", s.Tick);
             st.DamageCause[At(0, 2)] = cause; f.SetHole(At(0, 2), 0.075f);
-            string Line() => $"화물칸 {f.Pressure(At(3, 2)):0.0}kPa · 구멍 0.075m² 막음 {(f.Plug.Length > 0 ? f.Plug[At(0, 2)] : 0):0.000}m² · {m.NameOf(p)} {(m[p].C.PinAt != 0 ? "구멍에 빨려 붙음" : "떨어짐")} · 타박 {life[m[p].C.Body].Blunt:0.00} · 산소 포화 {life[m[p].C.Body].SpO2 * 100:0}%";
+            string Line() => $"화물칸 {f.Pressure(At(3, 2)):0.0}kPa · 구멍 0.075m² 막음 {f.PlugOf(At(0, 2)):0.000}m² · {m.NameOf(p)} {(m[p].C.PinAt != 0 ? "구멍에 빨려 붙음" : "떨어짐")} · 타박 {life[m[p].C.Body].Blunt:0.00} · 산소 포화 {life[m[p].C.Body].SpO2 * 100:0}%";
             Frame(s, painter, 0, 0, 15, 5, "파편이 박혔다 — " + Line());
             s.Step();
             var pin = s.Facts.Since(0).Where(x => x.Kind == FactKind.Hurt).Select(x => s.Causes.Story(x.Cause)).LastOrDefault() ?? "";

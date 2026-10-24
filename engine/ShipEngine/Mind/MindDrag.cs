@@ -123,7 +123,7 @@ public sealed partial class Mind
             int j = L.Index(x + ox, y + oy);
             bool open = F.IsOut(j) || L.Kind[j] == CellKind.Wall && F.Hole[j] >= 2f;
             if (!open && !(L.Kind[j] == CellKind.Wall && F.Hole[j] > 0.01f)) continue;
-            double area = open ? Field.WallFace : Math.Max(0, F.Hole[j] - (F.Plug.Length > j ? F.Plug[j] : 0));
+            double area = open ? Field.WallFace : Math.Max(0, F.Hole[j] - F.PlugOf(j));
             int bx = x + 2 * ox, by = y + 2 * oy;
             double pOut = !open && L.In(bx, by) && !F.IsOut(L.Index(bx, by)) && F.Passable(L.Index(bx, by)) ? F.Pressure(L.Index(bx, by)) : F.Outside.KPa;
             double dp = (p - pOut) * 1000;
@@ -200,11 +200,12 @@ public sealed partial class Mind
                 int j = a.C.PinAt - 1;
                 (now ??= new())[j] = Math.Max(now.GetValueOrDefault(j), (float)(Math.Min(F.Hole[j], BodyFace) * BodySeal));
             }
-        foreach (var it in Loose)
-            if (it.PlugAt != 0 && it.Cell >= 0)
+        if (_st != null)
+            foreach (var it in _st.Props)
+            if (it.Kind == 0 && it.PlugAt != 0)
             {
                 int j = it.PlugAt - 1;
-                double face = Math.Pow(ItemKg(it.Item) / ItemDensity, 2.0 / 3);
+                double face = Math.Pow(ItemKg(it.What) / ItemDensity, 2.0 / 3);
                 (now ??= new())[j] = Math.Max(now.GetValueOrDefault(j), (float)(Math.Min(F.Hole[j], face) * ItemSeal));
             }
         if (now == null && _plugs.Count == 0) return;
