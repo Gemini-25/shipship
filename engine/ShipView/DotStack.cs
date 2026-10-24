@@ -6,6 +6,7 @@ namespace ShipView;
 /// <summary>
 /// 쌓아 그리기 (docs/PHYSICS.md §6-2 — 회전 도트 그림): 도트 꼴 (월드 `DotForm`)을 무게중심을 축으로 각 단 (64 — 5.6°)만큼 돌려 층마다 겹쳐 그린다.
 /// 층 z마다 그 층을 지나는 기둥을 거꾸로 돌려 찾고 (그림 도트마다 2×2 잔표본 다수결 — 흐리지 않고 계단을 줄인다) z도트 위에 놓는다 (1층 = 1도트 — 3/4 시점).
+/// 넓은 보기 (16도트)는 반반이면 들고 · 그림 도트 격자를 단마다 골라 (발자국이 바닥 넓이 / 4에 가장 가깝게) 돌 때 크기가 같다 · 색은 그 층에서 겉에 드러난 기둥.
 /// 높은 층이 낮은 층을 덮어 남쪽에서 내려다본 겉만 남는다. 면 단은 새 가구 그림 (ArtFurniture)과 같다: 윗면 4 · 앞면 2 · 윗면 바로 아래 줄 3 ·
 /// 서쪽을 보는 옆은 한 단 밝게 · 동쪽은 한 단 어둡게 · 위 · 왼쪽 외곽 1 · 아래 · 오른쪽 외곽 0. 새 그림 가구는 그 그림의 윗면 무늬를 윗면에 그대로 덮는다.
 /// 세계를 읽기만 한다. 같은 꼴 · 같은 단이면 늘 같은 그림 (캐시는 `DotStackCache`).
@@ -63,12 +64,24 @@ public static class DotStack
         int rp = (int)Math.Ceiling(r / k) + 1, side = 2 * rp, hp = (f.H + k - 1) / k, n = side * side, ih = side + hp;
         double rd = rp * k, fx0 = cx - Math.Floor(cx), fy0 = cy - Math.Floor(cy);   // 단 0이면 잔표본이 기둥 가운데에 든다
         // 돌린 발자국이 드는 바닥면 도트만 본다
-        int px0 = Math.Max(0, (int)Math.Floor((qx0 + rd + fx0) / k) - 1), px1 = Math.Min(side - 1, (int)Math.Ceiling((qx1 + rd + fx0) / k) + 1);
-        int py0 = Math.Max(0, (int)Math.Floor((qy0 + rd + fy0) / k) - 1), py1 = Math.Min(side - 1, (int)Math.Ceiling((qy1 + rd + fy0) / k) + 1);
-        var smp = Buf(ref _smp, n * 4); var mask = Buf(ref _mask, n * words); Array.Clear(mask, 0, n * words);
+        var smp = Buf(ref _smp, n * 4); var ra = Buf(ref _ra, side); var rb = Buf(ref _rb, side);
+        var (px0, px1, py0, py1) = Box(qx0, qx1, qy0, qy1, rd, fx0, fy0, k, side);
+        if (k == 1) Sample(f, k, cs, sn, cx, cy, rd, fx0, fy0, side, px0, px1, py0, py1, smp, ra, rb);
+        else
+        {
+            // 넓은 보기 (그림 도트 하나 = 기둥 2×2): 그림 도트 격자를 돌린 발자국 상자의 왼쪽 위 모서리에 맞추고 (90°마다 잔표본이 기둥 가운데 · 짝수 너비는 꼭 맞는다)
+            // 반 도트 (기둥 하나)씩 옮긴 넷 가운데 발자국 (바닥에서 그림 도트로 드는 것)이 꼴의 바닥 넓이 / 4에 가장 가까운 것을 쓴다 (같으면 앞의 것 · `Parity`).
+            // 무게중심 자리로만 맞추면 홀수 너비 (13기둥 = 6.5도트)의 반 도트가 단마다 올림 · 내림으로 갈려 돌 때 크기가 줄었다 늘었다 했다 (우주복 단 0이 72 · 둘레는 80 넘게)
+            double bx = Wrap(-qx0, k), by = Wrap(-qy0, k);
+            int c = Parity(f, cs, sn, cx, cy, rd, bx, by, side, _area.GetValue(f, Area).Value / 4.0);
+            fx0 = Wrap(bx + (c & 1), k); fy0 = Wrap(by + (c >> 1), k);
+            (px0, px1, py0, py1) = Box(qx0, qx1, qy0, qy1, rd, fx0, fy0, k, side);
+            Sample(f, k, cs, sn, cx, cy, rd, fx0, fy0, side, px0, px1, py0, py1, smp, ra, rb);
+        }
+        var mask = Buf(ref _mask, n * words); Array.Clear(mask, 0, n * words);
         var wz = Buf(ref _wz, side * ih); Array.Fill(wz, -1, 0, side * ih);
         var wp = Buf(ref _wp, side * ih); var wc = Buf(ref _wc, side * ih); var top = Buf(ref _top, side * ih);
-        Stack(f, k, words, cs, sn, cx, cy, rd, fx0, fy0, side, hp, px0, px1, py0, py1, smp, mask, wz, wp, wc, top);
+        Vote(f, k, words, side, hp, py0, py1, smp, ra, rb, mask, wz, wp, wc, top);
         var shade = Buf(ref _shade, side * ih); Array.Fill(shade, (sbyte)-1, 0, side * ih);
         Shade(side, ih, words, wz, wp, top, mask, shade);
         // 새 그림 가구의 윗면 무늬 (선 꼴만 — 남쪽 그림을 보는 쪽대로 되돌려 읽는다)
@@ -98,21 +111,25 @@ public static class DotStack
         return new(img, (rd + fx0) / k, (rd + fy0) / k + hp);
     }
 
-    /// <summary>바닥면 도트마다 잔표본 넷의 기둥을 찾고 (줄마다 곧게) · 층마다 다수결로 화면 (z/k 도트 위)에 올린다 — 높은 층이 이긴다.</summary>
-    private static void Stack(DotForm f, int k, int words, double cs, double sn, double cx, double cy, double rd, double fx0, double fy0, int side, int hp,
-        int px0, int px1, int py0, int py1, int[] smp, ulong[] mask, int[] wz, int[] wp, int[] wc, bool[] top)
+    // 돌린 발자국 상자 (q) → 드는 바닥면 도트 (격자 fx0 · fy0)
+    private static (int x0, int x1, int y0, int y1) Box(double qx0, double qx1, double qy0, double qy1, double rd, double fx0, double fy0, int k, int side) =>
+        (Math.Max(0, (int)Math.Floor((qx0 + rd + fx0) / k) - 1), Math.Min(side - 1, (int)Math.Ceiling((qx1 + rd + fx0) / k) + 1),
+         Math.Max(0, (int)Math.Floor((qy0 + rd + fy0) / k) - 1), Math.Min(side - 1, (int)Math.Ceiling((qy1 + rd + fy0) / k) + 1));
+
+    // v를 [0, k)로 (k에 아주 가까우면 0 — 90°의 cos 찌꺼기로 한 도트 밀리지 않게)
+    private static double Wrap(double v, int k) { double m = v - k * Math.Floor(v / k); return m > k - 1e-9 ? 0 : m; }
+
+    /// <summary>바닥면 도트마다 잔표본 넷의 기둥을 찾는다 (줄마다 곧게 · 줄마다 드는 토막 ra..rb).</summary>
+    private static void Sample(DotForm f, int k, double cs, double sn, double cx, double cy, double rd, double fx0, double fy0, int side,
+        int px0, int px1, int py0, int py1, int[] smp, int[] ra, int[] rb)
     {
-        var solid = _solid.GetValue(f, ff => Enumerable.Range(0, ff.W * ff.D).Select(i => ff.Top[i] > ff.Bot[i] ? i : -1).ToArray());
-        int fw = f.W, fd = f.D, ks = k == 2 ? 1 : 0;   // k는 1 아니면 2 (층 → 화면 도트는 자리 옮김)
-        var bot = f.Bot; var tops = f.Top;
+        var solid = _solid.GetValue(f, Solid);
+        int fw = f.W, fd = f.D;
         Span<double> offx = stackalloc double[4], offy = stackalloc double[4];
         for (int q = 0; q < 4; q++) { double ox = ((q & 1) - 0.5) * 0.5 * k, oy = ((q >> 1) - 0.5) * 0.5 * k; offx[q] = cs * ox + sn * oy; offy[q] = -sn * ox + cs * oy; }
         double m = 0.25 * k * (Math.Abs(cs) + Math.Abs(sn)) + 1e-9;   // 잔표본이 가운데에서 벗어나는 가장 큰 한 축 길이
         var flags = _edge.GetValue(f, Edges);
         // 그림 바닥면 도트마다 잔표본 넷의 기둥 (없으면 −1) — 줄마다 곧게 나아간다 · 줄마다 돌린 발자국이 드는 토막만 (0 ≤ ux < W · 0 ≤ uy < D가 qx에 곧다)
-        var ra = Buf(ref _ra, side); var rb = Buf(ref _rb, side);
-        static (double lo, double hi) Span1(double a, double lo, double hi) =>
-            Math.Abs(a) < 1e-12 ? (lo <= 0 && 0 <= hi ? (double.MinValue, double.MaxValue) : (1, 0)) : a > 0 ? (lo / a, hi / a) : (hi / a, lo / a);
         for (int py = py0; py <= py1; py++)
         {
             int a = int.MaxValue, b = int.MinValue;
@@ -158,7 +175,55 @@ public static class DotStack
                 }
             }
         }
-        // 층마다 다수결 (넷 가운데 셋 넘게 · 둘이면 왼쪽 위 잔표본) → 화면 (z/k 도트 위) — 높은 층이 이긴다
+    }
+
+    /// <summary>
+    /// 넓은 보기의 격자 고르기: 반 도트씩 옮긴 네 격자의 잔표본은 모두 한 격자 (기둥 하나 간격) 위에 있다 — 한 번 찍고 2×2 덩이마다 (그림 도트 하나)
+    /// 그림 도트로 드는 것 (둘 넘게 찬 것 — `Vote`의 넓은 보기와 같다)을 덩이 첫 자리의 홀짝 (x · y)대로 센다 → 발자국이 want에 가장 가까운 격자 (0~3 — x 반 도트 · y 반 도트 옮김 · 같으면 앞의 것).
+    /// </summary>
+    private static int Parity(DotForm f, double cs, double sn, double cx, double cy, double rd, double bx, double by, int side, double want)
+    {
+        var solid = _solid.GetValue(f, Solid);
+        int fw = f.W, fd = f.D, L = 2 * side + 2;   // 격자 j → 화면 x = j + ½ − rd − bx (돌린 발자국 |q| ≤ r < rd − 1이 다 든다)
+        var g = Buf(ref _lat, L * L); Array.Clear(g, 0, L * L);
+        int i0 = L, i1 = -1, jl = L, jh = -1;   // 찍은 격자 상자 (세기는 그 안만)
+        for (int i = 0; i < L; i++)
+        {
+            double y = i + 0.5 - rd - by;
+            var (l1, h1) = Span1(cs, -cx - sn * y, fw - cx - sn * y);
+            var (l2, h2) = Span1(-sn, -cy - cs * y, fd - cy - cs * y);
+            double lo = Math.Max(l1, l2), hi = Math.Min(h1, h2);
+            if (lo > hi) continue;
+            int j0 = (int)Math.Max(0, Math.Floor(lo + rd + bx - 0.5) - 1), j1 = (int)Math.Min(L - 1, Math.Ceiling(hi + rd + bx - 0.5) + 1);
+            i0 = Math.Min(i0, i); i1 = i; jl = Math.Min(jl, j0); jh = Math.Max(jh, j1);
+            for (int j = j0; j <= j1; j++)
+            {
+                double x = j + 0.5 - rd - bx, ux = cx + cs * x + sn * y + 4096, uy = cy - sn * x + cs * y + 4096;
+                int ix = (int)ux - 4096, iy = (int)uy - 4096;
+                if ((uint)ix < (uint)fw && (uint)iy < (uint)fd && solid[iy * fw + ix] >= 0) g[i * L + j] = 1;
+            }
+        }
+        Span<int> cnt = stackalloc int[4];
+        for (int i = Math.Max(0, i0 - 1); i <= i1 && i + 1 < L; i++)
+            for (int j = Math.Max(0, jl - 1), o = i * L + j; j <= jh && j + 1 < L; j++, o++)
+                if (g[o] + g[o + 1] + g[o + L] + g[o + L + 1] >= 2) cnt[(j & 1) | (i & 1) << 1]++;
+        int best = 0;
+        for (int c = 1; c < 4; c++) if (Math.Abs(cnt[c] - want) < Math.Abs(cnt[best] - want)) best = c;
+        return best;
+    }
+
+    // 곧은 꼴 a·t ∈ [lo, hi]인 t 토막 (a = 0이면 온통 · 빈 것)
+    private static (double lo, double hi) Span1(double a, double lo, double hi) =>
+        Math.Abs(a) < 1e-12 ? (lo <= 0 && 0 <= hi ? (double.MinValue, double.MaxValue) : (1, 0)) : a > 0 ? (lo / a, hi / a) : (hi / a, lo / a);
+
+    /// <summary>
+    /// 층마다 다수결 (넷 가운데 셋 넘게 · 둘이면 왼쪽 위 잔표본 · 넓은 보기는 둘이면 든다) → 화면 (z/k 도트 위) — 높은 층이 이긴다.
+    /// </summary>
+    private static void Vote(DotForm f, int k, int words, int side, int hp, int py0, int py1, int[] smp, int[] ra, int[] rb,
+        ulong[] mask, int[] wz, int[] wp, int[] wc, bool[] top)
+    {
+        int ks = k == 2 ? 1 : 0;   // k는 1 아니면 2 (층 → 화면 도트는 자리 옮김)
+        var bot = f.Bot; var tops = f.Top; var hid = ks == 1 ? _hid.GetValue(f, Hidden) : null;
         for (int py = py0; py <= py1; py++)
             for (int px = ra[py]; px <= rb[py]; px++)
             {
@@ -178,9 +243,18 @@ public static class DotStack
                     for (int q = 0; q < 4; q++) { int c = smp[p * 4 + q]; if (c >= 0) { z0 = Math.Min(z0, bot[c]); z1 = Math.Max(z1, tops[c]); } }
                     for (int z = z0; z < z1; z++)
                     {
-                        int cnt = 0, col = -1; bool first = false;
-                        for (int q = 0; q < 4; q++) { int c = smp[p * 4 + q]; if (c >= 0 && bot[c] <= z && z < tops[c]) { cnt++; if (col < 0) col = c; first |= q == 0; } }
-                        if (cnt < 3 && !(cnt == 2 && first)) continue;   // 반반이면 왼쪽 위 잔표본을 따른다 (한쪽 테가 늘면 맞은쪽 테가 줄어 넓이가 그대로 · 곧은 테가 빗살이 되지 않는다)
+                        int cnt = 0, col = -1, shown = -1; bool first = false;
+                        for (int q = 0; q < 4; q++)
+                        {
+                            int c = smp[p * 4 + q];
+                            if (c < 0 || bot[c] > z || z >= tops[c]) continue;
+                            cnt++; if (col < 0) col = c; first |= q == 0;
+                            if (hid != null && shown < 0 && !(hid[2 * c] <= z && z < hid[2 * c + 1])) shown = c;
+                        }
+                        // 반반이면 왼쪽 위 잔표본을 따른다 (한쪽 테가 늘면 맞은쪽 테가 줄어 넓이가 그대로 · 곧은 테가 빗살이 되지 않는다).
+                        // 넓은 보기는 반반이면 든다 — 그림 도트 하나가 기둥 2×2라 반 덮인 테가 진짜로 반 (홀수 너비가 단마다 늘 올림 · 비스듬한 단도 같은 쪽으로)
+                        if (cnt < 3 && !(cnt == 2 && (first || ks == 1))) continue;
+                        if (shown >= 0) col = shown;   // 넓은 보기: 그 층에서 겉에 드러난 기둥 색 (안쪽 기둥이 앞면을 칠하지 않게 — 소화기 속 검은 기둥이 45°에서 몸의 73%를 덮었다)
                         mask[pw + (z >> 6)] |= 1UL << (z & 63); last = z;
                         int si = (col0 - (z >> ks)) * side + px;
                         if (z > wz[si]) { wz[si] = z; wp[si] = p; wc[si] = col; top[si] = false; }
@@ -256,9 +330,35 @@ public static class DotStack
 
     // 꼴마다 기둥 → 찬 기둥 번호 (빈 기둥 −1 — 잔표본 찾기를 한 번 읽기로)
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DotForm, int[]> _solid = new();
+    private static int[] Solid(DotForm f) => Enumerable.Range(0, f.W * f.D).Select(i => f.Top[i] > f.Bot[i] ? i : -1).ToArray();
+    // 꼴마다 기둥 → 옆이 막힌 층 토막 [lo, hi) (네 이웃이 모두 그 층을 품는다 · 맨 윗층은 빼고 — 그 층에서 안 보이는 속) — 넓은 보기의 색 고르기
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DotForm, int[]> _hid = new();
+    private static int[] Hidden(DotForm f)
+    {
+        var h = new int[f.W * f.D * 2];
+        ReadOnlySpan<int> dx = new[] { -1, 1, 0, 0 }, dy = new[] { 0, 0, -1, 1 };
+        for (int y = 0; y < f.D; y++)
+            for (int x = 0; x < f.W; x++)
+            {
+                int i = y * f.W + x, lo = f.Bot[i], hi = f.Top[i] - 1;
+                for (int d = 0; d < 4; d++)
+                {
+                    int nx = x + dx[d], ny = y + dy[d], n = ny * f.W + nx;
+                    if ((uint)nx >= (uint)f.W || (uint)ny >= (uint)f.D || f.Top[n] <= f.Bot[n]) { hi = lo; break; }
+                    lo = Math.Max(lo, f.Bot[n]); hi = Math.Min(hi, f.Top[n]);
+                }
+                h[2 * i] = lo; h[2 * i + 1] = hi;
+            }
+        return h;
+    }
+
+    // 꼴마다 찬 기둥 수 (바닥 넓이 — 넓은 보기의 격자 고르기)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DotForm, System.Runtime.CompilerServices.StrongBox<int>> _area = new();
+    private static System.Runtime.CompilerServices.StrongBox<int> Area(DotForm f) { int n = 0; for (int i = 0; i < f.W * f.D; i++) if (f.Top[i] > f.Bot[i]) n++; return new(n); }
 
     // 짓는 동안만 쓰는 판 (스레드마다 — 장마다 새로 잡지 않는다)
     [ThreadStatic] private static int[]? _smp, _wz, _wp, _wc, _ra, _rb;
+    [ThreadStatic] private static byte[]? _lat;
     [ThreadStatic] private static ulong[]? _mask;
     [ThreadStatic] private static bool[]? _top;
     [ThreadStatic] private static sbyte[]? _shade;

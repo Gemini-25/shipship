@@ -288,15 +288,21 @@ public static partial class Program
                 g16 - c16 <= 1 && g8 - c8 <= 1, $"16도트 {c16:0.0} → {g16:0.0}ms · 8도트 {c8:0.0} → {g8:0.0}ms");
         }
         // 쌓아 그리기 (물리 PH2 · docs/PHYSICS.md §6-2): 탁자 (2×2칸 · 62×60도트 · 12층) 한 장 짓기 — 캐시 없이 64단을 세 번 · 단마다 가장 작은 값의 가운데
+        // 32도트와 넓은 보기 16도트 (그림 도트는 1/4 · 격자 고르기 — 반 도트씩 옮긴 넷의 발자국을 한 번 찍어 센다 — 를 더해)
         {
             var table = DotForge.Make(Tables.Default, "Table", Facing.S, 2, 2);
-            for (int k = 0; k < 64; k++) ShipView.DotStack.Draw(table, k);   // 데우기
-            var best = new double[64]; Array.Fill(best, double.MaxValue);
-            for (int r = 0; r < 3; r++)
-                for (int k = 0; k < 64; k++) { var sw = Stopwatch.StartNew(); ShipView.DotStack.Draw(table, k); best[k] = Math.Min(best[k], sw.Elapsed.TotalMilliseconds); }
-            Array.Sort(best);
-            double med = best[32], worst = best[63];
-            Check("그리기 예산: 쌓아 그리기 — 탁자 한 장 짓기 ≤ 0.2ms (64단 가운데 값 · 캐시 없이)", med <= 0.2, $"가운데 {med:0.000}ms · 가장 느린 단 {worst:0.000}ms");
+            foreach (var (sc, cap) in new[] { (1, 0.2), (2, 0.15) })
+            {
+                for (int k = 0; k < 64; k++) ShipView.DotStack.Draw(table, k, sc);   // 데우기
+                var best = new double[64]; Array.Fill(best, double.MaxValue);
+                for (int r = 0; r < 3; r++)
+                    for (int k = 0; k < 64; k++) { var sw = Stopwatch.StartNew(); ShipView.DotStack.Draw(table, k, sc); best[k] = Math.Min(best[k], sw.Elapsed.TotalMilliseconds); }
+                Array.Sort(best);
+                double med = best[32], worst = best[63];
+                Check(sc == 1 ? "그리기 예산: 쌓아 그리기 — 탁자 한 장 짓기 ≤ 0.2ms (64단 가운데 값 · 캐시 없이)"
+                    : "그리기 예산: 쌓아 그리기 넓은 보기 (16도트) — 탁자 한 장 짓기 ≤ 0.15ms (64단 가운데 값 · 캐시 없이 · 격자 고르기까지)",
+                    med <= cap, $"가운데 {med:0.000}ms · 가장 느린 단 {worst:0.000}ms");
+            }
         }
     }
 

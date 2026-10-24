@@ -17,7 +17,7 @@ public static partial class Program
     }
 
     /// <summary>
-    /// 쌓아 그린 꼴 (PH2): 탁자 · 소화기 · 식량 상자 · 우주복을 각 단 0~63으로 — 불투명 도트 수가 단 0의 ±10% 안 · 단 0과 8 (45°)이 다르다 ·
+    /// 쌓아 그린 꼴 (PH2): 탁자 · 소화기 · 식량 상자 · 우주복을 각 단 0~63으로 (32 · 16도트 둘 다) — 불투명 도트 수가 단 0의 ±10% 안 · 단 0과 8 (45°)이 다르다 ·
     /// 캐시에 2만 장을 넣어도 32MB 안이고 가장 오래 안 쓴 것부터 나간다.
     /// </summary>
     private static void StackRules()
@@ -25,18 +25,28 @@ public static partial class Program
         var t = Tables.Default;
         static int Opaque(Img im) { int n = 0; for (int i = 3; i < im.Px.Length; i += 4) if (im.Px[i] > 0) n++; return n; }
         var forms = new[] { DotForge.Make(t, "Table", Facing.S, 2, 2), DotForge.Make(t, "소화기"), DotForge.Make(t, "식량 상자"), DotForge.Make(t, "우주복") };
-        var spread = new List<string>(); bool ok = true, differ = true;
-        foreach (var f in forms)
+        // 32도트 (scale 1)와 넓은 보기 16도트 (scale 2) 둘 다 — 넓은 보기에서도 돌 때 크기가 줄었다 늘었다 하지 않는다
+        foreach (int sc in new[] { 1, 2 })
         {
-            int n0 = Opaque(DotStack.Draw(f, 0).Img), lo = n0, hi = n0;
-            for (int k = 1; k < DotStack.Steps; k++) { int n = Opaque(DotStack.Draw(f, k).Img); lo = Math.Min(lo, n); hi = Math.Max(hi, n); }
-            ok &= n0 > 0 && lo >= 0.9 * n0 && hi <= 1.1 * n0;
-            spread.Add($"{f.Name} {n0} ({(n0 > 0 ? (double)lo / n0 : 0):0.00}~{(n0 > 0 ? (double)hi / n0 : 0):0.00})");
-            var a = DotStack.Draw(f, 0).Img; var b = DotStack.Draw(f, 8).Img;
-            differ &= a.W != b.W || a.H != b.H || !a.Px.AsSpan().SequenceEqual(b.Px);
+            var spread = new List<string>(); bool ok = true, differ = true;
+            foreach (var f in forms)
+            {
+                int n0 = Opaque(DotStack.Draw(f, 0, sc).Img), lo = n0, hi = n0;
+                for (int k = 1; k < DotStack.Steps; k++) { int n = Opaque(DotStack.Draw(f, k, sc).Img); lo = Math.Min(lo, n); hi = Math.Max(hi, n); }
+                ok &= n0 > 0 && lo >= 0.9 * n0 && hi <= 1.1 * n0;
+                spread.Add($"{f.Name} {n0} ({(n0 > 0 ? (double)lo / n0 : 0):0.00}~{(n0 > 0 ? (double)hi / n0 : 0):0.00})");
+                var a = DotStack.Draw(f, 0, sc).Img; var b = DotStack.Draw(f, 8, sc).Img;
+                differ &= a.W != b.W || a.H != b.H || !a.Px.AsSpan().SequenceEqual(b.Px);
+            }
+            string at = sc == 1 ? "32도트" : "16도트 (넓은 보기)";
+            Check($"쌓아 그린 꼴 {at} — 각 단 0~63의 불투명 도트 수가 단 0의 ±10% 안 (탁자 · 소화기 · 식량 상자 · 우주복)", ok, string.Join(" · ", spread));
+            Check($"쌓아 그린 꼴 {at} — 단 0과 단 8 (45°)의 그림이 다르다 (넷 모두)", differ && ok);
+            // 겉 색: 소화기는 빨간 몸 속에 검은 기둥 (꼭지 + 속 — 바닥부터 꼭대기까지)이 있다 — 어느 단에서도 속 기둥이 앞면을 칠하지 않는다
+            static double Red(Img im) { int n = 0, r = 0; for (int i = 0; i < im.Px.Length; i += 4) if (im.Px[i + 3] > 0) { n++; if (im.Px[i] > 2 * im.Px[i + 1] && im.Px[i] > 60) r++; } return n > 0 ? (double)r / n : 0; }
+            var ext = forms[1];
+            double redLo = Enumerable.Range(0, DotStack.Steps).Min(k => Red(DotStack.Draw(ext, k, sc).Img));
+            Check($"쌓아 그린 꼴 {at} — 소화기는 단마다 빨간 도트가 그림의 75% 넘게 (속의 검은 기둥이 앞면을 칠하지 않는다)", redLo > 0.75, $"가장 적은 단 {redLo:0.00}");
         }
-        Check("쌓아 그린 꼴 — 각 단 0~63의 불투명 도트 수가 단 0의 ±10% 안 (탁자 · 소화기 · 식량 상자 · 우주복)", ok, string.Join(" · ", spread));
-        Check("쌓아 그린 꼴 — 단 0과 단 8 (45°)의 그림이 다르다 (넷 모두)", differ && ok);
         // 캐시: 64×64 그림 (16KB) 2만 장 = 320MB를 넣는다 — 32MB 안 · 오래 안 쓴 것부터 나간다 (가끔 꺼내 본 것은 남는다)
         var cache = new DotStackCache();
         var form = forms[0];
