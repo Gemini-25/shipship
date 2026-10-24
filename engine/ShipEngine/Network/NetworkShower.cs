@@ -18,6 +18,8 @@ public sealed partial class Network
     /// <summary>물 밸브를 틀고 잠근다 (판단의 요청).</summary>
     public void SetValve(int d, bool open) { if (ShowerValve.Length != Devices.Count) Array.Resize(ref ShowerValve, Devices.Count); ShowerValve[d] = (byte)(open ? 1 : 0); }
     public bool ValveOpen(int d) => d >= 0 && d < ShowerValve.Length && ShowerValve[d] != 0;
+    /// <summary>지금 물이 흐르나 (밸브가 열렸고 · 물관으로 물이 오고 · 물탱크가 비지 않았다 — 읽기만: 화면의 물줄기).</summary>
+    public bool ShowerRunning(int d) => ValveOpen(d) && WaterAtDevice(d) && WaterTank > 0;
 
     private void ShowerStep(Sim sim, int d, double kw, double dt)
     {

@@ -18,6 +18,7 @@ public static partial class Program
 
     private static void WashRules()
     {
+        WashViewRules();   // 5단 A1 '화장실 그림' (RulesWashView.cs — 묶음은 따로)
         if (!Do("화장실")) return;
         Console.WriteLine("\n[화장실 · 샤워실 — 비우기 · 줄 · 다른 변기 · 지림 · 씻기 · 손]");
         var legend = new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery" };

@@ -82,8 +82,14 @@ public sealed partial class Painter
             // 웅덩이 (칸마다 다른 모양 · 가장자리 밝게)
             float cx = px + T / 2 + (DotHash.F(c, sIdx, 3) - 0.5f) * 8, cy = py + T / 2 + (DotHash.F(c, sIdx, 4) - 0.5f) * 6;
             float rx = (float)Math.Min(14, 5 + mol / full * 9), ry = rx * 0.6f;
-            img.Oval(cx, cy, rx, ry, col, a);
-            img.Oval(cx - rx * 0.3f, cy - ry * 0.3f, rx * 0.35f, ry * 0.3f, Rgba.Hex("#ffffff"), a * 0.35f);   // 빛 받은 자리
+            Puddle(img, cx, cy, rx, ry, col, a);
         }
+    }
+
+    /// <summary>웅덩이 한 장 (타원 · 빛 받은 자리) — 쏟은 액체 · 화장실 설비 칸 발치의 물이 함께 쓴다.</summary>
+    private static void Puddle(Img img, float cx, float cy, float rx, float ry, Rgba col, float a)
+    {
+        img.Oval(cx, cy, rx, ry, col, a);
+        img.Oval(cx - rx * 0.3f, cy - ry * 0.3f, rx * 0.35f, ry * 0.3f, Rgba.Hex("#ffffff"), a * 0.35f);   // 빛 받은 자리
     }
 }

@@ -115,7 +115,7 @@ public sealed partial class Painter
     /// <summary>덩어리 도장: 굽는 층이 읽는 세계 값 (둘레 한 칸 · 아래 두 줄까지 — 벽 앞면 · 솟은 설비).</summary>
     private ulong StampOf(Sim s, int ci)
     {
-        var f = s.Get<Field>(); var st = s.Find<Structure>(); var mind = s.Find<Mind>(); var net = s.Find<Network>();
+        var f = s.Get<Field>(); var st = s.Find<Structure>(); var mind = s.Find<Mind>(); var net = s.Find<Network>(); var life = s.Find<Life>();
         int cx = ci % _cw, cy = ci / _cw;
         int x0 = Math.Max(0, cx * Chunk - 1), y0 = Math.Max(0, cy * Chunk - 1), x1 = Math.Min(L.W, cx * Chunk + Chunk + 1), y1 = Math.Min(L.H, cy * Chunk + Chunk + 2);
         bool sub = st != null && st.Sub.Length == L.N, multi = st != null && st.Bodies.Count > 1;
@@ -145,6 +145,7 @@ public sealed partial class Painter
         {
             h = (h ^ (ulong)FillOf(i, mind).Key) * 1099511628211UL;
             h = (h ^ (FixOff(net, i) ? 1UL : 2UL)) * 1099511628211UL;
+            if (_washKind[i] == 1) h = (h ^ (ulong)(3 + WashState(life, i, 1))) * 1099511628211UL;   // 변기 몸 (때 3단 × 막힘 — 5단 A1)
         }
         return h;
     }
@@ -276,6 +277,20 @@ public sealed partial class Painter
                 Put(img, DownOf(icon, k), FloorDiv(Gx(x) + T / 2 - icon.W / 2 + (n % 3 - 1) * 7, k), FloorDiv(Gy(y) + T / 2 - icon.H / 2 + n / 3 * 6, k));
             }
         }
+        // ── 화장실 설비의 장마다 덧그림 (32도트 설비 고리와 같은 것 — 굽지 않는다): 샤워 칸 · 세면대 물줄기 · 빛을 끈 그림의 '사용 금지' 불 (빛을 켜면 FarGlows) ──
+        if (_washFix.Length > 0)
+        {
+            SinkUsers(mind);
+            foreach (int i in _washFix)
+            {
+                var (bx, by, bw, bh) = _fixBox[i];
+                if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1 || !Mine(L.Furniture[i].Cells[0])) continue;
+                int wk = _washKind[i], gx = Gx(bx), gy = Gy(by) - WashRise(wk);
+                if (wk == 3 && ShowerFlows(net, i)) Put(img, DownOf(ShowerStreamImg(frame), k), gx / k, FloorDiv(gy, k));
+                else if (wk == 2 && SinkFlows(net, i)) Put(img, DownOf(SinkStreamImg(frame), k), gx / k, FloorDiv(gy, k));
+                else if (wk == 1 && !Lighting && SignOn(mind, i)) SignLamp(img, (gx + SignX) / k, FloorDiv(gy + SignY, k), Math.Max(1, 2 / k), false);
+            }
+        }
         // ── 칸 덮개: 물 · 진공 · 열 · 어둠 (그을음 · 액체는 구웠다) ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -285,7 +300,14 @@ public sealed partial class Painter
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 int px = (x - x0) * D, py = (y - y0) * D;
                 double water = f.Stored(f.T.sWater, c);
-                if (water > 2) Put(img, DownOf(Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), k), px, py, false, (float)Math.Min(0.85, water / 60));
+                if (water > 2 && L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0)   // 화장실 설비 칸: 발치 웅덩이 (32도트로 그려 줄인다)
+                {
+                    var pool = _stainInto!;
+                    Array.Clear(pool.Px);
+                    FootPool(pool, c, 0, 0, water);
+                    PutDown(img, pool, k, px, py, T, T);
+                }
+                else if (water > 2) Put(img, DownOf(Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), k), px, py, false, (float)Math.Min(0.85, water / 60));
                 if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;
                 double kpa = f.Pressure(c);
                 if (kpa < 40) img.Fill(px, py, D, D, Rgba.Hex("#8fd0ff"), (float)(0.42 * (1 - kpa / 40)));
@@ -312,7 +334,11 @@ public sealed partial class Painter
                     int ox = AgOx + Mod(gx - AgOx, k), oy = AgOy + Mod(gy - AgOy, k);   // 판 (0, 0)이 줄인 도트 칸에 맞게
                     Array.Clear(sc.Px);
                     int e0 = _emissive.Count;
-                    if (a.IsPerson) DrawPerson(sc, mind, life, a, ox, oy, frame);
+                    if (a.IsPerson)
+                    {
+                        DrawPerson(sc, mind, life, a, ox, oy, frame);
+                        if (ShowerIn(a) is int sh and >= 0) Put(sc, CurtainImg(), Gx(_fixBox[sh].x) - (gx - ox), Gy(_fixBox[sh].y) - WashRise(3) - (gy - oy));   // 씻는 동안 닫힌 커튼 (32도트와 같다)
+                    }
                     else DrawBot(sc, a, ox, oy, frame);
                     if (_emissive.Count > e0)   // 공황 표시처럼 빛을 받지 않는 것 (작은 판 자리) — 빛을 곱한 뒤 그 자리에 다시 그린다
                     {
@@ -397,7 +423,7 @@ public sealed partial class Painter
             lt = Lap("넓은: 빛 지도", lt);
             ApplyLightFar(img, w, h, D);
             lt = Lap("넓은: 빛 곱하기", lt);
-            FarGlows(img, net, x0, y0, w, h, frame, k);
+            FarGlows(img, net, mind, x0, y0, w, h, frame, k);
             foreach (var (marks, mx, my) in _farMarks)
             {
                 Array.Clear(_agentInto!.Px);
@@ -628,7 +654,7 @@ public sealed partial class Painter
     }
 
     /// <summary>켜진 설비의 화면 · 불빛 (곱한 뒤 · 32도트와 같은 그림을 줄여서).</summary>
-    private void FarGlows(Img img, Network? net, int x0, int y0, int w, int h, int frame, int k)
+    private void FarGlows(Img img, Network? net, Mind? mind, int x0, int y0, int w, int h, int frame, int k)
     {
         _fixOrder ??= Enumerable.Range(0, L.Furniture.Count).Where(i => L.Furniture[i].Cells.Length > 0)
             .OrderBy(i => _fixBox[i].y + _fixBox[i].h).ThenBy(i => i).ToArray();
@@ -659,7 +685,11 @@ public sealed partial class Painter
                 if (g.W > 1) Put(img, DownOf(g, k), gx / k, FloorDiv(gy - nrise, k));
                 continue;
             }
-            if (_washKind[i] != 0) continue;
+            if (_washKind[i] != 0)   // 화장실 설비: 변기의 '사용 금지' 불만 스스로 빛난다 (5단 A1)
+            {
+                if (_washKind[i] == 1 && SignOn(mind, i)) SignLamp(img, (gx + SignX) / k, FloorDiv(gy - WashRise(1) + SignY, k), Math.Max(1, 2 / k), true);
+                continue;
+            }
             var ft = _fixType[i] ?? FurnitureType.Shelf;
             int rise = DotMachines.RiseOf(ft);
             int dev = DeviceOf(net, i);

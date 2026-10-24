@@ -32,6 +32,8 @@ public sealed partial class Painter
     };
     private readonly FurnitureType?[] _fixType;
     private readonly byte[] _washKind;   // 화장실 · 샤워실 설비의 제 그림 (PainterWash.cs)
+    private readonly int[] _washFix;     // 화장실 설비 번호들 (넓은 보기의 장마다 덧그림)
+    private readonly bool _hasSink;
     private readonly bool[] _newArt;     // 새 가구 그림 (ArtFurniture — 상위 15종)
     private readonly Facing[] _facing;   // 가구가 보는 쪽 (벽에 닿은 쪽이 뒤 — 도면에서 한 번)
     private readonly (int x, int y, int w, int h)[] _fixBox;
@@ -48,6 +50,8 @@ public sealed partial class Painter
         _finish = L.Rooms.Select(r => ArtFloors.FinishFor(r.Type)).ToArray();
         _fixType = new FurnitureType?[L.Furniture.Count];
         _washKind = L.Furniture.Select(f => (byte)WashKind(f.Type)).ToArray();
+        _washFix = Enumerable.Range(0, L.Furniture.Count).Where(i => _washKind[i] != 0 && L.Furniture[i].Cells.Length > 0).ToArray();
+        _hasSink = _washFix.Any(i => _washKind[i] == 2);
         _newArt = L.Furniture.Select(f => ArtFurniture.Has(f.Type)).ToArray();
         _facing = new Facing[L.Furniture.Count];
         _fixBox = new (int, int, int, int)[L.Furniture.Count];
@@ -588,6 +592,7 @@ public sealed partial class Painter
         // ── 설비 (아래쪽 것이 앞) ──
         _fixOrder ??= Enumerable.Range(0, L.Furniture.Count).Where(i => L.Furniture[i].Cells.Length > 0)
             .OrderBy(i => _fixBox[i].y + _fixBox[i].h).ThenBy(i => i).ToArray();   // 설비는 움직이지 않는다 — 한 번만 줄 세운다
+        if (!_bake) SinkUsers(mind);   // 세면대를 쓰는 이 (장마다 한 번)
         foreach (int i in _fixOrder)
         {
             var (bx, by, bw, bh) = _fixBox[i];
@@ -624,10 +629,14 @@ public sealed partial class Painter
                 else if (ndev >= 0) img.Fill(Px(bx), Py(by) - nrise, bw * T, bh * T + nrise, Rgba.Hex("#000308"), 0.3f);
                 continue;
             }
-            if (_washKind[i] != 0)
+            if (_washKind[i] != 0)   // 화장실 설비 (5단 A1): 몸은 상태대로 (변기 때 3단 × 막힘 — 굽는다) · 물줄기 · '사용 금지' 불은 장마다
             {
-                int wk = _washKind[i], wr = WashRise(wk);
-                Put(img, Cached(Key(5, 9100 + wk, bw, bh, 0), wk, static k => Shadowed(WashBody(k), WashRise(k))), Px(bx), Py(by) - wr);
+                int wk = _washKind[i], wr = WashRise(wk), ws = WashState(life, i, wk);
+                var wbody = Cached(Key(5, 9100 + wk * 16 + ws, bw, bh, 0), (wk, ws), static q => Shadowed(WashBody(q.wk, q.ws), WashRise(q.wk)));
+                int wx = Px(bx), wy = Py(by) - wr;
+                Put(img, wbody, wx, wy);
+                _front.Add((wbody, wx, wy, by + bh - 1));   // 앞 가림 (솟은 몸 — 변기 6 · 세면대 10 · 샤워 칸 14도트)
+                if (!_bake) WashOver(img, net, mind, i, wk, wx, wy, frame);
                 continue;
             }
             var ft = _fixType[i] ?? FurnitureType.Shelf;
@@ -679,7 +688,11 @@ public sealed partial class Painter
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 if (_bake) continue;   // 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
                 double water = f.Stored(f.T.sWater, c);
-                if (water > 2) Put(img, Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
+                if (water > 2)
+                {
+                    if (L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0) FootPool(img, c, Px(x), Py(y), water);   // 화장실 설비 칸: 설비를 덮지 않고 발치에
+                    else Put(img, Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
+                }
                 if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다 (기압 0으로 읽혀 늘 서리로 덮였다 — 하늘색 문)
                 double kpa = f.Pressure(c);
                 if (kpa < 40) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#8fd0ff"), (float)(0.42 * (1 - kpa / 40))); // 진공: 서리 (어두워진 새 바닥에서도 읽히게 0.36 → 0.42)
@@ -701,7 +714,11 @@ public sealed partial class Painter
                 int x = L.X(cell), y = L.Y(cell);
                 if (x < x0 - 1 || y < y0 - 1 || x > x0 + w || y > y0 + h + 1 || !Mine(cell)) continue;
                 var (nx, ny) = Nudge?.Invoke(a) ?? (0, 0);
-                if (a.IsPerson) DrawPerson(img, mind, life, a, Px(x) + nx, Py(y) + ny, frame);
+                if (a.IsPerson)
+                {
+                    DrawPerson(img, mind, life, a, Px(x) + nx, Py(y) + ny, frame);
+                    if (ShowerIn(a) is int sh and >= 0) Put(img, CurtainImg(), Px(_fixBox[sh].x), Py(_fixBox[sh].y) - WashRise(3));   // 씻는 동안 닫힌 커튼 (그 사람 바로 뒤에 — 막대 위로 머리만)
+                }
                 else DrawBot(img, a, Px(x) + nx, Py(y) + ny, frame);
                 // 앞 가림 (T9): 이 사람 · 로봇보다 아래 줄에 밑이 있는 솟은 설비가 그 그림과 겹치면 겹친 곳만 다시 얹는다
                 int sx0 = Px(x) + nx, sy0 = Py(y) + ny + T - 46, sx1 = sx0 + T, sy1 = Py(y) + ny + T;
