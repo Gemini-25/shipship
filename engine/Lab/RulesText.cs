@@ -34,6 +34,20 @@ public static partial class Program
             Check("화면 글 금지어: 영문 목표 · 개발 말 · 숫자와 단위 · 못 채운 자리 · 빈 글은 걸리고 · '몰라' · 시각 · 이름 속 숫자는 걸리지 않는다 · 정리기는 'Wash: …' → '씻는다: …' (숫자 괄호를 뗀다) · 속말 표의 모든 줄은 자리를 채운 뒤 걸리지 않는다",
                 caught.Count == bads.Length && falsePos.Count == 0 && cleaned == "씻는다: 샤워 칸에서 물이 나오지 않는다" && ShipView.TextLint.Bad(cleaned) == null && lineBad.Count == 0,
                 $"걸림 {caught.Count}/{bads.Length} · 헛걸림 [{string.Join(" | ", falsePos)}] · 정리 '{cleaned}' · 표 줄 걸림 {lineBad.Count} {string.Join(" | ", lineBad.Take(3))}");
+
+            // 입말 표 (talk.json) 전체: 대화가 쓰는 채움 (TalkTable.Fill)으로 자리를 채운 뒤 — 받침 있는 이름 · 없는 이름 둘 다 (뒤에 더하는 입말 줄도 저절로)
+            var talk = TalkTable.Load();
+            var talkBad = new List<string>();
+            int talkLines = 0;
+            foreach (var (key, lines) in talk.Lines)
+                foreach (var l in lines)
+                {
+                    talkLines++;
+                    foreach (var (other, given, about, room) in new[] { ("한지민", "지민", "박서준", "식당"), ("최유나", "유나", "이도해", "기관실") })
+                        if (ShipView.TextLint.Bad(TalkTable.Fill(l, other, given, about, room)) is string why) { talkBad.Add($"{key}: {l} ({why})"); break; }
+                }
+            Check("화면 글 금지어: 입말 표 (talk.json)의 모든 줄은 자리를 채운 뒤 걸리지 않는다 (영문 · 개발 말 · 숫자와 단위 · 못 채운 자리 · 빈 글)",
+                talkLines > 0 && talkBad.Count == 0, $"줄 {talkLines} · 걸림 {talkBad.Count} {string.Join(" | ", talkBad.Take(3))}");
         }
     }
 }

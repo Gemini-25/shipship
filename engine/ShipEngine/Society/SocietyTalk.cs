@@ -20,6 +20,12 @@ public sealed class TalkTable
         TalkEnd.Accept => "받아줌", TalkEnd.Reject => "거절", _ => "맞장구",
     };
 
+    /// <summary>입말 한 줄의 자리를 채운다: {상대} 듣는 이 · {상대아} 부를 때 (given — 성을 뗀 이름) · {그} 이야기 속 사람 ({그이} {그을} {그은} {그와}) · {곳} 그 방 ({곳에서} {곳을}).</summary>
+    public static string Fill(string line, string other, string given, string about, string room) =>
+        line.Replace("{상대아}", Ko.A(given)).Replace("{상대}", other)
+            .Replace("{그이}", Ko.I(about)).Replace("{그을}", Ko.Eul(about)).Replace("{그은}", Ko.Eun(about)).Replace("{그와}", Ko.Gwa(about)).Replace("{그}", about)
+            .Replace("{곳에서}", room + "에서").Replace("{곳을}", Ko.Eul(room)).Replace("{곳}", room);
+
     /// <summary>주제 · 결과의 이야기 한 줄 (기록 · 연출) — "둘이 불 이야기를 했다 → 서로 탓함".</summary>
     public static string Summary(Topic t, TalkEnd e) => e switch
     {
@@ -289,9 +295,7 @@ public sealed partial class Society
         string Name(int x) => x >= 0 && x < N ? mind.NameOf(x) : "그 사람";
         string room = RoomName(o.Cell);
         string other = Name(listener), about = Name(o.About);
-        string text = line.Replace("{상대아}", Ko.A(Given(other))).Replace("{상대}", other)
-            .Replace("{그이}", Ko.I(about)).Replace("{그을}", Ko.Eul(about)).Replace("{그은}", Ko.Eun(about)).Replace("{그와}", Ko.Gwa(about)).Replace("{그}", about)
-            .Replace("{곳에서}", room + "에서").Replace("{곳을}", Ko.Eul(room)).Replace("{곳}", room);
+        string text = TalkTable.Fill(line, other, Given(other), about, room);
         int summary = sim.Causes.Add(CauseKind.Society, summaryText ?? $"{Ko.Gwa(mind.NameOf(speaker))} {Ko.I(other)} {TalkTable.Summary(o.T, end)}", sim.Tick, C(speaker).Cell, o.Cause, 0, speaker);
         int said = sim.Causes.Add(CauseKind.Society, text, sim.Tick, C(speaker).Cell, summary, 0, speaker);
         Sayings.Add(new Saying { Tick = sim.Tick, Speaker = speaker, Listener = listener, Topic = o.T, End = end, Line = said, Cell = C(speaker).Cell });
