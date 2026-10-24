@@ -287,6 +287,17 @@ public static partial class Program
             Check("그리기 예산: 곰팡이 핀 배 넓은 보기 한 장 — 평시 판 + 1ms 안 (16 · 8도트 — 곰팡이 · 안개가 장마다 드는 몫 · 평시 판과 한 장씩 번갈아)",
                 g16 - c16 <= 1 && g8 - c8 <= 1, $"16도트 {c16:0.0} → {g16:0.0}ms · 8도트 {c8:0.0} → {g8:0.0}ms");
         }
+        // 쌓아 그리기 (물리 PH2 · docs/PHYSICS.md §6-2): 탁자 (2×2칸 · 62×60도트 · 12층) 한 장 짓기 — 캐시 없이 64단을 세 번 · 단마다 가장 작은 값의 가운데
+        {
+            var table = DotForge.Make(Tables.Default, "Table", Facing.S, 2, 2);
+            for (int k = 0; k < 64; k++) ShipView.DotStack.Draw(table, k);   // 데우기
+            var best = new double[64]; Array.Fill(best, double.MaxValue);
+            for (int r = 0; r < 3; r++)
+                for (int k = 0; k < 64; k++) { var sw = Stopwatch.StartNew(); ShipView.DotStack.Draw(table, k); best[k] = Math.Min(best[k], sw.Elapsed.TotalMilliseconds); }
+            Array.Sort(best);
+            double med = best[32], worst = best[63];
+            Check("그리기 예산: 쌓아 그리기 — 탁자 한 장 짓기 ≤ 0.2ms (64단 가운데 값 · 캐시 없이)", med <= 0.2, $"가운데 {med:0.000}ms · 가장 느린 단 {worst:0.000}ms");
+        }
     }
 
     /// <summary>세 번 잰 가운데 값 (그리기 예산): 판정은 가장 작은 값 — 다른 일 · VM 빼앗김은 시간을 더할 뿐 빼지 않는다. 글에는 '고른 값 (셋)'.</summary>

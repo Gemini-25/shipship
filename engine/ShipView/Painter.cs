@@ -991,8 +991,8 @@ public sealed partial class Painter
         }
     }
 
-    /// <summary>바닥 물건 그림 (작은 도트 — 무게만큼 크게): 상자 · 꾸러미 · 소화기 · 우주복 · 원료 덩이.</summary>
-    private static Img LooseIcon(string name)
+    /// <summary>바닥 물건 그림 (작은 도트 — 무게만큼 크게): 상자 · 꾸러미 · 소화기 · 우주복 · 원료 덩이. (관찰 장면 '도는 도트'가 나란히 보인다 — ShipView는 Lab에 속을 열지 않아 public)</summary>
+    public static Img LooseIcon(string name)
     {
         var (w, h, body, edge) = name switch
         {

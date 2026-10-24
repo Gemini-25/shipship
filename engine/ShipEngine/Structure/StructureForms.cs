@@ -16,8 +16,8 @@ public sealed class DotForm
     public string Name = "";
     public Facing Face;
     public byte Lie;
-    /// <summary>발자국 (도트) · 층 수 · 칸 상자 안 발자국 모서리 (도트 — 가구만 · 물건은 0).</summary>
-    public int W, D, H, Ox, Oy;
+    /// <summary>발자국 (도트) · 층 수 · 칸 상자 안 발자국 모서리 (도트 — 가구만 · 물건은 0) · 칸 상자 (칸 — 가구만 · 물건은 0).</summary>
+    public int W, D, H, Ox, Oy, Bw, Bh;
     public byte[] Bot = Array.Empty<byte>(), Top = Array.Empty<byte>(), Mat = Array.Empty<byte>(), Part = Array.Empty<byte>();
     /// <summary>기둥 질량 (kg — 재질 부피 몫 × 밀도를 표의 kg에 맞춰 늘리고 줄였다 · 합 = Mass).</summary>
     public double[] Kg = Array.Empty<double>();
@@ -69,7 +69,8 @@ public static class DotForge
         {
             def = t.Forms.GetValueOrDefault(name);
             kg = e.Parts.Values.Sum();
-            v = Furniture(t, e, def, face, Math.Max(1, bw), Math.Max(1, bh), out fm.Ox, out fm.Oy);
+            fm.Bw = Math.Max(1, bw); fm.Bh = Math.Max(1, bh);
+            v = Furniture(t, e, def, face, fm.Bw, fm.Bh, out fm.Ox, out fm.Oy);
         }
         else
         {
