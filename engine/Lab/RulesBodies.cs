@@ -449,6 +449,38 @@ public static partial class Program
                 $"조각 배에 대해 {w1:0.000}rad/s · 한 틱에 {turned:0.000}rad · 장마다 각 {string.Join(" → ", th.Select(t => (t - th[0]).ToString("0.000")))} (틱 사이 몫 0.25마다 {w1 * Time.SecondsPerTick * 0.25:0.000} · 가장 큰 어긋남 {worst:0.0e0}) · " +
                 $"배 {w0:0.000}rad/s · 한 틱에 {skyTurn:0.000}rad · 4분의 1에 별 {sky:0.000}rad (기대 {w0 * Time.SecondsPerTick * 0.25:0.000})");
 
+            // 갈라지지 않은 배: 구멍만 나면 부스러기와 함께 몸 0 하나가 선다 (몸 1) — 뿜어 도는 배의 별도 틱 사이 장마다 메운다 (몸이 둘 넘을 때만 메우면 별이 한 틱 서 있다가 틱마다 한 번에 뛴다)
+            var lay1 = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s1 = Worlds.Full(lay1, 2);
+            var st1 = s1.Get<Structure>();
+            s1.Run(3);
+            st1.Destroy(s1, Worlds.At(lay1, 18, 0), 0);   // 오른쪽 방 윗벽 끝 — 통로는 그대로
+            var show1 = new ShipView.LiveShow(s1, "아령 구멍") { SpeedOverride = 1, Follow = false };
+            int ran1 = show1.Advance(1.0);
+            int one = st1.Bodies.Count;
+            double vw = st1.Bodies[0].W;
+            var vent = new List<double>();   // 뿜어 도는 배: 틱 사이 ¼ · ½ · ¾에 그린 별 각 − 지난 틱 끝 각
+            double v0 = st1.Bodies[0].Th;
+            ran1 += show1.Advance(1.0);
+            double ventTurn = st1.Bodies[0].Th - v0;
+            for (int k = 0; k < 3; k++) { ran1 += show1.Advance(0.25); show1.Render(); vent.Add(show1.Painter.SkyTh - v0); }
+            double ventWorst = 0;
+            for (int k = 0; k < 3; k++) ventWorst = Math.Max(ventWorst, Math.Abs(vent[k] - ventTurn * 0.25 * (k + 1)));
+            ran1 += show1.Advance(0.25);   // 다음 틱이 돈다 (틱 사이 몫 1 → 0)
+            // 배를 2.0rad/s로: 한 틱 뒤 ¼에 별이 W · 2.4초 · ¼만큼 (W는 틱 처음 · 끝의 가운데 — 구멍으로 아직 뿜어 한 틱에 0.000005rad/s 는다)
+            SpinTo(st1, 0, 2.0);
+            double sw = st1.Bodies[0].W, s10 = st1.Bodies[0].Th;
+            ran1 += show1.Advance(1.0);
+            double spinTurn = st1.Bodies[0].Th - s10, sw1 = st1.Bodies[0].W;
+            ran1 += show1.Advance(0.25);
+            show1.Render();
+            double sky1 = show1.Painter.SkyTh - s10;
+            Check("도는 조각 그림 각 — 갈라지지 않은 배: 구멍만 난 배 (몸 0 하나)가 뿜어 돌거나 2rad/s로 돌면 별도 틱 사이 장마다 도는 쪽으로 고르게 (한 틱 서 있다가 틱마다 한 번에 뛰지 않는다)",
+                ran1 == 4 && one == 1 && st1.Bodies.Count == 1 && Math.Abs(vw) > 0.01 && Math.Abs(ventTurn) > 0.01 && ventWorst < 1e-9 &&
+                Math.Abs(sw - 2.0) < 1e-9 && Math.Abs(sky1 - (sw + sw1) / 2 * Time.SecondsPerTick * 0.25) < 1e-6,
+                $"몸 {one} → {st1.Bodies.Count} · 뿜어 {vw:0.000}rad/s · 한 틱에 {ventTurn:0.000}rad · ¼ · ½ · ¾에 별 {string.Join(" → ", vent.Select(v => v.ToString("0.000")))}rad (어긋남 {ventWorst:0.0e0}) · " +
+                $"배 {sw:0.000} → {sw1:0.000}rad/s · 한 틱에 {spinTurn:0.000}rad · 4분의 1에 별 {sky1:0.000000}rad (기대 {(sw + sw1) / 2 * Time.SecondsPerTick * 0.25:0.000000})");
+
             // 돌던 조각이 또 갈라지면: 새 몸은 이번 틱에 났다 (지난 틱 자세가 없다) — 붙어 있던 자리 · 지금 각에 가장 가까운 온 바퀴에서 메운다 (각을 감지 않아도 한 장에 몇 바퀴를 돌지 않는다)
             var lay3 = Worlds.Ascii(Triple, Worlds.MindLegend);
             var s3 = Worlds.Full(lay3, 2);

@@ -650,13 +650,17 @@ public sealed partial class LiveShow
         for (int k = 0; k < _keep.Count && k < 2; k++) _spare.Add(_keep[k]);   // 큰 것을 남긴다 (다시 넓게 볼 때 쓴다)
         if (reuse == null) { reuse = new Img((wc + wc / 8 + 1) * D, (hc + hc / 8 + 1) * D); NewCanvas++; } // 넓이 1.35배쯤 — 다음 장에 그대로 쓰인다
         Painter.Show = Show; Painter.ChainCells = Show == Overlay.Chain ? ChainCellsNow() : null;
-        // ④ 칸 강체: 틱 사이를 메운 몸의 자세 · 배의 자세(별)
+        // ④ 칸 강체: 틱 사이를 메운 몸의 자세 (떨어져 나간 조각이 있을 때) · 배의 자세(별 — 갈라지지 않은 배도: 구멍만 나면 몸 0 하나가 서서 뿜어 돈다)
         var stb = World.Find<Structure>();
-        if (stb != null && stb.Bodies.Count > 1)
+        if (stb != null && stb.Bodies.Count > 0)
         {
-            var poses = new (double, double, double, double)[stb.Bodies.Count];
-            for (int b = 0; b < poses.Length; b++) poses[b] = PoseDrawn(stb, b);
-            Painter.Poses = poses;
+            if (stb.Bodies.Count > 1)
+            {
+                var poses = new (double, double, double, double)[stb.Bodies.Count];
+                for (int b = 0; b < poses.Length; b++) poses[b] = PoseDrawn(stb, b);
+                Painter.Poses = poses;
+            }
+            else Painter.Poses = null;
             double th0 = stb.Bodies[0].Th;
             Painter.SkyTh = _prevPose.Length > 0 && World.Tick == _prevTick + 1 ? _prevSky + (th0 - _prevSky) * Math.Clamp(_carry, 0, 1) : th0;   // 감지 않는다 (빨리 도는 배의 별도 도는 쪽으로)
         }
