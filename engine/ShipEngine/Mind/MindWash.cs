@@ -27,6 +27,23 @@ public sealed partial class Mind
     /// <summary>사람마다 주컴퓨터의 줄 안내: 들은 때 · 가 보라는 설비(−1이면 차례만) · 차례(1부터 · 0이면 없음).</summary>
     private long[] _callTick = Array.Empty<long>();
     private int[] _callTo = Array.Empty<int>(), _callOrder = Array.Empty<int>();
+
+    // ── 5단 (라)(마): 냄새 · 줄 · 손 씻기 (사람 수에 맞춰 는다 — _callTick 꼴) ──
+    /// <summary>사람마다 맡은 이 넷 (사람 × <see cref="SmellSlots"/>): 누구 · 맡은 때 (0이면 빈 칸) · 원인 마디 · 그때 그 사람의 칸.</summary>
+    public const int SmellSlots = 4;
+    private int[] _smellWho = Array.Empty<int>(), _smellCause = Array.Empty<int>(), _smellCell = Array.Empty<int>();
+    private long[] _smellAt = Array.Empty<long>();
+    /// <summary>사람마다 '냄새가 난다'는 말을 들은 때 (0 없음).</summary>
+    private long[] _toldOdorAt = Array.Empty<long>();
+    /// <summary>사람마다 줄 기억: 줄을 선 설비 · 제 줄 걸음을 시작한 때 · 먼저 드는 열쇠 · 부탁한 줄 · 투덜한 줄 (그 줄 걸음을 시작한 때 — 줄 하나에 한 번).</summary>
+    private int[] _lineFu = Array.Empty<int>();
+    private long[] _lineStart = Array.Empty<long>(), _lineKey = Array.Empty<long>(), _lineAsked = Array.Empty<long>(), _lineGrumbled = Array.Empty<long>();
+    /// <summary>사람마다 '손을 씻어 주세요' 방송을 들은 때 (0 없음 — 들은 이만).</summary>
+    public long[] HandRuleAt = Array.Empty<long>();
+    /// <summary>샤워 칸 · 화장실 알림 (사람이 배 안 통신으로 — 주컴퓨터가 읽는다 · 많아야 16).</summary>
+    public readonly List<WashReport> WashReports = new();
+    /// <summary>재기용: 냄새 나는 이 곁을 피한 번 · 샤워 투덜 · 줄 새치기 · 차례를 부탁한 번 · 비켜 준 번.</summary>
+    public long SmellAvoided, Grumbles, LineCuts, AskedTurns, TurnsGiven;
     /// <summary>오물을 비울 곳의 차례: 퇴비통 · 압축기 — 둘 다 없으면 화물 상자 (봉해 쌓아 둔다).</summary>
     private static readonly string[] DumpTypes = { "Composter", "Compactor" };
 
@@ -484,6 +501,10 @@ public sealed partial class Mind
         w.I64(Toilets); w.I64(Bags); w.I64(ShowersTaken); w.I64(Wipes); w.I64(HandWashes); w.I64(Queued); w.I64(QueueGaveUp);
         w.I64(ShowerOverRule); w.I64(WashMoved); w.I64(WashTurnedAway); w.I64(Scrubbed); w.I64(Unclogged); w.I64(Emptied); w.I64(ShowersLeftOn);
         w.Arr(_showerDev); w.Arr(_showerFrom); w.Arr(WasteDown.ToArray());
+        w.Tag("화장실 (라)(마)");
+        w.Arr(_smellWho); w.Arr(_smellAt); w.Arr(_smellCause); w.Arr(_smellCell); w.Arr(_toldOdorAt);
+        w.Arr(_lineFu); w.Arr(_lineStart); w.Arr(_lineKey); w.Arr(_lineAsked); w.Arr(_lineGrumbled); w.Arr(HandRuleAt); w.List(WashReports);
+        w.I64(SmellAvoided); w.I64(Grumbles); w.I64(LineCuts); w.I64(AskedTurns); w.I64(TurnsGiven);
     }
 
     private void LoadWash(StateReader r)
@@ -494,6 +515,10 @@ public sealed partial class Mind
         Toilets = r.I64(); Bags = r.I64(); ShowersTaken = r.I64(); Wipes = r.I64(); HandWashes = r.I64(); Queued = r.I64(); QueueGaveUp = r.I64();
         ShowerOverRule = r.I64(); WashMoved = r.I64(); WashTurnedAway = r.I64(); Scrubbed = r.I64(); Unclogged = r.I64(); Emptied = r.I64(); ShowersLeftOn = r.I64();
         _showerDev = r.Arr<int>(); _showerFrom = r.Arr<double>(); WasteDown.Clear(); WasteDown.AddRange(r.Arr<int>());
+        r.Tag("화장실 (라)(마)");
+        _smellWho = r.Arr<int>(); _smellAt = r.Arr<long>(); _smellCause = r.Arr<int>(); _smellCell = r.Arr<int>(); _toldOdorAt = r.Arr<long>();
+        _lineFu = r.Arr<int>(); _lineStart = r.Arr<long>(); _lineKey = r.Arr<long>(); _lineAsked = r.Arr<long>(); _lineGrumbled = r.Arr<long>(); HandRuleAt = r.Arr<long>(); WashReports.Clear(); WashReports.AddRange(r.List<WashReport>());
+        SmellAvoided = r.I64(); Grumbles = r.I64(); LineCuts = r.I64(); AskedTurns = r.I64(); TurnsGiven = r.I64();
     }
 
     /// <summary>샤워 칸을 쓰는 동안: 처음에 온수기를 켠다 (전기 3kW — 꺼지면 찬물).</summary>

@@ -14,6 +14,9 @@ public sealed partial class Network
     public double[] ShowerMeter = Array.Empty<double>();
     /// <summary>샤워 칸마다 물 밸브 (1 열림 — 씻는 이 · 주컴퓨터가 틀고 잠근다).</summary>
     public byte[] ShowerValve = Array.Empty<byte>();
+    /// <summary>5단: 샤워 칸마다 온수기 조절기 (0 멀쩡 · 1 접점 붙음 — 뜨거움 · 2 열린 채 굳음 — 찬물) · 그 고장의 원인 마디 · 무중력에 떠다닌 샤워 물의 원인 마디.</summary>
+    public byte[] ThermoFault = Array.Empty<byte>();
+    public int[] ThermoCause = Array.Empty<int>(), ShowerFloatCause = Array.Empty<int>();
 
     /// <summary>물 밸브를 틀고 잠근다 (판단의 요청).</summary>
     public void SetValve(int d, bool open) { if (ShowerValve.Length != Devices.Count) Array.Resize(ref ShowerValve, Devices.Count); ShowerValve[d] = (byte)(open ? 1 : 0); }
@@ -37,6 +40,6 @@ public sealed partial class Network
         if (hot) HeatInto(dev, kw * 1000 * 0.15 * dt);   // 데운 물의 열은 거의 다 배수구로 — 칸에는 김 · 젖은 벽으로 15%
     }
 
-    private void SaveShower(StateWriter w) { w.Tag("샤워"); w.Arr(ShowerMeter); w.Arr(ShowerValve); }
-    private void LoadShower(StateReader r) { r.Tag("샤워"); ShowerMeter = r.Arr<double>(); ShowerValve = r.Arr<byte>(); }
+    private void SaveShower(StateWriter w) { w.Tag("샤워"); w.Arr(ShowerMeter); w.Arr(ShowerValve); w.Tag("조절기"); w.Arr(ThermoFault); w.Arr(ThermoCause); w.Arr(ShowerFloatCause); }
+    private void LoadShower(StateReader r) { r.Tag("샤워"); ShowerMeter = r.Arr<double>(); ShowerValve = r.Arr<byte>(); r.Tag("조절기"); ThermoFault = r.Arr<byte>(); ThermoCause = r.Arr<int>(); ShowerFloatCause = r.Arr<int>(); }
 }

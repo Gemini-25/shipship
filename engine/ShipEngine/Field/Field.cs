@@ -81,6 +81,8 @@ public sealed partial class Field : IEngine
     /// 구역 몰 수가 지수로 줄었다고 보고(틈 흐름이 그 식이다) 처음 흐름 = n₀·ln(n₀/n₁)/Δt · 처음 밀도 = 끝 밀도 × n₀/n₁.
     /// </summary>
     public float[] WindPa;
+    /// <summary>칸마다 고인 물의 원인 마디 (0 모름 — 5단: 지림 · 넘침 · 샌 물관 · 쏟음 · 불 끄기 물이 적고 퍼지면 이웃이 잇는다 · 마르면 지운다).</summary>
+    public int[] WetCause;
     /// <summary>틱마다 바깥으로 빠진 몰 수 누계 (시험 · 연출).</summary>
     public double VentedTotal;
     public Exterior Outside = Exterior.Space();
@@ -102,7 +104,7 @@ public sealed partial class Field : IEngine
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
         DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; Grav = new float[Cells]; Array.Fill(Grav, 1f); SeveredStore = new double[t.StoreCount]; Drops = new double[S * Cells]; Airflow = new float[Cells];
-        WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells];
+        WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells]; WetCause = new int[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
         Cs = new double[Cells]; _kRight = new double[Cells]; _kDown = new double[Cells]; _exposed = new byte[Cells];
@@ -444,6 +446,7 @@ public sealed partial class Field : IEngine
         w.Tag("중력"); w.Arr(Grav); w.Arr(Drops); w.Arr(Airflow);
         w.Tag("층"); w.Arr(Strat); w.Arr(Plug);
         w.Tag("바람 압력"); w.Arr(WindPa);   // 마음(끌림 · 날림)이 장보다 먼저 지난 틱의 바람 압력을 읽는다 — 찍지 않으면 되살린 세계는 첫 틱에 0으로 읽어 갈라졌다
+        w.Tag("물 원인"); w.Arr(WetCause);
         w.Tag("틈 흐름"); w.I32(Links.Count); foreach (var k in Links) w.F64(k.Flow);   // 지난 틱 흐름량 — 이번 틱에 잘게 나눠 셀지(Fast)를 정한다 (찍지 않으면 되살린 세계는 구멍으로 바람이 부는 중에 갈라졌다)
     }
 
@@ -457,6 +460,7 @@ public sealed partial class Field : IEngine
         r.Tag("중력"); r.ArrInto(Grav); r.ArrInto(Drops); r.ArrInto(Airflow); _dropsAny = Drops.Any(v => v > 0);
         r.Tag("층"); r.ArrInto(Strat); r.ArrInto(Plug);
         r.Tag("바람 압력"); r.ArrInto(WindPa);
+        r.Tag("물 원인"); r.ArrInto(WetCause);
         r.Tag("틈 흐름"); var flows = new double[r.I32()]; for (int i = 0; i < flows.Length; i++) flows[i] = r.F64();
         SolidLinks(); // 끊긴 칸의 전도 · 우주를 보는 면은 도면 + 끊김에서 다시 센다 (찍지 않는다)
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다

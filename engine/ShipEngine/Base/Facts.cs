@@ -132,6 +132,9 @@ public enum FactKind : ushort
     // 화장실 · 샤워실 (docs/WASH.md)
     Soiled,            // 참지 못하고 지렸다 (Actor: 그 몸 · Size: 1 소변 · 2 대변)
     Overflowed,        // 막힌 변기를 모르고 써서 넘쳤다 (Actor: 쓴 몸 · Other: 변기 설비 · Size: 바닥에 쏟아진 오줌 몰)
+    // 5단 화장실 (라)(마) · 일상 물리 (docs/STAGE5.md)
+    ThermoStuck,       // 샤워 온수기 조절기가 고장 났다 (Other: 장치 · Size: 1 접점 붙음 — 뜨거움 · 2 열린 채 굳음 — 찬물)
+    Spilled,           // 물 · 냄비를 쏟았다 (Actor: 그 몸 · Other: 설비 · Size: 쏟은 물 몰)
 }
 
 public static class FactNames
@@ -156,7 +159,7 @@ public static class FactNames
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
-        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", FactKind.Diagnosed => "병을 짐작했다", FactKind.Surgery => "수술했다", FactKind.Heart => "마음", FactKind.Culture => "관습", FactKind.Sensed => "센서에 잡혔다", FactKind.Letter => "고향 편지", FactKind.Soiled => "참지 못했다", FactKind.Overflowed => "변기가 넘쳤다", _ => "",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", FactKind.Vomit => "토했다", FactKind.Arrest => "심장이 멎었다", FactKind.Revived => "심장이 다시 뛴다", FactKind.Dosed => "약을 줬다", FactKind.Diagnosed => "병을 짐작했다", FactKind.Surgery => "수술했다", FactKind.Heart => "마음", FactKind.Culture => "관습", FactKind.Sensed => "센서에 잡혔다", FactKind.Letter => "고향 편지", FactKind.Soiled => "참지 못했다", FactKind.Overflowed => "변기가 넘쳤다", FactKind.ThermoStuck => "조절기 고장", FactKind.Spilled => "쏟았다", _ => "",
     };
 }
 

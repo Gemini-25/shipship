@@ -25,6 +25,15 @@ public sealed partial class ShipMind
     private long[] _washSince = Array.Empty<long>();    // 사람마다 화장실에 들어온 때 (사람 표의 자리 — 1분마다 · 0이면 밖)
     private int[] _washCell = Array.Empty<int>();       // 사람마다 지난 읽기의 자리 (가만히 서 있나)
     private int[]? _washFix;                             // 변기 · 샤워 칸 설비
+    // 5단 (라)(마): 샤워 칸 알림 · 냄새 처방 · 돌림병
+    private long[] _showerNoteAt = Array.Empty<long>();  // 샤워 칸 설비마다 받은 알림의 때
+    private byte[] _showerNoteKind = Array.Empty<byte>(); // 그 갈래 (1 뜨거움 · 2 찬물)
+    private byte[] _showerAwait = Array.Empty<byte>();   // 부품이 없어 잠가 두고 부품을 기다린다 (1)
+    private byte[] _odorStep = Array.Empty<byte>();      // 방마다 냄새 알림의 처방 단계 (0 아직 · 1 비움 · 2 닦음 · 3 못 찾음)
+    private byte[] _scrubAsk = Array.Empty<byte>();      // 변기마다 '닦아 달라' 표시 (냄새로 올린 닦기 — 한 번 닦으면 끝)
+    /// <summary>닦을 물 내린 수 (평시 <see cref="ScrubEvery"/> · 돌림병 6).</summary>
+    public int ScrubAt = ScrubEvery;
+    private long _outbreakAt = long.MinValue / 2;        // 돌림병(배탈)을 마지막으로 알린 때
     private int[]? _washDevOf;                           // 설비 → 장치 (−1 없음)
 
     private int WashDevice(int fu)
@@ -237,6 +246,15 @@ public sealed partial class ShipMind
         return best;
     }
 
-    private void SaveWash(StateWriter w) { w.Tag("주컴퓨터 화장실"); w.Arr(_washCallAt); w.Arr(_washSince); w.Arr(_washCell); w.Arr(_showerIdle); w.I64(ToiletSigns); w.I64(WashCalls); w.I64(WashOrders); w.I64(ShowersCut); }
-    private void LoadWash(StateReader r) { r.Tag("주컴퓨터 화장실"); _washCallAt = r.Arr<long>(); _washSince = r.Arr<long>(); _washCell = r.Arr<int>(); _showerIdle = r.Arr<byte>(); ToiletSigns = r.I64(); WashCalls = r.I64(); WashOrders = r.I64(); ShowersCut = r.I64(); }
+    private void SaveWash(StateWriter w)
+    {
+        w.Tag("주컴퓨터 화장실"); w.Arr(_washCallAt); w.Arr(_washSince); w.Arr(_washCell); w.Arr(_showerIdle); w.I64(ToiletSigns); w.I64(WashCalls); w.I64(WashOrders); w.I64(ShowersCut);
+        w.Tag("주컴퓨터 화장실 (라)(마)"); w.Arr(_showerNoteAt); w.Arr(_showerNoteKind); w.Arr(_showerAwait); w.Arr(_odorStep); w.Arr(_scrubAsk); w.I32(ScrubAt); w.I64(_outbreakAt);
+    }
+
+    private void LoadWash(StateReader r)
+    {
+        r.Tag("주컴퓨터 화장실"); _washCallAt = r.Arr<long>(); _washSince = r.Arr<long>(); _washCell = r.Arr<int>(); _showerIdle = r.Arr<byte>(); ToiletSigns = r.I64(); WashCalls = r.I64(); WashOrders = r.I64(); ShowersCut = r.I64();
+        r.Tag("주컴퓨터 화장실 (라)(마)"); _showerNoteAt = r.Arr<long>(); _showerNoteKind = r.Arr<byte>(); _showerAwait = r.Arr<byte>(); _odorStep = r.Arr<byte>(); _scrubAsk = r.Arr<byte>(); ScrubAt = r.I32(); _outbreakAt = r.I64();
+    }
 }

@@ -24,6 +24,8 @@ public sealed partial class Society
     public int MealCustom = -1;
     /// <summary>배의 규칙: 조용한 밤 · 조리대.</summary>
     public bool QuietRule, StoveRule;
+    /// <summary>배의 규칙 셋째: 샤워는 5분 (5단).</summary>
+    public bool ShowerRule;
     public long Customs, CustomsLost, CustomMealsShared, Taboos, TaboosLifted, BedTaboos, Nicknames, Memorials, Celebrations, RulesMade, RulesRejected, RuleBreaks, QuietKept, Gatherings, GatheringsFailed, MemorialsDeferred;
     private readonly HashSet<int> _mournDeferred = new();   // 수습 때문에 추모를 미룬다고 이미 남긴 숨진 이
     /// <summary>사람마다 별명 · 처음 부른 이.</summary>
@@ -41,6 +43,8 @@ public sealed partial class Society
     private readonly List<(long t, int woken, int by, int cause)> _wakeLog = new();
     private readonly List<(long t, int who, int cause)> _stoveLog = new();
     private long _askQuiet = long.MinValue / 2, _askStove = long.MinValue / 2, _cultureCursor;
+    private readonly List<(long t, int who, int target, int cause)> _showerLog = new();   // 사흘 안의 샤워 투덜 (때 · 투덜한 이 · 오래 씻은 이 · 원인)
+    private long _askShower = long.MinValue / 2;
 
     public static readonly int[] DeedsFor = { 0, 3, 3, 3, 5, 2 };
     public static string NickText(Nickname n) => n switch
@@ -404,6 +408,8 @@ public sealed partial class Society
         w.I32(_wakeLog.Count); foreach (var (t, a, b, c) in _wakeLog) { w.I64(t); w.I32(a); w.I32(b); w.I32(c); }
         w.I32(_stoveLog.Count); foreach (var (t, a, c) in _stoveLog) { w.I64(t); w.I32(a); w.I32(c); }
         w.I64(_askQuiet); w.I64(_askStove); w.I64(_cultureCursor);
+        w.Byte((byte)(ShowerRule ? 1 : 0)); w.I64(_askShower);
+        w.I32(_showerLog.Count); foreach (var (t, a, u, c) in _showerLog) { w.I64(t); w.I32(a); w.I32(u); w.I32(c); }
     }
 
     private void LoadCulture(StateReader r)
@@ -417,5 +423,7 @@ public sealed partial class Society
         _wakeLog.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int a = r.I32(); int b = r.I32(); int c = r.I32(); _wakeLog.Add((t, a, b, c)); }
         _stoveLog.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int a = r.I32(); int c = r.I32(); _stoveLog.Add((t, a, c)); }
         _askQuiet = r.I64(); _askStove = r.I64(); _cultureCursor = r.I64();
+        ShowerRule = r.Byte() != 0; _askShower = r.I64();
+        _showerLog.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int a = r.I32(); int u = r.I32(); int c = r.I32(); _showerLog.Add((t, a, u, c)); }
     }
 }

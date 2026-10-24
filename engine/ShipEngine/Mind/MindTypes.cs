@@ -310,6 +310,17 @@ public struct GrindReport
     public int Who;
 }
 
+/// <summary>샤워 칸 · 화장실을 알렸다 (5단 — 사람이 배 안 통신으로 · 주컴퓨터가 읽는다).</summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct WashReport
+{
+    public long Tick;
+    public int Where;    // 샤워 칸 장치 (갈래 1 · 2) · 방 (갈래 3)
+    public int Cause;
+    public int Who;
+    public byte Kind;    // 1 데일 듯 뜨겁다 · 2 찬물 · 3 역한 냄새
+}
+
 /// <summary>직접 가서 없다고 확인한 것 — 한동안 말 · 방송으로 들어도 반신반의한다.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct Doubt

@@ -76,6 +76,13 @@ public struct Body
     public long HypnoticAt;                      // 마지막 수면제 (틱)
     public float HearShift;                      // 일시 청력 손실 (dB — 들리는 문턱이 오른 만큼 · 소리 단계 S3)
     public int HearCause;                        // 귀를 먹먹하게 한 소리의 원인 마디
+    // 5단 화장실 (라)(마) · 일상 물리 (docs/STAGE5.md)
+    public float HandGerm;                       // 손에 묻은 장염 균 (몫 — 만지면 겉면과 맞바꾼다 · 씻으면 준다)
+    public int HandCause;                        // 손 균의 원인 마디
+    public byte Gut;                             // 배탈: 0 안 걸림 · 1 잠복 · 2 앓음 · 3 나음
+    public float GutHours;                       // 그 단계에 든 지 (시간)
+    public int GutCause;                         // 배탈의 원인 마디
+    public float Spore;                          // 마시는 곰팡이 포자 (그 방 몫 — 마스크 · 우주복이면 0)
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -173,6 +180,8 @@ public sealed partial class Life : IEngine
     public List<Body> Bodies = new();
     public List<Crop> Crops = new();
     public float[] Mold;
+    /// <summary>방마다 떠다니는 곰팡이 포자 (그 방 곰팡이 평균 — 5단).</summary>
+    public float[] RoomSpore;
     public long Deaths;
     public double FoodRotted;   // 썩은 양분 (몰 — 장부)
 
@@ -181,7 +190,7 @@ public sealed partial class Life : IEngine
         F = f; L = f.L; T = f.T;
         _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment");
         _glucose = T.S("Glucose"); _waterL = T.S("H2O_l"); _fat = T.S("Fat");
-        Mold = new float[L.N];
+        Mold = new float[L.N]; RoomSpore = new float[L.Rooms.Count];
         _sealed = new bool[L.N];
         foreach (var fu in L.Furniture) if (T.Equip(fu.Type).Sealed) foreach (int c in fu.Cells) _sealed[c] = true;
         WashArrays();
@@ -758,8 +767,8 @@ public sealed partial class Life : IEngine
         return (g, w, f);
     }
 
-    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); w.Tag("변기"); w.Arr(Tank); w.Arr(Bowl); w.Arr(Heap); w.Arr(Clogged); w.Arr(ClogCause); w.Arr(Grime); w.Arr(Flushes); w.Arr(ScrubbedAt); w.I64(Clogs); w.I64(Overflows); w.F64(WasteCarried); }
-    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); r.Tag("변기"); Tank = r.Arr<double>(); Bowl = r.Arr<double>(); Heap = r.Arr<double>(); Clogged = r.Arr<byte>(); ClogCause = r.Arr<int>(); Grime = r.Arr<float>(); Flushes = r.Arr<int>(); ScrubbedAt = r.Arr<int>(); Clogs = r.I64(); Overflows = r.I64(); WasteCarried = r.F64(); }
+    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); w.Tag("변기"); w.Arr(Tank); w.Arr(Bowl); w.Arr(Heap); w.Arr(Clogged); w.Arr(ClogCause); w.Arr(Grime); w.Arr(Flushes); w.Arr(ScrubbedAt); w.I64(Clogs); w.I64(Overflows); w.F64(WasteCarried); w.Tag("균 · 포자"); w.Arr(SurfGerm); w.Arr(SurfCause); w.Arr(RoomSpore); w.F64(WasteRotKg); w.I64(Slips); }
+    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); r.Tag("변기"); Tank = r.Arr<double>(); Bowl = r.Arr<double>(); Heap = r.Arr<double>(); Clogged = r.Arr<byte>(); ClogCause = r.Arr<int>(); Grime = r.Arr<float>(); Flushes = r.Arr<int>(); ScrubbedAt = r.Arr<int>(); Clogs = r.I64(); Overflows = r.I64(); WasteCarried = r.F64(); r.Tag("균 · 포자"); SurfGerm = r.Arr<float>(); SurfCause = r.Arr<int>(); r.ArrInto(RoomSpore); WasteRotKg = r.F64(); Slips = r.I64(); }
 }
 
 /// <summary>닦는 갈래 (Life.Mop — 겹쳐 쓴다).</summary>

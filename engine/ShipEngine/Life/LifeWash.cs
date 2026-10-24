@@ -23,6 +23,12 @@ public sealed partial class Life
     /// <summary>물 내린 수 (변기 조절기가 센다 — 주컴퓨터가 읽는 센서) · 마지막으로 닦았을 때의 수 (닦은 이가 조절기에 적는다).</summary>
     public int[] Flushes = Array.Empty<int>(), ScrubbedAt = Array.Empty<int>();
     public long Clogs, Overflows;
+    /// <summary>5단: 설비마다 겉면의 장염 균 (몫 — 만진 손과 맞바꾼다 · 닦으면 0) · 그 원인 마디.</summary>
+    public float[] SurfGerm = Array.Empty<float>();
+    public int[] SurfCause = Array.Empty<int>();
+    /// <summary>5단: 썩어 나간 오물 (kg — 메탄 · 악취 · 이산화탄소로) · 젖은 바닥에 미끄러진 수 (넘어짐과 따로).</summary>
+    public double WasteRotKg;
+    public long Slips;
     /// <summary>들고 옮기는 중인 오물 (kg — 로봇 손 · 바닥에 내려놓은 통 · 질량을 정확히 세려고 월드가 쥔다).</summary>
     public double WasteCarried;
     private int[]? _toiletDev;
@@ -33,6 +39,7 @@ public sealed partial class Life
         if (Tank.Length == n) return;
         Array.Resize(ref Tank, n); Array.Resize(ref Bowl, n); Array.Resize(ref Heap, n); Array.Resize(ref Clogged, n);
         Array.Resize(ref ClogCause, n); Array.Resize(ref Grime, n); Array.Resize(ref Flushes, n); Array.Resize(ref ScrubbedAt, n);
+        Array.Resize(ref SurfGerm, n); Array.Resize(ref SurfCause, n);
     }
 
     private int ToiletDev(int fu)

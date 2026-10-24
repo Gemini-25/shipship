@@ -30,6 +30,8 @@
     "smell": { "name": "탄 냄새", "ppm": 2 }, "color": "#1a1614" },
   { "id": "Aroma", "name": "음식 향", "formula": "C6H12O2", "phase": "gas", "hf": -500, "c": 190,
     "smell": { "name": "음식 냄새", "ppm": 0.5 } },
+  { "id": "Stench", "name": "악취", "formula": "C4H8O2", "phase": "gas", "hf": -476, "c": 101,
+    "smell": { "name": "썩은 듯 역한 냄새", "ppm": 0.004 } },
 
   { "id": "H2O_l", "name": "물",      "formula": "H2O", "phase": "liquid", "hf": -285.8, "c": 75.3, "cell": true },
   { "id": "NH3_l", "name": "액체 암모니아", "formula": "NH3", "phase": "liquid", "hf": -69.2, "c": 80.8, "cell": true },

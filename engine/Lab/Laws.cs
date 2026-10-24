@@ -131,6 +131,7 @@ public static partial class Program
             ulong shape = ShipWorld.Crewed("Didim", 1, 6, 2).ShapeOf();
             Check($"저장 모양이 판 {Sim.SaveVersion}의 지문과 같다 (모양이 바뀌면 Sim.SaveVersion을 올리고 SaveShape를 고친다)", shape == Sim.SaveShape,
                 $"지금 모양 0x{shape:x16} · 판 {Sim.SaveVersion}의 지문 0x{Sim.SaveShape:x16}");
+            Stage5SaveLaw();
         }
 
         if (Do("보존"))
