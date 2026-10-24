@@ -194,7 +194,7 @@ public sealed partial class Painter
     // 벽 밑 그림자: 북쪽 벽 앞면 아래 · 서쪽 · 동쪽 벽 곁 (도트 계단)
     private static readonly float[] AoN = MakeAo(T, DotTiles.Face, 8, 0.30f), AoW = MakeAo(T, 0, 5, 0.16f);
     private static readonly int[] AoNi = AoN.Select(v => (int)(v * 256)).ToArray(), AoWi = AoW.Select(v => (int)(v * 256)).ToArray();
-    /// <summary>시험용: 빛을 한 점씩 곱한다 (네 점씩과 같은 그림인지 견준다).</summary>
+    /// <summary>시험용: 빛을 한 점씩 곱한다 · 안개도 한 점씩 섞는다 (네 점씩과 같은 그림인지 견준다).</summary>
     public static bool NoVector;
     private static readonly int[] AoWiRev = AoWi.Reverse().ToArray();   // 오른쪽 벽 그림자 (AoWi[T-1-xx]) — 네 점씩 읽는다
     private static float[] MakeAo(int n, int from, int len, float k)

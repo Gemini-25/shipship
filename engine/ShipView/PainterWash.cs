@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using ShipEngine;
 using ShipSim.Art;
 
@@ -11,6 +13,8 @@ namespace ShipView;
 /// 설비 칸에 고인 물 (발치 웅덩이 — 많이 고이면 곁 바닥처럼 칸에 물이 차고 설비는 그 물에 선다).
 /// 5단 A2 — 세계 습도를 읽는다 (Field.RelHumidity · 장마다 · 굽지 않는다): 뜨거운 물이 흐르는 샤워기 위로 오르는 흰 김 · 습도 0.9 넘는 바닥 칸의 흰 안개 (사람 위에) ·
 /// 세면대 칸 습도 0.85 넘으면 거울 김 서림 — 샤워가 끝나도 세계 습도가 빠지는 만큼 오래 남는다 (제습기가 꺼진 화장실은 늘 뿌옇다).
+/// A2 검토 고침: 안개는 한 번 셈한 물결 표 · 네 점씩 정수 섞기 · 칸 줄마다 여러 코어 (바닥 모두 습도 0.97인 배의 '김 · 안개' 단계 10.4 · 18.2 · 12.5 → 약 0.6 · 0.8 · 0.7ms) ·
+/// 김은 그 방의 공기에만 (벽 뚜껑 · 바깥 · 옆방에 그리지 않는다) · 천장에 닿으면 앞으로 굴러 나온다.
 /// </summary>
 public sealed partial class Painter
 {
@@ -247,8 +251,10 @@ public sealed partial class Painter
 
     /// <summary>김 (뜨거운 물이 흐르는 샤워 칸 — 밸브 · 물 · 온수기가 돈다): 샤워기(몸 그림 21, 10)에서 흰 뭉치 3~6개(습할수록 많다)가 오르며 커지고 옅어진다 (2초에 두 칸 위까지).
     /// 짙기 0.25 + 0.5 × clamp((습도 − 0.5) / 0.45) — 뭉치를 두른 엷은 겉의 짙기 · 속은 0.55 더 짙다 (갓 나온 김은 어느 방에서나 희다 · 습한 방은 겉까지 짙게 엉긴다) · 오를수록 옅어진다.
-    /// (gx, gy)는 몸 그림 자리 (32도트 그림판) · k는 줄임 (넓은 보기 16도트 2 · 8도트 4).</summary>
-    private void Steam(Img img, double rh, int gx, int gy, int frame, int seed, int k = 1)
+    /// 김은 그 샤워 칸 방의 공기에만 얹는다 (<see cref="RoomAir"/> — 벽 뚜껑 · 바깥 · 옆방에는 없다 — A2 검토): 오를 높이는 방에 맞춘다 — 샤워기에서 천장 (위 벽 앞면 위쪽 줄)까지 head도트
+    /// (<see cref="SteamHead"/>)를 넘으면 더 오르지 않고 천장을 따라 앞으로 (화면 아래로) 굴러 나온다 (벽에 붙은 샤워 칸은 칸 위로 피어 앞으로 번진다 · 천장에 닿은 윗자락은 잘린다).
+    /// (gx, gy)는 몸 그림 자리 (32도트 그림판) · (ox, oy)는 그림판 (0, 0)의 도면 32도트 자리 · k는 줄임 (넓은 보기 16도트 2 · 8도트 4).</summary>
+    private void Steam(Img img, double rh, int room, int head, int gx, int gy, int ox, int oy, int frame, int seed, int k = 1)
     {
         float t = (float)Math.Clamp((rh - 0.5) / 0.45, 0, 1), den = 0.25f + 0.5f * t;
         int n = 3 + (int)MathF.Round(3 * t);
@@ -256,40 +262,152 @@ public sealed partial class Painter
         {
             float ph = (frame + q * (float)SteamLife / n) % SteamLife / SteamLife;   // 이 뭉치의 나이 (0 샤워기 → 1 사라짐 · 뭉치마다 고르게 어긋난다)
             int size = 10 + 2 * (int)(ph * 6);                                                                 // 10 → 20도트 (2도트씩 — 이웃 뭉치와 겹쳐 한 줄기로)
-            float rise = 3 + ph * 34;
+            float up = 3 + ph * 34, top = head - 2, rise = Math.Min(up, top) - Math.Max(0, up - top) * 0.5f;   // 천장 (head − 2)에 닿으면 남은 만큼의 반을 앞으로 굴러 나온다
             float sway = MathF.Sin(ph * 5f + q * 1.7f) * 2.2f + (DotHash.F(seed, q, 3) - 0.5f) * 8 * ph;   // 흔들리며 옆으로 번진다
             float thin = (1.15f - 0.6f * ph) * (ph < 0.7f ? 1 : 1 - (ph - 0.7f) / 0.3f * 0.9f);              // 오를수록 옅다 · 끝에 사라진다
             float cx = gx + 21.5f + sway, cy = gy + 10 - rise;
             int sd = seed * 7 + q;
             var halo = DownOf(SteamPuffImg(size + 6, sd), k);
             var core = DownOf(SteamPuffImg(size, sd + 1), k);
-            Put(img, halo, FloorDiv((int)cx - (size + 6) / 2, k), FloorDiv((int)cy - (size + 6) / 2, k), false, Math.Min(0.95f, den * thin));
-            Put(img, core, FloorDiv((int)cx - size / 2, k), FloorDiv((int)cy - size / 2 - 1, k), false, Math.Min(0.95f, (den + 0.55f) * thin));   // 짙은 속
+            PutAir(img, halo, FloorDiv((int)cx - (size + 6) / 2, k), FloorDiv((int)cy - (size + 6) / 2, k), Math.Min(0.95f, den * thin), room, ox, oy, k);
+            PutAir(img, core, FloorDiv((int)cx - size / 2, k), FloorDiv((int)cy - size / 2 - 1, k), Math.Min(0.95f, (den + 0.55f) * thin), room, ox, oy, k);   // 짙은 속
         }
     }
 
-    /// <summary>습한 방의 안개 (습도 0.9 넘는 바닥 칸): 흰 막 짙기 0.25 × (습도 − 0.9) / 0.1 · 4도트 덩이마다 배 자리의 부드러운 물결로 짙기가 달라 천천히 옆으로 흐른다
-    /// (칸 경계에서 이어진다 · 사람 위에 덮는다). (gx, gy)는 칸 자리 (32도트 그림판) · k는 줄임.</summary>
-    private void Fog(Img img, double rh, int c, int gx, int gy, int frame, int k = 1)
+    /// <summary>뭉치를 짙기 alpha로 얹되 방 room의 공기로 보이는 도트에만 (<see cref="RoomAir"/> — 도트 가운데의 도면 자리로 본다). (ox, oy)는 그림판 (0, 0)의 도면 32도트 자리.</summary>
+    private void PutAir(Img dst, Img src, int dx, int dy, float alpha, int room, int ox, int oy, int k)
     {
-        float a = 0.25f * (float)Math.Min(1, (rh - 0.9) / 0.1);
-        if (a <= 0.004f) return;
-        int bs = Math.Max(1, 4 / k), wx = L.X(c) * T, wy = L.Y(c) * T;
-        float drift = frame * 0.35f;
-        for (int by = 0; by < T; by += 4)
-            for (int bx = 0; bx < T; bx += 4)
+        int x0 = Math.Max(0, -dx), y0 = Math.Max(0, -dy), x1 = Math.Min(src.W, dst.W - dx), y1 = Math.Min(src.H, dst.H - dy);
+        for (int y = y0; y < y1; y++)
+        {
+            int wy = (dy + y) * k + oy + k / 2;
+            for (int x = x0; x < x1; x++)
             {
-                float X = wx + bx + drift, Y = wy + by;
-                float wave = 0.85f + 0.15f * MathF.Sin(X * 0.11f + MathF.Sin(Y * 0.09f) * 1.6f) + 0.1f * MathF.Sin(Y * 0.07f - X * 0.05f);   // 0.6 ~ 1.1
-                img.Fill((gx + bx) / k, (gy + by) / k, bs, bs, FogTint, a * wave);
+                var c = src.Get(x, y);
+                if (c.A == 0 || !RoomAir(room, (dx + x) * k + ox + k / 2, wy)) continue;
+                dst.Blend(dx + x, dy + y, c, alpha);
             }
+        }
+    }
+
+    /// <summary>샤워 칸 sc의 샤워기(칸 위 4도트)에서 천장까지 화면 도트: 바로 위가 같은 방 바닥 칸이 아니면 위 벽 앞면 위쪽 줄까지 10 · 한 칸이면 42 · 두 칸 넘게면 74 (김이 다 올라도 닿지 않는다).</summary>
+    private int SteamHead(int sc)
+    {
+        int x = L.X(sc), y = L.Y(sc), room = L.Room[sc], up = 0;
+        while (up < 2 && L.In(x, y - 1 - up) && L.Kind[L.Index(x, y - 1 - up)] == CellKind.Floor && L.Room[L.Index(x, y - 1 - up)] == room) up++;
+        return T - ArtWalls.CapH - 4 + up * T;   // 샤워기 (샤워 칸 칸 위 4도트)에서 위 벽 칸의 뚜껑 끝 (그 칸 위에서 18도트)까지
+    }
+
+    /// <summary>도면 32도트 자리 (wx, wy)가 방 room의 공기로 보이는 곳인가 (비스듬한 시점): 그 방 바닥 · 설비 칸 · 그 방 바닥을 바로 아래에 둔 벽 · 문 칸의 앞면 (칸 아래 14도트 — 천장 높이까지).
+    /// 벽 뚜껑 · 바깥 · 옆방 바닥은 아니다.</summary>
+    private bool RoomAir(int room, int wx, int wy)
+    {
+        int cx = wx >> 5, cy = wy >> 5;   // T = 32 (음수 자리도 내림)
+        if (!L.In(cx, cy)) return false;
+        int c = L.Index(cx, cy);
+        if (L.Kind[c] == CellKind.Floor) return L.Room[c] == room;
+        if (L.Kind[c] is not (CellKind.Wall or CellKind.Door) || (wy & (T - 1)) < ArtWalls.CapH || !L.In(cx, cy + 1)) return false;
+        int b = c + L.W;
+        return L.Kind[b] == CellKind.Floor && L.Room[b] == room;
+    }
+
+    /// <summary>안개 · 거울 김 서림이 서는 습도 (넘으면 — 관찰 장면 · 그리기 예산도 같은 값으로 센다).</summary>
+    public const double FogRh = 0.9, MirrorRh = 0.85;
+    /// <summary>이 장에 안개를 칠할 칸 (칸 x · 짙기 /256 — 칸 줄 차례) · 칸 줄 (첫 자리 · 칸 수 · y): 습도는 한 스레드로 훑고 (칸마다 한 번 · 싸다) 칠하기만 나눈다.</summary>
+    private readonly List<(int x, uint aq)> _fog = new();
+    private readonly List<(int start, int n, int y)> _fogRows = new();
+    /// <summary>안개 칸이 이만큼 넘으면 칸 줄마다 여러 코어에서 칠한다 (적으면 한 스레드가 싸다 — 나누는 값이 칠하는 값보다 크다).</summary>
+    private const int FogPar = 24;
+
+    /// <summary>안개 물결 짙기 표 (0.6 ~ 1.1을 256배한 정수 · 256도트 = 8칸 주기 — 가로는 도트 · 세로는 4도트 덩이 64줄): 한 번 셈해 둔다 (장마다 덩이마다 sin 셋을 부르던 것 — A2 검토).</summary>
+    private static readonly int[] FogWave = MakeFogWave();
+    private static int[] MakeFogWave()
+    {
+        var w = new int[256 * 64];
+        const float K = MathF.PI * 2 / 256;   // 물결 수는 8칸에 정수 번 (칸 경계 · 표 끝에서 이어진다)
+        for (int by = 0; by < 64; by++)
+            for (int x = 0; x < 256; x++)
+            {
+                float y = by * 4;
+                w[by * 256 + x] = (int)MathF.Round(256 * (0.85f + 0.15f * MathF.Sin(x * 4 * K + MathF.Sin(y * 4 * K) * 1.6f) + 0.1f * MathF.Sin(y * 3 * K - x * 2 * K)));
+            }
+        return w;
+    }
+
+    /// <summary>안개 빛 (FogTint)을 한 줄 토막 (그림판 py줄 · px0 + xa .. px0 + xb − 1)에 섞는다 — 점 x의 짙기는 덩이 짙기 wb[x ≫ sh] / 256 (덩이 하나 = 2^sh 도트):
+    /// 불투명한 바탕은 정수로 (네 점씩 — 한 점씩과 비트까지 같다 · <see cref="Img.Blend"/>와는 1 안쪽 차) · 반투명 바탕 (드물다)은 예전처럼 <see cref="Img.Blend"/>.</summary>
+    private static void VeilRow(Img img, Span<uint> d, int px0, int py, ReadOnlySpan<uint> wb, int sh, int xa, int xb)
+    {
+        uint crb = FogTint.R | (uint)FogTint.B << 16, cg = FogTint.G;
+        int at = py * img.W + px0, x = xa;
+        if (Vector128.IsHardwareAccelerated && !NoVector)
+        {
+            for (; x < xb && (x & 3) != 0; x++) VeilDot(img, d, at + x, px0 + x, py, wb[x >> sh], crb, cg);   // 네 점 자리에 맞춘다 (왼쪽 끝이 잘린 칸)
+            Vector128<uint> vRB = Vector128.Create(0x00FF00FFu), vA = Vector128.Create(0xFF000000u), vFF = Vector128.Create(0xFFu), v256 = Vector128.Create(256u), vcrb = Vector128.Create(crb), vcg = Vector128.Create(cg);
+            ref uint row = ref d[at];
+            for (; x + 4 <= xb; x += 4)
+            {
+                var q = Vector128.LoadUnsafe(ref row, (nuint)x);
+                if (!Vector128.EqualsAll(q & vA, vA)) { for (int j = x; j < x + 4; j++) VeilDot(img, d, at + j, px0 + j, py, wb[j >> sh], crb, cg); continue; }
+                var w = sh == 2 ? Vector128.Create(wb[x >> 2]) : sh == 1 ? Vector128.Create(wb[x >> 1], wb[x >> 1], wb[(x >> 1) + 1], wb[(x >> 1) + 1]) : Vector128.Create(wb[x], wb[x + 1], wb[x + 2], wb[x + 3]);
+                var inv = v256 - w;
+                ((((q & vRB) * inv + vcrb * w) >> 8 & vRB) | (((q >> 8) & vFF) * inv + vcg * w) >> 8 << 8 | vA).StoreUnsafe(ref row, (nuint)x);
+            }
+        }
+        for (; x < xb; x++) VeilDot(img, d, at + x, px0 + x, py, wb[x >> sh], crb, cg);
+    }
+
+    /// <summary>한 점 (d[i] — 그림판 (px, py)): 불투명하면 정수로 섞고 아니면 <see cref="Img.Blend"/>.</summary>
+    private static void VeilDot(Img img, Span<uint> d, int i, int px, int py, uint w, uint crb, uint cg)
+    {
+        uint q = d[i], inv = 256 - w;
+        if (q >> 24 != 255) { img.Blend(px, py, FogTint, w / 256f); return; }
+        d[i] = ((q & 0x00FF00FFu) * inv + crb * w) >> 8 & 0x00FF00FFu | (((q >> 8) & 0xFFu) * inv + cg * w) >> 8 << 8 | 0xFF000000u;
+    }
+
+    /// <summary>이 장의 물결 (흐른 만큼 민 표 — 덩이 줄 64 × (칸 x mod 8 · 덩이 8) 64): 칸 x의 덩이 bx는 [줄 · 64 + (x & 7) · 8 + bx] (흐름이 바뀔 때만 다시 셈한다).</summary>
+    private readonly int[] _fogWave = new int[64 * 64];
+    private int _fogDrift = -1;
+
+    /// <summary>습한 방의 안개 (습도 0.9 넘는 바닥 칸): 흰 막 짙기 0.25 × (습도 − 0.9) / 0.1 · 4도트 덩이마다 배 자리의 부드러운 물결 (<see cref="FogWave"/>)로 짙기가 달라 천천히 옆으로 흐른다
+    /// (칸 경계에서 이어진다 · 사람 위에 덮는다). 한 칸 줄 y의 안개 칸 (_fog[start .. start + n) — x 차례)을 그림판 줄째로 칠한다: 덩이 짙기만 셈하고 (점마다 펴지 않는다)
+    /// 이웃한 안개 칸은 한 토막으로 이어 칠한다 (칸 줄마다 여러 코어에서 부른다). (x0, y0)은 보는 창 · k는 줄임.</summary>
+    private void FogRow(Img img, int start, int n, int y, int x0, int y0, int k)
+    {
+        int D = T / k, sh = k == 1 ? 2 : k == 2 ? 1 : 0, py0 = (y - y0) * D;   // 덩이 하나 = 4 / k 도트 (2^sh)
+        Span<uint> wb = n * 8 <= 1024 ? stackalloc uint[n * 8] : new uint[n * 8];   // 칸마다 이 덩이 줄의 덩이 짙기 (/256)
+        var d = MemoryMarshal.Cast<byte, uint>(img.Px.AsSpan());
+        var fog = CollectionsMarshal.AsSpan(_fog).Slice(start, n);
+        for (int by = 0; by < 8; by++)
+        {
+            int row = ((y * 8 + by) & 63) * 64;
+            for (int j = 0; j < n; j++)
+            {
+                var (x, aq) = fog[j];
+                int wv = row + (x & 7) * 8;
+                for (int bx = 0; bx < 8; bx++) wb[j * 8 + bx] = (aq * (uint)_fogWave[wv + bx] + 128) >> 8;
+            }
+            for (int r = 0; r < 1 << sh; r++)
+            {
+                int py = py0 + (by << sh) + r;
+                if ((uint)py >= (uint)img.H) continue;
+                for (int j = 0; j < n;)
+                {
+                    int j1 = j + 1, cx = fog[j].x;
+                    while (j1 < n && fog[j1].x == cx + (j1 - j)) j1++;   // 이웃한 안개 칸 토막
+                    int px0 = (cx - x0) * D, xa = Math.Max(0, -px0), xb = Math.Min((j1 - j) * D, img.W - px0);
+                    if (xa < xb) VeilRow(img, d, px0, py, wb.Slice(j * 8, (j1 - j) * 8), sh, xa, xb);
+                    j = j1;
+                }
+            }
+        }
     }
 
     /// <summary>거울 김 서림 (세면대 칸 습도 0.85 넘게): 거울 사각(몸 그림 7..24, 1..9)에 흰 덮개 짙기 0.6 × (습도 − 0.85) / 0.15 · 맺힌 물이 흘러내린 줄 셋은 옅다 (32도트만 — 넓은 보기는 고른 덮개).
     /// (gx, gy)는 몸 그림 자리 (32도트 그림판) · k는 줄임.</summary>
     private static void MirrorFog(Img img, double rh, int fu, int gx, int gy, int k = 1)
     {
-        float a = 0.6f * (float)Math.Min(1, (rh - 0.85) / 0.15);
+        float a = 0.6f * (float)Math.Min(1, (rh - MirrorRh) / 0.15);
         if (a <= 0.004f) return;
         if (k > 1)
         {
@@ -308,7 +426,7 @@ public sealed partial class Painter
     }
 
     /// <summary>김 · 안개 · 거울 김 서림 (장마다 — 32도트 Draw와 넓은 보기가 '떠 있는 물방울' 층 뒤에 함께 쓴다 · 습도는 이어지는 값이라 굽거나 캐시 열쇠에 넣지 않는다):
-    /// 거울 김 서림 → 바닥 칸 안개 → 샤워기 김. 칸 (x, y)의 그림판 자리는 ((x − x0) · 32, (y − y0) · 32) / k.</summary>
+    /// 거울 김 서림 → 바닥 칸 안개 (습도는 한 스레드로 훑고 · 칠하기는 칸 줄마다 여러 코어 — 제 줄만 칠한다) → 샤워기 김 (그 방의 공기에만). 칸 (x, y)의 그림판 자리는 ((x − x0) · 32, (y − y0) · 32) / k.</summary>
     private void WashAir(Img img, Field f, Network? net, int x0, int y0, int w, int h, int frame, int k = 1)
     {
         foreach (int i in _washFix)
@@ -318,9 +436,12 @@ public sealed partial class Painter
             int kc = L.Furniture[i].Cells[0];
             if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1 || !Mine(kc)) continue;
             double rh = f.RelHumidity(kc);
-            if (rh > 0.85) MirrorFog(img, rh, i, (bx - x0) * T, (by - y0) * T - WashRise(2), k);
+            if (rh > MirrorRh) MirrorFog(img, rh, i, (bx - x0) * T, (by - y0) * T - WashRise(2), k);
         }
-        for (int y = y0; y < y0 + h; y++)
+        _fog.Clear(); _fogRows.Clear();
+        for (int y = y0; y < y0 + h; y++)   // 칸 줄마다 안개 칸을 모은다
+        {
+            int start = _fog.Count;
             for (int x = x0; x < x0 + w; x++)
             {
                 if (!L.In(x, y)) continue;
@@ -328,8 +449,24 @@ public sealed partial class Painter
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다
                 double rh = f.RelHumidity(c);
-                if (rh > 0.9) Fog(img, rh, c, (x - x0) * T, (y - y0) * T, frame, k);
+                if (rh <= FogRh) continue;
+                uint aq = (uint)MathF.Round(64 * (float)Math.Min(1, (rh - FogRh) / 0.1));   // 짙기 0.25 × (습도 − 0.9) / 0.1 (/256)
+                if (aq > 1) _fog.Add((x, aq));
             }
+            if (_fog.Count > start) _fogRows.Add((start, _fog.Count - start, y));
+        }
+        if (_fog.Count > 0)
+        {
+            int drift = (int)(frame * 0.35f);   // 안개가 흐른 도트 (8장에 약 3도트)
+            if (drift != _fogDrift)
+            {
+                _fogDrift = drift;
+                for (int r = 0; r < 64; r++) for (int i = 0; i < 64; i++) _fogWave[r * 64 + i] = FogWave[r * 256 + ((drift + (i >> 3) * T + (i & 7) * 4) & 255)];
+            }
+            void Rows(int i) { var (start, n, y) = _fogRows[i]; FogRow(img, start, n, y, x0, y0, k); }
+            if (_fog.Count >= FogPar) Parallel.For(0, _fogRows.Count, Rows);   // 칸 줄마다 제 줄만 칠한다
+            else for (int i = 0; i < _fogRows.Count; i++) Rows(i);
+        }
         if (net == null) return;
         foreach (int i in _washFix)
         {
@@ -339,7 +476,7 @@ public sealed partial class Painter
             if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 2 || !Mine(sc)) continue;   // 김은 두 칸 위까지 오른다 (화면 아래 두 줄의 샤워 칸 김도)
             int d = DeviceOf(net, i);
             if (d < 0 || !net.ShowerRunning(d) || !net.Working(d)) continue;   // 찬물 (온수기가 꺼졌다 · 전기가 없다)은 김이 없다
-            Steam(img, f.RelHumidity(sc), (bx - x0) * T, (by - y0) * T - WashRise(3), frame, i, k);
+            Steam(img, f.RelHumidity(sc), L.Room[sc], SteamHead(sc), (bx - x0) * T, (by - y0) * T - WashRise(3), x0 * T, y0 * T, frame, i, k);
         }
     }
 

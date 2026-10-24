@@ -10,6 +10,7 @@ namespace Lab;
 /// 그림은 세계를 읽기만 한다 — 모두 기준 그림과의 차로 센다 (커튼 윗단 · 도기가 이미 밝기 230을 넘는다).
 /// 빛깔은 빛 끈 그림으로 견주고, 게임이 쓰는 빛 켠 그림 · 넓은 보기(16 · 8도트)에도 같은 것이 나오는지 본다 (A1 검토: 그 길들에 시험이 없었다).
 /// 5단 A2: 김 (뜨거운 물이 흐르면 샤워기 위로 — 찬물은 없다) · 습도 0.9 넘는 바닥의 흰 안개 · 세면대 칸 0.85 넘으면 거울 김 서림 (세계 습도를 읽기만 — 0.4는 그대로).
+/// A2 검토: 넓은 보기 · 빛 켠 그림의 거울 김 서림 · 습도 문턱 바로 아래 (0.85 · 0.8) · 습할수록 많은 김 · 안개 네 점씩 = 한 점씩 · 벽 바로 아래 샤워 칸의 김이 벽을 넘지 않는다 (SteamWallShip).
 /// </summary>
 public static partial class Program
 {
@@ -21,10 +22,20 @@ public static partial class Program
 #pbw...#.S....k..#
 ##################";
 
+    // 벽 바로 아래 샤워 칸 둘 (A2 검토 — 김이 벽을 넘던 것): 위 방 S는 선체 벽 아래 (두 칸 위는 바깥) · 아래 방 S는 안쪽 벽 아래 (두 칸 위는 위 방 바닥)
+    private const string SteamWallShip = @"
+##########
+#S.......#
+#........#
+####D#####
+#pbw..S..#
+#........#
+##########";
+
     private static void WashViewRules()
     {
         if (!Do("화장실 그림")) return;
-        Console.WriteLine("\n[화장실 그림 — 샤워 칸 커튼 · 물줄기 · 변기 때 · 막힘 · 사용 금지 불 · 발치 물 · 세면대 물줄기 · 김 · 안개 · 거울 김 서림 (기준 그림과의 차)]");
+        Console.WriteLine("\n[화장실 그림 — 샤워 칸 커튼 · 물줄기 · 변기 때 · 막힘 · 사용 금지 불 · 발치 물 · 세면대 물줄기 · 김 · 안개 · 거울 김 서림 · 벽을 넘지 않는 김 (기준 그림과의 차)]");
         var legend = new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery", ['w'] = "WaterRecycler" };
         var lay = Worlds.Ascii(WashViewShip, legend);
         var s = Worlds.Full(lay, 3);
@@ -264,16 +275,17 @@ public static partial class Program
                     for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) { sum += Lum(im.Get(lay.X(c) * D + x, lay.Y(c) * D + y)); n++; }
                 return (double)sum / Math.Max(1, n);
             }
-            bool SameRoom(Img a, Img b, int D)
+            bool SameCells(Img a, Img b, IEnumerable<int> cells, int D)
             {
-                foreach (int c in room.Cells)
+                foreach (int c in cells)
                     for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) if (!a.Get(lay.X(c) * D + x, lay.Y(c) * D + y).Equals(b.Get(lay.X(c) * D + x, lay.Y(c) * D + y))) return false;
                 return true;
             }
-            // 방 칸의 수증기를 상대 습도 rh로 (RulesCracks 응력 부식의 식 — 칸 온도로)
-            void Humid(double rh)
+            bool SameRoom(Img a, Img b, int D) => SameCells(a, b, room.Cells, D);
+            // 방 칸 (cells를 주면 그 칸만)의 수증기를 상대 습도 rh로 (RulesCracks 응력 부식의 식 — 칸 온도로)
+            void Humid(double rh, int[]? cells = null)
             {
-                foreach (int c in room.Cells)
+                foreach (int c in cells ?? room.Cells)
                 {
                     double t = f.Temp(c), want = rh * Water.SatKPa(t) * 1000 * Field.CellVolume / (Field.R * t), have = f.Gas(f.T.gH2O, c);
                     if (want > have) f.AddGas(c, f.T.gH2O, want - have, t); else f.RemoveGas(c, f.T.gH2O, have - want);
@@ -301,7 +313,7 @@ public static partial class Program
                 bl >= 20 && bf >= 6 && b8 >= 2 && bc == 0, $"밝아진 점 빛 켬 {bl} · 16도트 {bf} · 8도트 {b8} · 찬물 16도트 {bc}");
             // (c) 방 칸을 습도 0.97로: 바닥에 흰 막 · 거울이 뿌옇다 · (d) 0.4: 그대로
             int Mirror(Img im) => Box(im, sink, KR, 7, 1, 25, 10, q => Lum(q) > 230);
-            var dry = Shot(); var dryF = Far(); var dry8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var dryL = Lit();
+            var dry = Shot(); var dryF = Far(); var dry8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var dryL = Lit(); var dryLF = LitFar(16);
             Humid(0.97);
             double rhW = f.RelHumidity(kc);
             var wet = Shot(); var wetF = Far(); var wet8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var wetL = Lit();
@@ -318,6 +330,99 @@ public static partial class Program
             double f0 = FloorMean(dryF, 16), f1 = FloorMean(wetF, 16), e0 = FloorMean(dry8, 8), e1 = FloorMean(wet8, 8), l0 = FloorMean(dryL, 32), l1 = FloorMean(wetL, 32);
             Check("화장실 그림: 습한 방 — 빛 켠 그림 · 넓은 보기 16 · 8도트도 바닥에 흰 안개",
                 l1 > l0 + 4 && f1 > f0 + 8 && e1 > e0 + 8, $"바닥 밝기 빛 켬 {l0:0.0} → {l1:0.0} · 16도트 {f0:0.0} → {f1:0.0} · 8도트 {e0:0.0} → {e1:0.0}");
+
+            // ── A2 검토 고침: 거울 김 서림의 넓은 보기 · 빛 켠 그림 갈래 · 습도 문턱 · 습할수록 많고 짙은 김 (그 갈래를 틀리게 하면 빨강) ──
+            // (e) 세면대 칸만 습도 0.97: 거울 사각(몸 그림 1~9줄)은 위 칸에 걸쳐 바닥 안개가 덮지 않는다 — 기준 그림보다 20 넘게 밝아진 거울 점 (32 · 16 · 8도트 · 빛 켬 32 · 16도트)
+            int Misted(Img a, Img b, int D = 32)
+            {
+                int bx = lay.X(kc) * D, by = lay.Y(kc) * D - KR * D / T, n = 0;
+                for (int y = 1 * D / T; y < 10 * D / T; y++) for (int x = 7 * D / T; x < 25 * D / T; x++) if (Lum(a.Get(bx + x, by + y)) - Lum(b.Get(bx + x, by + y)) >= 20) n++;
+                return n;
+            }
+            Humid(0.97, new[] { kc });
+            var mi32 = Shot(); var mi16 = Far(); var mi8 = p.FrameFar(s, 0, 0, W, H, 0, 8); var miL = Lit(); var miLF = LitFar(16);
+            Humid(rh0);
+            int g32 = Misted(mi32, dry), g16 = Misted(mi16, dryF, 16), g8 = Misted(mi8, dry8, 8), gL = Misted(miL, dryL), gLF = Misted(miLF, dryLF, 16);
+            Check("화장실 그림: 거울 김 서림 — 넓은 보기 16 · 8도트와 빛 켠 그림 (32 · 16도트)도 세면대 칸 습도 0.97이면 거울이 뿌옇다 (세면대 칸만 — 바닥 안개는 거울에 없다)",
+                g32 >= 40 && g16 >= 10 && g8 >= 3 && gL >= 40 && gLF >= 10, $"밝아진 거울 점 32도트 {g32} · 16도트 {g16} · 8도트 {g8} · 빛 켬 {gL} · 빛 켬 16도트 {gLF}");
+            // (f) 문턱 바로 아래: 습도 0.85 — 바닥 칸은 처음 그림 그대로 (안개는 0.9부터 · 거울이 걸친 칸은 뺀다) · 0.8 — 거울까지 방 그림이 그대로 (김 서림은 0.85부터)
+            var bare = free.Where(c => c != kc - lay.W).ToArray();
+            Humid(0.85);
+            double rh85 = f.RelHumidity(sc);
+            var u85 = Shot(); var u85F = Far(); var u858 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Humid(0.80);
+            double rh80 = f.RelHumidity(kc);
+            var u80 = Shot(); var u80F = Far(); var u808 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Humid(rh0);
+            bool floor85 = SameCells(u85, dry, bare, 32) && SameCells(u85F, dryF, bare, 16) && SameCells(u858, dry8, bare, 8);
+            bool room80 = SameRoom(u80, dry, 32) && SameRoom(u80F, dryF, 16) && SameRoom(u808, dry8, 8);
+            Check("화장실 그림: 습도 문턱 — 0.85에서는 바닥에 안개가 없고 (0.9부터) · 0.8에서는 거울까지 방 그림이 처음 그대로 (김 서림은 0.85부터 · 32 · 16 · 8도트)",
+                rh85 is > 0.83 and < 0.87 && rh80 is > 0.78 and < 0.82 && floor85 && room80, $"습도 {rh85:0.000} 바닥 그대로 {floor85} · 습도 {rh80:0.000} 방 그대로 {room80}");
+            // (g) 습할수록 많고 짙은 김: 같은 틱 · 같은 방에서 더운 물 그림과 찬물 그림의 차 (샤워기 위 띠에서 20 넘게 밝아진 점) — 방 습도 0.95와 처음 습도
+            int SteamGain(double rh)
+            {
+                Humid(rh);
+                net.SetValve(dev, true); net.SetOn(dev, true);
+                var a = Shot();
+                net.SetOn(dev, false);
+                var b = Shot();
+                net.SetValve(dev, false);
+                return Brighter(a, b, 32);
+            }
+            int s95 = SteamGain(0.95), s50 = SteamGain(rh0);
+            Check("화장실 그림: 김 — 습한 방(0.95)의 김은 처음 습도 방보다 많고 짙다 (샤워기 위에서 밝아진 점 — 같은 틱 · 찬물 그림과의 차)",
+                s95 >= s50 * 3 / 2 + 20, $"밝아진 점 습도 {rh0:0.00} {s50} → 0.95 {s95}");
+            // (h) 안개의 네 점씩 섞기 (정수 — 빠른 길)가 한 점씩 섞기와 같은 그림 (Painter.NoVector · 습도 0.97 · 32 · 16 · 8도트)
+            Humid(0.97);
+            var v32 = Shot(); var v16 = Far(); var v8 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Painter.NoVector = true;
+            var o32 = Shot(); var o16 = Far(); var o8 = p.FrameFar(s, 0, 0, W, H, 0, 8);
+            Painter.NoVector = false;
+            Humid(rh0);
+            bool sameVec = SameRoom(v32, o32, 32) && SameRoom(v16, o16, 16) && SameRoom(v8, o8, 8);
+            Check("화장실 그림: 안개 — 네 점씩 섞은 그림이 한 점씩 섞은 그림과 같다 (습도 0.97 · 32 · 16 · 8도트)",
+                sameVec && FloorMean(v32, 32) > m0 + 8, $"같다 {sameVec} · 바닥 밝기 {m0:0.0} → {FloorMean(v32, 32):0.0}");
+        }
+
+        // ── 벽 너머로 새지 않는 김 (A2 검토): 선체 벽 바로 아래 샤워 칸 (두 칸 위는 바깥) · 안쪽 벽 바로 아래 샤워 칸 (두 칸 위는 옆방 바닥) ──
+        // 김은 그 방의 공기에만 — 그 방 바닥과 그 방을 마주한 벽 앞면 위에 · 벽 뚜껑 · 바깥 · 옆방은 김을 켜도 찬물 그림 그대로 (32 · 16 · 8도트 · 빛 켬) ·
+        // 천장 (위 벽 앞면 위쪽 줄)에 닿은 김은 앞으로 굴러 나와 샤워 칸 위에 보인다
+        {
+            var wlay = Worlds.Ascii(SteamWallShip, legend);
+            var w = Worlds.Full(wlay, 3);
+            w.Run(6);
+            var wn = w.Get<Network>();
+            var wp = new Painter(wlay) { Lighting = false };
+            var wpl = new Painter(wlay);
+            int WW = wlay.W, WH = wlay.H;
+            string Leak(FurnitureDef fu, string where)
+            {
+                int dv = wn.Devices.First(d => d.Furniture == fu.Id).Id, sx = wlay.X(fu.Cells[0]), sy = wlay.Y(fu.Cells[0]);
+                wn.SetValve(dv, true); wn.SetOn(dv, true);
+                w.Run(3);
+                bool hot = wn.ShowerRunning(dv) && wn.Working(dv);
+                Img[] Shots() => new[] { wp.Frame(w, 0, 0, WW, WH, 0), wp.FrameFar(w, 0, 0, WW, WH, 0, 16), wp.FrameFar(w, 0, 0, WW, WH, 0, 8), wpl.Frame(w, 0, 0, WW, WH, 0) };
+                var on = Shots();
+                wn.SetOn(dv, false);   // 같은 틱 · 찬물 (김만 없다)
+                var off = Shots();
+                wn.SetValve(dv, false);
+                // 샤워 칸과 양옆 칸 (3칸 폭) — 두 칸 위 줄 전체 · 바로 위 벽 칸의 뚜껑(위 18도트): 바뀐 점 / 바로 위 벽 앞면(아래 14도트)과 샤워 칸 위 12도트: 바뀐 점 (김이 보인다)
+                int Diff(Img a, Img b, int D, int ya, int yb)
+                {
+                    int n = 0;
+                    for (int y = ya * D / T; y < yb * D / T; y++) for (int x = (sx - 1) * D; x < (sx + 2) * D; x++) if (!a.Get(x, y).Equals(b.Get(x, y))) n++;
+                    return n;
+                }
+                int[] Ds = { 32, 16, 8, 32 };
+                var leak = Enumerable.Range(0, 4).Select(i => Diff(on[i], off[i], Ds[i], (sy - 2) * T, (sy - 1) * T + ArtWalls.CapH)).ToArray();
+                var seen = Enumerable.Range(0, 4).Select(i => Diff(on[i], off[i], Ds[i], (sy - 1) * T + ArtWalls.CapH, sy * T + 12)).ToArray();
+                bool ok = hot && leak.All(n => n == 0) && seen[0] >= 130 && seen[1] >= 40 && seen[2] >= 12 && seen[3] >= 130;   // 천장에 닿은 김은 앞으로 굴러 나와 방 안에 보인다 (자르기만 하면 100 · 29 · 12)
+                return $"{(ok ? "" : "✘ ")}{where} 더운 물 {hot} · 벽 너머 바뀐 점 {string.Join("/", leak)} · 방 안 김 {string.Join("/", seen)}";
+            }
+            var showers = wlay.Furniture.Where(x => x.Type == "Shower").OrderBy(x => x.Cells[0]).ToArray();
+            string hull = Leak(showers[0], "선체 벽 아래"), inner = Leak(showers[1], "안쪽 벽 아래");
+            Check("화장실 그림: 김은 벽을 넘지 않는다 — 선체 벽 · 안쪽 벽 바로 아래 샤워 칸에서 김을 켜도 벽 뚜껑 · 바깥 · 옆방 바닥은 찬물 그림 그대로 · 천장에 닿은 김은 앞으로 굴러 나와 방 안(벽 앞면 · 샤워 칸 위)에 보인다 (32 · 16 · 8도트 · 빛 켬)",
+                !hull.StartsWith("✘") && !inner.StartsWith("✘"), $"{hull} | {inner} (32 · 16 · 8 · 빛 켬)");
         }
         Painter.FarBakeMs = bakeMs; Painter.FarBakeMax = bakeMax;
     }

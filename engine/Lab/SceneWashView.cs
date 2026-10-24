@@ -7,6 +7,7 @@ namespace Lab;
 /// 5단 A1 관찰 장면 '화장실 그림' — 새뜰호(40명 · 로봇 10)의 아침 06:00~09:00: 쓰는 동안 닫힌 샤워 커튼 · 흐르는 물줄기 · 변기의 '사용 금지' 불 ·
 /// 넘친 변기 발치의 물 · 뜨거운 물 위로 오르는 김 (5단 A2)이 그림에 실제로 나오는가 (1분마다 세계를 보고 · 처음 몇 장을 찍는다 — 재미 · 빈도는 재지 않는다).
 /// 차림 (원인 마디 Setup): 새벽에 변기 하나가 막혀 모르고 쓴 이가 넘쳤다 (막힘 · 발치의 물) · 어젯밤 늦게까지 정비한 여섯이 씻지 못하고 잤다 (더러움).
+/// A2 검토: 끝 줄에 안개 칸 · 거울 김 서림을 화장실 안 · 밖으로 나눠 센다 (1분마다 본 가운데 가장 많을 때 — 화장실 밖의 안개가 그림에 드러나게 · 세계 습도가 1을 넘는 칸도).
 /// </summary>
 public static partial class Program
 {
@@ -42,12 +43,32 @@ public static partial class Program
             k++;
         }
         Shot(clogged.Cells[0], "06:00 — 새벽에 넘친 변기 (막힘 · 발치에 고인 물)");
+        // 안개 · 거울 김 서림 (그림과 같은 문턱 — 바닥 칸과 열린 문 칸 · 세면대 칸): 화장실 안 · 밖으로 나눠 1분마다 세고 가장 많을 때를 남긴다
+        bool InWash(int c) => L.Room[c] >= 0 && L.Rooms[L.Room[c]].Type == "Washroom";
+        var sinks = wash.Where(fu => fu.Type == "Sink").ToList();
+        int fogIn = 0, fogOut = 0, mirIn = 0, mirOut = 0, over1 = 0; double rhMax = 0;
+        void CountAir()
+        {
+            int fi = 0, fo = 0, mi = 0, mo = 0, o1 = 0;
+            for (int c = 0; c < L.N; c++)
+            {
+                if (L.Kind[c] is not (CellKind.Floor or CellKind.Door)) continue;
+                if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;
+                double rh = f.RelHumidity(c);
+                rhMax = Math.Max(rhMax, rh);
+                if (rh > 1) o1++;
+                if (rh > Painter.FogRh) { if (InWash(c)) fi++; else fo++; }
+            }
+            foreach (var fu in sinks) if (f.RelHumidity(fu.Cells[0]) > Painter.MirrorRh) { if (InWash(fu.Cells[0])) mi++; else mo++; }
+            fogIn = Math.Max(fogIn, fi); fogOut = Math.Max(fogOut, fo); mirIn = Math.Max(mirIn, mi); mirOut = Math.Max(mirOut, mo); over1 = Math.Max(over1, o1);
+        }
         long end = s.Tick + Time.Hours(3);
         while (s.Tick < end)
         {
             s.Step();
             if (s.Tick % 25 != 0) continue;   // 1분마다 세계를 본다
             looks++;
+            CountAir();
             var at = new int[] { -1, -1, -1, -1, -1, -1 };
             foreach (var a in m.Agents)
             {
@@ -70,5 +91,6 @@ public static partial class Program
         Shot(clogged.Cells[0], $"09:00 넓은 보기 16도트 — 막힌 변기 {(life.Clogged[clogged.Id] == 0 ? "뚫렸다" : "그대로")} · 발치 물 {f.Stored(f.T.sWater, clogged.Cells[0]):0.0}몰", 16);
         File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>washview</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:464px}}img{{width:464px;image-rendering:pixelated}}</style>{page}");
         Console.WriteLine($"  washview: 1분마다 {looks}번 본 가운데 커튼 닫힌 장 {seen[0]} · 물줄기 장 {seen[1]} · 불 켜진 변기 {seen[2]} · 발치 물 {seen[3]} · 김 장 {seen[5]} (손 씻는 물줄기 {seen[4]}) · {k}장 → {dir}");
+        Console.WriteLine($"  washview: 가장 많을 때 안개 칸 (습도 {Painter.FogRh}) 화장실 안 {fogIn} · 밖 {fogOut} · 거울 김 서림 (세면대 {sinks.Count}) 안 {mirIn} · 밖 {mirOut} · 습도 1을 넘는 칸 {over1} · 가장 높은 습도 {rhMax:0.00}");
     }
 }

@@ -163,6 +163,44 @@ public static partial class Program
             double far8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
             Check("그리기 예산: 새뜰호 41×24칸 32도트 ≤ 6ms · 97×55칸 16도트 ≤ 8ms · 배 전체 8도트 ≤ 8ms (가운데 값 — 세계 스레드가 1/60초 안에)",
                 near <= 6 && far16 <= 8 && far8 <= 8, $"{near:0.0} · {far16:0.0} · {far8:0.0}ms (덩어리 {p.Baked})");
+            // 습한 판 (5단 A2 검토 — 평시 300틱은 안개 칸이 하나뿐이라 안개 비용을 못 봤다 · 3000틱이면 100칸): 칸의 수증기를 습도 0.97로 (RulesCracks 응력 부식의 식)
+            // ① 평시에 습한 방 (화장실 · 운동실 · 재배 갑판 · 휴게실 — 새뜰호 3000틱의 안개 칸이 여기에)의 바닥 — 같은 창 · 같은 예산
+            // ② 제습기가 멈춘 배 (바닥 칸 모두 — 보이는 바닥마다 안개): '김 · 안개' 단계만 잰다 (다른 층의 흔들림에 묻히지 않게 · 고치기 전 10.4 · 18.2 · 12.5ms)
+            var fd = s.Get<Field>();
+            int Humid(IEnumerable<int> cells)
+            {
+                int n = 0;
+                foreach (int c in cells)
+                {
+                    double tk = fd.Temp(c), want = 0.97 * Water.SatKPa(tk) * 1000 * Field.CellVolume / (Field.R * tk), have = fd.Gas(fd.T.gH2O, c);
+                    if (want > have) fd.AddGas(c, fd.T.gH2O, want - have, tk); else fd.RemoveGas(c, fd.T.gH2O, have - want);
+                    if (fd.RelHumidity(c) > ShipView.Painter.FogRh) n++;
+                }
+                return n;
+            }
+            double Stage(Action f, string key)   // 그 단계의 가운데 값 (Painter.Prof — 실험실만)
+            {
+                for (int k = 0; k < 40; k++) f();
+                var ms = new List<double>();
+                for (int k = 0; k < 12; k++) { ShipView.Painter.Prof = new(); f(); ms.Add(ShipView.Painter.Prof.GetValueOrDefault(key)); }
+                ShipView.Painter.Prof = null;
+                ms.Sort(); return ms[ms.Count / 2];
+            }
+            bool IsFloor(int c) => s.Layout.Kind[c] == CellKind.Floor;
+            int wet = Humid(s.Layout.Rooms.Where(r => r.Type is "Washroom" or "Gym" or "Hydroponics" or "Lounge").SelectMany(r => r.Cells).Where(IsFloor));
+            double hNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into));
+            double hFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into));
+            double hFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Check("그리기 예산: 습한 판 — 평시에 습한 방 (화장실 · 운동실 · 재배 갑판 · 휴게실) 바닥을 습도 0.97로 (안개) · 같은 창 · 같은 예산 (32도트 ≤ 6 · 16 · 8도트 ≤ 8ms)",
+                wet >= 600 && hNear <= 6 && hFar16 <= 8 && hFar8 <= 8, $"안개 칸 {wet} · {hNear:0.0} · {hFar16:0.0} · {hFar8:0.0}ms (평시 {near:0.0} · {far16:0.0} · {far8:0.0})");
+            var floors = Enumerable.Range(0, s.Layout.N).Where(IsFloor).ToArray();
+            int all = Humid(floors);
+            double sNear = Stage(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into), "김 · 안개");
+            double sFar16 = Stage(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into), "넓은: 김 · 안개");
+            double sFar8 = Stage(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into), "넓은: 김 · 안개");
+            double aNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into)), aFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into)), aFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Check("그리기 예산: 제습기가 멈춘 배 (바닥 칸 모두 습도 0.97 — 보이는 바닥마다 안개) — '김 · 안개' 단계 32도트 ≤ 1.5 · 16 · 8도트 ≤ 2ms",
+                all >= floors.Length * 9 / 10 && sNear <= 1.5 && sFar16 <= 2 && sFar8 <= 2, $"안개 칸 {all}/{floors.Length} · 단계 {sNear:0.00} · {sFar16:0.00} · {sFar8:0.00}ms (한 장 {aNear:0.0} · {aFar16:0.0} · {aFar8:0.0}ms)");
         }
     }
 
