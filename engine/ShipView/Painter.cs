@@ -280,6 +280,8 @@ public sealed partial class Painter
     public double SkyTh = double.NaN;
     /// <summary>관전 화면이 장마다 넣는다: 틱 사이 비율 (0 지난 틱 끝 ~ 1 지금 — 부스러기를 그 때 자리에) · 그 때 배(몸 0) 무게중심의 세상 자리 (NaN이면 지금 — 각은 SkyTh).</summary>
     public double TickFrac = 1, ShipX = double.NaN, ShipY = double.NaN;
+    /// <summary>관전 화면이 장마다 넣는다: 그릴 운석 · 구름 맞음과 잔상 세기 (1 → 0 — 화면 시간 0.25초). null이면 지난 틱의 맞음 가운데 틱 사이 비율이 지난 것.</summary>
+    public List<(Struck hit, float glow)>? Strikes;
 
     /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.
     /// into: 다시 쓸 그림 (w × h 칸이 들어가면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다 · 남는 곳은 우주색).</summary>
@@ -290,7 +292,7 @@ public sealed partial class Painter
         var st = s.Find<Structure>();
         // 배가 돌면 별도 돈다 (화면은 배를 따라 돈다 — 별은 무한히 멀어 배의 자세만큼만 거꾸로 돈다 · 배의 무게중심을 축으로)
         (_skyTh, _skyX, _skyY) = st != null && st.Bodies.Count > 0 ? (double.IsNaN(SkyTh) ? st.Bodies[0].Th : SkyTh, st.Bodies[0].Lx, st.Bodies[0].Ly) : (0, 0, 0);
-        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; return Draw(s, x0, y0, w, h, frame, into, false); }
+        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; var one = Draw(s, x0, y0, w, h, frame, into, false); DrawStrikes(one, s, st, x0, y0); return one; }
         // ④ 칸 강체: 배를 그리고 · 떨어져 나간 조각마다 제 칸만 따로 그려 자세대로 돌려 붙인다 (가까운 도트 — 도트 그림이 뭉개지지 않게)
         _stc = st; _only = 0;
         var img = Draw(s, x0, y0, w, h, frame, into, false);
@@ -312,7 +314,55 @@ public sealed partial class Painter
             Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1);
         }
         _only = -1; _stc = null;
+        DrawStrikes(img, s, st, x0, y0);
         return img;
+    }
+
+    /// <summary>
+    /// 운석 · 구름 맞음 (월드 보기 기록 Outside.Struck): 들어온 쪽 화면 끝 (구름 파편은 1.5m)에서 맞은 칸까지 1~2도트 줄 — 맞은 곳 흰빛에서 들어온 쪽으로 주황 · 옅게.
+    /// 맨 위에 빛 없이 (스스로 빛난다). Strikes가 없으면 (시험 · 사진) 지난 틱의 맞음 가운데 틱 사이 비율이 그 때를 지난 것.
+    /// </summary>
+    private void DrawStrikes(Img img, Sim s, Structure? st, int x0, int y0, int dots = T)
+    {
+        var list = Strikes;
+        if (list == null)
+        {
+            var o = s.Find<Outside>();
+            if (o == null || o.Struck.Count == 0 || o.StruckTick != _tick - 1) return;
+            _strikesNow.Clear();
+            foreach (var h in o.Struck) if (h.Sub / 255.0 <= TickFrac + 1e-9) _strikesNow.Add((h, 1f));
+            list = _strikesNow;
+        }
+        if (list.Count == 0) return;
+        var hot = Rgba.Hex("#fff6e0"); var tail = Rgba.Hex("#ff9a3c");
+        foreach (var (h, glow) in list)
+        {
+            if (glow <= 0 || h.Cell < 0 || h.Cell >= L.N) continue;
+            var (hx, hy) = st != null ? st.ShipFrameOf(h.Cell) : (L.X(h.Cell) + 0.5, L.Y(h.Cell) + 0.5);
+            double px = (hx - x0) * dots, py = (hy - y0) * dots, ux = h.Ux, uy = h.Uy;
+            double len = h.Cloud ? 1.5 * dots : ToEdge(px, py, -ux, -uy, img.W, img.H);   // 도트
+            bool wide = h.Kg >= 0.1, across = Math.Abs(uy) > Math.Abs(ux);
+            int n = (int)Math.Ceiling(len);
+            for (int k = 0; k <= n; k++)
+            {
+                double t = k / Math.Max(1.0, len);   // 0 맞은 곳 ~ 1 끝
+                var c = Rgba.Lerp(hot, tail, (float)Math.Min(1, t * 3));
+                float a = glow * (float)(1 - 0.7 * t);
+                int X = (int)Math.Floor(px - ux * k), Y = (int)Math.Floor(py - uy * k);
+                img.Blend(X, Y, c, a);
+                if (wide) img.Blend(X + (across ? 1 : 0), Y + (across ? 0 : 1), c, a);
+            }
+        }
+    }
+    private readonly List<(Struck hit, float glow)> _strikesNow = new();
+
+    /// <summary>(px, py)에서 (dx, dy) 쪽으로 그림 끝까지 도트 (그림 밖이면 0).</summary>
+    private static double ToEdge(double px, double py, double dx, double dy, int w, int h)
+    {
+        double t = 4000;
+        if (dx > 1e-9) t = Math.Min(t, (w - px) / dx); else if (dx < -1e-9) t = Math.Min(t, -px / dx);
+        if (dy > 1e-9) t = Math.Min(t, (h - py) / dy); else if (dy < -1e-9) t = Math.Min(t, -py / dy);
+        return Math.Max(0, t);
     }
 
     /// <summary>
@@ -320,9 +370,13 @@ public sealed partial class Painter
     /// 자리는 틱 사이 비율 TickFrac의 때: 지금 자리에서 (1 − f) · 2.4초만큼 뒤로 (진공을 곧게 난다) · 배 틀은 그 때의 배 자세 (ShipX · ShipY · SkyTh).
     /// 이번 틱에 났고 뒤로 늘인 자리가 난 몸의 바닥 · 설비 칸이면 그 장에는 그리지 않는다 — 충돌 잔걸음에 난 것은 아직 나지 않았다 (틱 처음에 난 구멍 · 운석 · 갈라짐의 것은 외판 · 끊긴 칸에서 시작한다).
     /// </summary>
-    private void Shards(Img img, Structure st, int x0, int y0, int dots = T)
+    private void Shards(Img img, Sim s, Structure st, int x0, int y0, int dots = T)
     {
         if (st.Shards.Count == 0) return;
+        // 지난 틱에 바깥에서 맞은 것 (운석 · 구름 — 바깥이 먼저 돌아 그 부스러기는 틱 처음 맞은 칸에서 한 틱을 다 난다): 맞은 때 (Sub) 전에는 그리지 않고 ·
+        // 뒤에는 남은 틱 사이에 맞은 칸 곁 → 틱 끝 자리를 곧게 (틱 사이 비율을 (f − Sub) / (1 − Sub)로 — 다음 틱과 이어진다)
+        var outs = s.Find<Outside>();
+        var struck = outs != null && outs.Struck.Count > 0 && outs.StruckTick == _tick - 1 ? outs.Struck : null;
         var body = Rgba.Hex("#9aa2b0"); var dark = Rgba.Hex("#3a404c");
         var b0 = st.Bodies.Count > 0 ? st.Bodies[0] : default;
         double f = Math.Clamp(TickFrac, 0, 1), back = (1 - f) * Time.SecondsPerTick;
@@ -330,11 +384,29 @@ public sealed partial class Painter
         double cs = Math.Cos(-th), sn = Math.Sin(-th);
         foreach (var sh in st.Shards)
         {
-            double wx = sh.X - sh.Vx * back - ox, wy = sh.Y - sh.Vy * back - oy;
+            double sback = back;
+            bool fresh = back > 0 && sh.Born == _tick - 1, hit = false;
+            if (fresh && struck != null)
+            {
+                // 틱 처음 자리 (배 틀 — 배에 대해 한 틱 난 만큼 뒤로)가 맞은 칸 가운데에서 2m 안이면 그 맞음의 부스러기
+                var (ex, ey) = st.LocalOf(0, sh.X, sh.Y);
+                double rvx = sh.Vx - b0.Vx, rvy = sh.Vy - b0.Vy, c0 = Math.Cos(-b0.Th), s0 = Math.Sin(-b0.Th);
+                ex -= (c0 * rvx - s0 * rvy) * Time.SecondsPerTick; ey -= (s0 * rvx + c0 * rvy) * Time.SecondsPerTick;
+                double best = 4, sub = 0;   // 거리²
+                foreach (var k in struck)
+                {
+                    var (kx, ky) = st.ShipFrameOf(k.Cell);
+                    double d2 = (kx - ex) * (kx - ex) + (ky - ey) * (ky - ey);
+                    if (d2 < best) { best = d2; sub = k.Sub / 255.0; hit = true; }
+                }
+                if (hit && f < sub) continue;
+                if (hit) sback = sub >= 0.999 ? 0 : (1 - (f - sub) / (1 - sub)) * Time.SecondsPerTick;
+            }
+            double wx = sh.X - sh.Vx * sback - ox, wy = sh.Y - sh.Vy * sback - oy;
             double sx = b0.Lx + cs * wx - sn * wy, sy = b0.Ly + sn * wx + cs * wy;
             int px = (int)Math.Round((sx - x0) * dots), py = (int)Math.Round((sy - y0) * dots);
             if (px < -8 || py < -8 || px > img.W + 8 || py > img.H + 8) continue;
-            if (back > 0 && sh.Born == _tick - 1 && NotYet(st, sh, sx, sy)) continue;
+            if (fresh && !hit && NotYet(st, sh, sx, sy)) continue;
             int size = Math.Max(1, Math.Clamp((int)Math.Round(Math.Sqrt(sh.Kg) / 3), 2, 6) * dots / T);
             // 배에서 본 빠르기 쪽 반대로 꼬리
             double vx = sh.Vx - b0.Vx, vy = sh.Vy - b0.Vy, lvx = cs * vx - sn * vy, lvy = sn * vx + cs * vy, vl = Math.Sqrt(lvx * lvx + lvy * lvy);
@@ -342,7 +414,7 @@ public sealed partial class Painter
             if (vl > 0.5) for (int k = 1; k <= 4; k++) img.Blend(px - (int)(lvx / vl * k * step), py - (int)(lvy / vl * k * step), body, 0.5f - k * 0.1f);
             // 판의 각 (배 틀): 알갱이마다 해시 각 (빠르기 · 난 때 — 날며 바뀌지 않는다) + 제 돎 ω · 나이 (ω = Spin / (Kg · 0.25²/6) — 25cm 판의 보기 어림) − 배 각
             long hv = BitConverter.DoubleToInt64Bits(sh.Vx) ^ BitConverter.DoubleToInt64Bits(sh.Vy) * 31;
-            double age = (_tick - 1 - sh.Born + f) * Time.SecondsPerTick, spin = sh.Kg > 0 ? sh.Spin / (sh.Kg * 0.25 * 0.25 / 6) : 0;
+            double age = (_tick - 1 - sh.Born + f) * Time.SecondsPerTick - (back - sback), spin = sh.Kg > 0 ? sh.Spin / (sh.Kg * 0.25 * 0.25 / 6) : 0;
             double ang = DotHash.F((int)hv, (int)(hv >> 32), (int)sh.Born) * 2 * Math.PI + spin * age - th;
             var plate = PlateOf(size, ang);
             foreach (var (dx, dy) in plate) img.Blend(px + dx + 1, py + dy + 1, dark, 0.6f);
@@ -848,7 +920,7 @@ public sealed partial class Painter
         SmokeVeil(img, f, x0, y0, w, h, frame);
         lt = Lap("연기", lt);
         // ── 부스러기 알갱이 (배 그림에만 — 빛을 받는다) ──
-        if (!part && st != null) Shards(img, st, x0, y0);
+        if (!part && st != null) Shards(img, s, st, x0, y0);
         lt = Lap("부스러기", lt);
         // ── 빛: 곱하고 · 스스로 빛나는 것 · 불꽃 (맨 앞) ──
         if (Lighting)

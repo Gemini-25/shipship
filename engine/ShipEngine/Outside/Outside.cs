@@ -22,6 +22,16 @@ public struct Rock
     public int Id;
 }
 
+/// <summary>이번 틱에 배를 맞힌 것 하나 (보기 기록 — 찍지 않는다): 오는 쪽 (도면 틀 단위 벡터) · 맞은 칸 · 질량 · 빠르기 · 틱 안의 때 (0~255 = 틱 처음 ~ 끝) · 구름 파편인가.</summary>
+public struct Struck
+{
+    public float Ux, Uy;
+    public int Cell;
+    public float Kg, Speed;
+    public byte Sub;
+    public bool Cloud;
+}
+
 /// <summary>
 /// ⑤ 바깥 세계 — 별 · 행성 · 파편 · 운석 (docs/ENGINE.md §4 ⑤).
 /// <para>
@@ -67,6 +77,9 @@ public sealed partial class Outside : IEngine
     public List<Cloud> Clouds = new();
     public List<Rock> Rocks = new();
     public long DebrisHits, RockHits, NearMisses, Flares;
+    /// <summary>이번 틱 (StruckTick)에 배를 맞힌 운석 · 구름 파편 (화면이 줄을 긋는 보기 기록 — 찍지 않는다 · 틱마다 비운다).</summary>
+    public readonly List<Struck> Struck = new();
+    public long StruckTick = -1;
     private RngStream _rng;
 
     /// <summary>칸마다 방사선 선량률 (mGy/시) — 바깥 × 가림.</summary>
@@ -257,6 +270,7 @@ public sealed partial class Outside : IEngine
 
     private void CloudsStep(Sim sim, double dt)
     {
+        Struck.Clear(); StruckTick = sim.Tick;   // 이번 틱의 맞음 (구름 · 바위)
         double halfW = L.W / 2.0, halfH = L.H / 2.0;
         for (int k = 0; k < Clouds.Count; k++)
         {
@@ -284,7 +298,11 @@ public sealed partial class Outside : IEngine
                     double m = PowerLaw(d.MinKg, d.MaxKg, d.Alpha);
                     double e = 0.5 * m * sp * sp;
                     double off = (_rng.Unit() - 0.5) * width;
-                    if (HitShip(sim, ux, uy, off, e, c.Cause, $"{d.Name}의 {m * 1000:0.##}g 파편")) { c.Hits++; DebrisHits++; }
+                    if (HitShip(sim, ux, uy, off, e, c.Cause, $"{d.Name}의 {m * 1000:0.##}g 파편", out int hc))
+                    {
+                        c.Hits++; DebrisHits++;
+                        Struck.Add(new Struck { Ux = (float)ux, Uy = (float)uy, Cell = hc, Kg = (float)m, Speed = (float)sp, Sub = (byte)Math.Round((h + 0.5) / hits * 255), Cloud = true });   // 구름 속 맞음은 틱 안에 고르게 (난수를 더 뽑지 않는다)
+                    }
                 }
             }
             Clouds[k] = c;
@@ -317,7 +335,13 @@ public sealed partial class Outside : IEngine
             {
                 double off = cx * -uy + cy * ux; // 비낀 거리 (진행 방향의 왼쪽 +)
                 double e = 0.5 * r.Mass * sp * sp;
-                if (HitShip(sim, ux, uy, -off, e, r.Cause, $"{r.Mass:0.#}kg 운석")) { RockHits++; r.Mass = 0; }
+                if (HitShip(sim, ux, uy, -off, e, r.Cause, $"{r.Mass:0.#}kg 운석", out int hc))
+                {
+                    // 틱 안의 때: 틱 처음 자리에서 맞은 칸 가운데까지 진행 방향 길이 ÷ (빠르기 × dt) — 배 가운데 틀 (도면 가운데)
+                    double along = (L.X(hc) + 0.5 - L.W / 2.0 - x0) * ux + (L.Y(hc) + 0.5 - L.H / 2.0 - y0) * uy;
+                    Struck.Add(new Struck { Ux = (float)ux, Uy = (float)uy, Cell = hc, Kg = (float)r.Mass, Speed = (float)sp, Sub = (byte)Math.Round(Math.Clamp(along / (sp * dt), 0, 1) * 255) });
+                    RockHits++; r.Mass = 0;
+                }
             }
             if (r.Mass > 0 && r.Warned < 2 && t >= 0 && t <= sp * dt && miss <= reach + 1000)
             {
@@ -331,10 +355,11 @@ public sealed partial class Outside : IEngine
     }
 
     /// <summary>
-    /// (ux, uy) 방향으로 날아오는 것이, 진행 방향에 수직으로 off(m)만큼 비껴 배를 지난다 — 처음 닿는 칸을 찾아 ④ 구조에 충돌로.
+    /// (ux, uy) 방향으로 날아오는 것이, 진행 방향에 수직으로 off(m)만큼 비껴 배를 지난다 — 처음 닿는 칸을 찾아 ④ 구조에 충돌로 (그 칸 → hit).
     /// </summary>
-    private bool HitShip(Sim sim, double ux, double uy, double off, double energy, int parentCause, string what)
+    private bool HitShip(Sim sim, double ux, double uy, double off, double energy, int parentCause, string what, out int hit)
     {
+        hit = -1;
         double cx = L.W / 2.0, cy = L.H / 2.0;
         double px = -uy, py = ux;
         double reach = Math.Sqrt(L.W * L.W + L.H * L.H);
@@ -350,6 +375,7 @@ public sealed partial class Outside : IEngine
             int cause = sim.Causes.Add(CauseKind.Impact, $"{Ko.I(what)} 부딪혔다 ({energy / 1000:0.#}kJ)", sim.Tick, c, parentCause);
             int dx = Math.Abs(ux) >= Math.Abs(uy) ? Math.Sign(ux) : 0, dy = dx == 0 ? Math.Sign(uy) : 0;
             sim.Find<Structure>()?.Impact(sim, c, energy, dx, dy, cause);
+            hit = c;
             return true;
         }
         return false;
@@ -475,6 +501,7 @@ public sealed partial class Outside : IEngine
         Star = r.Str()!; Distance = r.F64(); VoyageFrom = r.F64(); VoyageTo = r.F64(); VoyageStart = r.I64(); VoyageTicks = r.I64(); SunAngle = r.F64(); SunDrift = r.F64(); Planet = r.Str(); PlanetSince = r.I64(); Storm = r.Bool(); StormUntil = r.I64();
         NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64(); CalmDose = r.F64(); FlareScale = r.F64();
         Clouds = r.List<Cloud>(); Rocks = r.List<Rock>();
+        Struck.Clear(); StruckTick = -1;   // 보기 기록 (찍지 않는다)
         DebrisHits = r.I64(); RockHits = r.I64(); NearMisses = r.I64(); Flares = r.I64();
         LoadMotion(r); LoadContacts(r); LoadMap(r);
         _rng.Load(r);

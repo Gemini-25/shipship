@@ -420,7 +420,7 @@ public sealed partial class Painter
         }
         lt = Lap("넓은: 연기", lt);
         // ── 부스러기 알갱이 (빛을 받는다 — Frame과 같다) ──
-        if (st != null) Shards(img, st, x0, y0, D);
+        if (st != null) Shards(img, s, st, x0, y0, D);
         lt = Lap("넓은: 부스러기", lt);
 
         // ── 빛: 곱하고 · 설비 빛 · 불꽃 (맨 앞) ──
@@ -477,7 +477,9 @@ public sealed partial class Painter
                 Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1, D);
             }
         _only = -1; _stc = null;
-        Lap("넓은: 조각", lt);
+        lt = Lap("넓은: 조각", lt);
+        DrawStrikes(img, s, st, x0, y0, D);
+        Lap("넓은: 운석 줄", lt);
         return img;
     }
 

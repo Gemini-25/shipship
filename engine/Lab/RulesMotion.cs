@@ -256,5 +256,77 @@ public static partial class Program
             Check("항로의 위험 구간: 작은 바위 띠(1.12 ~ 1.30AU)를 지나는 이틀 동안 바위가 온다 (하루 평균 3) · 띠 밖(1AU)에서는 오지 않는다",
                 inBelt.rocks >= 2 && outBelt.rocks == 0 && outBelt.clouds == 0, $"띠 안: 바위 {inBelt.rocks} · 구름 {inBelt.clouds} / 띠 밖: 바위 {outBelt.rocks} · 구름 {outBelt.clouds}");
         }
+
+        // ── 운석 줄: 맞은 틱의 '맞음' 보기 기록 (찍지 않는다 · 틱 안의 때 Sub) — 화면은 틱 사이 그 때를 지나는 장부터 들어온 쪽 화면 끝에서 맞은 칸까지 줄 · 잔상 0.25초 (화면 시간) · 그 운석에 난 부스러기도 그 때부터 · 구름 맞음마다 짧은 줄 ──
+        {
+            var dl = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            // 줄 하나만 둔 그림 − 줄 없는 그림: 다른 도트 (같은 화가 · 같은 세계)
+            static List<(int x, int y)> Diff(ShipView.Painter p, Sim s, int x0, int y0, int w, int h, Action strip)
+            {
+                var keep = p.Strikes;
+                var with = p.Frame(s, x0, y0, w, h, 0);
+                strip();
+                var bare = p.Frame(s, x0, y0, w, h, 0);
+                p.Strikes = keep;
+                var d = new List<(int, int)>();
+                for (int y = 0; y < with.H; y++)
+                    for (int x = 0; x < with.W; x++)
+                    {
+                        int i = (y * with.W + x) * 4;
+                        if (with.Px[i] != bare.Px[i] || with.Px[i + 1] != bare.Px[i + 1] || with.Px[i + 2] != bare.Px[i + 2]) d.Add((x, y));
+                    }
+                return d;
+            }
+            var s = Worlds.Full(dl, 2);
+            var o = s.Get<Outside>(); var st = s.Get<Structure>();
+            s.Run(3);
+            var show = new ShipView.LiveShow(s, "운석") { SpeedOverride = 1, Follow = false };
+            o.AddRock(1.0, 6000, 1, 0, 0, 6000 * 1.2, 0);   // 왼쪽에서 · 틱 가운데에 맞게
+            int ran = show.Advance(1.0);
+            int struck = o.Struck.Count;
+            double sub = struck > 0 ? o.Struck[0].Sub / 255.0 : double.NaN;
+            int wx0 = -14, wy0 = 0, ww = 20, wh = dl.H;
+            var p = show.Painter;
+            List<(int x, int y)> Line() => Diff(p, s, wx0, wy0, ww, wh, () => p.Strikes = new());
+            List<(int x, int y)> Bits()   // 부스러기 하나도 없는 그림과 (한 틱에 수십 m — 넓게)
+            {
+                var all = st.Shards.ToList();
+                var d = Diff(p, s, -70, -40, 80, 90, () => st.Shards.Clear());
+                st.Shards.Clear(); st.Shards.AddRange(all);
+                return d;
+            }
+            bool ok = !double.IsNaN(sub);
+            ran += show.Advance(ok ? sub - 0.2 : 0.3); show.Render();
+            var early = Line(); var earlyBits = Bits();
+            ran += show.Advance(0.21); show.Render();
+            var hitLine = Line(); var hitBits = Bits();
+            ran += show.Advance(0.25); show.Render();
+            var after = Line();
+            int cell = struck > 0 ? o.Struck[0].Cell : -1;
+            var (hx, hy) = cell >= 0 ? st.ShipFrameOf(cell) : (0.0, 0.0);
+            int inSide = hitLine.Count(q => (wx0 + (q.x + 0.5) / ShipView.Painter.T) < hx);   // 들어온 쪽 (왼쪽)
+            // 파편 구름 속: 맞은 파편마다 그 칸에서 들어온 쪽으로 짧은 줄
+            var s2 = Worlds.Full(dl, 2);
+            var o2 = s2.Get<Outside>(); var st2 = s2.Get<Structure>();
+            s2.Run(3);
+            o2.AddCloud("rubble", 0, 100_000, 4e-5, 1, 0, 0);   // 배가 구름 속 (한 틱에 맞음 6쯤)
+            long h0 = o2.DebrisHits;
+            s2.Step();
+            var p2 = new ShipView.Painter(dl);
+            var cl = Diff(p2, s2, -4, 0, dl.W + 4, dl.H, () => p2.Strikes = new());
+            int lined = 0;
+            foreach (var h in o2.Struck)
+            {
+                var (cx, cy) = st2.ShipFrameOf(h.Cell);
+                double bx = cx - h.Ux * 1.0, by = cy - h.Uy * 1.0;   // 맞은 칸 가운데에서 들어온 쪽으로 1m
+                if (cl.Count(q => Math.Abs(-4 + (q.x + 0.5) / ShipView.Painter.T - bx) < 0.6 && Math.Abs((q.y + 0.5) / ShipView.Painter.T - by) < 0.6) >= 3) lined++;
+            }
+            Check("운석 줄: 맞은 틱에 '맞음' 하나 · 틱 안의 때 0.5 ± 0.1 · 그 때를 지나는 장부터 들어온 쪽 화면 끝에서 맞은 칸까지 줄 (20도트 넘게) · 0.2 앞 장에는 없다 · 잔상 0.25초 뒤 없다 · 그 운석에 난 부스러기도 그 때부터 · 파편 구름 속에서는 맞은 파편마다 짧은 줄",
+                ran == 1 && struck == 1 && Math.Abs(sub - 0.5) <= 0.1 && early.Count == 0 && inSide >= 20 && after.Count == 0 &&
+                st.Shards.Count > 0 && earlyBits.Count == 0 && hitBits.Count > 0 &&
+                o2.Struck.Count == o2.DebrisHits - h0 && o2.Struck.Count >= 2 && lined == o2.Struck.Count,
+                $"맞음 {struck} · 때 {sub:0.000} · 줄 도트 (때 − 0.2 · + 0.01 들어온 쪽 · 0.25초 뒤) {early.Count} · {inSide}/{hitLine.Count} · {after.Count} · " +
+                $"부스러기 {st.Shards.Count} (때 − 0.2 · + 0.01 그린 도트 {earlyBits.Count} · {hitBits.Count}) · 구름 맞음 {o2.Struck.Count}/{o2.DebrisHits - h0} · 줄 있는 {lined}");
+        }
     }
 }

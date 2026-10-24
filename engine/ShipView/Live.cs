@@ -240,6 +240,7 @@ public sealed partial class LiveShow
                 if (i == n - 1) Remember();
                 AL("자세 · 걸음");
                 w.Step(); AL("세계");
+                CollectStrikes();
                 d.Observe(w); AL("연출");
                 ran++;
                 if (_replay != null && w.Tick >= _replayEnd) break;
@@ -303,6 +304,40 @@ public sealed partial class LiveShow
     // 지난 틱 끝 배(몸 0)의 세상 자세 · 제 틀 무게중심 (몸이 아직 없었으면 0 — 처음 서는 몸 0은 세상 = 도면 틀에서 선다)
     private (double x, double y, double th, double lx, double ly) _prevShip;
     private long _prevTick = long.MinValue;
+
+    // 운석 · 구름 맞음 (월드 보기 기록 Outside.Struck — 틱마다 비워지니 틱을 돌릴 때마다 옮겨 둔다): 맞은 틱 · 처음 그린 화면 때 (NaN — 아직) — 잔상은 화면 시간 0.25초
+    public const double StrikeGlowSec = 0.25;
+    private readonly List<(Struck hit, long tick, double seen)> _strikes = new();
+    private readonly List<(Struck hit, float glow)> _strikesDrawn = new();
+    private long _struckTick = -1;
+    private Sim? _struckWorld;
+
+    private void CollectStrikes()
+    {
+        if (!ReferenceEquals(World, _struckWorld)) { _strikes.Clear(); _struckWorld = World; _struckTick = -1; }
+        var o = World.Find<Outside>();
+        if (o == null || o.StruckTick == _struckTick) return;
+        _struckTick = o.StruckTick;
+        foreach (var h in o.Struck) _strikes.Add((h, o.StruckTick, double.NaN));
+    }
+
+    /// <summary>이 장에 그릴 맞음: 그리는 때 (지난 틱 + 틱 사이 비율 fr)가 맞은 때를 지난 것 · 처음 그린 뒤 화면 0.25초 동안 옅어지며.</summary>
+    private List<(Struck hit, float glow)> StrikesNow(double fr)
+    {
+        CollectStrikes();
+        _strikesDrawn.Clear();
+        double now = World.Tick - 1 + fr;
+        for (int i = _strikes.Count - 1; i >= 0; i--)
+        {
+            var (h, tick, seen) = _strikes[i];
+            if (now + 1e-9 < tick + h.Sub / 255.0) continue;   // 아직 (틱 안 그 때 전)
+            if (double.IsNaN(seen)) { seen = _anim; _strikes[i] = (h, tick, seen); }
+            double age = _anim - seen;
+            if (age >= StrikeGlowSec - 1e-9) { _strikes.RemoveAt(i); continue; }
+            _strikesDrawn.Add((h, (float)(1 - age / StrikeGlowSec)));
+        }
+        return _strikesDrawn;
+    }
 
     private void Remember()
     {
@@ -677,6 +712,7 @@ public sealed partial class LiveShow
             else { Painter.SkyTh = o0.Th; Painter.ShipX = Painter.ShipY = double.NaN; Painter.TickFrac = 1; }   // 되살린 첫 틱 · 건너뛴 틱은 지금 자세로
         }
         else { Painter.Poses = null; Painter.SkyTh = double.NaN; Painter.ShipX = Painter.ShipY = double.NaN; Painter.TickFrac = 1; }
+        Painter.Strikes = StrikesNow(Painter.TickFrac);
         Painter.Sub = Math.Clamp(_carry, 0, 1);
         Painter.Still = ReferenceEquals(World, _drawnWorld) && World.Tick == _drawnTick;   // 세계는 틱에만 바뀐다 (멈춤 · 느린 연출 · 따라 보기 · 계산 일꾼을 기다리는 장 — 다시보기로 바꾼 세계는 아니다)
         _drawnWorld = World; _drawnTick = World.Tick;
