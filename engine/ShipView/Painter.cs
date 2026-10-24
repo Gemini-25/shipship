@@ -14,9 +14,11 @@ public enum Overlay : byte { None, Air, Heat, Smoke, Chain, Lines }
 
 // ── 그림 캐시 갈래 표: _cache 열쇠의 맨 윗 바이트 (Key(갈래, …) · 직접 열쇠는 (갈래L << 56) ^ …) ──
 //   갈래가 겹치면 먼저 든 남의 그림을 꺼낸다 (예전엔 드론도 9 — 바닥 소화기(물건 0) 아이콘과 멈춘 드론 장 0이 한 열쇠였다). 새 그림은 15부터.
+//   갈래 안에서도 같다: 열쇠에서 잘라 낸 값 (& 7 · & 0xFFF)은 그림도 잘라 낸 그 값으로 그린다 (예전 로봇 — 열쇠 Id & 7 · 그림 Id 전체).
+//   (아직 남은 것: 1 바닥의 꾸밈 — ArtFloors.Details의 긁힘 · 흙 알갱이 · 이끼는 칸 자리 전체를 보는데 열쇠는 x & 7 · y & 7)
 //    1 바닥 (100 + 문턱) · 2 벽 윗면 · 3 벽 앞면 · 4 문짝 (PainterFar DoorTile)
 //    5 설비 몸 · 화장실 (9001 중력 발생기 · 9100~ 화장실 몸 · 9200~ 물줄기 · 커튼 · 김) · 6 물 · 7 연기
-//    8 로봇 · 9 바닥 물건 아이콘 · 10 옛 설비 빛 (OldGlow — DotMachines.Life) · 11 외판 바깥 면
+//    8 로봇 (Id & 0xFFF) · 9 바닥 물건 아이콘 · 10 옛 설비 빛 (OldGlow — DotMachines.Life) · 11 외판 바깥 면
 //   12 새 가구 몸 (직접 열쇠 — 설비 고리) · 13 새 가구 빛 (직접 열쇠 — PainterFar NewGlow) · 14 드론 (DrawBot)
 public sealed partial class Painter
 {
@@ -1259,7 +1261,8 @@ public sealed partial class Painter
             return;
         }
         var kind = (DotBotKind)(a.Id % 4);
-        var bot = Cached(Key(8, (int)kind, (int)state, frame & 3, a.Id & 7), (kind, state, f4: frame & 3, a.Id), static q => DotBots.Robot(q.kind, q.state, q.f4, q.Id));
+        int seed = a.Id & 0xFFF;   // 그을음 · 불꽃의 씨앗 — 열쇠와 그림이 같은 값 (예전엔 열쇠 Id & 7 · 그림 Id 전체라 Id가 8 차이 나는 로봇이 먼저 그린 로봇의 그림을 꺼냈다)
+        var bot = Cached(Key(8, (int)kind, (int)state, frame & 3, seed), (kind, state, f4: frame & 3, seed), static q => DotBots.Robot(q.kind, q.state, q.f4, q.seed));
         img.Oval(px + T / 2, py + T - 2, 7.5f, 2.2f, FootShade, 0.38f);   // 바퀴 · 다리 밑 그림자
         Put(img, bot, px + T / 2 - DotBots.Cx, py + T - DotBots.Foot - 1);
     }
