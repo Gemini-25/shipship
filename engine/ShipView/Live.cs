@@ -601,6 +601,9 @@ public sealed partial class LiveShow
     /// <summary>새로 잡은 그림판 수 (재기용).</summary>
     public static int NewCanvas;
     private readonly List<Img> _keep = new();
+    /// <summary>지난 장을 그린 세계 · 틱 (같으면 틱이 지나지 않은 장 — 화가가 안개 칸을 다시 훑지 않는다 · <see cref="Painter.Still"/>).</summary>
+    private Sim? _drawnWorld;
+    private long _drawnTick;
     /// <summary>세밀도 단계 (docs/GRAPHICS.md §3): 보는 칸이 이보다 많으면 칸당 16 · 8도트 (1920 화면에서 한 픽셀에 도트가 하나 넘게 오지 않게) · 경계 ±FarGap칸은 지금 도트 그대로.</summary>
     public const double Far16 = 60, Far8 = 120, FarGap = 3;
     private int _dot = Painter.T;
@@ -646,6 +649,8 @@ public sealed partial class LiveShow
         }
         else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
         Painter.Sub = Math.Clamp(_carry, 0, 1);
+        Painter.Still = ReferenceEquals(World, _drawnWorld) && World.Tick == _drawnTick;   // 세계는 틱에만 바뀐다 (멈춤 · 느린 연출 · 따라 보기 · 계산 일꾼을 기다리는 장 — 다시보기로 바꾼 세계는 아니다)
+        _drawnWorld = World; _drawnTick = World.Tick;
         var img = D == Painter.T ? Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse) : Painter.FrameFar(World, x0, y0, wc, hc, (int)(_anim * AnimFps), D, reuse);
         if (D == Painter.T) Painter.Prebake(World);   // 넓게 볼 때 첫 장에 굽기가 몰리지 않게 (장마다 덩어리 하나)
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);

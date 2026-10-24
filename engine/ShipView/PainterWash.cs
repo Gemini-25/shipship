@@ -318,41 +318,53 @@ public sealed partial class Painter
     /// <summary>포화 수증기압의 1K 표 (250 ~ 499K · <see cref="Water.SatKPa"/>): 칸 온도의 내림 자리 값 — 포화 수증기압은 온도가 오를수록 크니 그 칸의 값보다 작거나 같다.</summary>
     private static readonly double[] SatFloor = Enumerable.Range(250, 250).Select(t => Water.SatKPa(t)).ToArray();
 
-    /// <summary>안개를 볼 칸의 상대 습도 (장마다 칸마다 — 먼저 exp · 나눗셈 여럿 없이 거른다 · <see cref="FogSieve"/>): 습도가 FogRh를 넘을 수 없는 칸은 0 ·
-    /// 나머지는 수증기 분압 ÷ 포화 수증기압 (<see cref="Field.RelHumidity"/>와 같은 식 — 열용량을 성분 넷씩 함께 더하는 차례만 달라 1e-15 안쪽) · 기체가 거의 없거나 표 밖 온도 (드물다)는 RelHumidity 그대로.
-    /// (예산 고침 — 바닥 칸마다 RelHumidity (나눗셈 여럿 · exp)를 셈했다: 평시 판 '김 · 안개' 단계 16 · 8도트 0.11~0.16 · 0.15~0.22 → 0.06~0.07 · 0.06~0.08ms ·
-    /// 바닥 모두 안개인 배의 훑기는 거름 뒤 RelHumidity를 또 부르던 것보다 0.18 · 0.22 → 0.11 · 0.15ms)</summary>
-    private double FogRhAt(Field f, int c)
-    {
-        if (NoFogSieve) return f.RelHumidity(c);
-        if (!FogSieve(f, c, out double p, out double t)) return 0;   // 거의 모든 칸이 여기서 빠진다
-        return double.IsNaN(t) ? f.RelHumidity(c) : p / Water.SatKPa(t);
-    }
+    /// <summary>거른 칸의 상대 습도: 수증기 분압 ÷ 포화 수증기압 (<see cref="Field.RelHumidity"/>와 같은 식 — 열용량을 성분 넷씩 함께 더하는 차례만 달라 1e-15 안쪽) ·
+    /// 기체가 거의 없거나 표 밖 온도 (T = NaN — 드물다)는 RelHumidity 그대로. exp는 여기서만 (256비트 셈을 하는 <see cref="FogSieveRow"/> 밖 — 같은 메서드 안의 exp는 SSE 전환 값으로 몇 배 느렸다).
+    /// (예산 고침 — 바닥 칸마다 RelHumidity (나눗셈 여럿 · exp)를 셈했다: 평시 판 '김 · 안개' 단계 16 · 8도트 0.11~0.16 · 0.15~0.22 → 0.06~0.07 · 0.06~0.08ms)</summary>
+    private static double FogRhOf(Field f, in FogHit q) => double.IsNaN(q.T) ? f.RelHumidity(q.C) : q.P / Water.SatKPa(q.T);
 
-    /// <summary>안개 칸 거름: false면 습도가 FogRh를 넘을 수 없다 (수증기 분압 ≤ FogRh × 내림 온도의 포화 수증기압 — 맺음 끝 1e-9) · true면 p (수증기 분압 kPa) · t (기체 온도 K)를 건넨다
-    /// (기체가 거의 없거나 표 밖 온도면 t = NaN — RelHumidity로). 따로 둔 메서드 — 256비트 셈이 끝나면 위쪽 절반을 비우고 돌아간다 (같은 메서드 안에서 이어 부른 exp는 SSE 전환 값으로 몇 배 느렸다).</summary>
+    /// <summary>거름을 지난 칸 (칸 · 수증기 분압 kPa · 기체 온도 K — 기체가 거의 없거나 표 밖 온도면 둘 다 NaN).</summary>
+    private readonly record struct FogHit(int C, double P, double T);
+    private FogHit[] _sieve = Array.Empty<FogHit>();
+
+    /// <summary>안개 칸 거름 (칸 줄 y의 x = xa .. xe − 1 중 바닥 · 열린 문 칸 · 내 몸 칸): 습도가 FogRh를 넘을 수 있는 칸만 x 차례로 <see cref="_sieve"/>에 · 그 수 (평시 판은 거의 늘 0).
+    /// 넘을 수 없는 칸 = 수증기 분압 ≤ FogRh × 내림 온도의 포화 수증기압 (맺음 끝 1e-9 — exp 없이 · 분압은 나눗셈 없이 n · R/V/1000 · T로 견주고 지난 칸만 예전 식으로 셈한다 · 열용량은 예전과 같은 차례로 더한다).
+    /// 줄 하나를 한 번에 훑는다 (예산 고침 검토 — 칸마다 따로 둔 거름 메서드를 부르고 · 내보낸 값을 메모리로 건네고 · 나눗셈 셋: 틱이 지난 장의 평시 판 훑기 32 · 16 · 8도트 (여덟 판의 가운데 값) 0.015 · 0.060 · 0.076 → 0.011 · 0.051 · 0.053ms — 남는 것은 칸마다 기체 성분 열일곱을 읽는 값).
+    /// all이면 (NoFogSieve) 공기 칸 모두를 NaN으로 (칸마다 RelHumidity). 따로 둔 메서드 — 256비트 셈이 끝나면 위쪽 절반을 비우고 돌아간다.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private bool FogSieve(Field f, int c, out double p, out double t)
+    private int FogSieveRow(Field f, int y, int xa, int xe, bool all)
     {
         var cv = _gasCv ??= f.T.Gases.Select(g => g.C).ToArray();   // Field의 성분별 cv와 같은 표
-        int G = f.G, g0 = 0;
-        ref double nc = ref f.N[c * G];
-        double gc = 0;
-        if (Vector256.IsHardwareAccelerated && !NoVector)
+        if (_sieve.Length < L.W) _sieve = new FogHit[L.W];
+        var hit = _sieve;
+        var kind = L.Kind; var doorAt = L.DoorAt; var open = f.DoorOpen; var u = f.U; var sat = SatFloor;
+        int G = f.G, G4 = Vector256.IsHardwareAccelerated && !NoVector ? G & ~3 : 0, h = f.T.gH2O, m = 0;
+        const double K = Field.R / Field.CellVolume / 1000, Edge = FogRh * (1 - 1e-9);   // 분압 kPa = n · K · T
+        ref double n0 = ref MemoryMarshal.GetArrayDataReference(f.N);
+        ref double cv0 = ref MemoryMarshal.GetArrayDataReference(cv);
+        for (int c = y * L.W + xa, ce = y * L.W + xe; c < ce; c++)
         {
-            var acc = Vector256<double>.Zero;
-            ref double cv0 = ref cv[0];
-            for (; g0 + 4 <= G; g0 += 4) acc += Vector256.LoadUnsafe(ref nc, (nuint)g0) * Vector256.LoadUnsafe(ref cv0, (nuint)g0);
-            gc = Vector256.Sum(acc);
+            var kd = kind[c];
+            if (kd is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
+            if (kd == CellKind.Door && doorAt[c] >= 0 && open[doorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다
+            if (all) { hit[m++] = new FogHit(c, double.NaN, double.NaN); continue; }
+            ref double nc = ref Unsafe.Add(ref n0, (nint)c * G);
+            double gc = 0;
+            int g = 0;
+            if (G4 > 0)
+            {
+                var acc = Vector256<double>.Zero;
+                for (; g < G4; g += 4) acc += Vector256.LoadUnsafe(ref nc, (nuint)g) * Vector256.LoadUnsafe(ref cv0, (nuint)g);
+                gc = Vector256.Sum(acc);
+            }
+            for (; g < G; g++) gc += Unsafe.Add(ref nc, g) * Unsafe.Add(ref cv0, g);
+            double tk = u[c] / gc;
+            if (!(gc > 2e-6 && tk >= 250 && tk < 499)) { hit[m++] = new FogHit(c, double.NaN, double.NaN); continue; }   // 기체가 거의 없다 (RelHumidity는 1e-6 아래면 바닥 온도 — 그 언저리는 그대로 셈한다) · 표 밖 · NaN
+            double nh = Unsafe.Add(ref nc, h);
+            if (!(nh * K * tk > Edge * sat[(int)tk - 250])) continue;   // 거의 모든 칸이 여기서 빠진다
+            hit[m++] = new FogHit(c, nh * Field.R * tk / Field.CellVolume / 1000, tk);   // 수증기 분압 kPa (= 압력 × 몰 분율 — 셈 차례만 다르다)
         }
-        for (; g0 < G; g0++) gc += Unsafe.Add(ref nc, g0) * cv[g0];
-        p = t = double.NaN;
-        if (!(gc > 2e-6)) return true;   // 기체가 거의 없다 (RelHumidity는 1e-6 아래면 바닥 온도 — 그 언저리는 그대로 셈한다) · NaN
-        double tk = f.U[c] / gc;
-        if (!(tk >= 250 && tk < 499)) return true;
-        t = tk;
-        p = f.N[c * G + f.T.gH2O] * Field.R * tk / Field.CellVolume / 1000;   // 수증기 분압 kPa (= 압력 × 몰 분율 — 셈 차례만 다르다)
-        return p > FogRh * SatFloor[(int)tk - 250] * (1 - 1e-9);
+        return m;
     }
     private double[]? _gasCv;
     /// <summary>시험용: 안개 칸 거름을 끈다 (칸마다 RelHumidity — 거름 · 빠른 습도 셈이 그림을 바꾸지 않는지 견준다).</summary>
@@ -361,6 +373,15 @@ public sealed partial class Painter
     /// <summary>이 장에 안개를 칠할 칸 (칸 x · 짙기 /256 — 칸 줄 차례) · 칸 줄 (첫 자리 · 칸 수 · y): 습도는 한 스레드로 훑고 (칸마다 한 번 · 싸다) 칠하기만 나눈다.</summary>
     private readonly List<(int x, uint aq)> _fog = new();
     private readonly List<(int start, int n, int y)> _fogRows = new();
+    /// <summary>관전 화면이 장마다 켠다: 지난 장 뒤로 세계가 그대로다 (같은 세계 · 같은 틱 — 멈춤 · 느린 연출 · 따라 보기 · 계산 일꾼을 기다리는 장).
+    /// 켜면 같은 창 · 같은 몸의 안개 칸 목록 (<see cref="_fog"/> — 세계 값 N · U · 문 열림에만 달렸다)을 다시 훑지 않고 쓴다 (틱마다 한 번 훑는다 · 조각이 떨어져 나간 배는 몸마다 창이 달라 장마다 훑는다).
+    /// 기본은 꺼짐 — 시험 · 실험실은 같은 틱에 세계를 바꾸고 다시 그린다 (장마다 훑는다).
+    /// (예산 고침 검토 — 같은 틱에도 장마다 보이는 바닥 칸의 기체 성분을 모두 읽었다: 평시 판 '김 · 안개' 단계가 판마다 0.052 ~ 0.124ms로 흔들려 문턱 0.1ms에 여유가 없었다 → 0.003 ~ 0.007ms)</summary>
+    public bool Still;
+    /// <summary>안개 칸을 훑은 번 수 (시험용 — 같은 틱을 다시 그린 장이 훑지 않는지).</summary>
+    public long FogScans;
+    /// <summary>지금 안개 칸 목록을 훑은 세계 · 틱 · 창 · 몸 · 시험 스위치.</summary>
+    private (Field? f, long tick, int x0, int y0, int w, int h, int only, bool noSieve, bool noVector) _fogKey;
     /// <summary>안개 칸이 이만큼 넘으면 칸 줄마다 여러 코어에서 칠한다 (적으면 한 스레드가 싸다 — 나누는 값이 칠하는 값보다 크다).</summary>
     private const int FogPar = 24;
 
@@ -507,23 +528,24 @@ public sealed partial class Painter
             double rh = f.RelHumidity(kc);
             if (rh > MirrorRh) MirrorFog(img, rh, i, (bx - x0) * T, (by - y0) * T - WashRise(2), k);
         }
-        _fog.Clear(); _fogRows.Clear();
-        var kind = L.Kind;
-        int xa = Math.Max(0, x0), xe = Math.Min(L.W, x0 + w);   // 도면 안 칸만 (넓은 보기 창은 도면 밖 한 칸까지)
-        for (int y = Math.Max(0, y0); y < Math.Min(L.H, y0 + h); y++)   // 칸 줄마다 안개 칸을 모은다
+        var key = (f, _tick, x0, y0, w, h, _only, NoFogSieve, NoVector);
+        if (!Still || key != _fogKey)   // 같은 틱을 다시 그린 장 (Still)은 지난 목록 그대로
         {
-            int start = _fog.Count;
-            for (int x = xa; x < xe; x++)
+            _fog.Clear(); _fogRows.Clear(); FogScans++; _fogKey = key;
+            int xa = Math.Max(0, x0), xe = Math.Min(L.W, x0 + w);   // 도면 안 칸만 (넓은 보기 창은 도면 밖 한 칸까지)
+            for (int y = Math.Max(0, y0); y < Math.Min(L.H, y0 + h); y++)   // 칸 줄마다 안개 칸을 모은다 (거른 칸만 습도를 셈한다)
             {
-                int c = y * L.W + x;
-                if (kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
-                if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다
-                double rh = FogRhAt(f, c);
-                if (rh <= FogRh) continue;
-                uint aq = (uint)MathF.Round(64 * (float)Math.Min(1, (rh - FogRh) / 0.1));   // 짙기 0.25 × (습도 − 0.9) / 0.1 (/256)
-                if (aq > 1) _fog.Add((x, aq));
+                int start = _fog.Count, m = xa < xe ? FogSieveRow(f, y, xa, xe, NoFogSieve) : 0;
+                for (int j = 0; j < m; j++)
+                {
+                    ref readonly var q = ref _sieve[j];
+                    double rh = FogRhOf(f, q);
+                    if (rh <= FogRh) continue;
+                    uint aq = (uint)MathF.Round(64 * (float)Math.Min(1, (rh - FogRh) / 0.1));   // 짙기 0.25 × (습도 − 0.9) / 0.1 (/256)
+                    if (aq > 1) _fog.Add((L.X(q.C), aq));
+                }
+                if (_fog.Count > start) _fogRows.Add((start, _fog.Count - start, y));
             }
-            if (_fog.Count > start) _fogRows.Add((start, _fog.Count - start, y));
         }
         if (_fog.Count > 0)
         {

@@ -405,6 +405,30 @@ public static partial class Program
             bool sameSieve = SameRoom(q32, r32, 32) && SameRoom(q16, r16, 16) && SameRoom(q8, r8, 8);
             Check("화장실 그림: 안개 칸 거름 — 칸마다 온도 245 ~ 480K · 습도 0.903 ~ 0.948로 달리 해도 거름을 끈 그림과 같다 (32 · 16 · 8도트 — 넘을 수 없는 칸만 뺀다)",
                 sameSieve && fogged == airCells.Length && FloorMean(q32, 32) > m0 + 4, $"같다 {sameSieve} · 안개 칸 {fogged}/{airCells.Length} · 바닥 밝기 {m0:0.0} → {FloorMean(q32, 32):0.0}");
+            // (j) 같은 틱을 다시 그린 장 (예산 고침 검토 — 관전 화면이 Painter.Still을 켠다: 멈춤 · 느린 연출 · 따라 보기): 안개 칸을 다시 훑지 않고 지난 목록을 쓴다 (그림은 새로 훑은 그림과 같다) ·
+            //     창이 바뀌면 · Still을 끄면 (같은 틱에 기체를 바꾼 시험 · 실험실 — 기본) · 틱이 지나면 다시 훑는다
+            Humid(0.97);
+            long n0 = p.FogScans;
+            var w32 = Shot(); var w16 = Far(); var w8 = p.FrameFar(s, 0, 0, W, H, 0, 8);   // Still 끔 — 장마다 훑는다
+            long n1 = p.FogScans;
+            p.Still = true;
+            var t32 = Shot(); var t16 = Far(); var t8 = p.FrameFar(s, 0, 0, W, H, 0, 8);   // 같은 틱 · 같은 창 (도트는 달라도 안개 칸 목록은 같다)
+            long n2 = p.FogScans;
+            p.FrameFar(s, 1, 0, W - 1, H, 0, 16);   // 창이 바뀌었다
+            long n3 = p.FogScans;
+            p.Still = false;
+            Humid(rh0);
+            var d32 = Shot();   // 기체를 바꿨다 (Still 끔)
+            long n4 = p.FogScans;
+            p.Still = true;
+            s.Run(1);
+            Shot();   // 틱이 지났다
+            long n5 = p.FogScans;
+            p.Still = false;
+            bool sameStill = SameRoom(w32, t32, 32) && SameRoom(w16, t16, 16) && SameRoom(w8, t8, 8);
+            Check("화장실 그림: 같은 틱을 다시 그린 장 (관전 화면이 켜는 Still — 멈춤 · 느린 연출 · 따라 보기) — 안개 칸을 다시 훑지 않고 그림은 새로 훑은 그림과 같다 · 창이 바뀌거나 · Still을 끄고 기체를 바꾸거나 · 틱이 지나면 다시 훑는다 (32 · 16 · 8도트)",
+                n1 - n0 == 3 && n2 == n1 && n3 == n2 + 1 && n4 == n3 + 1 && n5 == n4 + 1 && sameStill && FloorMean(t32, 32) > m0 + 8 && SameRoom(d32, dry, 32),
+                $"훑은 번 수 — 장마다 {n1 - n0} · Still {n2 - n1} · 창 바뀜 {n3 - n2} · 기체 바뀜 {n4 - n3} · 틱 지남 {n5 - n4} · 같다 {sameStill} · 바닥 밝기 {m0:0.0} → {FloorMean(t32, 32):0.0} · 마른 방 그대로 {SameRoom(d32, dry, 32)}");
         }
 
         // ── 벽 너머로 새지 않는 김 (A2 검토): 선체 벽 바로 아래 샤워 칸 (두 칸 위는 바깥) · 안쪽 벽 바로 아래 샤워 칸 (두 칸 위는 옆방 바닥) ──
@@ -446,6 +470,21 @@ public static partial class Program
             string hull = Leak(showers[0], "선체 벽 아래"), inner = Leak(showers[1], "안쪽 벽 아래");
             Check("화장실 그림: 김은 벽을 넘지 않는다 — 선체 벽 · 안쪽 벽 바로 아래 샤워 칸에서 김을 켜도 벽 뚜껑 · 바깥 · 옆방 바닥은 찬물 그림 그대로 · 천장에 닿은 김은 앞으로 굴러 나와 방 안(벽 앞면 · 샤워 칸 위)에 보인다 (32 · 16 · 8도트 · 빛 켬)",
                 !hull.StartsWith("✘") && !inner.StartsWith("✘"), $"{hull} | {inner} (32 · 16 · 8 · 빛 켬)");
+        }
+
+        // ── 관전 화면이 켜는 Still (예산 고침 검토): 틱이 지나지 않은 장 (멈춤)은 안개 칸을 다시 훑지 않는다 · 창이 바뀌면 · 틱이 지나면 다시 훑는다 ──
+        {
+            var show = new LiveShow(ShipWorld.Crewed("Didim", 3, 2), "시험호") { Paused = true };
+            long Scans() { var fr = show.Render(); show.Recycle(fr.Img); return show.Painter.FogScans; }
+            long a0 = Scans(); bool still0 = show.Painter.Still;
+            long a1 = Scans(); bool still1 = show.Painter.Still;
+            show.ViewW *= 1.5;   // 같은 틱에 창이 넓어진다
+            long a2 = Scans();
+            show.Paused = false; long t0 = show.World.Tick; show.Advance(0.1); long ran = show.World.Tick - t0; show.Paused = true;
+            long a3 = Scans(); bool still3 = show.Painter.Still;
+            Check("화장실 그림: 관전 화면 — 틱이 지나지 않은 장은 Still (안개 칸을 다시 훑지 않는다) · 같은 틱에 창이 바뀌면 · 틱이 지나면 다시 훑는다",
+                a0 > 0 && !still0 && still1 && a1 == a0 && a2 == a1 + 1 && ran > 0 && !still3 && a3 == a2 + 1,
+                $"훑은 번 수 첫 장 {a0} · 멈춘 장 {a1 - a0} (Still {still1}) · 창 바뀜 {a2 - a1} · {ran}틱 뒤 {a3 - a2} (Still {still3})");
         }
         Painter.FarBakeMs = bakeMs; Painter.FarBakeMax = bakeMax;
     }

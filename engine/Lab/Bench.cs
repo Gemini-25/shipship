@@ -152,7 +152,17 @@ public static partial class Program
         // 그리기 예산 (6단 60프레임 · docs/GRAPHICS.md §3): 세계 스레드가 나아가기 + 그리기를 1/60초 안에 — 넓은 보기는 칸당 16 · 8도트 (굽은 덩어리)
         // 줄마다 세 번 재어 가장 작은 가운데 값으로 판정한다 (예산 고침 — 한가한 기계 · 같은 판에서도 한 번 잰 값이 4.2 ~ 7.1ms로 흔들렸다: 다른 일 · VM 빼앗김은 시간을 더할 뿐 빼지 않는다).
         // 기준 숫자는 그대로 (느슨하게 하는 것이 아니라 잡음을 뺀다) · 줄에는 고른 값 (세 가운데 값)을 함께 적는다 · DRAW_PROF=1이면 넓은 보기 단계마다 (조사용)
+        // 세 회차는 32 · 16 · 8도트 줄을 돌아가며 잰다 (Rounds — 예산 고침 검토: 한 줄의 세 회차를 곧바로 이어 재면 데운 직후의 단계 번역 구간이 셋을 다 덮었다)
         {
+            // 재기 점검 (예산 고침 검토 — 첫 줄 32도트 (7.8/10.5/6.0) · (6.8/8.3/3.8)ms · 평소 3.7 ~ 4.1 · 단계 번역을 끄면 3.7 · 4.1 · 5.0ms):
+            //    가짜 줄 셋 (한 장 4 · 7 · 4ms — 가짜 시계로 센다 · 처음 0.6초는 두 배 — 데운 직후의 단계 번역)을 같은 재기로 재면 줄마다 고른 값이 평소 값이다
+            {
+                double clock = 0;
+                (Action, Func<double>) Fake(double ms) { double One() { double v = clock < 600 ? 2 * ms : ms; clock += v; return v; } return (() => One(), One); }
+                var (fa, fb, fc) = Rounds(Fake(4), Fake(7), Fake(4));
+                Check("그리기 예산 재기: 처음 0.6초가 두 배 느린 가짜 줄 셋 (한 장 4 · 7 · 4ms — 데운 직후의 단계 번역 · 가짜 시계) — 줄마다 고른 값이 평소 값 (한 줄의 회차 사이에 다른 줄의 재기가 낀다)",
+                    fa.V == 4 && fb.V == 7 && fc.V == 4, $"{fa:0.0} · {fb:0.0} · {fc:0.0}ms (가짜 시계 {clock / 1000:0.00}초)");
+            }
             var s = ShipWorld.Crewed("Saetteul", 9, 40, 16, 4);
             s.Run(300);
             var p = new ShipView.Painter(s.Layout);
@@ -162,18 +172,23 @@ public static partial class Program
             void Near() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into);
             void Far16() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into);
             void Far8() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into);
-            Three Med(Action f) => Thrice(f, () => { var sw = Stopwatch.StartNew(); f(); return sw.Elapsed.TotalMilliseconds; });   // 한 장의 가운데 값
-            Three Stage(Action f, string key) => Thrice(f, () => { ShipView.Painter.Prof = new(); f(); double v = ShipView.Painter.Prof.GetValueOrDefault(key); ShipView.Painter.Prof = null; return v; });   // 그 단계의 가운데 값 (Painter.Prof — 실험실만)
+            (Action, Func<double>) Med(Action f) => (f, () => { var sw = Stopwatch.StartNew(); f(); return sw.Elapsed.TotalMilliseconds; });   // 한 장
+            (Action, Func<double>) Stage(Action f, string key) => (f, () => { ShipView.Painter.Prof = new(); f(); double v = ShipView.Painter.Prof.GetValueOrDefault(key); ShipView.Painter.Prof = null; return v; });   // 그 단계 (Painter.Prof — 실험실만)
             p.FrameFar(s, -1, -1, W + 2, H + 2, 0, 8, into);   // 처음 한 번 모두 굽는다 (관전 화면은 32도트로 보는 동안 미리 굽는다)
-            Three near = Med(Near), far16 = Med(Far16), far8 = Med(Far8);
+            var (near, far16, far8) = Rounds(Med(Near), Med(Far16), Med(Far8));
             if (prof) { StageProf("평시 16도트", Far16); StageProf("평시 8도트", Far8); }
             Check("그리기 예산: 새뜰호 41×24칸 32도트 ≤ 6ms · 97×55칸 16도트 ≤ 8ms · 배 전체 8도트 ≤ 8ms (가운데 값 — 세계 스레드가 1/60초 안에)",
                 near <= 6 && far16 <= 8 && far8 <= 8, $"{near:0.0} · {far16:0.0} · {far8:0.0}ms (덩어리 {p.Baked})");
-            // 평시 판 (습도 · 곰팡이가 없다 — 300틱은 안개 칸이 하나뿐): 5단 A2가 더한 '김 · 안개' 단계가 장마다 0에 가깝다 — 남는 것은 바닥 칸마다 기체 성분을 한 번 읽는 값 (배 전체 8도트 약 0.05ms)
-            //    (예산 고침 — 바닥 칸마다 RelHumidity (나눗셈 여럿 · exp)를 셈하던 것: 32 · 16 · 8도트 0.03 · 0.12 · 0.15ms)
-            Three qNear = Stage(Near, "김 · 안개"), qFar16 = Stage(Far16, "넓은: 김 · 안개"), qFar8 = Stage(Far8, "넓은: 김 · 안개");
-            Check("그리기 예산: 평시 판 (습도 · 곰팡이 없음) — '김 · 안개' 단계가 0에 가깝다 (32 · 16 · 8도트 ≤ 0.1ms)",
-                qNear <= 0.1 && qFar16 <= 0.1 && qFar8 <= 0.1, $"{qNear:0.000} · {qFar16:0.000} · {qFar8:0.000}ms");
+            // 평시 판 (습도 · 곰팡이가 없다 — 300틱은 안개 칸이 하나뿐): 5단 A2가 더한 '김 · 안개' 단계가 장마다 0에 가깝다 — 같은 틱을 다시 그린 장 (관전 화면이 Painter.Still을 켠다 — 멈춤 · 느린 연출 · 따라 보기)은
+            //    안개 칸 목록을 다시 쓴다 (예산 고침 — 바닥 칸마다 RelHumidity (나눗셈 여럿 · exp)를 셈하던 것: 32 · 16 · 8도트 0.03 · 0.12 · 0.15ms ·
+            //    예산 고침 검토 — 같은 틱에도 장마다 바닥 칸을 모두 훑던 것: 0.015 · 0.06 · 0.07ms가 판마다 0.052 ~ 0.124ms로 흔들려 문턱 0.1ms에 여유가 없었다).
+            //    틱이 지난 장 (다시 훑는다 — 칸마다 기체 성분 열일곱을 읽는 값)은 함께 적는다 (판정하지 않는다 — 세계 값을 읽는 몫)
+            p.Still = true;
+            var (qNear, qFar16, qFar8) = Rounds(Stage(Near, "김 · 안개"), Stage(Far16, "넓은: 김 · 안개"), Stage(Far8, "넓은: 김 · 안개"));
+            p.Still = false;
+            var (rNear, rFar16, rFar8) = Rounds(Stage(Near, "김 · 안개"), Stage(Far16, "넓은: 김 · 안개"), Stage(Far8, "넓은: 김 · 안개"));
+            Check("그리기 예산: 평시 판 (습도 · 곰팡이 없음) — 같은 틱을 다시 그린 장의 '김 · 안개' 단계가 0에 가깝다 (32 · 16 · 8도트 ≤ 0.1ms)",
+                qNear <= 0.1 && qFar16 <= 0.1 && qFar8 <= 0.1, $"{qNear:0.000} · {qFar16:0.000} · {qFar8:0.000}ms (틱이 지난 장 — 다시 훑는다 {rNear.V:0.000} · {rFar16.V:0.000} · {rFar8.V:0.000})");
             // 습한 판 (5단 A2 검토 — 평시 300틱은 안개 칸이 하나뿐이라 안개 비용을 못 봤다 · 3000틱이면 100칸): 칸의 수증기를 습도 0.97로 (RulesCracks 응력 부식의 식)
             // ① 평시에 습한 방 (화장실 · 운동실 · 재배 갑판 · 휴게실 — 새뜰호 3000틱의 안개 칸이 여기에)의 바닥 — 같은 창 · 같은 예산
             // ② 제습기가 멈춘 배 (바닥 칸 모두 — 보이는 바닥마다 안개): '김 · 안개' 단계만 잰다 (다른 층의 흔들림에 묻히지 않게 · 고치기 전 10.4 · 18.2 · 12.5ms)
@@ -191,13 +206,13 @@ public static partial class Program
             }
             bool IsFloor(int c) => s.Layout.Kind[c] == CellKind.Floor;
             int wet = Humid(s.Layout.Rooms.Where(r => r.Type is "Washroom" or "Gym" or "Hydroponics" or "Lounge").SelectMany(r => r.Cells).Where(IsFloor));
-            Three hNear = Med(Near), hFar16 = Med(Far16), hFar8 = Med(Far8);
+            var (hNear, hFar16, hFar8) = Rounds(Med(Near), Med(Far16), Med(Far8));
             Check("그리기 예산: 습한 판 — 평시에 습한 방 (화장실 · 운동실 · 재배 갑판 · 휴게실) 바닥을 습도 0.97로 (안개) · 같은 창 · 같은 예산 (32도트 ≤ 6 · 16 · 8도트 ≤ 8ms)",
                 wet >= 600 && hNear <= 6 && hFar16 <= 8 && hFar8 <= 8, $"안개 칸 {wet} · {hNear:0.0} · {hFar16:0.0} · {hFar8:0.0}ms (평시 {near.V:0.0} · {far16.V:0.0} · {far8.V:0.0})");
             var floors = Enumerable.Range(0, s.Layout.N).Where(IsFloor).ToArray();
             int all = Humid(floors);
-            Three sNear = Stage(Near, "김 · 안개"), sFar16 = Stage(Far16, "넓은: 김 · 안개"), sFar8 = Stage(Far8, "넓은: 김 · 안개");
-            Three aNear = Med(Near), aFar16 = Med(Far16), aFar8 = Med(Far8);
+            var (sNear, sFar16, sFar8) = Rounds(Stage(Near, "김 · 안개"), Stage(Far16, "넓은: 김 · 안개"), Stage(Far8, "넓은: 김 · 안개"));
+            var (aNear, aFar16, aFar8) = Rounds(Med(Near), Med(Far16), Med(Far8));
             if (prof) StageProf("안개 16도트", Far16);
             Check("그리기 예산: 제습기가 멈춘 배 (바닥 칸 모두 습도 0.97 — 보이는 바닥마다 안개) — '김 · 안개' 단계 32도트 ≤ 1.5 · 16 · 8도트 ≤ 2ms",
                 all >= floors.Length * 9 / 10 && sNear <= 1.5 && sFar16 <= 2 && sFar8 <= 2, $"안개 칸 {all}/{floors.Length} · 단계 {sNear:0.00} · {sFar16:0.00} · {sFar8:0.00}ms (한 장 {aNear:0.0} · {aFar16:0.0} · {aFar8:0.0}ms)");
@@ -248,7 +263,7 @@ public static partial class Program
             ShipView.Painter.FarBakeMs = 0;
             try { int b0 = p.Baked; Far8(); rebaked = p.Baked - b0; }
             finally { ShipView.Painter.FarBakeMs = keepMs; }
-            Three mNear = Med(Near), mFar16 = Med(Far16), mFar8 = Med(Far8);
+            var (mNear, mFar16, mFar8) = Rounds(Med(Near), Med(Far16), Med(Far8));
             if (prof) { StageProf("곰팡이 16도트", Far16); StageProf("곰팡이 8도트", Far8); }
             // 평시 판 + 1ms: 같은 시드 · 같은 틱의 평시 판을 하나 더 띄워 (화가도 따로 — 덩어리를 따로 굽는다) 한 장씩 번갈아 잰다 (몇 초씩 이어지는 다른 일의 흔들림이 두 쪽에 같게 — 맨 처음 잰 평시 판 값은 6.4 · 5.6 · 4.9ms로 흔들렸다)
             var s0 = ShipWorld.Crewed("Saetteul", 9, 40, 16, 4);
@@ -292,18 +307,24 @@ public static partial class Program
         return (new Three(ma[0], ma[1], ma[2]), new Three(mb[0], mb[1], mb[2]));
     }
 
-    /// <summary>데우기 40장 (단계 번역이 끝나게 — 관전 화면은 1초에 60장)은 한 번 · 장 12개의 가운데 값을 세 번 (묶음 시간이 늘지 않게 장 수는 그대로 · 데우기만 한 번).</summary>
-    private static Three Thrice(Action warm, Func<double> one)
+    /// <summary>그리기 예산 줄 셋 (32 · 16 · 8도트 — 데우기 · 한 번 재기)을 함께 잰다: 줄마다 데우기 40장 (단계 번역이 끝나게 — 관전 화면은 1초에 60장)은 한 번 (셋 모두 먼저) ·
+    /// 회차마다 줄을 돌아가며 장 12개의 가운데 값 (1회차 셋 → 2회차 셋 → 3회차 셋 — 묶음 시간이 늘지 않게 장 수는 그대로) · 줄마다 세 가운데 값 (판정은 가장 작은 값).
+    /// 한 줄의 회차 사이에 다른 두 줄의 재기가 끼어 회차가 시간에 흩어진다 (예산 고침 검토 — 줄마다 데운 뒤 세 회차를 곧바로 이어 재면 0.5초 안에 몰려 데운 직후의 단계 번역 구간이 셋을 다 덮었다:
+    /// 첫 줄 32도트 (7.8/10.5/6.0) · (6.8/8.3/3.8)ms — 평소 3.7 ~ 4.1 · 단계 번역을 끄면 3.7 · 4.1 · 5.0).</summary>
+    private static (Three a, Three b, Three c) Rounds((Action warm, Func<double> one) a, (Action warm, Func<double> one) b, (Action warm, Func<double> one) c)
     {
-        for (int k = 0; k < 40; k++) warm();
-        var m = new double[3];
+        var lines = new[] { a, b, c };
+        var m = new double[3, 3];
+        foreach (var l in lines) for (int k = 0; k < 40; k++) l.warm();
         for (int r = 0; r < 3; r++)
+            for (int i = 0; i < 3; i++) m[i, r] = Mid12(lines[i].one);
+        return (new Three(m[0, 0], m[0, 1], m[0, 2]), new Three(m[1, 0], m[1, 1], m[1, 2]), new Three(m[2, 0], m[2, 1], m[2, 2]));
+        static double Mid12(Func<double> one)
         {
             var ms = new List<double>();
             for (int k = 0; k < 12; k++) ms.Add(one());
-            ms.Sort(); m[r] = ms[ms.Count / 2];
+            ms.Sort(); return ms[ms.Count / 2];
         }
-        return new Three(m[0], m[1], m[2]);
     }
 
     /// <summary>조사용 (DRAW_PROF=1): 그리기 한 장의 단계마다 가운데 값 (데운 뒤 12장 · Painter.Prof).</summary>
