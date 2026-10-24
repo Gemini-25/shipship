@@ -242,4 +242,93 @@ public static partial class Program
                 a.Px.AsSpan().SequenceEqual(b.Px) && before.AsSpan().SequenceEqual(s.Save()), $"{a.W}×{a.H}");
         }
     }
+
+    /// <summary>
+    /// 그림 열쇠 (물리 세계 PH0a — '화면' 묶음): 한 화가의 그림 캐시는 열쇠 맨 윗 바이트(갈래 — Painter.cs 머리의 표)로 나뉜다.
+    /// 바닥 물건 아이콘(9) · 드론(14) · 가구 빛(13)이 같은 장에 있어도 서로의 그림을 꺼내 쓰지 않는다 (예전엔 드론도 9 — 소화기(물건 0)와 멈춘 드론 장 0이 한 열쇠).
+    /// </summary>
+    private static void ArtKeyRules()
+    {
+        Console.WriteLine("\n[그림 열쇠 — 물건 아이콘 · 드론 · 가구 빛]");
+        var lay = Worlds.Ascii(@"
+###########
+#.........#
+#.c.......#
+#.........#
+#.....p.b.#
+###########", new Dictionary<char, string> { ['c'] = "Console", ['b'] = "Battery", ['p'] = "PowerPanel" });
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        const int T = Painter.T;
+        int itemCell = At(2, 3), droneCell = At(6, 1);
+        var s = Worlds.Full(lay, 21);
+        s.Run(3);   // 배전반이 조종대에 전기를 보낸다 (화면 빛) — 드론은 그 뒤에 태운다 (일감 없이 멈춘 장 0)
+        var m = s.Get<Mind>();
+        int dr = m.AddRobot(s, droneCell, AgentKind.Drone, droneCell);
+        void Drop() { if (m.Loose.Count == 0) m.Loose.Add(new LooseItem { Item = (byte)m.iExt, Cell = itemCell, Charge = 500 }); }
+        var want = DotBots.Drone(DotDroneKind.Repair, DotBotState.Ok, 0);
+        // 드론 그림 자리 (DrawBot과 같다 — 칸 가운데 · 8도트 떠 있다)의 불투명 도트가 드론 그림 그대로인가
+        (int bad, int n) Drone(Img im)
+        {
+            int ox = lay.X(droneCell) * T + T / 2 - want.W / 2, oy = lay.Y(droneCell) * T + T / 2 - want.H / 2 - 8, bad = 0, n = 0;
+            for (int y = 0; y < want.H; y++) for (int x = 0; x < want.W; x++)
+            {
+                var w = want.Get(x, y);
+                if (w.A != 255) continue;
+                n++;
+                if (!im.Get(ox + x, oy + y).Equals(w)) bad++;
+            }
+            return (bad, n);
+        }
+        static int Diff(Img a, Img b) { int d = 0; for (int i = 0; i < a.Px.Length; i += 4) if (a.Px[i] != b.Px[i] || a.Px[i + 1] != b.Px[i + 1] || a.Px[i + 2] != b.Px[i + 2]) d++; return d; }
+
+        // 1 · 아이콘을 먼저 그린 화가가 드론을 그려도 드론 그림 / 드론을 먼저 그린 화가가 소화기를 그려도 소화기 그림 (두 화가의 장이 바이트까지 같다)
+        Drop();
+        var iconFirst = new Painter(lay) { Lighting = false };
+        var a1 = iconFirst.Frame(s, 0, 0, lay.W, lay.H, 0);
+        var (bad, n) = Drone(a1);
+        m.Loose.Clear();
+        var droneFirst = new Painter(lay) { Lighting = false };
+        droneFirst.Frame(s, 0, 0, lay.W, lay.H, 0);
+        Drop();
+        var b1 = droneFirst.Frame(s, 0, 0, lay.W, lay.H, 0);
+        int swap = Diff(a1, b1);
+        if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") { Png.WriteRgba("build/shots/rule-artkey-a.png", a1.W, a1.H, a1.Px); Png.WriteRgba("build/shots/rule-artkey-b.png", b1.W, b1.H, b1.Px); }
+        Check("그림 열쇠 — 물건 아이콘 · 드론: 바닥 소화기(물건 0) 아이콘을 먼저 그린 화가가 멈춘 수리 드론(Id 4의 배수 · 장 0)을 그려도 드론 그림이다 · 드론을 먼저 그린 화가의 소화기도 제 그림 (두 장이 같다)",
+            m.iExt == 0 && m[dr].Id % 4 == 0 && n > 20 && bad == 0 && swap == 0,
+            $"소화기 물건 {m.iExt} · 드론 Id {m[dr].Id} · 드론 자리 다른 도트 {bad}/{n} · 그린 차례를 바꾼 두 장의 다른 도트 {swap}");
+
+        // 2 · 넓은 보기 (16도트 · 빛 켬): 한 장에 드론은 빛보다 먼저 · 32도트 장은 가구 빛이 드론보다 먼저 캐시에 든다 — 차례가 달라도 같은 장 (갈래가 겹치면 한쪽이 남의 그림)
+        {
+            var farOnly = new Painter(lay);
+            var c1 = farOnly.FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
+            var nearFirst = new Painter(lay);
+            nearFirst.Frame(s, 0, 0, lay.W, lay.H, 0);
+            var c2 = nearFirst.FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
+            int far = Diff(c1, c2);
+            // 조종대 화면 빛이 그 장에 있다 (빛을 곱한 뒤 얹는 푸른 화면 · 줄)
+            int con = lay.Furniture.FindIndex(fu => fu.Type == "Console"), screen = 0, D = 16;
+            var box = lay.Furniture[con].Cells;
+            int bx0 = box.Min(lay.X) * D, by0 = box.Min(lay.Y) * D - D, bx1 = (box.Max(lay.X) + 1) * D, by1 = (box.Max(lay.Y) + 1) * D;
+            for (int y = Math.Max(0, by0); y < by1; y++) for (int x = bx0; x < bx1; x++) { var q = c1.Get(x, y); if (q.B > 150 && q.G > 120 && q.B > q.R + 40) screen++; }
+            // 드론이 그 장에 있다 (드론을 뺀 장과 드론 칸 둘레가 다르다)
+            int dCell = m[dr].C.Cell;
+            m[dr].C.Cell = At(8, 1);
+            var c0 = new Painter(lay).FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
+            m[dr].C.Cell = dCell;
+            // 바닥 물건이 없는 장을 처음 그린 화가의 드론 (아이콘이 캐시에 든 적이 없다)과 같은 드론
+            m.Loose.Clear();
+            var c3 = new Painter(lay).FrameFar(s, 0, 0, lay.W, lay.H, 0, 16);
+            Drop();
+            int drone = 0, own = 0;
+            for (int y = (lay.Y(droneCell) - 1) * D; y < (lay.Y(droneCell) + 1) * D; y++) for (int x = lay.X(droneCell) * D; x < (lay.X(droneCell) + 1) * D; x++)
+            {
+                if (!c0.Get(x, y).Equals(c1.Get(x, y))) drone++;
+                if (!c3.Get(x, y).Equals(c1.Get(x, y))) own++;
+            }
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") { Png.WriteRgba("build/shots/rule-artkey-far.png", c1.W, c1.H, c1.Px); }
+            Check("그림 열쇠 — 드론 · 가구 빛 (넓은 보기): 조종대 화면 빛 · 소화기 아이콘 · 드론이 한 장에 있어도 모두 제 그림 (캐시에 든 차례를 바꾼 두 장이 같다 · 드론은 물건 없이 그린 드론 그대로)",
+                far == 0 && screen > 4 && drone > 20 && own == 0, $"차례를 바꾼 두 장의 다른 도트 {far} · 조종대 화면 빛 도트 {screen} · 드론 자리 도트 {drone} · 물건 없이 그린 드론과 다른 도트 {own}");
+        }
+        m.Loose.Clear();
+    }
 }

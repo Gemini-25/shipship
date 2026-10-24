@@ -12,6 +12,12 @@ namespace ShipView;
 /// <summary>겹쳐 보기 (화면 설정 — 기본은 눈에 보이는 것만): 공기(산소 · 진공 · 일산화탄소) · 열 · 연기 · 사슬 선.</summary>
 public enum Overlay : byte { None, Air, Heat, Smoke, Chain, Lines }
 
+// ── 그림 캐시 갈래 표: _cache 열쇠의 맨 윗 바이트 (Key(갈래, …) · 직접 열쇠는 (갈래L << 56) ^ …) ──
+//   갈래가 겹치면 먼저 든 남의 그림을 꺼낸다 (예전엔 드론도 9 — 바닥 소화기(물건 0) 아이콘과 멈춘 드론 장 0이 한 열쇠였다). 새 그림은 15부터.
+//    1 바닥 (100 + 문턱) · 2 벽 윗면 · 3 벽 앞면 · 4 문짝 (PainterFar DoorTile)
+//    5 설비 몸 · 화장실 (9001 중력 발생기 · 9100~ 화장실 몸 · 9200~ 물줄기 · 커튼 · 김) · 6 물 · 7 연기
+//    8 로봇 · 9 바닥 물건 아이콘 · 10 옛 설비 빛 (OldGlow — DotMachines.Life) · 11 외판 바깥 면
+//   12 새 가구 몸 (직접 열쇠 — 설비 고리) · 13 새 가구 빛 (직접 열쇠 — PainterFar NewGlow) · 14 드론 (DrawBot)
 public sealed partial class Painter
 {
     public const int T = DotTiles.T;
@@ -1248,7 +1254,7 @@ public sealed partial class Painter
         if (c.Kind == AgentKind.Drone)
         {
             img.Oval(px + T / 2, py + T - 4, 5, 1.5f, FootShade, 0.2f);   // 떠 있는 드론의 옅은 그림자
-            var dr = Cached(Key(9, (int)state, frame & 3, a.Id & 3), (state, f4: frame & 3), static q => DotBots.Drone(DotDroneKind.Repair, q.state, q.f4));
+            var dr = Cached(Key(14, (int)state, frame & 3, a.Id & 3), (state, f4: frame & 3), static q => DotBots.Drone(DotDroneKind.Repair, q.state, q.f4));
             Put(img, dr, px + T / 2 - dr.W / 2, py + T / 2 - dr.H / 2 - 8);
             return;
         }

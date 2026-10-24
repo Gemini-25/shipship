@@ -49,6 +49,7 @@ public static partial class Program
             $"같음 {same} · 불꽃 도트 {fire} · 푸른 기 빠진 방 {vac:0} / 통로 {ok:0} · {img.W}×{img.H}");
 
         LiveRules(lay);
+        ArtKeyRules();   // 그림 열쇠 — 물건 아이콘 · 드론 · 가구 빛 (RulesArt.cs)
     }
 
     /// <summary>관전 화면 (Godot 장면의 속): 연출의 빠르기를 따르고 · 멈춤 · 밀린 것은 버림 · 카메라가 일 난 곳으로 · 세계는 그대로.</summary>
