@@ -231,8 +231,10 @@ public sealed partial class LiveShow
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             double v0 = Speed;
             int ran = 0;
+            var thinker = w.Find<ShipMind>();
             for (int i = 0; i < n; i++)
             {
+                if (thinker != null && thinker.Waiting(w.Tick)) break;   // 6단 계산 일꾼이 늦었다: 세계만 멈추고 그림은 계속 그린다 (받을 틱 · 결과는 그대로 — docs/ENGINE.md §3-10)
                 if (i == n - 1) Remember();
                 AL("자세 · 걸음");
                 w.Step(); AL("세계");

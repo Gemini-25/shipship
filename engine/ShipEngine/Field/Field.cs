@@ -383,7 +383,7 @@ public sealed partial class Field : IEngine
 
     private long Lap(string name, long t0)
     {
-        if (Prof == null) return 0;
+        if (Prof == null || Sim.InWorker) return 0;   // 계산 일꾼은 정적 표를 쓰지 않는다 (docs/ENGINE.md §3-10)
         long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         return t1;
@@ -433,6 +433,8 @@ public sealed partial class Field : IEngine
         w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore);
         w.Tag("중력"); w.Arr(Grav); w.Arr(Drops); w.Arr(Airflow);
         w.Tag("층"); w.Arr(Strat); w.Arr(Plug);
+        w.Tag("바람 압력"); w.Arr(WindPa);   // 마음(끌림 · 날림)이 장보다 먼저 지난 틱의 바람 압력을 읽는다 — 찍지 않으면 되살린 세계는 첫 틱에 0으로 읽어 갈라졌다
+        w.Tag("틈 흐름"); w.I32(Links.Count); foreach (var k in Links) w.F64(k.Flow);   // 지난 틱 흐름량 — 이번 틱에 잘게 나눠 셀지(Fast)를 정한다 (찍지 않으면 되살린 세계는 구멍으로 바람이 부는 중에 갈라졌다)
     }
 
     public void Load(StateReader r)
@@ -444,9 +446,12 @@ public sealed partial class Field : IEngine
         r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore);
         r.Tag("중력"); r.ArrInto(Grav); r.ArrInto(Drops); r.ArrInto(Airflow); _dropsAny = Drops.Any(v => v > 0);
         r.Tag("층"); r.ArrInto(Strat); r.ArrInto(Plug);
+        r.Tag("바람 압력"); r.ArrInto(WindPa);
+        r.Tag("틈 흐름"); var flows = new double[r.I32()]; for (int i = 0; i < flows.Length; i++) flows[i] = r.F64();
         SolidLinks(); // 끊긴 칸의 전도 · 우주를 보는 면은 도면 + 끊김에서 다시 센다 (찍지 않는다)
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
         RestoreTopology();
+        if (flows.Length == Links.Count) for (int i = 0; i < flows.Length; i++) Links[i].Flow = flows[i];   // 같은 문 · 구멍으로 같은 차례의 틈을 다시 세웠다
         _dirty = dirty; _imb = imb;
     }
 }

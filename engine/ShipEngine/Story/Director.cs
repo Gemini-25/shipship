@@ -36,6 +36,7 @@ public sealed partial class Director
     public const double SlowShare = 0.4, CalmFloor = 20, CalmCeiling = 20_000;
 
     public const int RingEvery = 50, RingSize = 30;   // 2분마다 · 1시간치
+    private bool _ringLate;   // 주컴퓨터 일꾼이 셈 중이라 미룬 다시보기 찍기
     public const float HighlightAt = 80;
 
     private readonly Layout L;
@@ -185,8 +186,11 @@ public sealed partial class Director
         if (bestScore > 0) MaybeHighlight(sim, best, t);
         DayTick(sim, t);
         // 다시보기 고리 (처음 본 틱에도 한 장 — 첫 2분 안에 시작한 일도 첫 조짐부터 되살린다)
-        if (KeepRing && (t % RingEvery == 0 || Ring.Count == 0))
+        bool ring = KeepRing && (t % RingEvery == 0 || Ring.Count == 0 || _ringLate);
+        if (ring && sim.Find<ShipMind>() is { WorkerBusy: true }) { _ringLate = true; ring = false; }   // 주컴퓨터 일꾼이 셈 중이면 찍기가 기다린다 — 다음 틱으로 미룬다 (세계는 그대로)
+        if (ring)
         {
+            _ringLate = false;
             byte[]? buf = null;
             if (Ring.Count >= RingSize) { buf = Ring[0].snap; Ring.RemoveAt(0); }   // 가장 오래된 칸에 다시 찍는다
             int len = sim.SaveInto(ref buf);

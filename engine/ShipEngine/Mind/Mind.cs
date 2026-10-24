@@ -483,7 +483,7 @@ public sealed partial class Mind : IEngine
     private static long _lapAlloc;
     private static long Lap(string name, long t0)
     {
-        if (Prof == null) return 0;
+        if (Prof == null || Sim.InWorker) return 0;   // 계산 일꾼은 정적 표를 쓰지 않는다 (docs/ENGINE.md §3-10)
         long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         if (ProfAlloc != null) { long a = GC.GetTotalAllocatedBytes(true); if (_lapAlloc != 0) ProfAlloc[name] = ProfAlloc.GetValueOrDefault(name) + a - _lapAlloc; _lapAlloc = a; return System.Diagnostics.Stopwatch.GetTimestamp(); }
@@ -493,6 +493,7 @@ public sealed partial class Mind : IEngine
     /// <summary>조사용 (Prof가 켜져 있을 때만): 사람 · 로봇마다 목표 갈래로 모은 시간 — '걸음:FightFire' 꼴.</summary>
     private static void LapWho(string what, Agent a, long t0)
     {
+        if (Sim.InWorker) return;   // 계산 일꾼은 정적 표를 쓰지 않는다
         double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         if (ms < 0.2) return;
         string k = $"{what}:{a.C.Kind}#{a.Id}:{a.C.Goal}";

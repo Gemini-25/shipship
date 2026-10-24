@@ -392,7 +392,7 @@ public sealed partial class Network : IEngine
     public static Dictionary<string, double>? Prof;
     private static long Lap(string name, long t0)
     {
-        if (Prof == null) return 0;
+        if (Prof == null || Sim.InWorker) return 0;   // 계산 일꾼은 정적 표를 쓰지 않는다 (docs/ENGINE.md §3-10)
         long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         return t1;

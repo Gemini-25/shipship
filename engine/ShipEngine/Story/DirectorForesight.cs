@@ -92,9 +92,11 @@ public sealed partial class Director
         if (_ahead != null && (_ahead.Tick < t || _aheadTotals.Count > 0 && _aheadTotals.Peek().tick == t && _aheadTotals.Peek().facts != sim.Facts.Total))
         { _ahead = null; Resyncs++; }
         int budget = AheadPerTick;
+        if (_ahead == null && sim.Find<ShipMind>() is { WorkerBusy: true }) return;   // 주컴퓨터 일꾼이 셈 중 — 복제(찍기)가 기다리지 않게 다음 틱에
         if (_ahead == null)
         {
             _ahead = sim.Clone(); _aheadCursor = _ahead.Facts.Total; _aheadTotals.Clear();
+            if (_ahead.Find<ShipMind>() is { } aheadMind) aheadMind.Inline = true;   // 미리 보기 복제는 이미 다른 코어에서 돈다 — 일꾼 없이 그 틱에 (결과 · 받는 틱은 같다)
             _future.Clear(); Foresights++;
             DropPending();   // 미리 돌린 몫은 버린 앞선 세계의 것
         }

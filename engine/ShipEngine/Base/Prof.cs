@@ -10,7 +10,7 @@ public static class Prof
     public static long Start() => D != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
     public static long Lap(string name, long t0)
     {
-        if (D == null) return 0;
+        if (D == null || Sim.InWorker) return 0;   // 계산 일꾼은 정적 표를 쓰지 않는다
         long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         lock (D) D[name] = D.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;   // 시험은 배 여럿을 함께 돌린다
         return t1;

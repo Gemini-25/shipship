@@ -191,6 +191,7 @@ public sealed partial class ShipMind : IEngine
     public void Step(Sim sim, double dt)
     {
         Bind(sim);
+        DropStaleThoughts(sim);   // 받을 틱에 쓰이지 않은 셈 (사건이 끝났다 · 사람이 나갔다 · 주컴퓨터가 멈췄다)은 버린다
         bool was = Online;
         bool alive = _net != null && _computer >= 0 && _net.Working(_computer);
         if (alive && !Imagining) SelfCheck(sim);                  // 제 몸 온도 — 뜨거우면 느려지고 · 넘으면 멈춘다 (멈춰 있어도 식는 것은 안다)
@@ -1273,11 +1274,16 @@ public sealed partial class ShipMind : IEngine
         if (x.Sealed == 0)
         {
             // 사람이 안에 있다: 기다릴까 · 지금 닫을까 — 세계를 복제해 2분 앞을 돌려 보고 고른다 (한 번만 · 사건이 몰렸거나 느려졌으면 그려 보지 않고 방침대로)
+            // 6단 계산 일꾼: 틱 t에 찍어 맡기고 t + ThinkTicks에 받는다 (그동안은 기다린다 — 방침 기다림이 먼저 끝나면 닫는다)
             int xr = x.Room; long xs = x.Since;
-            if (peopleIn && !waitOver && !Imagining && Overloaded == 0 && Throttled == 0 && x.Clear == 0 && !Imaginations.Any(v => v.Room == xr && v.Tick >= Math.Min(xs, t - Time.Minutes(5))))
+            int ti = ThoughtFor(xr);
+            if (ti < 0 && _thoughts.Count == 0 && peopleIn && !waitOver && !Imagining && Overloaded == 0 && Throttled == 0 && x.Clear == 0 && !Imaginations.Any(v => v.Room == xr && v.Tick >= Math.Min(xs, t - Time.Minutes(5))))   // 한 번에 하나 (찍을 때 다른 셈을 기다리지 않게 — 남은 셈이 목록에 있으면 다음 방은 받은 뒤에)
+                StartThinking(sim, x.Room, x.Id);
+            else if (ti >= 0 && _thoughts[ti].Due <= t)
             {
-                var (wait, now) = Imagine(sim, x.Room);
+                var (wait, now, reflex) = TakeThought(ti);
                 bool sealNow = now.Score < wait.Score - 1;
+                if (!sealNow) Unreflex(sim, x.Room, reflex, x.Id);
                 wait.Chosen = (byte)(sealNow ? 0 : 1); now.Chosen = (byte)(sealNow ? 1 : 0);
                 Imaginations.Add(wait); Imaginations.Add(now);
                 if (Imaginations.Count > 40) Imaginations.RemoveRange(0, Imaginations.Count - 40);
@@ -1329,40 +1335,51 @@ public sealed partial class ShipMind : IEngine
 
     // ───────────────────────── 상상 (복제 세계) ─────────────────────────
 
-    /// <summary>세계를 복제해 두 안(기다림 · 지금 봉쇄)을 각각 2분 돌려 본다. 복제 안의 주컴퓨터는 상상하지 않고 규칙대로만 한다.</summary>
+    /// <summary>세계를 복제해 두 안(기다림 · 지금 봉쇄)을 각각 5분 돌려 본다 (그 틱에 바로 — 1코어 · 연출의 미리 보기 복제). 복제 안의 주컴퓨터는 상상하지 않고 규칙대로만 한다.</summary>
     private (Imagined wait, Imagined now) Imagine(Sim sim, int room)
+    {
+        var ws = sim.Clones(2);   // 복제는 차례로 (원래 세계를 동시에 읽지 않게)
+        return ImagineRuns(L, _roomDoors[room], room, sim.Tick, ws[0], ws[1], false);
+    }
+
+    /// <summary>두 복제를 돌려 두 미래를 잰다 — 주컴퓨터 상태를 읽지 않는다 (일꾼에서도 돈다). 두 복제는 서로 닿지 않아 함께 돌린다 · 결과는 순서와 상관없이 같다.</summary>
+    private static (Imagined wait, Imagined now) ImagineRuns(Layout L, int[] doors, int room, long tick, Sim w0, Sim w1, bool worker)
     {
         Imagined Run(byte option, Sim w)
         {
-            var cm = w.Get<ShipMind>();
-            cm.Imagining = true;
-            if (option == 1)
+            bool was = Sim.InWorker;
+            if (worker) Sim.InWorker = true;   // 함께 돌리는 스레드도 일꾼이다 (정적 계측을 쓰지 않는다)
+            try
             {
-                // 지금 봉쇄: 그 방 문을 모두 닫는다 (몸이 걸린 문은 닫히지 않는다)
-                var st = w.Get<Structure>();
-                foreach (int d in _roomDoors[room]) st.RequestDoor(d, 0);
-                for (int i = 0; i < cm.Incidents.Count; i++) { var y = cm.Incidents[i]; if (y.Room == room && y.Active != 0) { y.Sealed = 1; cm.Incidents[i] = y; } }
+                var cm = w.Get<ShipMind>();
+                cm.Imagining = true;
+                if (option == 1)
+                {
+                    // 지금 봉쇄: 그 방 문을 모두 닫는다 (몸이 걸린 문은 닫히지 않는다)
+                    var st = w.Get<Structure>();
+                    foreach (int d in doors) st.RequestDoor(d, 0);
+                    for (int i = 0; i < cm.Incidents.Count; i++) { var y = cm.Incidents[i]; if (y.Room == room && y.Active != 0) { y.Sealed = 1; cm.Incidents[i] = y; } }
+                }
+                else cm.Policy.SealWaitMin = 1e6f; // 기다림: 이 5분 동안은 닫지 않는다
+                var f0 = w.Get<Field>();
+                var before = new double[L.Rooms.Count];
+                for (int r = 0; r < L.Rooms.Count; r++) before[r] = L.Rooms[r].Cells.Length > 0 ? f0.Pressure(L.Rooms[r].Cells[0]) : 0;
+                w.Run(ImagineTicks);
+                var life = w.Get<Life>(); var mind = w.Get<Mind>();
+                int dead = 0, down = 0;
+                foreach (var a in mind.Agents)
+                {
+                    if (!a.IsPerson) continue;
+                    var b = life.Bodies[a.C.Body];
+                    if (b.Alive == 0) dead++; else if (b.Conscious == 0 || b.Hypoxia > 0.3f) down++;
+                }
+                double lost = 0;
+                for (int r = 0; r < L.Rooms.Count; r++)
+                    if (r != room && L.Rooms[r].Cells.Length > 0) lost += Math.Max(0, before[r] - f0.Pressure(L.Rooms[r].Cells[0]));
+                return new Imagined { Tick = tick, Room = room, Option = option, Dead = dead, Down = down, LostKPa = (float)lost, Score = (float)(dead * 100 + down * 30 + lost * 0.5) };
             }
-            else cm.Policy.SealWaitMin = 1e6f; // 기다림: 이 2분 동안은 닫지 않는다
-            var f0 = w.Get<Field>();
-            var before = new double[L.Rooms.Count];
-            for (int r = 0; r < L.Rooms.Count; r++) before[r] = L.Rooms[r].Cells.Length > 0 ? f0.Pressure(L.Rooms[r].Cells[0]) : 0;
-            w.Run(ImagineTicks);
-            var life = w.Get<Life>(); var mind = w.Get<Mind>();
-            int dead = 0, down = 0;
-            foreach (var a in mind.Agents)
-            {
-                if (!a.IsPerson) continue;
-                var b = life.Bodies[a.C.Body];
-                if (b.Alive == 0) dead++; else if (b.Conscious == 0 || b.Hypoxia > 0.3f) down++;
-            }
-            double lost = 0;
-            for (int r = 0; r < L.Rooms.Count; r++)
-                if (r != room && L.Rooms[r].Cells.Length > 0) lost += Math.Max(0, before[r] - f0.Pressure(L.Rooms[r].Cells[0]));
-            return new Imagined { Tick = sim.Tick, Room = room, Option = option, Dead = dead, Down = down, LostKPa = (float)lost, Score = (float)(dead * 100 + down * 30 + lost * 0.5) };
+            finally { Sim.InWorker = was; }
         }
-        // 두 복제 세계는 서로 닿지 않는다 — 함께 돌린다 (복제는 차례로: 원래 세계를 동시에 읽지 않게). 결과는 순서와 상관없이 같다.
-        var ws = sim.Clones(2); var w0 = ws[0]; var w1 = ws[1];
         Imagined a = default, b = default;
         if (Par.Threads <= 1) { a = Run(0, w0); b = Run(1, w1); }
         else Parallel.Invoke(() => a = Run(0, w0), () => b = Run(1, w1));
@@ -1559,7 +1576,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w); SaveParts(w); SaveComms(w); SaveVoyage(w); SaveCalendar(w); SaveWash(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
-        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w); SaveEars(w);
+        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w); SaveEars(w); SaveThoughts(w);
     }
 
     public void Load(StateReader r)
@@ -1573,6 +1590,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r); LoadParts(r); LoadComms(r); LoadVoyage(r); LoadCalendar(r); LoadWash(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
-        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r); LoadEars(r);
+        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r); LoadEars(r); LoadThoughts(r);
     }
 }
