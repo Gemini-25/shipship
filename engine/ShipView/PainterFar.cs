@@ -8,7 +8,7 @@ namespace ShipView;
 
 /// <summary>
 /// 넓은 보기 화가 (docs/GRAPHICS.md §3 T0 세밀도 단계 · 6단 60프레임): 칸 하나를 D = 16 · 8도트로 그린다 (배 전체 보기 32도트 20ms → 몇 ms).
-/// 늘 같은 층 (바닥 · 벽 뚜껑 · 앞면 · 문턱 · 잔칸 · 녹 · 실금 · 외판 구멍 · 그을음 단 · 쏟은 액체 · 설비 몸)은 8×8칸 덩어리로 32도트에 한 번 구워
+/// 늘 같은 층 (바닥 · 곰팡이 단 · 벽 뚜껑 · 앞면 · 문턱 · 잔칸 · 녹 · 실금 · 외판 구멍 · 그을음 단 · 쏟은 액체 · 설비 몸)은 8×8칸 덩어리로 32도트에 한 번 구워
 /// 2×2 알파 평균으로 줄여 둔다 (8도트는 그것을 다시 2×2). 덩어리 도장 (구멍 · 잔칸 · 끊김 · 녹 · 실금 · 그을음 단 · 액체 · 설비 채움 · 꺼짐)이 바뀌면 다시 굽는다.
 /// 장마다 그리는 층: 별 · 문짝 · 바닥 물건 · 물 · 서리 · 열 · 사람 · 로봇 (앞 가림까지 — 32도트로 그려 줄인다) · 물방울 · 김 · 안개 · 연기 · 빛 (칸 모서리 빛을 잇는다) · 설비 빛 · 불 · 겹쳐 보기.
 /// 넓은 보기에 없는 것: 빛 웅덩이 · 벽 밑 그림자 · 벽 띠등 · 새는 공기 줄기 · 아지랑이 · 합선 불꽃 · 충격파 · 방사선 잡음 (칸이 14~30픽셀이라 거의 안 보인다).
@@ -482,18 +482,19 @@ public sealed partial class Painter
     private Img? _stainInto;
     private readonly List<(List<Action<Img>> marks, int x, int y)> _farMarks = new();
 
-    /// <summary>문 칸의 그을음 · 곰팡이 · 쏟은 액체를 문짝 위에 (굽는 덩어리는 문 칸 얼룩을 빼고 굽는다) · 가로 벽 문짝이 아래 칸에 드리운 줄 위에도 그 칸의 얼룩을 (문짝의 불투명한 도트만 — 나머지는 구웠다).</summary>
+    /// <summary>문 칸의 그을음 · 곰팡이 · 쏟은 액체를 문짝 위에 (굽는 덩어리는 문 칸 얼룩을 빼고 굽는다) · 가로 벽 문짝이 아래 칸에 드리운 줄 위에도 그 칸의 그을음 · 액체를 (문짝의 불투명한 도트만 — 나머지는 구웠다).
+    /// 아래 칸의 곰팡이는 바닥 타일과 함께 구웠다 — 문짝이 그 앞에 선다 (32도트와 같은 차례 · 5단 A3 검토).</summary>
     private void DoorStain(Img img, Field f, Life? life, int c, Img tile, int x, int y, int x0, int y0, int D, int frame)
     {
         int k = T / D;
-        bool Stained(int cell) => f.SootGPerM2(cell) > 0.05 || MoldAt(life, cell) > 0 || L.FurnitureAt[cell] < 0 && (f.T.sNH3l >= 0 && f.Stored(f.T.sNH3l, cell) >= 0.5 || f.T.sEC >= 0 && f.Stored(f.T.sEC, cell) >= 0.5);
+        bool Stained(int cell) => f.SootGPerM2(cell) > 0.05 || L.FurnitureAt[cell] < 0 && (f.T.sNH3l >= 0 && f.Stored(f.T.sNH3l, cell) >= 0.5 || f.T.sEC >= 0 && f.Stored(f.T.sEC, cell) >= 0.5);
         var sc = _stainInto!;
-        if (Stained(c))
+        if (Stained(c) || MoldAt(life, c) > 0)
         {
             Array.Clear(sc.Px);
             double sg = f.SootGPerM2(c);
             if (sg > 0.05) SootStain(sc, 0, 0, T, T, SootStep(sg), c);
-            MoldOn(sc, life, c, 0, 0, false);   // 문 칸은 굽지 않는다 (32도트와 같은 값)
+            MoldOn(sc, life, c, 0, 0);   // 문 칸은 굽지 않는다 (32도트 칸 덮개와 같은 점)
             FloorLiquids(sc, f, c, 0, 0, frame);
             PutDown(img, sc, k, (x - x0) * D, (y - y0) * D, T, T);
         }
@@ -504,7 +505,6 @@ public sealed partial class Painter
         Array.Clear(sc.Px);
         double sb = f.SootGPerM2(below);
         if (sb > 0.05) SootStain(sc, 0, 0, T, T, SootStep(sb), below);
-        MoldOn(sc, life, below, 0, 0, true);   // 아래 칸은 구운 덩어리 — 곰팡이도 구운 단 값으로 (문짝 줄 밖의 얼룩과 이어지게)
         FloorLiquids(sc, f, below, 0, 0, frame);
         var d = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(sc.Px.AsSpan());
         for (int yy = 0; yy < T; yy++)

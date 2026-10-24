@@ -136,6 +136,7 @@ public sealed partial class Painter
 
     /// <summary>상태를 넘기는 꼴 (static 람다) — 칸마다 부르는 곳에서 갇힌 변수 묶음 · 대리자를 장마다 새로 잡지 않는다.</summary>
     private Img?[] _tileOf = Array.Empty<Img?>();
+    private MoldDot[]?[] _moldOf = Array.Empty<MoldDot[]?>();   // 칸마다 바닥 타일과 함께 찍을 곰팡이 점 목록 (5단 A3)
 
     private Img Cached<TS>(long key, TS st, Func<TS, Img> make)
     {
@@ -421,13 +422,14 @@ public sealed partial class Painter
 
         lt = Lap("우주", lt);
         // ── 바닥 · 벽 · 문 ── 칸마다 타일을 차례로 고르고 (타일 캐시) · 찍기는 칸 줄마다 여러 코어에서 (타일은 꼭 한 칸 — 서로 겹쳐 쓰지 않는다)
-        if (_tileOf.Length < w * h) _tileOf = new Img?[w * h];
-        var tileOf = _tileOf;
+        // 바닥에 핀 곰팡이 (5단 A3 — 단마다 구운 점 목록 · 칸 안에만)도 바닥 타일과 함께 찍는다: 벽 앞면 · 문짝 · 설비 몸 (제 칸 · 아래 줄에서 솟은 것)이 그 앞에 선다 (A3 검토)
+        if (_tileOf.Length < w * h) { _tileOf = new Img?[w * h]; _moldOf = new MoldDot[]?[w * h]; }
+        var tileOf = _tileOf; var moldOf = _moldOf;
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
             {
                 ref var tile = ref tileOf[(y - y0) * w + x - x0];
-                tile = null;
+                tile = null; moldOf[(y - y0) * w + x - x0] = null;
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (!Mine(c)) continue;
@@ -440,6 +442,7 @@ public sealed partial class Painter
                         int edge = EdgeMask(x, y, room);
                         bool drain = room >= 0 && DrainOf(room) == c;
                         tile = Cached(Key(1, (int)fin, (x & 7) | (y & 7) << 3 | edge << 6 | (drain ? 1 : 0) << 10), (fin, x, y, edge, drain), static q => ArtFloors.Floor(q.fin, q.x, q.y, q.edge, q.drain));
+                        moldOf[(y - y0) * w + x - x0] = MoldMarksAt(life, c);
                         break;
                     }
                     case CellKind.Door:
@@ -466,7 +469,10 @@ public sealed partial class Painter
         Parallel.For(0, h, r =>
         {
             for (int k = 0; k < w; k++)
+            {
                 if (tileOf[r * w + k] is { } tile) Put(img, tile, k * T, r * T);
+                if (moldOf[r * w + k] is { } mold) MoldPut(img, mold, k * T, r * T);
+            }
         });
         lt = Lap("바닥 · 벽 · 문", lt);
         // ── 잔칸 (④ 칸 강체 (라)): 판 구멍은 우주 (덧댄 것은 덧판) · 찢긴 가장자리는 밝은 금속 테 · 우주가 된 사이 칸에 남은 잔칸은 붙은 몸과 함께 ──
@@ -685,7 +691,7 @@ public sealed partial class Painter
                 if (_bake && L.Kind[c] == CellKind.Door) continue;   // 문 칸의 얼룩은 넓은 보기가 장마다 문짝 위에 (32도트와 같은 차례)
                 double sootG = f.SootGPerM2(c);
                 if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, _bake ? SootStep(sootG) : sootG, c); // 바닥에 앉은 그을음
-                MoldOn(img, life, c, Px(x), Py(y), _bake);   // 곰팡이 (5단 A3 — 굽는 덩어리는 단 값으로 · 화장실 설비 칸은 줄눈 · 가장자리에만 · 다른 가구 칸은 건너뛴다)
+                if (L.Kind[c] == CellKind.Door) MoldOn(img, life, c, Px(x), Py(y));   // 문 칸 곰팡이는 문짝 위에 (5단 A3 — 바닥 칸은 바닥 타일과 함께 · 굽는 덩어리는 문 칸을 건너뛴다)
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 if (_bake) continue;   // 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
                 double water = f.Stored(f.T.sWater, c);
@@ -730,6 +736,7 @@ public sealed partial class Painter
                 }
             }
         }
+        if (FrontLog != null) foreach (var (fimg, fx, fy, _) in _front) FrontLog.Add((fimg, fx, fy));
         _front.Clear();
 
         lt = Lap("사람 · 로봇", lt);
@@ -914,6 +921,8 @@ public sealed partial class Painter
 
     /// <summary>이 장에 그린 솟은 설비 (그림 · 자리 · 밑 줄) — 앞 가림에 쓴다.</summary>
     private readonly List<(Img img, int x, int y, int baseRow)> _front = new();
+    /// <summary>시험용: null이 아니면 32도트 장마다 솟은 설비 몸 (그림 · 그림판 자리)을 모은다 (앞에 선 몸이 덮은 자리가 그대로인지 견준다).</summary>
+    public List<(Img img, int x, int y)>? FrontLog;
 
     /// <summary>그림의 (cx0, cy0)~(cx1, cy1) 안쪽만 얹는다 (투명 도트는 건너뛴다).</summary>
     private static void PutClip(Img dst, Img src, int dx, int dy, int cx0, int cy0, int cx1, int cy1)

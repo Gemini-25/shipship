@@ -7,6 +7,18 @@ namespace Lab;
 /// <summary>재질 흔적 규칙 시험 (그래픽 결정 5) — 녹 · 실금 · 쏟아진 액체는 세계의 값에서만 · 값이 줄면(수리 · 청소) 흔적도 사라진다.</summary>
 public static partial class Program
 {
+    // 곰팡이 시험 배 (5단 A3 검토): 변기 T · 세면대 k · 샤워 칸 S · 배터리 b · 배전반 p 바로 위가 가구 없는 바닥 (솟은 몸이 위 칸으로 올라온다) ·
+    // 가로 벽 문 D (위아래 바닥 — 문짝이 아래 칸 위 10줄에 드리운다)
+    private const string MoldShip = @"
+###########
+#.........#
+#.T.k.S.b.#
+#.........#
+####D######
+#.........#
+#.p.......#
+###########";
+
     private static void TraceRules()
     {
         if (!Do("재질 흔적")) return;
@@ -75,17 +87,25 @@ public static partial class Program
             static bool Moldy(int xx, int yy, Rgba q0, Rgba q1) => Sum(q0) - Sum(q1) > 60 && q1.G >= q1.R;   // 기준보다 어둡고 푸르다
             static bool Changed(int xx, int yy, Rgba q0, Rgba q1) => q0 != q1;
             static bool Edge(int xx, int yy) => xx < 4 || xx >= T - 4 || yy < 4 || yy >= T - 4 || xx is 15 or 16 || yy is 15 or 16;   // 가장자리 4도트 · 가운데 줄눈 (16도트 타일)
-            var b0 = Shot(floor); var o0 = Shot(other); var t0 = Shot(toilet);
+            var b0 = Shot(floor); var o0 = Shot(other);
+            p.FrontLog = new();   // 변기 몸 그림의 불투명한 도트 (A3 검토 — 가장자리 점이 흡입 장치 · 테 위에 앉았다)
+            var t0 = Shot(toilet);
+            var tBody = new HashSet<(int, int)>();
+            foreach (var (fimg, fx, fy) in p.FrontLog)
+                for (int yy = 0; yy < fimg.H; yy++) for (int xx = 0; xx < fimg.W; xx++) if (fimg.Get(xx, yy).A == 255) tBody.Add((fx + xx, fy + yy));
+            p.FrontLog = null;
+            int tx = (L.X(toilet) - Math.Max(0, L.X(toilet) - 2)) * T, ty = (L.Y(toilet) - Math.Max(0, L.Y(toilet) - 2)) * T;   // 변기 칸의 그림판 자리
             life.Mold[floor] = 0.5f; life.Mold[other] = 0.5f; life.Mold[toilet] = 0.5f;
             var b1 = Shot(floor); var o1 = Shot(other); var t1 = Shot(toilet);
             int moldy = Count(b0, b1, floor, Moldy), otherCh = Count(o0, o1, other, Changed);
             int edgeIn = Count(t0, t1, toilet, (xx, yy, q0, q1) => q0 != q1 && Edge(xx, yy)), edgeOut = Count(t0, t1, toilet, (xx, yy, q0, q1) => q0 != q1 && !Edge(xx, yy));
+            int onBody = Count(t0, t1, toilet, (xx, yy, q0, q1) => q0 != q1 && tBody.Contains((tx + xx, ty + yy)));
             life.Mold[floor] = 0; life.Mold[other] = 0; life.Mold[toilet] = 0;
             var b2 = Shot(floor); var t2 = Shot(toilet);
             int back = Count(b0, b2, floor, Changed) + Count(t0, t2, toilet, Changed);
-            Check("곰팡이 얼룩 (Mold 0.5): 가구 없는 바닥 칸에 어둡고 푸른 점 30 넘게 · 다른 가구 칸은 그대로 · 변기 칸은 줄눈 · 가장자리 4도트에만 · 닦으면(0) 처음 그림 그대로",
-                moldy > 30 && otherCh == 0 && edgeIn > 0 && edgeOut == 0 && back == 0,
-                $"바닥 검푸른 점 {moldy} · 다른 가구 칸 바뀐 점 {otherCh} · 변기 칸 줄눈 · 가장자리 {edgeIn} · 그 밖 {edgeOut} · 닦은 뒤 바뀐 점 {back}");
+            Check("곰팡이 얼룩 (Mold 0.5): 가구 없는 바닥 칸에 어둡고 푸른 점 30 넘게 · 다른 가구 칸은 그대로 · 변기 칸은 줄눈 · 가장자리 4도트에만 (바뀐 점 가운데 변기 몸 점 0) · 닦으면(0) 처음 그림 그대로",
+                moldy > 30 && otherCh == 0 && edgeIn > 0 && edgeOut == 0 && onBody == 0 && back == 0,
+                $"바닥 검푸른 점 {moldy} · 다른 가구 칸 바뀐 점 {otherCh} · 변기 칸 줄눈 · 가장자리 {edgeIn} (그 가운데 변기 몸 위 {onBody}) · 그 밖 {edgeOut} · 닦은 뒤 바뀐 점 {back}");
 
             // 넓은 보기 16도트: 곰팡이 단이 덩어리 도장에 든다 → 다시 구운 덩어리에 같은 칸이 어두워진다 (한 장에 하나씩 굽는다 · 두 장)
             int keep = Painter.FarBakeMax; Painter.FarBakeMax = 1;
@@ -105,6 +125,91 @@ public static partial class Program
                     dark1 > 8 && dark2 == 0, $"어두워진 점 {dark1} · 닦은 뒤 {dark2} (16×16 중)");
             }
             finally { Painter.FarBakeMax = keep; }
+        }
+
+        // ── 곰팡이는 바닥에 핀다 (5단 A3 검토): 앞에 선 것이 가린다 — 제 칸 설비 몸 · 아래 줄 설비가 위 칸으로 솟은 몸 (변기 6 · 세면대 10 · 샤워 칸 14도트 · 배터리 · 배전반) ·
+        //    가로 벽 문짝이 아래 칸에 드리운 줄 (32 · 16도트 같은 차례) · 문 칸은 문짝 위에 (32도트는 칸 덮개 · 넓은 보기는 DoorStain이 장마다) ──
+        {
+            var legend = new Dictionary<char, string> { ['T'] = "Toilet", ['k'] = "Sink", ['S'] = "Shower", ['b'] = "Battery", ['p'] = "PowerPanel" };
+            var lay = Worlds.Ascii(MoldShip, legend);
+            var s = Worlds.Full(lay, 3);
+            s.Run(6);   // 빛이 한 번 잰다 (5틱마다)
+            var life = s.Get<Life>(); var f = s.Get<Field>();
+            int W = lay.W, H = lay.H, GW = W * Painter.T;
+            const int T = Painter.T;
+            var p = new Painter(lay) { Lighting = false, FrontLog = new() };   // 빛깔만 견준다
+            double bakeMs = Painter.FarBakeMs; int bakeMax = Painter.FarBakeMax;
+            Painter.FarBakeMs = 0; Painter.FarBakeMax = 0;   // 넓은 보기는 도장이 바뀐 덩어리를 그 장에 모두 다시 굽는다
+            try
+            {
+                static Img Copy(Img im) { var o = new Img(im.W, im.H); Array.Copy(im.Px, o.Px, im.Px.Length); return o; }
+                Img Shot() { p.FrontLog!.Clear(); return Copy(p.Frame(s, 0, 0, W, H, 0)); }
+                Img Far() { p.FrameFar(s, 0, 0, W, H, 0, 16); return Copy(p.FrameFar(s, 0, 0, W, H, 0, 16)); }
+                static int Sum(Rgba q) => q.R + q.G + q.B;
+                // 칸 c의 도트 (칸 안 줄 r0..r1 · D는 칸당 도트) 가운데 고른 점 수
+                int Cell(Img a, Img b, int c, int D, int r0, int r1, Func<Rgba, Rgba, bool> pick)
+                {
+                    int n = 0;
+                    for (int yy = r0; yy < r1; yy++) for (int xx = 0; xx < D; xx++) if (pick(a.Get(lay.X(c) * D + xx, lay.Y(c) * D + yy), b.Get(lay.X(c) * D + xx, lay.Y(c) * D + yy))) n++;
+                    return n;
+                }
+                static bool Changed(Rgba q0, Rgba q1) => q0 != q1;
+                static bool Moldy(Rgba q0, Rgba q1) => Sum(q0) - Sum(q1) > 60 && q1.G >= q1.R;   // 기준보다 어둡고 푸르다
+                static bool Dark(Rgba q0, Rgba q1) => Sum(q0) - Sum(q1) > 40;
+
+                var a0 = Shot();
+                var body = new bool[GW * H * T];   // 솟은 설비 몸의 불투명한 도트 (배 32도트 자리)
+                int bodies = p.FrontLog!.Count;
+                foreach (var (fimg, fx, fy) in p.FrontLog!)
+                    for (int yy = 0; yy < fimg.H; yy++) for (int xx = 0; xx < fimg.W; xx++)
+                        if ((uint)(fx + xx) < (uint)GW && (uint)(fy + yy) < (uint)(H * T) && fimg.Get(xx, yy).A == 255) body[(fy + yy) * GW + fx + xx] = true;
+                var fixes = lay.Furniture.Where(fu => fu.Cells.Length > 0 && legend.ContainsValue(fu.Type)).ToList();
+                int risen = 0;   // 위 칸으로 솟은 몸 도트 (설비 바로 위 바닥 칸 안)
+                foreach (var fu in fixes) { int u = fu.Cells[0] - W; for (int yy = 0; yy < T; yy++) for (int xx = 0; xx < T; xx++) if (body[(lay.Y(u) * T + yy) * GW + lay.X(u) * T + xx]) risen++; }
+                var f0 = Far();
+                var floors = Enumerable.Range(0, lay.N).Where(c => lay.Kind[c] == CellKind.Floor).ToArray();
+                foreach (int c in floors) life.Mold[c] = 1;
+                var a1 = Shot(); var f1 = Far();
+                foreach (int c in floors) life.Mold[c] = 0;
+                int onBody = 0, seen = 0, onBody16 = 0, seen16 = 0;
+                for (int gy = 0; gy < H * T; gy++)
+                    for (int gx = 0; gx < GW; gx++)
+                    {
+                        if (a0.Get(gx, gy) == a1.Get(gx, gy)) continue;
+                        if (body[gy * GW + gx]) onBody++; else seen++;
+                    }
+                for (int gy = 0; gy < H * 16; gy++)   // 16도트: 32도트 네 점이 모두 몸인 도트
+                    for (int gx = 0; gx < W * 16; gx++)
+                    {
+                        if (f0.Get(gx, gy) == f1.Get(gx, gy)) continue;
+                        bool all = body[2 * gy * GW + 2 * gx] && body[2 * gy * GW + 2 * gx + 1] && body[(2 * gy + 1) * GW + 2 * gx] && body[(2 * gy + 1) * GW + 2 * gx + 1];
+                        if (all) onBody16++; else seen16++;
+                    }
+                // 위 칸마다 (설비 바로 위 바닥): 몸이 덮지 않은 곳에는 곰팡이가 보인다
+                int aboveSeen = fixes.Min(fu => { int u = fu.Cells[0] - W, n = 0; for (int yy = 0; yy < T; yy++) for (int xx = 0; xx < T; xx++) { int gx = lay.X(u) * T + xx, gy = lay.Y(u) * T + yy; if (!body[gy * GW + gx] && a0.Get(gx, gy) != a1.Get(gx, gy)) n++; } return n; });
+                Check("곰팡이는 바닥에 핀다 (바닥 칸 모두 곰팡이 1): 제 칸 · 아래 줄 설비가 위 칸으로 솟은 몸 (변기 · 세면대 · 샤워 칸 · 배터리 · 배전반)의 불투명한 점은 그대로 · 몸이 덮지 않은 곳에 핀다 (32 · 16도트)",
+                    bodies >= fixes.Count && risen > 300 && onBody == 0 && onBody16 == 0 && seen > 2000 && seen16 > 400 && aboveSeen > 20,
+                    $"솟은 몸 {bodies} (위 칸 안 몸 도트 {risen}) · 몸 위 바뀐 점 32도트 {onBody} · 16도트 {onBody16} · 그 밖 곰팡이 점 {seen} · {seen16} · 설비 바로 위 칸마다 몸 밖 곰팡이 점 가장 적은 {aboveSeen}");
+
+                // 문 칸 (가로 벽 문 — 위아래 바닥): 곰팡이 0.5 → 문짝 위에 어둡고 푸른 점 (32도트 칸 덮개 · 16도트 DoorStain) · 0 → 처음 그림
+                var door = lay.Doors.First(d => d.Vertical && lay.Kind[d.Cell + W] == CellKind.Floor);
+                int dc = door.Cell, below = dc + W;
+                bool closed = f.DoorOpen[door.Id] < 0.05f;   // 닫힌 문짝은 드리운 줄 (아래 칸 위 FaceLow줄)의 칸 너비를 다 덮는다
+                life.Mold[dc] = 0.5f; var d1 = Shot(); var df1 = Far();
+                life.Mold[dc] = 0; var d2 = Shot(); var df2 = Far();
+                int dNear = Cell(a0, d1, dc, T, 0, T, Moldy), dFar = Cell(f0, df1, dc, 16, 0, 16, Dark), dBack = Cell(a0, d2, dc, T, 0, T, Changed) + Cell(f0, df2, dc, 16, 0, 16, Changed);
+                Check("곰팡이 문 칸: 곰팡이 0.5 → 문짝 위에 어둡고 푸른 점 (32도트) · 16도트도 어두워진다 (넓은 보기는 장마다) · 0 → 처음 그림",
+                    dNear > 20 && dFar > 4 && dBack == 0, $"32도트 검푸른 점 {dNear} · 16도트 어두워진 점 {dFar} · 닦은 뒤 바뀐 점 {dBack}");
+                // 가로 벽 문짝이 아래 칸에 드리운 줄: 아래 칸 곰팡이는 문짝 뒤 (그 줄은 그대로) · 그 밑에는 핀다 — 32도트와 16도트가 같다
+                life.Mold[below] = 0.5f; var h1 = Shot(); var hf1 = Far();
+                life.Mold[below] = 0; var h2 = Far();
+                int hang = Cell(a0, h1, below, T, 0, ArtWalls.FaceLow, Changed), under = Cell(a0, h1, below, T, ArtWalls.FaceLow, T, Moldy);
+                int hangF = Cell(f0, hf1, below, 16, 0, ArtWalls.FaceLow / 2, Changed), underF = Cell(f0, hf1, below, 16, ArtWalls.FaceLow / 2, 16, Dark);
+                Check("곰팡이 문 아래 칸: 가로 벽 문짝이 드리운 줄 (위 10줄)은 그 칸의 곰팡이를 가린다 · 그 밑에는 핀다 (32 · 16도트 같은 차례)",
+                    closed && hang == 0 && under > 20 && hangF == 0 && underF > 4 && Cell(f0, h2, below, 16, 0, 16, Changed) == 0,
+                    $"닫힌 문 {closed} · 드리운 줄 바뀐 점 32도트 {hang} · 16도트 {hangF} · 그 밑 검푸른 점 {under} · 어두워진 점 {underF}");
+            }
+            finally { Painter.FarBakeMs = bakeMs; Painter.FarBakeMax = bakeMax; }
         }
     }
 }

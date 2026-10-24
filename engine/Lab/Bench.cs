@@ -201,6 +201,45 @@ public static partial class Program
             double aNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into)), aFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into)), aFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
             Check("그리기 예산: 제습기가 멈춘 배 (바닥 칸 모두 습도 0.97 — 보이는 바닥마다 안개) — '김 · 안개' 단계 32도트 ≤ 1.5 · 16 · 8도트 ≤ 2ms",
                 all >= floors.Length * 9 / 10 && sNear <= 1.5 && sFar16 <= 2 && sFar8 <= 2, $"안개 칸 {all}/{floors.Length} · 단계 {sNear:0.00} · {sFar16:0.00} · {sFar8:0.00}ms (한 장 {aNear:0.0} · {aFar16:0.0} · {aFar8:0.0}ms)");
+            // ③ 곰팡이 핀 배 (5단 A3 검토 — 제습기가 멈춘 배는 278~310K이면 하루 0.7배씩 자라 약 일주일 뒤 바닥이 모두 곰팡이 1 · 안개도 그대로): 바닥 · 문 칸 모두 Mold 1
+            //    32도트: 곰팡이를 그리는 단계 (바닥 · 벽 · 문 + 칸 덮개)가 곰팡이 0보다 0.5ms 안 · 한 장 ≤ 6ms
+            //    넓은 보기: 곰팡이 단이 바뀐 덩어리는 다시 굽는다 (한 장에 FarBakeMs까지 — 덩어리 하나는 늘 굽는다) → 덩어리 하나를 굽는 곰팡이 단계가 곰팡이 0보다 0.06ms 안 · 다 구운 뒤 16 · 8도트 ≤ 8ms
+            //    (고치기 전 — 칸마다 점 수백 개를 소수로 섞었다: 단계 0.59 → 3.92ms · 덩어리 0.082 → 0.197ms)
+            var lf = s.Get<Life>();
+            var moldy = Enumerable.Range(0, s.Layout.N).Where(c => s.Layout.Kind[c] is CellKind.Floor or CellKind.Door).ToArray();
+            void Mold(float v) { foreach (int c in moldy) lf.Mold[c] = v; }
+            string[] moldStages = { "바닥 · 벽 · 문", "칸 덮개" };   // 곰팡이를 그리는 단계 (바닥 칸은 바닥 타일과 함께 · 문 칸은 칸 덮개 — 굽는 덩어리도 같은 Draw)
+            double MoldMs() => moldStages.Sum(key => ShipView.Painter.Prof!.GetValueOrDefault(key));
+            static double Mid(List<double> v) { v.Sort(); return v.Count == 0 ? double.NaN : v[v.Count / 2]; }
+            // 곰팡이 0 · 1을 한 장씩 번갈아 잰다 (함께 쓰는 기계의 흔들림이 두 쪽에 같게) — 32도트 곰팡이 단계 합의 가운데 값
+            var near0 = new List<double>(); var near1 = new List<double>();
+            for (int k = 0; k < 40; k++) { Mold(k % 2); p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into); }
+            for (int k = 0; k < 24; k++) { Mold(k % 2); ShipView.Painter.Prof = new(); p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into); (k % 2 == 0 ? near0 : near1).Add(MoldMs()); }
+            ShipView.Painter.Prof = null;
+            double m0 = Mid(near0), m1 = Mid(near1);
+            // 넓은 보기: 곰팡이 0 ↔ 1을 번갈아 두면 곰팡이 단이 바뀐 덩어리를 그 장에 모두 다시 굽는다 (FarBakeMs 0) — 덩어리 하나를 굽는 곰팡이 단계 (합 ÷ 구운 수)의 가운데 값
+            var bake0 = new List<double>(); var bake1 = new List<double>();
+            double keepMs = ShipView.Painter.FarBakeMs; int keepMax = ShipView.Painter.FarBakeMax;
+            ShipView.Painter.FarBakeMs = 0; ShipView.Painter.FarBakeMax = 0;
+            try
+            {
+                for (int k = 0; k < 13; k++)
+                {
+                    Mold(k % 2);
+                    ShipView.Painter.Prof = new(); int b0 = p.Baked;
+                    p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into);
+                    int nb = p.Baked - b0;
+                    if (k > 0 && nb > 0) (k % 2 == 0 ? bake0 : bake1).Add(MoldMs() / nb);
+                }
+            }
+            finally { ShipView.Painter.Prof = null; ShipView.Painter.FarBakeMs = keepMs; ShipView.Painter.FarBakeMax = keepMax; }
+            double b0ne = Mid(bake0), b1ne = Mid(bake1);
+            Mold(1);
+            double mNear = Med(() => p.Frame(s, W / 2 - 20, H / 2 - 12, 41, 24, 3, into)), mFar16 = Med(() => p.FrameFar(s, W / 2 - 48, H / 2 - 27, 97, 55, 3, 16, into)), mFar8 = Med(() => p.FrameFar(s, -1, -1, W + 2, H + 2, 3, 8, into));
+            Mold(0);
+            Check("그리기 예산: 곰팡이 핀 배 (바닥 · 문 칸 모두 곰팡이 1 · 안개도) — 32도트 곰팡이 단계 (바닥 · 벽 · 문 + 칸 덮개) +0.5ms 안 · 한 장 ≤ 6ms · 덩어리 하나 다시 굽기 +0.06ms 안 · 16 · 8도트 ≤ 8ms",
+                m1 - m0 <= 0.5 && mNear <= 6 && b1ne - b0ne <= 0.06 && mFar16 <= 8 && mFar8 <= 8,
+                $"곰팡이 칸 {moldy.Length} · 단계 {m0:0.00} → {m1:0.00}ms · 덩어리 굽기 {b0ne:0.000} → {b1ne:0.000}ms · 한 장 {mNear:0.0} · {mFar16:0.0} · {mFar8:0.0}ms");
         }
     }
 

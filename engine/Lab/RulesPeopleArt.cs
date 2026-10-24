@@ -87,6 +87,29 @@ public static partial class Program
             Check("얼룩진 옷 · 지린 옷 옆 그림: 신발 줄은 그대로 · 다리 윗부분은 어두워진다",
                 shoes == 0 && sideLeg > 6 && Diff(side0, clean) > 0, $"신발 줄 바뀐 점 {shoes} · 다리 어두운 점 {sideLeg} · 옆 그림 {Diff(side0, clean)}도트 다름");
             a.C.LookAt = look; a.C.LookUntil = until;
+
+            // 누운 · 기는 · 업힌 그림 (A3 검토 — 그 갈래를 지워도 초록이었다): 같은 칠 — 더러움 0.8 → 갈색 점 10 넘게 더 · 지림 → 어두운 점 (돌린 그림이라 그림판 전체에서 센다)
+            int BrownAll(Img im) { int n = 0; for (int i = 0; i < im.Px.Length; i += 4) if (Array.IndexOf(stainCols, new Rgba(im.Px[i], im.Px[i + 1], im.Px[i + 2])) >= 0) n++; return n; }
+            int DarkerAll(Img i1, Img i2) { int n = 0; for (int i = 0; i < i1.Px.Length; i += 4) if (i2.Px[i] + i2.Px[i + 1] + i2.Px[i + 2] < i1.Px[i] + i1.Px[i + 1] + i1.Px[i + 2]) n++; return n; }
+            (int brown, int dark) Stains(int body)   // 그 몸을 깨끗이 · 더러움 0.8 · 지림으로 찍어 견준다
+            {
+                life[body].Dirt = 0; life[body].Wet = 0; var q0 = Shot();
+                life[body].Dirt = 0.8f; var q1 = Shot();
+                life[body].Dirt = 0; life[body].Wet = 1; var q2 = Shot();
+                life[body].Wet = 0;
+                return (BrownAll(q1) - BrownAll(q0), DarkerAll(q0, q2));
+            }
+            byte low0 = b.Low;
+            b.Asleep = 1; var lie = Stains(a.C.Body); b.Asleep = 0;   // 누운 그림 (자는 이)
+            b.Low = 1; var crawled = Stains(a.C.Body); b.Low = low0;   // 기는 그림 (머리를 낮췄다)
+            var o = m.Agents.First(x => x.IsPerson && x != a);   // 업힌 사람 (업은 이의 어깨 위 누운 그림)
+            int carrying = a.C.Carrying, carriedBy = o.C.CarriedBy;
+            a.C.Carrying = o.C.Body; o.C.CarriedBy = a.Id;
+            var carried = Stains(o.C.Body);
+            a.C.Carrying = carrying; o.C.CarriedBy = carriedBy;
+            Check("얼룩진 옷 · 지린 옷 누운 · 기는 · 업힌 그림: 더러움 0.8 → 갈색 점 10 넘게 더 · 지림 → 어두운 점 3 넘게 (서기 그림과 같은 칠)",
+                lie.brown > 10 && lie.dark > 3 && crawled.brown > 10 && crawled.dark > 3 && carried.brown > 10 && carried.dark > 3,
+                $"누운 갈색 +{lie.brown} · 어두운 점 {lie.dark} · 기는 +{crawled.brown} · {crawled.dark} · 업힌 +{carried.brown} · {carried.dark}");
             b.Suit = suit; b.Wet = wet; b.Dirt = dirt; b.Asleep = asleep; b.Conscious = conscious;
         }
     }

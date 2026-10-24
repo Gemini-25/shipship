@@ -87,46 +87,87 @@ public sealed partial class Painter
         }
     }
 
-    /// <summary>곰팡이 단 여섯 (굽는 덩어리는 이 값으로 그린다 — 도장에 단 번호 · 천천히 자라는 값이 장마다 다시 굽게 하지 않는다).</summary>
+    /// <summary>곰팡이 단 여섯 (32도트 · 굽는 덩어리 모두 이 값으로 그린다 — 도장에 단 번호 · 천천히 자라는 값이 장마다 다시 굽게 하지 않는다 · 단마다 구운 점 목록).</summary>
     private static readonly float[] MoldSteps = { 0.05f, 0.1f, 0.2f, 0.4f, 0.7f, 1f };
     private static int MoldIdx(float m) { int i = 0; while (i < MoldSteps.Length && m >= MoldSteps[i]) i++; return i; }
-    private static float MoldStep(float m) { int i = MoldIdx(m); return i == 0 ? m : MoldSteps[i - 1]; }
     private static readonly Rgba[] MoldCol = { Rgba.Hex("#1f2a1a"), Rgba.Hex("#2e3b22"), Rgba.Hex("#3f4a2a") };
 
     /// <summary>그 칸에 그릴 곰팡이 (없거나 다른 가구 칸이면 0 — 화장실 설비 칸은 그린다).</summary>
     private float MoldAt(Life? life, int c) =>
         life == null || c >= life.Mold.Length || life.Mold[c] < MoldMin || L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] == 0 ? 0 : life.Mold[c];
 
-    /// <summary>칸 c (자리 px, py)의 곰팡이 얼룩 — 32도트 칸 덮개 · 굽는 덩어리 (step: 단 값으로) · 넓은 보기 문 칸이 함께 쓴다.</summary>
-    private void MoldOn(Img img, Life? life, int c, int px, int py, bool step)
+    /// <summary>곰팡이 점 하나 (칸 안 자리 · 한 번 섞은 빛깔 · 알파).</summary>
+    private readonly record struct MoldDot(byte X, byte Y, byte R, byte G, byte B, byte A);
+    /// <summary>구운 곰팡이 점 목록: 단 여섯 × 칸 무늬 64 (칸 자리 8칸 주기 — 바닥 타일과 같다) × 화장실 설비 칸 (A3 검토 — 칸마다 점 수백 개를 소수로 섞던 것: 곰팡이 1인 배 32도트 칸 덮개 0.08 → 2.2~3.9ms).</summary>
+    private static readonly MoldDot[]?[] MoldMarks = new MoldDot[]?[6 * 64 * 2];
+
+    /// <summary>칸 c의 곰팡이 점 목록 (없으면 null) — 32도트 Draw는 칸을 고르는 고리 (한 스레드)에서 고르고 바닥 타일과 함께 칸 줄마다 여러 코어에서 찍는다.</summary>
+    private MoldDot[]? MoldMarksAt(Life? life, int c)
     {
         float m = MoldAt(life, c);
-        if (m <= 0) return;
-        int fu = L.FurnitureAt[c];
-        MoldStain(img, px, py, step ? MoldStep(m) : m, c, fu >= 0 ? WashBodyImg(life, fu) : null, fu >= 0 ? WashRise(_washKind[fu]) : 0);
+        if (m <= 0) return null;
+        int idx = MoldIdx(m) - 1, seed = (L.X(c) & 7) | (L.Y(c) & 7) << 3, fix = L.FurnitureAt[c] >= 0 ? 1 : 0;
+        return MoldMarks[(idx * 64 + seed) * 2 + fix] ??= MoldBake(MoldSteps[idx], seed, fix != 0);   // 다른 스레드가 함께 구워도 같은 목록 (참조 쓰기는 한 번에)
     }
 
-    /// <summary>곰팡이 얼룩: 녹 얼룩 꼴 (2×2 점 · DotHash.U — 늘 같은 자리) 검푸른 점이 칸마다 세 무리로 핀다 — 점 4 + 60 × 곰팡이 · 짙기 0.35 + 0.5 × 곰팡이 · 빛깔 셋.
-    /// fixture (화장실 설비 몸 그림 · 위로 rise 솟음)가 있으면 칸 가장자리 4도트와 16도트 타일의 가운데 줄눈 (설비 몸이 덮지 않은 곳)에만.</summary>
-    private static void MoldStain(Img img, int px, int py, float mold, int c, Img? fixture, int rise)
+    /// <summary>칸 c (자리 px, py)의 곰팡이 — 문 칸 (32도트 칸 덮개 · 넓은 보기 DoorStain)이 쓴다 (바닥 칸은 Draw가 바닥 타일과 함께).</summary>
+    private void MoldOn(Img img, Life? life, int c, int px, int py)
+    {
+        if (MoldMarksAt(life, c) is { } dots) MoldPut(img, dots, px, py);
+    }
+
+    /// <summary>점 목록을 칸 (px, py)에 섞는다 — 불투명한 바탕은 정수로 반올림해 섞고 (Blend의 버림과 한 단 안) · 투명한 바탕 (문짝 위 얼룩 판)은 Blend 그대로.</summary>
+    private static void MoldPut(Img img, MoldDot[] dots, int px, int py)
+    {
+        var d = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(img.Px.AsSpan());
+        foreach (var q in dots)
+        {
+            int x = px + q.X, y = py + q.Y;
+            if ((uint)x >= (uint)img.W || (uint)y >= (uint)img.H) continue;
+            ref uint v = ref d[y * img.W + x];
+            if (v >> 24 != 255) { img.Blend(x, y, new Rgba(q.R, q.G, q.B, q.A)); continue; }
+            uint a = q.A, ia = 255 - a;   // (t · 0x8081) >> 23 = t / 255 (t < 65536 — 몫이 꼭 같다)
+            uint r = ((q.R * a + (v & 255) * ia + 127) * 0x8081u) >> 23, g = ((q.G * a + (v >> 8 & 255) * ia + 127) * 0x8081u) >> 23, b = ((q.B * a + (v >> 16 & 255) * ia + 127) * 0x8081u) >> 23;
+            v = r | g << 8 | b << 16 | 0xFF000000u;
+        }
+    }
+
+    /// <summary>곰팡이 점 목록 굽기: 투명한 칸 판에 MoldStain을 섞어 (겹친 점은 한 빛깔로) 보이는 점만 모은다.</summary>
+    private static MoldDot[] MoldBake(float mold, int seed, bool fixture)
+    {
+        var t = new Img(T, T);
+        MoldStain(t, mold, seed, fixture);
+        var dots = new List<MoldDot>();
+        for (int y = 0; y < T; y++)
+            for (int x = 0; x < T; x++)
+            {
+                var q = t.Get(x, y);
+                if (q.A > 0) dots.Add(new MoldDot((byte)x, (byte)y, q.R, q.G, q.B, q.A));
+            }
+        return dots.ToArray();
+    }
+
+    /// <summary>곰팡이 얼룩: 녹 얼룩 꼴 (2×2 점 · DotHash.U — 칸 무늬마다 늘 같은 자리) 검푸른 점이 칸마다 세 무리로 핀다 — 점 4 + 60 × 곰팡이 · 짙기 0.35 + 0.5 × 곰팡이 · 빛깔 셋.
+    /// 화장실 설비 칸 (fixture)은 칸 가장자리 4도트와 16도트 타일의 가운데 줄눈에만 — 바닥에 피므로 설비 몸 · 아래 줄 설비가 솟은 몸 · 벽 앞면 · 문짝이 앞에 서서 가린다 (A3 검토 — 가린 쪽보다 나중에 그려 몸 위에 앉았다).</summary>
+    private static void MoldStain(Img img, float mold, int seed, bool fixture)
     {
         mold = Math.Min(1, mold);
         float a = 0.35f + 0.5f * mold;
         int n = (int)(4 + 60 * mold), r = 3 + (int)(mold * 8);
         for (int k = 0; k < n; k++)
         {
-            uint u = DotHash.U(c, k, 73);
+            uint u = DotHash.U(seed, k, 73);
             int sx, sy;
-            if (fixture == null)
+            if (!fixture)
             {
-                uint g = DotHash.U(c, (int)(u % 3), 79);   // 무리 셋 (칸마다 같은 자리 · 곰팡이가 많을수록 넓게)
+                uint g = DotHash.U(seed, (int)(u % 3), 79);   // 무리 셋 (칸 무늬마다 같은 자리 · 곰팡이가 많을수록 넓게)
                 sx = Math.Clamp(4 + (int)(g % (T - 10)) + (int)((u >> 4) % (uint)(2 * r + 1)) - r, 0, T - 2);
                 sy = Math.Clamp(4 + (int)((g >> 8) % (T - 10)) + (int)((u >> 10) % (uint)(2 * r + 1)) - r, 0, T - 2);
             }
             else
             {
                 int along = (int)((u >> 4) % (T - 1)), side = (int)((u >> 12) % 3);
-                switch ((u >> 16) % 6)   // 위 · 아래 · 왼 · 오른 가장자리 (4도트 안) · 가운데 줄눈 (가로 · 세로 — 설비 몸이 덮은 곳은 건너뛴다)
+                switch ((u >> 16) % 6)   // 위 · 아래 · 왼 · 오른 가장자리 (4도트 안) · 가운데 줄눈 (가로 · 세로)
                 {
                     case 0: sx = along; sy = side; break;
                     case 1: sx = along; sy = T - 2 - side; break;
@@ -135,9 +176,8 @@ public sealed partial class Painter
                     case 4: sx = along; sy = 15; break;
                     default: sx = 15; sy = along; break;
                 }
-                if ((u >> 16) % 6 >= 4 && (fixture.Get(sx, sy + rise).A > 0 || fixture.Get(sx + 1, sy + 1 + rise).A > 0)) continue;
             }
-            img.Fill(px + sx, py + sy, 2, 2, MoldCol[(u >> 20) % 3], a * (0.85f + 0.05f * ((u >> 24) % 4)));
+            img.Fill(sx, sy, 2, 2, MoldCol[(u >> 20) % 3], a * (0.85f + 0.05f * ((u >> 24) % 4)));
         }
     }
 
