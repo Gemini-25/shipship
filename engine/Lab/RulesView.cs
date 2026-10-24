@@ -50,6 +50,7 @@ public static partial class Program
 
         LiveRules(lay);
         ArtKeyRules();   // 그림 열쇠 — 물건 아이콘 · 드론 · 가구 빛 (RulesArt.cs)
+        WorkerClockRules();   // 일꾼을 기다리는 그림 시계 (LawsWorker.cs)
     }
 
     /// <summary>관전 화면 (Godot 장면의 속): 연출의 빠르기를 따르고 · 멈춤 · 밀린 것은 버림 · 카메라가 일 난 곳으로 · 세계는 그대로.</summary>
@@ -160,6 +161,7 @@ public static partial class Program
         walk.Sim.Run(3);
         walk.Sim.Get<Chemistry>().Ignite(At(3, 5), 3e6, walk.Sim.Causes.Add(CauseKind.Setup, "침대 불씨", walk.Sim.Tick));
         walk.SpeedOverride = 2;
+        walk.Sim.Get<ShipMind>().Inline = true;   // 주컴퓨터의 상상은 그 틱에 (결과 · 받는 틱은 같다) — 일꾼을 기다려 세계가 멈추면 걸음이 없다 (예전에는 900장 가운데 810장을 기다려 걸은 틱 1 · 멈춘 틱을 되감아 다시 재생해 '칸 사이'를 셌다)
         int partial = 0, jumps = 0, moved = 0;
         for (int i = 0; i < 60 * 15; i++)
         {

@@ -136,4 +136,40 @@ public static partial class Program
         }
         finally { Par.Threads = keep; }
     }
+
+    /// <summary>규칙 '일꾼을 기다리는 그림 시계' (묶음 '화면'): 받을 틱에 일꾼이 아직 셈 중이라 세계가 멈춘 동안 그리는 때 (지난 틱 + 틱 사이 비율)가 줄지 않는다 —
+    /// 예전에는 기다린 장마다 틱 사이 비율을 0으로 되돌려 그 틱을 되감아 다시 재생했다 (한 장에 거의 한 틱 뒤로).</summary>
+    private static void WorkerClockRules()
+    {
+        var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        int keep = Par.Threads;
+        Par.Threads = 4; ShipMind.WorkerDelayMs = 2000;
+        try
+        {
+            // 뚫린 방에 쓰러진 사람 · 열린 문 너머 옆 방에도 — 주컴퓨터가 봉쇄를 그려 본다 (법칙 '일꾼'과 같은 판)
+            var w = Worlds.Full(lay, 1);
+            var mw = w.Get<Mind>(); var lw = w.Get<Life>();
+            int pa = mw.AddPerson(w, At(6, 2)), pb = mw.AddPerson(w, At(13, 2));
+            foreach (int q in new[] { pa, pb }) { ref var body = ref lw[mw[q].C.Body]; body.Conscious = 0; body.Hypoxia = 0.6f; }
+            w.Get<Structure>().RequestDoor(lay.DoorAt[At(10, 3)], 1); w.Run(3);
+            w.Get<Field>().SetHole(At(0, 2), 0.05f);
+            var show = new ShipView.LiveShow(w, "시험호") { SpeedOverride = 30 };   // 1초에 30틱 — 장마다 틱 사이 ½
+            var cm = w.Get<ShipMind>();
+            double last = double.NegativeInfinity, worst = 0;
+            int stalled = 0;
+            for (int k = 0; k < 240; k++)
+            {
+                show.Advance(1 / 60.0);
+                double t = show.DrawnTick;
+                if (cm.Waiting(w.Tick)) stalled++;
+                if (t < last) worst = Math.Max(worst, last - t);
+                last = Math.Max(last, t);
+            }
+            Check("일꾼을 기다리는 그림 시계: 받을 틱에 일꾼이 늦어 세계가 멈춘 동안 그리는 때가 줄지 않는다 (틱 사이 비율을 되감지 않는다 — 0.999에 붙잡는다)",
+                cm.ThoughtsOnWorker >= 1 && stalled >= 5 && worst == 0,
+                $"일꾼에서 {cm.ThoughtsOnWorker}번 · 240장 가운데 멈춘 장 {stalled} · 그리는 때가 가장 많이 준 것 {worst:0.000}틱 · 틱 {w.Tick}");
+        }
+        finally { ShipMind.WorkerDelayMs = 0; Par.Threads = keep; }
+    }
 }

@@ -233,10 +233,11 @@ public sealed partial class LiveShow
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             double v0 = Speed;
             int ran = 0;
+            bool waited = false;
             var thinker = w.Find<ShipMind>();
             for (int i = 0; i < n; i++)
             {
-                if (thinker != null && thinker.Waiting(w.Tick)) break;   // 6단 계산 일꾼이 늦었다: 세계만 멈추고 그림은 계속 그린다 (받을 틱 · 결과는 그대로 — docs/ENGINE.md §3-10)
+                if (thinker != null && thinker.Waiting(w.Tick)) { waited = true; break; }   // 6단 계산 일꾼이 늦었다: 세계만 멈추고 그림은 계속 그린다 (받을 틱 · 결과는 그대로 — docs/ENGINE.md §3-10)
                 if (i == n - 1) Remember();
                 AL("자세 · 걸음");
                 w.Step(); AL("세계");
@@ -247,7 +248,8 @@ public sealed partial class LiveShow
                 if (SpeedOverride <= 0 && _replay == null && d.Speed < v0 * 0.5) break;   // 묶음 가운데 분위기가 무거워졌다 — 그 틱에서 멈춘다 (빨리 지나치지 않게)
             }
             if (ran > 0) _tickMs = 0.8 * _tickMs + 0.2 * (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / ran;
-            if (ran < n) _carry = 0;   // 남은 틱은 버린다 (다음 장에 몰지 않는다)
+            // 남은 틱은 버린다 (다음 장에 몰지 않는다) — 일꾼을 기다려 멈췄으면 그리는 때를 되감지 않고 이 틱 끝 바로 앞에 붙잡는다 (0으로 되돌리면 기다린 장마다 그 틱을 다시 재생했다)
+            if (ran < n) _carry = waited ? Math.Min(_carry + (n - ran), 0.999) : 0;
             n = ran;
             if (n > 0) Trace();
             AL("자세 · 걸음");
@@ -480,6 +482,9 @@ public sealed partial class LiveShow
         double cs = Math.Cos(th), sn = Math.Sin(th);
         return (cs, sn, qx - (cs * o.Lx - sn * o.Ly), qy - (sn * o.Lx + cs * o.Ly));
     }
+
+    /// <summary>그리는 때 (틱 — 지난 틱 끝 + 틱 사이 비율: 화면은 한 틱 늦게 메운다).</summary>
+    public double DrawnTick => World.Tick - 1 + Math.Clamp(_carry, 0, 1);
 
     /// <summary>시험용: 몸 b를 틱 사이 비율 f (0 지난 틱 끝 ~ 1 지금)에 그리는 배 틀 각 (rad).</summary>
     public double DrawnTh(int b, double f)
