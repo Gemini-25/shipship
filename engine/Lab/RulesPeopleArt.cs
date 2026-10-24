@@ -57,6 +57,37 @@ public static partial class Program
             int dFear = Diff(plain, scared), dCrawl = Diff(plain, crawl);
             Check("화면의 사람: 두려움을 올리면 얼굴이 바뀌고 (몇 도트) · 머리를 낮추면 엎드린 그림이 된다 (많이) · 그리기는 세계를 바꾸지 않는다",
                 same && dFear is > 0 and < 40 && dCrawl > 100, $"같은 세계 {same} · 겁 {dFear}도트 · 기기 {dCrawl}도트");
+
+            // ── 얼룩진 옷 · 지린 옷 (5단 A3 — ⑦ Body.Dirt · Body.Wet): 더러우면 옷에 갈색 점 · 지리면 다리 윗부분이 어둡다 · 우주복은 덮는다 · 씻으면 처음 그림 ──
+            p.Lighting = false;   // 빛깔만 견준다 (사람 도트는 색표 그대로)
+            byte suit = b.Suit, wet = b.Wet; float dirt = b.Dirt; asleep = b.Asleep; byte conscious = b.Conscious;
+            int look = a.C.LookAt; long until = a.C.LookUntil;
+            b.Asleep = 0; b.Conscious = 1; b.Dirt = 0; b.Wet = 0; a.C.LookUntil = -1;   // 서서 앞을 보는 그림 (누운 그림은 돌린 같은 칠 — 자리를 세기 쉽게)
+            int sx = (L.X(cell) - x0) * Painter.T + Painter.T / 2 - DotPeople.Cx, sy = (L.Y(cell) - y0) * Painter.T + Painter.T - DotPeople.Foot - 2;   // 사람 그림 (24×40)의 왼쪽 위
+            var stainCols = new[] { Rgba.Hex("#2a1d12"), Rgba.Hex("#4a3420"), Rgba.Hex("#6b4e30") };
+            int Brown(Img im) { int n = 0; for (int yy = 0; yy < DotPeople.FH; yy++) for (int xx = 0; xx < DotPeople.FW; xx++) { var q = im.Get(sx + xx, sy + yy); if (Array.IndexOf(stainCols, q) >= 0) n++; } return n; }
+            int Darker(Img i1, Img i2, int r0, int r1) { int n = 0; for (int yy = r0; yy <= r1; yy++) for (int xx = 0; xx < DotPeople.FW; xx++) { var q1 = i1.Get(sx + xx, sy + yy); var q2 = i2.Get(sx + xx, sy + yy); if (q2.R + q2.G + q2.B < q1.R + q1.G + q1.B) n++; } return n; }
+            int Rows(Img i1, Img i2, int r0, int r1) { int n = 0; for (int yy = r0; yy <= r1; yy++) for (int xx = 0; xx < DotPeople.FW; xx++) if (i1.Get(sx + xx, sy + yy) != i2.Get(sx + xx, sy + yy)) n++; return n; }
+            var face = new Img(Painter.FaceW, Painter.FaceH);
+            var clean = Shot(); int n0 = Brown(clean); long k0 = p.Portrait(s, a.Id, face, 0, 0);
+            b.Dirt = 0.8f; var dirty = Shot(); int n1 = Brown(dirty); long k1 = p.Portrait(s, a.Id, face, 0, 0);
+            b.Dirt = 0; b.Wet = 1; var soiled = Shot(); int legDark = Darker(clean, soiled, 26, 35), upper = Rows(clean, soiled, 0, 25);   // 다리 (몸통 아래) 윗부분 · 그 위는 그대로
+            b.Suit = 1; b.Dirt = 0; b.Wet = 0; var suit0 = Shot();
+            b.Dirt = 0.8f; b.Wet = 1; var suit1 = Shot(); int nSuit = Brown(suit1), dSuit = Diff(suit0, suit1);
+            b.Suit = 0; life.Rinse(a.C.Body, Life.ShowerMol); var rinsed = Shot(); int nRinse = Brown(rinsed), dRinse = Diff(clean, rinsed); long k2 = p.Portrait(s, a.Id, face, 0, 0);
+            Check("얼룩진 옷 · 지린 옷: 더러움 0.8 → 옷에 갈색 점 10 넘게 더 · 얼굴 줄 열쇠도 바뀐다 · 지림 → 다리 윗부분 어두운 점 6 넘게 (몸통 위는 그대로) · 우주복은 덮는다 · 샤워 한 번 씻으면 처음 그림",
+                n1 > n0 + 10 && k1 != k0 && legDark > 6 && upper == 0 && nSuit == n0 && dSuit == 0 && nRinse == n0 && dRinse == 0 && k2 == k0,
+                $"갈색 {n0} → {n1} · 열쇠 {(k1 != k0 ? "바뀜" : "같음")} · 다리 어두운 점 {legDark} · 위 바뀐 점 {upper} · 우주복 갈색 {nSuit} · 바뀐 점 {dSuit} · 씻은 뒤 갈색 {nRinse} · 바뀐 점 {dRinse} · 열쇠 {(k2 == k0 ? "처음" : "다름")}");
+
+            // 옆 그림 (동쪽을 본다): 신발 줄 (36 · 37줄)은 지려도 · 더러워도 그대로 (옆 그림의 부위 3은 신발이다) · 다리는 어두워진다
+            a.C.LookAt = cell + 1; a.C.LookUntil = s.Tick + 1000;
+            b.Dirt = 0; b.Wet = 0; var side0 = Shot();
+            b.Dirt = 0.9f; b.Wet = 1; var side1 = Shot();
+            int shoes = Rows(side0, side1, DotPeople.Foot - 1, DotPeople.Foot), sideLeg = Darker(side0, side1, 26, 35);
+            Check("얼룩진 옷 · 지린 옷 옆 그림: 신발 줄은 그대로 · 다리 윗부분은 어두워진다",
+                shoes == 0 && sideLeg > 6 && Diff(side0, clean) > 0, $"신발 줄 바뀐 점 {shoes} · 다리 어두운 점 {sideLeg} · 옆 그림 {Diff(side0, clean)}도트 다름");
+            a.C.LookAt = look; a.C.LookUntil = until;
+            b.Suit = suit; b.Wet = wet; b.Dirt = dirt; b.Asleep = asleep; b.Conscious = conscious;
         }
     }
 }

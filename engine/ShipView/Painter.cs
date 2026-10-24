@@ -685,6 +685,7 @@ public sealed partial class Painter
                 if (_bake && L.Kind[c] == CellKind.Door) continue;   // 문 칸의 얼룩은 넓은 보기가 장마다 문짝 위에 (32도트와 같은 차례)
                 double sootG = f.SootGPerM2(c);
                 if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, _bake ? SootStep(sootG) : sootG, c); // 바닥에 앉은 그을음
+                MoldOn(img, life, c, Px(x), Py(y), _bake);   // 곰팡이 (5단 A3 — 굽는 덩어리는 단 값으로 · 화장실 설비 칸은 줄눈 · 가장자리에만 · 다른 가구 칸은 건너뛴다)
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 if (_bake) continue;   // 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
                 double water = f.Stored(f.T.sWater, c);
@@ -1026,6 +1027,7 @@ public sealed partial class Painter
         bool lying = b.Alive == 0 || b.Conscious == 0 || b.Asleep != 0;
         l.EyesClosed = lying;
         l.Hurt = HurtOf(b);
+        int stain = StainOf(b);   // 옷의 얼룩 · 지린 자국 (5단 A3 — ⑦ 더러움 · 지림)
         l.Face = lying ? DotFace.Calm : FaceOf(c, b);
         l.Held = c.Holding == 255 ? DotHeld.None : mind.ItemNames[c.Holding] switch
         {
@@ -1051,7 +1053,7 @@ public sealed partial class Painter
         {
             // 누운 사람: 옆으로 돌린 그림 (머리가 왼쪽)
             l.Motion = DotMotion.None;
-            var lie = PersonImg(a.Id, l, DotFacing.S, DotPose.Stand, 0, true, false);
+            var lie = PersonImg(a.Id, l, DotFacing.S, DotPose.Stand, 0, true, false, stain);
             int breathe = b.Alive != 0 && ((frame + a.Id) & 7) >= 5 ? 1 : 0;   // 자는 사람은 숨을 쉰다 (가슴이 오르내린다)
             Put(img, lie, px + T / 2 - lie.W / 2, py + T / 2 - lie.H / 2 - lift - breathe);
             return;
@@ -1062,7 +1064,7 @@ public sealed partial class Painter
             bool goes = a.PathIdx < a.Path.Count;
             var face0 = FacingOf(L, a, _tick);
             l.Cycle8 = true; l.Motion = DotMotion.None;
-            var crawl = PersonImg(a.Id, l, face0 == DotFacing.W ? DotFacing.W : DotFacing.E, goes ? DotPose.Walk : DotPose.Stand, goes ? (frame + a.Id) & 7 : 0, false, true);
+            var crawl = PersonImg(a.Id, l, face0 == DotFacing.W ? DotFacing.W : DotFacing.E, goes ? DotPose.Walk : DotPose.Stand, goes ? (frame + a.Id) & 7 : 0, false, true, stain);
             Put(img, crawl, px + T / 2 - crawl.W / 2, py + T / 2 - crawl.H / 2 + 4);
             return;
         }
@@ -1086,7 +1088,7 @@ public sealed partial class Painter
         if (l.Motion == DotMotion.Tool && l.Held == DotHeld.None) l.Held = DotHeld.Wrench;
         if (l.Motion == DotMotion.Doze) { l.EyesClosed = true; l.Face = DotFace.Calm; }
         int fr = pose == DotPose.Walk || l.Motion != DotMotion.None ? (frame + a.Id) & 7 : 0;
-        var dot = PersonImg(a.Id, l, face, pose, fr, false, false);
+        var dot = PersonImg(a.Id, l, face, pose, fr, false, false, stain);
         int ox = px + T / 2 - DotPeople.Cx, oy = py + T - DotPeople.Foot - 2 - lift + (pressing ? (frame + a.Id) & 1 : 0);
         Put(img, dot, ox, oy);
         if (c.Carrying >= 0)
@@ -1099,7 +1101,7 @@ public sealed partial class Painter
                 var vl = LookOf(mind, va);
                 vl.EyesClosed = true; vl.Dead = life.Bodies[vb].Alive == 0; vl.Suit = life.Bodies[vb].Suit != 0;
                 vl.Hurt = HurtOf(life.Bodies[vb]); vl.Face = DotFace.Calm;
-                var lie = PersonImg(va.Id, vl, DotFacing.S, DotPose.Stand, 0, true, false);
+                var lie = PersonImg(va.Id, vl, DotFacing.S, DotPose.Stand, 0, true, false, StainOf(life.Bodies[vb]));
                 Put(img, lie, px + T / 2 - lie.W / 2, oy + 6);
             }
         }

@@ -5,12 +5,13 @@ namespace ShipView;
 
 /// <summary>
 /// 재질 흔적 (그래픽 결정 5) — 사고와 세월로 쌓이고 남는다 · 모두 세계의 값: ④ 벽의 부식(녹 — 윗면 얼룩 · 앞면으로 흘러내린 자국) ·
-/// ④ 벽의 피로(실금) · ② 바닥에 고인 액체마다 빛깔 (암모니아 냉매는 옅은 청록 · 배터리 전해액은 호박색 — 물 · 그을음은 따로 그린다).
-/// 청소 · 수리로 세계의 값이 줄면 흔적도 옅어진다.
+/// ④ 벽의 피로(실금) · ② 바닥에 고인 액체마다 빛깔 (암모니아 냉매는 옅은 청록 · 배터리 전해액은 호박색 — 물 · 그을음은 따로 그린다) ·
+/// 곰팡이 (5단 A3 — ⑦ Life.Mold: 습한 칸에 저절로 핀 검푸른 점 무리 · 화장실 설비 칸은 줄눈 · 가장자리에만).
+/// 청소 · 수리로 세계의 값이 줄면 흔적도 옅어진다 (닦으면 곰팡이 0 → 다음 장에 사라진다).
 /// </summary>
 public sealed partial class Painter
 {
-    public const float RustMin = 0.05f, CrackMin = 0.3f;
+    public const float RustMin = 0.05f, CrackMin = 0.3f, MoldMin = 0.05f;
 
     private void WallTraces(Img img, Structure st, int x0, int y0, int w, int h)
     {
@@ -83,6 +84,60 @@ public sealed partial class Painter
             float cx = px + T / 2 + (DotHash.F(c, sIdx, 3) - 0.5f) * 8, cy = py + T / 2 + (DotHash.F(c, sIdx, 4) - 0.5f) * 6;
             float rx = (float)Math.Min(14, 5 + mol / full * 9), ry = rx * 0.6f;
             Puddle(img, cx, cy, rx, ry, col, a);
+        }
+    }
+
+    /// <summary>곰팡이 단 여섯 (굽는 덩어리는 이 값으로 그린다 — 도장에 단 번호 · 천천히 자라는 값이 장마다 다시 굽게 하지 않는다).</summary>
+    private static readonly float[] MoldSteps = { 0.05f, 0.1f, 0.2f, 0.4f, 0.7f, 1f };
+    private static int MoldIdx(float m) { int i = 0; while (i < MoldSteps.Length && m >= MoldSteps[i]) i++; return i; }
+    private static float MoldStep(float m) { int i = MoldIdx(m); return i == 0 ? m : MoldSteps[i - 1]; }
+    private static readonly Rgba[] MoldCol = { Rgba.Hex("#1f2a1a"), Rgba.Hex("#2e3b22"), Rgba.Hex("#3f4a2a") };
+
+    /// <summary>그 칸에 그릴 곰팡이 (없거나 다른 가구 칸이면 0 — 화장실 설비 칸은 그린다).</summary>
+    private float MoldAt(Life? life, int c) =>
+        life == null || c >= life.Mold.Length || life.Mold[c] < MoldMin || L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] == 0 ? 0 : life.Mold[c];
+
+    /// <summary>칸 c (자리 px, py)의 곰팡이 얼룩 — 32도트 칸 덮개 · 굽는 덩어리 (step: 단 값으로) · 넓은 보기 문 칸이 함께 쓴다.</summary>
+    private void MoldOn(Img img, Life? life, int c, int px, int py, bool step)
+    {
+        float m = MoldAt(life, c);
+        if (m <= 0) return;
+        int fu = L.FurnitureAt[c];
+        MoldStain(img, px, py, step ? MoldStep(m) : m, c, fu >= 0 ? WashBodyImg(life, fu) : null, fu >= 0 ? WashRise(_washKind[fu]) : 0);
+    }
+
+    /// <summary>곰팡이 얼룩: 녹 얼룩 꼴 (2×2 점 · DotHash.U — 늘 같은 자리) 검푸른 점이 칸마다 세 무리로 핀다 — 점 4 + 60 × 곰팡이 · 짙기 0.35 + 0.5 × 곰팡이 · 빛깔 셋.
+    /// fixture (화장실 설비 몸 그림 · 위로 rise 솟음)가 있으면 칸 가장자리 4도트와 16도트 타일의 가운데 줄눈 (설비 몸이 덮지 않은 곳)에만.</summary>
+    private static void MoldStain(Img img, int px, int py, float mold, int c, Img? fixture, int rise)
+    {
+        mold = Math.Min(1, mold);
+        float a = 0.35f + 0.5f * mold;
+        int n = (int)(4 + 60 * mold), r = 3 + (int)(mold * 8);
+        for (int k = 0; k < n; k++)
+        {
+            uint u = DotHash.U(c, k, 73);
+            int sx, sy;
+            if (fixture == null)
+            {
+                uint g = DotHash.U(c, (int)(u % 3), 79);   // 무리 셋 (칸마다 같은 자리 · 곰팡이가 많을수록 넓게)
+                sx = Math.Clamp(4 + (int)(g % (T - 10)) + (int)((u >> 4) % (uint)(2 * r + 1)) - r, 0, T - 2);
+                sy = Math.Clamp(4 + (int)((g >> 8) % (T - 10)) + (int)((u >> 10) % (uint)(2 * r + 1)) - r, 0, T - 2);
+            }
+            else
+            {
+                int along = (int)((u >> 4) % (T - 1)), side = (int)((u >> 12) % 3);
+                switch ((u >> 16) % 6)   // 위 · 아래 · 왼 · 오른 가장자리 (4도트 안) · 가운데 줄눈 (가로 · 세로 — 설비 몸이 덮은 곳은 건너뛴다)
+                {
+                    case 0: sx = along; sy = side; break;
+                    case 1: sx = along; sy = T - 2 - side; break;
+                    case 2: sx = side; sy = along; break;
+                    case 3: sx = T - 2 - side; sy = along; break;
+                    case 4: sx = along; sy = 15; break;
+                    default: sx = 15; sy = along; break;
+                }
+                if ((u >> 16) % 6 >= 4 && (fixture.Get(sx, sy + rise).A > 0 || fixture.Get(sx + 1, sy + 1 + rise).A > 0)) continue;
+            }
+            img.Fill(px + sx, py + sy, 2, 2, MoldCol[(u >> 20) % 3], a * (0.85f + 0.05f * ((u >> 24) % 4)));
         }
     }
 

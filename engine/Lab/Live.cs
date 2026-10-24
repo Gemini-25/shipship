@@ -112,6 +112,7 @@ public static partial class Program
         Console.WriteLine($"  미리 보기: 복제 {show.Dir.Foresights} · 다시 맞춤 {show.Dir.Resyncs} · 앞선 틱 {show.Dir.AheadSteps} · {show.Dir.ForeseeMs:0}ms");
         Console.WriteLine($"  코드 미리 옮기기: {Warmup.Methods}개 · {Warmup.Ms / 1000:0.0}초 (낮은 우선순위 스레드){(Warmup.Ms == 0 ? " — 아직 하는 중" : "")}");
         Console.WriteLine($"  새 그림판 {LiveShow.NewCanvas}장 / 그림 {paint.Count}장 (확대 단계가 바뀔 때만)");
+        Console.WriteLine($"  사람 그림 캐시: {show.Painter.PeopleCached}장 · 6,000장을 넘어 비운 횟수 {show.Painter.PeopleWipes} (옷의 얼룩 · 지림 단이 열쇠에 든다 — 5단 A3)");
         Console.WriteLine($"  소리 섞기 1/60초마다: 보통 {P(mixMs, 0.5):0.00}ms · 99% {P(mixMs, 0.99):0.00}ms · 가장 김 {mixMs.Max():0.0}ms · 목소리 {mix.Voices}");
         Console.WriteLine($"  분위기별 화면 초: 조용함 {show.Dir.CalmScreenSec:0} · 조짐 {show.Dir.OmenScreenSec:0} · 위험 {show.Dir.DangerScreenSec:0} · 결정적 {show.Dir.CriticalScreenSec:0}");
         // 확대마다 한 장 그리기 (손 카메라 · 세계는 멈춘 채 열 장씩 · 가운데 값)

@@ -8,6 +8,7 @@ namespace Lab;
 /// 넘친 변기 발치의 물 · 뜨거운 물 위로 오르는 김 (5단 A2)이 그림에 실제로 나오는가 (1분마다 세계를 보고 · 처음 몇 장을 찍는다 — 재미 · 빈도는 재지 않는다).
 /// 차림 (원인 마디 Setup): 새벽에 변기 하나가 막혀 모르고 쓴 이가 넘쳤다 (막힘 · 발치의 물) · 어젯밤 늦게까지 정비한 여섯이 씻지 못하고 잤다 (더러움).
 /// A2 검토: 끝 줄에 안개 칸 · 거울 김 서림을 화장실 안 · 밖으로 나눠 센다 (1분마다 본 가운데 가장 많을 때 — 화장실 밖의 안개가 그림에 드러나게 · 세계 습도가 1을 넘는 칸도).
+/// 5단 A3: 곰팡이 칸 · 얼룩 옷 — 차림 (Setup): 지난주 화장실 곁 제습기 모터가 멈췄다 (기계 부품이 망가졌다 — 새뜰호 화장실에는 제습기가 없어 가장 가까운 것) · 그 곁 화장실 바닥 두 칸에 곰팡이 0.4 (곰팡이는 느리게 자라 짧은 장면은 차림으로 보인다).
 /// </summary>
 public static partial class Program
 {
@@ -26,12 +27,22 @@ public static partial class Program
         f.AddStore(clogged.Cells[0], f.T.sWater, 25);
         s.Causes.Add(CauseKind.Setup, "어젯밤 늦게까지 기관실 정비를 한 여섯은 씻지 못하고 잤다", s.Tick);
         foreach (var a in m.Agents.Where(a => a.IsPerson).Take(6)) life[a.C.Body].Dirt = 0.7f;   // 일어나면 씻으러 간다 (언제 · 어디서는 제 판단)
+        // 곰팡이 (5단 A3): 화장실 곁 제습기 모터가 지난주 멈췄다 · 그 사이 화장실 바닥 두 칸에 곰팡이가 폈다
+        bool InWash(int c) => L.Room[c] >= 0 && L.Rooms[L.Room[c]].Type == "Washroom";
+        int Far(int c1, int c2) => Math.Abs(L.X(c1) - L.X(c2)) + Math.Abs(L.Y(c1) - L.Y(c2));
+        var washCells = Enumerable.Range(0, L.N).Where(c => L.Kind[c] == CellKind.Floor && InWash(c)).ToList();
+        var dry = net.Devices.Where(d => d.Type == "Dehumidifier").OrderBy(d => washCells.Min(c => Far(c, d.Cell))).ThenBy(d => d.Id).First();   // 화장실의 제습기 (화장실에 없으면 가장 가까운 것 — 새뜰호는 화장실 곁 방)
+        int moldCause = s.Causes.Add(CauseKind.Setup, "지난주 제습기 모터가 멈췄다 — 화장실 바닥에 곰팡이가 폈다", s.Tick, dry.Cell);
+        net.Age(dry.Id, Part.Mechanical, 1.0, moldCause); net.Broken[dry.Id * 4 + (int)Part.Mechanical] = 1;
+        var moldy = washCells.Where(c => L.FurnitureAt[c] < 0).OrderBy(c => Far(c, dry.Cell)).ThenBy(c => c).Take(2).ToArray();
+        foreach (int c in moldy) life.Mold[c] = 0.4f;
 
         var painter = new Painter(L);
         var page = new System.Text.StringBuilder();
         int k = 0, looks = 0;
-        var seen = new int[6]; var shots = new int[6];   // 커튼 닫힘 · 샤워 물줄기 · 사용 금지 불 · 발치 물 · 손 씻는 물줄기 · 김 (뜨거운 물)
-        string[] what = { "커튼 닫힌 샤워 칸", "샤워 물줄기", "'사용 금지' 불 켜진 변기", "설비 발치의 물", "손 씻는 물줄기", "김이 오르는 샤워 칸" };
+        var seen = new int[8]; var shots = new int[8];   // 커튼 닫힘 · 샤워 물줄기 · 사용 금지 불 · 발치 물 · 손 씻는 물줄기 · 김 (뜨거운 물) · 곰팡이 칸 · 얼룩 옷 (5단 A3)
+        string[] what = { "커튼 닫힌 샤워 칸", "샤워 물줄기", "'사용 금지' 불 켜진 변기", "설비 발치의 물", "손 씻는 물줄기", "김이 오르는 샤워 칸", "곰팡이 핀 화장실 바닥", "얼룩진 · 지린 옷" };
+        int moldMost = 0, stainMost = 0;
         void Shot(int cell, string text, int D = 32)
         {
             int vw = D == 32 ? 29 : 58, vh = D == 32 ? 19 : 38;
@@ -44,7 +55,6 @@ public static partial class Program
         }
         Shot(clogged.Cells[0], "06:00 — 새벽에 넘친 변기 (막힘 · 발치에 고인 물)");
         // 안개 · 거울 김 서림 (그림과 같은 문턱 — 바닥 칸과 열린 문 칸 · 세면대 칸): 화장실 안 · 밖으로 나눠 1분마다 세고 가장 많을 때를 남긴다
-        bool InWash(int c) => L.Room[c] >= 0 && L.Rooms[L.Room[c]].Type == "Washroom";
         var sinks = wash.Where(fu => fu.Type == "Sink").ToList();
         int fogIn = 0, fogOut = 0, mirIn = 0, mirOut = 0, over1 = 0; double rhMax = 0;
         void CountAir()
@@ -69,7 +79,7 @@ public static partial class Program
             if (s.Tick % 25 != 0) continue;   // 1분마다 세계를 본다
             looks++;
             CountAir();
-            var at = new int[] { -1, -1, -1, -1, -1, -1 };
+            var at = new int[] { -1, -1, -1, -1, -1, -1, -1, -1 };
             foreach (var a in m.Agents)
             {
                 if (!a.IsPerson || a.C.StepIndex >= a.Plan.Count) continue;
@@ -81,7 +91,20 @@ public static partial class Program
             foreach (var (fu, dev) in showers) if (dev >= 0 && net.ShowerRunning(dev)) { at[1] = fu.Cells[0]; if (net.Working(dev)) at[5] = fu.Cells[0]; }   // 온수기가 돌면 김
             foreach (var fu in toilets) if (m.WashSign[fu.Id] != 0) at[2] = fu.Cells[0];
             foreach (var fu in wash) if (f.Stored(f.T.sWater, fu.Cells[0]) > 2) at[3] = fu.Cells[0];
-            for (int i = 0; i < 6; i++)
+            // 곰팡이 칸 (그림과 같은 문턱 — 가구 없는 바닥 · 문 · 화장실 설비 칸) · 얼룩 옷 (그림과 같은 표 — 더러움 0.35 넘게 · 지림 · 우주복은 덮는다)
+            int mc = 0, sp = 0;
+            for (int c = 0; c < L.N; c++)
+                if (L.IsSpace(c) && life.Mold[c] >= Painter.MoldMin && (L.FurnitureAt[c] < 0 || L.Furniture[L.FurnitureAt[c]].Type is "Toilet" or "Sink" or "Shower")) { mc++; if (at[6] < 0 || InWash(c)) at[6] = c; }
+            bool pickWet = false;
+            foreach (var a in m.Agents)
+            {
+                if (!a.IsPerson || Painter.StainOf(life.Bodies[a.C.Body]) == 0) continue;
+                sp++;
+                bool wetNow = life.Bodies[a.C.Body].Wet != 0;
+                if (at[7] < 0 || wetNow && !pickWet) { at[7] = a.C.Cell; pickWet = wetNow; }   // 지린 이를 먼저 찍는다
+            }
+            moldMost = Math.Max(moldMost, mc); stainMost = Math.Max(stainMost, sp);
+            for (int i = 0; i < 8; i++)
             {
                 if (at[i] < 0) continue;
                 seen[i]++;
@@ -90,7 +113,7 @@ public static partial class Program
         }
         Shot(clogged.Cells[0], $"09:00 넓은 보기 16도트 — 막힌 변기 {(life.Clogged[clogged.Id] == 0 ? "뚫렸다" : "그대로")} · 발치 물 {f.Stored(f.T.sWater, clogged.Cells[0]):0.0}몰", 16);
         File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>washview</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:464px}}img{{width:464px;image-rendering:pixelated}}</style>{page}");
-        Console.WriteLine($"  washview: 1분마다 {looks}번 본 가운데 커튼 닫힌 장 {seen[0]} · 물줄기 장 {seen[1]} · 불 켜진 변기 {seen[2]} · 발치 물 {seen[3]} · 김 장 {seen[5]} (손 씻는 물줄기 {seen[4]}) · {k}장 → {dir}");
+        Console.WriteLine($"  washview: 1분마다 {looks}번 본 가운데 커튼 닫힌 장 {seen[0]} · 물줄기 장 {seen[1]} · 불 켜진 변기 {seen[2]} · 발치 물 {seen[3]} · 김 장 {seen[5]} (손 씻는 물줄기 {seen[4]}) · 곰팡이 칸 장 {seen[6]} (가장 많을 때 {moldMost}칸) · 얼룩 옷 장 {seen[7]} (가장 많을 때 {stainMost}명) · {k}장 → {dir}");
         Console.WriteLine($"  washview: 가장 많을 때 안개 칸 (습도 {Painter.FogRh}) 화장실 안 {fogIn} · 밖 {fogOut} · 거울 김 서림 (세면대 {sinks.Count}) 안 {mirIn} · 밖 {mirOut} · 습도 1을 넘는 칸 {over1} · 가장 높은 습도 {rhMax:0.00}");
     }
 }
