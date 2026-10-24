@@ -354,6 +354,8 @@ public static partial class Program
         var breath = new Breath(7); breath.Set(0.3f, 0.35f);
         var breeze = new Wind(8); breeze.Set(0, 0.2f);
         var storm = new Wind(9); storm.Set(1, 0.9f);
-        return new (string, Voice)[] { ("방 공기 A=1", room), ("쉬익 1kHz", jet), ("쉬익 6kHz", jet2), ("불 250kW", fire), ("펌프", pump), ("공조", hvac), ("우주복 숨", breath), ("바람", breeze), ("모래 폭풍", storm) };
+        var spray = new Spray(10); spray.Set(1, 0);
+        var sprayBody = new Spray(11); sprayBody.Set(1, 1);
+        return new (string, Voice)[] { ("방 공기 A=1", room), ("쉬익 1kHz", jet), ("쉬익 6kHz", jet2), ("불 250kW", fire), ("펌프", pump), ("공조", hvac), ("우주복 숨", breath), ("바람", breeze), ("모래 폭풍", storm), ("샤워 물", spray), ("샤워 물 (사람)", sprayBody) };
     }
 }

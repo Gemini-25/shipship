@@ -334,3 +334,48 @@ public sealed class HumVoice : VoicedBase
         return _dc.High(env * (_lp.Low(glottal, 800) * 0.8f + _nasal.Run(glottal) * 0.6f), 70) * 0.62f;   // 반쪽 사인 맥박의 직류는 덜어 낸다
     }
 }
+
+/// <summary>
+/// 샤워 물 (쏴아 — 이어 도는 소리 · 5단 A4): 물줄기가 받침을 때리는 흰 잡음 (1 ~ 9kHz 띠 · 물줄기가 고르지 않아 조금씩 일렁인다) +
+/// 물방울이 받침을 때리는 투둑 (초당 80번 남짓 · 2 ~ 6kHz 짧은 울림) + 배수구 꾸르륵 (250Hz 좁은 띠 · 0.3Hz로 너울진다).
+/// 그 칸에 사람이 서 있으면 (person) 몸이 물을 받아 높은 음(5kHz 위)이 먹먹해지고 투둑이 준다.
+/// </summary>
+public sealed class Spray : Voice
+{
+    private Noise _n;
+    private OnePole _hp1, _hp2, _lp1, _lp2, _body1, _body2, _flick;
+    private Biquad _drain = Biquad.Band(250, 5);
+    private readonly Mode[] _drops = new Mode[4];
+    private int _drop;
+    private double _swell;
+    private float _level, _cur, _person, _curPerson;
+    public Spray(uint seed) { _n = new Noise(seed); _swell = (_n.White() + 1) * 0.5; Send = 0.2f; }
+    /// <summary>세기 · 그 칸에 사람이 서 있나 (0 ~ 1).</summary>
+    public void Set(float level, float person) { _level = level; _person = Math.Clamp(person, 0, 1); }
+    public void Stop() => _level = 0;
+    public override float Next()
+    {
+        _cur += (_level - _cur) * 0.0005f * Dsp.K;
+        if (_level <= 0 && _cur < 1e-4f) { Done = true; return 0; }
+        _curPerson += (_person - _curPerson) * 0.0003f * Dsp.K;
+        // 물줄기: 1 ~ 9kHz 띠 (두 극씩) · 고르지 않은 흐름 (12Hz 아래로 일렁임) · 몸이 받으면 5kHz 위가 준다
+        float hiss = _lp2.Low(_lp1.Low(_hp2.High(_hp1.High(_n.White(), 1000), 1000), 9000), 9000);
+        hiss *= 0.8f + 0.2f * _flick.Low(_n.White() * 3f, 12f);
+        float muffled = _body2.Low(_body1.Low(hiss, 5000), 5000);
+        hiss += (muffled - hiss) * _curPerson;
+        // 투둑: 물방울이 받침을 때린다 (몸이 받으면 드물다)
+        if (_n.Chance(80f * (1 - 0.6f * _curPerson) / Dsp.Rate))
+        {
+            float u = (_n.White() + 1) * 0.5f;
+            _drops[_drop] = new Mode(2000 + 4000 * u, 0.012f + 0.02f * (_n.White() + 1) * 0.5f, 0.3f * (0.5f + 0.5f * u));
+            _drop = (_drop + 1) & 3;
+        }
+        float patter = _drops[0].Next() + _drops[1].Next() + _drops[2].Next() + _drops[3].Next();
+        // 배수구 꾸르륵: 좁은 띠 · 0.3Hz 너울 (물이 빠지며 숨을 쉬듯)
+        _swell += 0.3 / Dsp.Rate;
+        if (_swell >= 1) _swell -= 1;
+        float sw = 0.5f + 0.5f * MathF.Sin((float)(_swell * Dsp.Tau));
+        float gurgle = _drain.Run(_n.White()) * sw * sw;
+        return _cur * (hiss * 0.7f + patter + gurgle * 2f) * 1.48f;   // 크기 기준 (가장 센 0.1초 RMS 0.25)
+    }
+}

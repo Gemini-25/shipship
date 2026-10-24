@@ -4,15 +4,17 @@ using ShipEngine;
 namespace ShipView.Audio;
 
 /// <summary>이어 도는 소리의 종류 (섞개가 이 열쇠로 하나씩 둔다).</summary>
-public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring, Tune, Wind }
+public enum LoopKind : byte { Jet, Fire, Machine, Room, Breath, Ring, Tune, Wind, Water }
 
 /// <summary>이어 도는 소리 하나의 이번 모습.</summary>
 public struct LoopUpdate
 {
+    /// <summary>섞개가 목소리를 하나씩 두는 열쇠 — 갈래마다 따로: 1 ~ 4 방 공기 · 숨 · 이명 · 바람 / 1,000 + 새는 틈 / 2,000,000 + 불(방) /
+    /// 3,000,000 + 음악(사람 × 4 + 방식 — 곡의 씨앗) / 5,000,000 + 샤워 물(장치) / 6,000,000 + 기계(장치) / 900,000,000 + 봉함 쉬익(칸).</summary>
     public long Key;
     public LoopKind Kind;
     public string Role;      // 기계: 장치 역할
-    public float A, B;       // 쉬익: 띠 Hz · 세기 / 불: kW / 기계 · 방: 세기 / 숨: 빠르기 · 세기
+    public float A, B;       // 쉬익: 띠 Hz · 세기 / 불: kW / 기계 · 방: 세기 / 숨: 빠르기 · 세기 / 샤워 물: 세기 · 그 칸에 사람이 서 있나
     public float Gain, Cutoff, Pan, Send;
 }
 
@@ -467,7 +469,7 @@ public sealed class Acoustics
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxFires)) frame.Loops.Add(j.u);
     }
 
-    // ── 돌아가는 장치: 엔진의 장치 표 크기 + 낡은 몫 (바탕 소음과 같은 값) ──
+    // ── 돌아가는 장치: 엔진의 장치 표 크기 + 낡은 몫 (바탕 소음과 같은 값) · 물이 흐르는 샤워 칸은 기계 웅웅이 아니라 쏴아 (5단 A4) ──
 
     private void Machines(SoundFrame frame, Sim w, int ear, float halfW, bool suit)
     {
@@ -479,10 +481,26 @@ public sealed class Acoustics
             float db = net.NoiseDb(dev.Id);
             if (db <= 30) continue;
             if (!Hear(dev.Cell, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan, dev.Cell)) continue;
-            list.Add((lp, new LoopUpdate { Key = 3_000_000 + dev.Id, Kind = LoopKind.Machine, Role = dev.Def.Role, A = 1, B = net.WornDb(dev.Id), Gain = gain, Cutoff = cut, Pan = pan, Send = 0.15f }));
+            // 샤워 칸: 물이 흐르면 물줄기 · 투둑 · 배수구 (그 칸에 사람이 서 있으면 몸이 물을 받아 먹먹하다) — 온수기만 돌고 물이 흐르지 않으면 (잠근 그 틱 · 물탱크가 빈) 기계 웅웅 그대로
+            if (dev.Type == "Shower" && net.ShowerRunning(dev.Id))
+            {
+                list.Add((lp, new LoopUpdate { Key = 5_000_000 + dev.Id, Kind = LoopKind.Water, A = 1, B = PersonAt(w, dev.Cell) ? 1 : 0, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.2f }));
+                Caption("쏴아 — 샤워 물", DirOf(dev.Cell, ear), lp, true);
+                continue;
+            }
+            list.Add((lp, new LoopUpdate { Key = 6_000_000 + dev.Id, Kind = LoopKind.Machine, Role = dev.Def.Role, A = 1, B = net.WornDb(dev.Id), Gain = gain, Cutoff = cut, Pan = pan, Send = 0.15f }));
         }
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxMachines)) frame.Loops.Add(j.u);
-        if (Log != null && _logMachines++ % 600 == 0) Log("  기계: " + string.Join(" · ", list.OrderByDescending(x => x.lp).Take(MaxMachines).Select(x => $"{x.u.Role} {x.lp:0}dB")));
+        if (Log != null && _logMachines++ % 600 == 0) Log("  기계: " + string.Join(" · ", list.OrderByDescending(x => x.lp).Take(MaxMachines).Select(x => $"{(x.u.Kind == LoopKind.Water ? "샤워 물" : x.u.Role)} {x.lp:0}dB")));
+    }
+
+    /// <summary>그 칸에 사람이 있나 (서 있든 쓰러졌든 — 샤워 물을 몸이 받는다).</summary>
+    private static bool PersonAt(Sim w, int cell)
+    {
+        var mind = w.Find<Mind>();
+        if (mind == null) return false;
+        foreach (var a in mind.Agents) if (a.IsPerson && a.C.Cell == cell) return true;
+        return false;
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using ShipEngine;
 using ShipSim.Art;
 using ShipView;
+using ShipView.Audio;
 
 namespace Lab;
 
@@ -425,5 +426,117 @@ public static partial class Program
                 !hull.StartsWith("✘") && !inner.StartsWith("✘"), $"{hull} | {inner} (32 · 16 · 8 · 빛 켬)");
         }
         Painter.FarBakeMs = bakeMs; Painter.FarBakeMax = bakeMax;
+    }
+
+    /// <summary>
+    /// 화장실 소리 (5단 A4 — 화면 몫 · docs/stage5/view.md I): 이어 도는 소리의 열쇠가 겹치지 않는다 (있던 결함 — 사람 i의 스피커 음악과 장치 4i+1의 기계 소리가 같은 열쇠라
+    /// 섞개가 먼저 만든 기계 목소리에 음악을 먹였다) · 물이 흐르는 샤워 칸은 기계 웅웅이 아니라 쏴아 (물줄기 · 투둑 · 배수구) — 그 칸에 사람이 서 있으면 몸이 물을 받아 먹먹하다 · 잠그면 그친다.
+    /// 귀는 세계를 읽기만 한다 (세계의 샤워 칸 소리 크기는 C7에서 물 흐름을 따른다 — 지금은 온수기가 돌 때 표의 50dB).
+    /// </summary>
+    private static void WashSoundRules()
+    {
+        if (!Do("화장실 소리")) return;
+        Console.WriteLine("\n[화장실 소리 — 이어 도는 소리 열쇠 (음악 · 기계) · 샤워 물 쏴아 (기계 웅웅이 아니다) · 사람이 서면 먹먹 · 잠그면 그친다]");
+        var legend = new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery", ['w'] = "WaterRecycler" };
+        var lay = Worlds.Ascii(WashViewShip, legend);
+        var show = new LiveShow(Worlds.Full(lay, 3), "시험호");
+        var s = show.Sim;
+        var m = s.Get<Mind>(); var net = s.Get<Network>(); var life = s.Get<Life>();
+        const double dt = 1.0 / 60;
+        show.Advance(dt);
+        show.Ears.Captions = true;
+        SoundFrame Ear(int ear)   // 그 칸에서 한 장 듣는다 (세계는 나아가지 않는다 — 귀만)
+        {
+            show.Ears.ForceEar = ear;
+            while (show.Ears.Out.TryDequeue(out _)) { }
+            show.Ears.Remap(ear);
+            show.Ears.Update(show, dt);
+            var fr = new SoundFrame();
+            while (show.Ears.Out.TryDequeue(out var f)) fr = f;
+            return fr;
+        }
+
+        // ── 열쇠: 사람 i가 스피커를 틀고 장치 4i+1(변기 — 가만히 있어도 1m 40dB)이 들린다 → 두 이어 도는 소리의 열쇠가 다르고 · 섞개가 소리마다 목소리를 따로 둔다 ──
+        {
+            var toilet = net.Devices.First(d => d.Type == "Toilet" && d.Id % 4 == 1);
+            int who = (toilet.Id - 1) / 4, at = toilet.Cell + lay.W;   // 변기 바로 아래 칸
+            while (m.Agents.Count <= who) m.AddPerson(s, at);
+            ref var c = ref m[who].C;
+            c.Cell = at; life[c.Body].Cell = at;
+            c.Playing = 1; c.PlayedAt = s.Tick;   // 스피커 (시험 차리기 — 트는 것은 '음악' 시험이 본다)
+            var fr = Ear(at);
+            c.Playing = 0;
+            var tune = fr.Loops.Where(u => u.Kind == LoopKind.Tune).ToList();
+            var hum = fr.Loops.Where(u => u.Kind == LoopKind.Machine).ToList();
+            bool distinct = fr.Loops.Select(u => u.Key).Distinct().Count() == fr.Loops.Count;
+            var mix = new Mixer { MusicGain = 0 };
+            mix.Apply(fr);
+            int voices = mix.Voices - fr.Shots.Count;
+            Check("화장실 소리: 이어 도는 소리 열쇠 — 사람 i가 스피커를 틀고 장치 4i+1(변기 웅웅)이 들리면 두 열쇠가 다르고 · 섞개가 소리마다 목소리를 따로 둔다 (있던 결함: 같은 열쇠라 음악이 기계 목소리에 먹혔다)",
+                m[who].Id == who && m[who].IsPerson && tune.Count == 1 && hum.Count >= 1 && distinct && voices == fr.Loops.Count,
+                $"사람 {who} · 장치 {toilet.Id} · 음악 열쇠 {string.Join("/", tune.Select(u => u.Key))} · 기계 열쇠 {string.Join("/", hum.Select(u => u.Key))} · 이어 도는 소리 {fr.Loops.Count} · 섞개 목소리 {voices}");
+        }
+
+        // ── 샤워 칸: 밸브 · 온수기를 켜 두면 (사람 없이 3틱) 쏴아 하나 (열쇠 5,000,000 + 장치) · 그 장치의 기계 웅웅은 없다 · 자막 '쏴아 — 샤워 물' ·
+        //    그 칸에 사람이 서면 B = 1 (몸이 물을 받는다) · 잠그면 같은 틱 (온수기는 아직 돈다)에도 쏴아가 없다 · 흐름 스위치가 온수기를 끈 뒤에도 없다 ──
+        {
+            var shower = lay.Furniture.First(x => x.Type == "Shower");
+            int sc = shower.Cells[0], dev = net.Devices.First(d => d.Furniture == shower.Id).Id, ear = sc + 1;
+            LoopUpdate[] Water(SoundFrame f) => f.Loops.Where(u => u.Kind == LoopKind.Water).ToArray();
+            bool HumOf(SoundFrame f) => f.Loops.Any(u => u.Kind == LoopKind.Machine && (u.Key == 3_000_000 + dev || u.Key == 6_000_000 + dev));
+            var quiet = Ear(ear);
+            net.SetValve(dev, true); net.SetOn(dev, true);
+            s.Run(3);
+            bool hot = net.ShowerRunning(dev) && net.Working(dev);
+            var on = Ear(ear);
+            var caps = show.Ears.CaptionsNow();
+            int pp = m.AddPerson(s, sc);
+            var stand = Ear(ear);
+            m[pp].C.Cell = lay.Index(lay.X(sc), lay.Y(sc) - 1); life[m[pp].C.Body].Cell = m[pp].C.Cell;   // 샤워 칸 밖으로
+            net.SetValve(dev, false);
+            bool heater = net.NoiseDb(dev) > 30;   // 온수기는 아직 돈다 (흐름 스위치는 다음 틱에 끈다)
+            var shut = Ear(ear);
+            s.Run(2);
+            var after = Ear(ear);
+            var w = Water(on);
+            Check("화장실 소리: 샤워 칸 — 밸브와 온수기를 켜 두면 (사람 없이) 이어 도는 소리에 샤워 물 하나 (열쇠 5,000,000 + 장치) · 그 장치의 기계 웅웅은 없다 · 자막 '쏴아 — 샤워 물' · 켜기 전엔 없다",
+                hot && Water(quiet).Length == 0 && w.Length == 1 && w[0].Key == 5_000_000 + dev && w[0].B == 0 && w[0].Gain > 0 && !HumOf(on) && caps.Any(x => x.Text == "쏴아 — 샤워 물"),
+                $"더운 물 {hot} · 켜기 전 {Water(quiet).Length} · 샤워 물 {string.Join("/", w.Select(u => $"열쇠 {u.Key} B {u.B:0} 크기 {u.Gain:0.000}"))} · 기계 웅웅 {HumOf(on)} · 자막 {string.Join(" / ", caps.Select(x => x.Text))}");
+            var ws = Water(stand);
+            Check("화장실 소리: 샤워 칸 — 그 칸에 사람이 서면 B = 1 (몸이 물을 받아 먹먹하다) · 밸브를 잠그면 같은 틱 (온수기는 아직 돈다)에도 쏴아가 없고 · 온수기가 꺼진 뒤에도 없다",
+                ws.Length == 1 && ws[0].B == 1 && heater && Water(shut).Length == 0 && Water(after).Length == 0 && !HumOf(after),
+                $"사람이 선 샤워 물 {string.Join("/", ws.Select(u => $"B {u.B:0}"))} · 잠근 틱 온수기 {heater} · 쏴아 {Water(shut).Length} · 두 틱 뒤 {Water(after).Length} · 기계 {HumOf(after)}");
+        }
+
+        // ── 섞개 · 목소리: 샤워 물 루프는 쏴아 목소리로 울리고 · 사람이 서면 5kHz 위가 반 아래로 준다 · 목록에서 빠지면 그친다 ──
+        {
+            var mix = new Mixer { MusicGain = 0 };
+            var fr = new SoundFrame();
+            fr.Loops.Add(new LoopUpdate { Key = 5_000_000, Kind = LoopKind.Water, A = 1, B = 0, Gain = 1, Cutoff = 16000 });
+            var buf = new float[Dsp.Rate * 2];
+            mix.Apply(fr); mix.Render(buf, Dsp.Rate);   // 1초 (크기가 따라 오른다)
+            double rms = Math.Sqrt(buf.Skip(Dsp.Rate).Sum(x => (double)x * x) / Dsp.Rate);   // 뒤 0.5초
+            OnePole m1 = default, m2 = default;
+            double mHi = 0, mAll = 0;
+            for (int i = 0; i < Dsp.Rate; i++) { float x = buf[2 * i], y = m2.High(m1.High(x, 2000), 2000); if (i >= Dsp.Rate / 2) { mHi += y * y; mAll += x * x; } }   // 왼쪽 · 뒤 0.5초 — 2kHz 위 몫 (이 거름으로 흰 잡음 0.45 · 방 공기 웅웅 0)
+            double hiShare = mHi / Math.Max(1e-12, mAll);
+            mix.Apply(new SoundFrame());
+            mix.Render(buf, Dsp.Rate); mix.Render(buf, Dsp.Rate);
+            int left = mix.Voices;
+            (double hi, double all) Play(float person)
+            {
+                var v = new Spray(5);
+                v.Set(1, person);
+                for (int i = 0; i < Dsp.Rate; i++) v.Next();   // 따라 오를 때까지
+                OnePole h1 = default, h2 = default;
+                double e = 0, a = 0;
+                for (int i = 0; i < Dsp.Rate; i++) { float x = v.Next(), y = h2.High(h1.High(x, 5000), 5000); e += y * y; a += x * x; }
+                return (e / Dsp.Rate, Math.Sqrt(a / Dsp.Rate));
+            }
+            var open = Play(0); var body = Play(1);
+            Check("화장실 소리(섞개 · 목소리): 샤워 물 루프는 쏴아 목소리로 울리고 (흰 잡음 1~9kHz · 투둑 · 배수구) · 사람이 서면 5kHz 위가 반 아래로 준다 · 목록에서 빠지면 그친다",
+                rms > 0.02 && hiShare > 0.2 && left == 0 && open.all > 0.1 && body.hi < open.hi * 0.5 && body.all > open.all * 0.4,
+                $"섞개 RMS {rms:0.000} · 2kHz 위 몫 {hiShare:0.00} · 빠진 뒤 목소리 {left} · 목소리 RMS {open.all:0.000} → 사람 {body.all:0.000} · 5kHz 위 {10 * Math.Log10(open.hi + 1e-12):0.0} → {10 * Math.Log10(body.hi + 1e-12):0.0}dB");
+        }
     }
 }

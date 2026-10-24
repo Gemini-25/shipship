@@ -73,13 +73,14 @@ public sealed class Mixer
                 case Ring g: g.Set(u.A); break;
                 case Tune tu: tu.Set(u.B); break;
                 case Wind wi: wi.Set(u.A, u.B); break;
+                case Spray sp: sp.Set(u.A, u.B); break;
             }
         }
         foreach (var s in _loops.Values)
             if (!s.Seen)
             {
                 s.TGain = 0;
-                switch (s.V) { case Jet j: j.Stop(); break; case Fire fi: fi.Set(0); break; case Machine m: m.Set(0); break; }
+                switch (s.V) { case Jet j: j.Stop(); break; case Fire fi: fi.Set(0); break; case Machine m: m.Set(0); break; case Spray sp: sp.Stop(); break; }
             }
     }
 
@@ -95,6 +96,7 @@ public sealed class Mixer
             LoopKind.Ring => new Ring(seed),
             LoopKind.Tune => new Tune((uint)u.Key, (int)u.A),   // 사람마다 같은 곡 (열쇠 = 사람)
             LoopKind.Wind => new Wind(seed),
+            LoopKind.Water => new Spray(seed),
             _ => new RoomTone(seed),
         };
     }
