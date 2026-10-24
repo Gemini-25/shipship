@@ -177,6 +177,7 @@ void fragment() {
                 gen = _gen;
                 while (_cmds.TryDequeue(out _)) { }               // 옛 배에 내린 손은 버린다
                 _show = LiveShow.Crewed(want, _launchSeed);
+                Warmup.Crisis(_show.Sim);   // 위기 길 데우기: 첫 불의 멈칫 (새뜰 6.9ms → 2ms 아래) — 복제로 · 한 번만
                 _show.DayMinutes = LiveShow.DefaultDayMinutes;   // 하루 길이 목표 (기본 3분 · 빠르기 단추 '3분')
                 if (_skipHours > 0) { _show.FastForward(Time.Hours(_skipHours)); _skipHours = 0; }
                 if (_ignite)

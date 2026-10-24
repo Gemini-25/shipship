@@ -25,6 +25,33 @@ public static class Warmup
         Job.Start();
     }
 
+    /// <summary>
+    /// 위기 길 데우기 (MIND.md 6단): 메서드를 미리 옮겨도 첫 불에서 처음 도는 길 (일반화 메서드 · 처음 채우는 표 · 정적 준비)은 남는다 (새뜰 첫 위기 가장 긴 틱 6.9ms → 미리 옮기기만 3.9ms).
+    /// 띄운 세계의 복제 하나에 불 넷을 내고 낮은 우선순위 스레드에서 몇 분 돌려 그 길을 한 번 지나게 한다 — 복제라 세계는 그대로 (결정론과 상관없다 · 복제는 버린다).
+    /// </summary>
+    public static Thread? CrisisJob { get; private set; }
+    public static double CrisisMs;
+    public static void Crisis(Sim live, int ticks = 150)
+    {
+        if (CrisisJob != null) return;
+        var c = live.Clone();   // 부르는 스레드에서 찍는다 (세계를 돌리는 스레드)
+        CrisisJob = new Thread(() =>
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var chem = c.Find<Chemistry>();
+                var room = c.Layout.Rooms.Where(r => r.Cells.Length > 20 && r.Type != "Corridor").OrderByDescending(r => r.Cells.Length).FirstOrDefault();
+                if (chem != null && room != null)
+                    foreach (int cell in room.Cells.Where((x, i) => i % 9 == 0 && c.Layout.Kind[x] == CellKind.Floor).Take(4)) chem.Ignite(cell, 3e6, c.Causes.Add(CauseKind.Setup, "데우기 불", c.Tick, cell));
+                c.Run(ticks);
+            }
+            catch { }
+            CrisisMs = sw.Elapsed.TotalMilliseconds;
+        }) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "위기 길 데우기" };
+        CrisisJob.Start();
+    }
+
     private static void Run()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();

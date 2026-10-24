@@ -107,6 +107,13 @@ public static partial class Program
         Check("시간 예산: 새터호 조용한 틱 — 마음 ÷ 사람 수 ≤ 0.012ms (판단 층을 더해도 사람 한 명 몫)", perPerson <= 0.012, $"{perPerson * 1000:0.0}µs/사람 (마음 {per.GetValueOrDefault("마음"):0.000}ms · 40명)");
         // 위기 틱: 같은 위기를 두 번 — 첫 번은 데우기 (불 끄기 · 뿌리기 · 불 느끼기 코드가 이 과정에서 처음 돌며 JIT 번역에 한 번 7~11ms — 틱마다의 값이 아니다) · 둘째 번을 잰다
         double coldMax = 0;
+        // 데우기 (6단 — 게임은 배를 띄울 때 한다): 메서드 미리 옮기기 + 다른 씨앗 새뜰 복제로 위기 길 한 번 → 그 뒤 첫 위기를 잰다 (BENCH_COLD=1이면 데우지 않는다 — 견주기용)
+        if (Environment.GetEnvironmentVariable("BENCH_COLD") != "1")
+        {
+            ShipView.Warmup.Start(); ShipView.Warmup.Job?.Join();
+            var wc = ShipWorld.Crewed("Saetteul", 9, 40, 10); wc.Run(30); ShipView.Warmup.Crisis(wc); ShipView.Warmup.CrisisJob?.Join();
+            Console.WriteLine($"  데우기: 코드 미리 옮기기 {ShipView.Warmup.Methods}개 · {ShipView.Warmup.Ms:0}ms · 위기 길 {ShipView.Warmup.CrisisMs:0}ms");
+        }
         for (int pass = 0; pass < 2; pass++)
         {
             var s = ShipWorld.Crewed("Saetteul", 7, 40, 10);
@@ -128,7 +135,15 @@ public static partial class Program
             s.Measure = false;
             if (probe) { Mind.Prof = null; foreach (var (ms, d) in ticks.OrderByDescending(x => x.ms).Take(5)) Console.WriteLine($"    {ms:0.00}ms: " + string.Join(" · ", d.Where(kv => !kv.Key.StartsWith("GC")).OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{kv.Key} {kv.Value:0.00}")) + $" · GC {d["GC0"]}/{d["GC1"]}/{d["GC2"]}"); }
             mindMs.Sort();
-            if (pass == 0) { coldMax = mindMs[^1]; continue; }
+            if (pass == 0)
+            {
+                coldMax = mindMs[^1];
+                int over3 = mindMs.Count(v => v > 3.0);
+                Console.WriteLine($"  첫 위기 (데우기 {(Environment.GetEnvironmentVariable("BENCH_COLD") == "1" ? "없음" : "뒤")}): 3ms 넘는 틱 {over3} · 가장 긴 {coldMax:0.00} · 둘째 {mindMs[^2]:0.00}ms");
+                if (Environment.GetEnvironmentVariable("BENCH_COLD") != "1")
+                    Check("시간 예산: 데운 뒤 첫 위기 — 마음 3ms 넘는 틱이 하나 넘지 않는다 (데우기 없으면 JIT 번역으로 여럿 · 한 번 튐은 공유 기계의 GC · 스케줄 몫으로 봐준다)", over3 <= 1, $"3ms 넘는 틱 {over3} · 가장 긴 {coldMax:0.00} · 둘째 {mindMs[^2]:0.00}ms");
+                continue;
+            }
             double p99 = mindMs[(int)(mindMs.Count * 0.99)], max = mindMs[^1];
             Check($"시간 예산: 위기 틱 (새터호 {room.Name} 불 넷 · 40명이 달아나고 · 끄고 · 구하고) — 마음 ≤ 2ms (99번째 백분위 · 데운 뒤)", p99 <= 2.0, $"99% {p99:0.00}ms · 가장 긴 틱 {max:0.00}ms · 가운데 {mindMs[mindMs.Count / 2]:0.000}ms · (처음 한 번 — JIT 번역을 셈한 가장 긴 틱 {coldMax:0.00}ms)");
         }
