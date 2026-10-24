@@ -7,7 +7,8 @@ namespace ShipView;
 /// 화장실 · 샤워실 설비의 제 그림 (함장 요청 — 옛 도트에 없는 설비): 변기 · 세면대 · 샤워 칸.
 /// 칸 하나 32도트 · 비스듬한 시점 (위로 솟은 만큼 윗벽에 걸친다) · 흰 도기 · 강철 · 유리.
 /// 5단 A1 — 세계를 읽는다 (읽기만): 변기 몸은 때 3단 × 막힘 (굽는다) · 장마다 덧그림 — 샤워 칸 물줄기 (밸브 · 물관 · 물탱크) · 세면대 물줄기 (손 씻는 걸음 · 물관) ·
-/// 변기의 '사용 금지' 불 (주컴퓨터가 켠 불) · 쓰는 동안 닫힌 샤워 커튼 (그 칸에서 [샤워] 걸음인 사람 — 커튼은 세계 값이 아니다).
+/// 변기의 '사용 금지' 불 (주컴퓨터가 켠 불) · 쓰는 동안 닫힌 샤워 커튼 (그 칸에서 [샤워] 걸음인 사람 — 커튼은 세계 값이 아니다 · 커튼 위로 얼굴까지) ·
+/// 설비 칸에 고인 물 (발치 웅덩이 — 많이 고이면 곁 바닥처럼 칸에 물이 차고 설비는 그 물에 선다).
 /// </summary>
 public sealed partial class Painter
 {
@@ -114,23 +115,26 @@ public sealed partial class Painter
         return g;
     }
 
-    /// <summary>커튼 (x0 ~ x1−1 · 막대 아래 19~44줄): 주름 넷 · 윗단 빛 · 밑단.</summary>
-    private static void Curtain(Img g, int x0, int x1)
+    /// <summary>커튼 (x0 ~ x1−1 · top ~ 44줄 — 접힌 커튼은 막대 바로 아래 19줄부터): 주름 넷 · 윗단 빛 · 밑단.</summary>
+    private static void Curtain(Img g, int x0, int x1, int top = 19)
     {
         for (int x = x0; x < x1; x++)
         {
-            g.Fill(x, 19, 1, 25, Fold[x % 4]);
-            if (x % 4 == 2) g.Set(x, 19, Rgba.Hex("#d6f2f1"));
+            g.Fill(x, top, 1, 44 - top, Fold[x % 4]);
+            if (x % 4 == 2) g.Set(x, top, Rgba.Hex("#d6f2f1"));
         }
         g.Fill(x0, 43, x1 - x0, 2, Rgba.Hex("#145156"));   // 밑단
     }
 
-    /// <summary>쓰는 동안 닫힌 커튼 (샤워 칸 몸 그림 좌표 · 그 사람 바로 뒤에 얹는다 — 막대 위로 머리만 보인다).</summary>
+    /// <summary>닫힌 커튼의 윗단 (샤워 칸 몸 그림 줄 — 사람 그림의 목줄: 머리 12~22 · 목 23~25 · 몸 26~44줄).</summary>
+    private const int CurtainTop = 25;
+
+    /// <summary>쓰는 동안 닫힌 커튼 (샤워 칸 몸 그림 좌표 · 그 사람 바로 뒤에 얹는다): 윗단은 목줄 — 커튼 위로 얼굴까지 머리가 보이고 목 아래 몸은 가린다
+    /// (막대 · 고리는 몸 그림 17~18줄에 그대로 — 머리 뒤로 지나간다 · 왼쪽에 접혀 있던 자락은 막대까지 닿아 있다).</summary>
     private static Img ShowerCurtain()
     {
         var g = new Img(T, T + WashRise(3));
-        Curtain(g, 2, 30);
-        for (int x = 3; x < 30; x += 3) g.Set(x, 18, WSteelHi);   // 고리
+        Curtain(g, 2, 30, CurtainTop);
         return g;
     }
 
@@ -230,12 +234,45 @@ public sealed partial class Painter
         }
     }
 
-    /// <summary>화장실 설비 칸에 고인 물 (지린 오줌 · 넘친 변기): 설비를 덮지 않고 칸 22~31줄(대야 · 세면대 앞판 아래 — 발치)에 타원 웅덩이 · 짙기 min(0.85, 물/60) · 크기는 물의 양만큼.</summary>
-    private static void FootPool(Img img, int c, int px, int py, double water)
+    /// <summary>화장실 설비 칸에 고인 물 (지린 오줌 · 넘친 변기): 설비를 덮지 않고 칸 22~31줄(대야 · 세면대 앞판 아래 — 발치)에 타원 웅덩이 · 짙기 min(0.85, 물/60) · 크기는 물의 양만큼 (약 52몰에 다 자란다).</summary>
+    private static void FootPool(Img img, int c, int px, int py, double water, float fade = 1)
     {
-        float a = (float)Math.Min(0.85, water / 60);
+        float a = (float)Math.Min(0.85, water / 60) * fade;
         float rx = (float)Math.Min(13, 6 + water / 60 * 8), ry = Math.Min(4.5f, rx * 0.35f);
         float cx = px + T / 2 + (DotHash.F(c, 9, 3) - 0.5f) * 4, cy = py + 26.5f;
         Puddle(img, cx, cy, rx, ry, PoolWater, a);
+    }
+
+    /// <summary>설비 칸의 물이 이만큼 넘으면 (웅덩이가 다 자란 뒤 — 물관이 터지거나 넘친 물이 쌓였다) 칸 전체로 번진다: 짙기 (물 − 50) / 40 · 84몰부터 곁 바닥과 같은 0.85.</summary>
+    private const double FloodAt = 50;
+
+    /// <summary>화장실 설비 몸 그림 (상태대로 굽는다 — 설비 고리 · 물에 선 설비가 함께 쓴다).</summary>
+    private Img WashBodyImg(Life? life, int i)
+    {
+        var (_, _, bw, bh) = _fixBox[i];
+        int wk = _washKind[i], ws = WashState(life, i, wk);
+        return Cached(Key(5, 9100 + wk * 16 + ws, bw, bh, 0), (wk, ws), static q => Shadowed(WashBody(q.wk, q.ws), WashRise(q.wk)));
+    }
+
+    /// <summary>화장실 설비 칸 c에 고인 물 (칸 자리 px, py — 32도트 Draw와 넓은 보기가 함께 쓴다): 발치 웅덩이 ·
+    /// FloodAt몰 넘게 고이면 곁 바닥과 같은 물 타일을 설비 몸이 선 자리만 빼고 깐다 (설비가 물에 서 있다 — 몸 도트의 알파만큼 덜 칠한다 · 물줄기 · 불은 몸 안쪽이라 가리지 않는다).</summary>
+    private void WashWater(Img img, Life? life, int c, int px, int py, double water, int frame)
+    {
+        float a = (float)Math.Clamp((water - FloodAt) / 40, 0, 0.85);
+        FootPool(img, c, px, py, water, 1 - a * 0.7f);   // 물이 칸에 차면 몸에 걸친 웅덩이는 옅어진다 (밑동이 물에 잠긴 빛만)
+        if (a <= 0) return;
+        int i = L.FurnitureAt[c];
+        var body = WashBodyImg(life, i);
+        var (bx, by, _, _) = _fixBox[i];
+        int ox = (L.X(c) - bx) * T, oy = (L.Y(c) - by) * T + WashRise(_washKind[i]);   // 이 칸이 몸 그림에서 놓인 자리
+        var tile = Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8));
+        for (int y = 0; y < T; y++)
+            for (int x = 0; x < T; x++)
+            {
+                var w = tile.Get(x, y);
+                if (w.A == 0) continue;
+                float k = a * (1 - body.Get(x + ox, y + oy).A / 255f);
+                if (k > 0.004f) img.Blend(px + x, py + y, w, k);
+            }
     }
 }

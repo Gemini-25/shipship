@@ -631,8 +631,8 @@ public sealed partial class Painter
             }
             if (_washKind[i] != 0)   // 화장실 설비 (5단 A1): 몸은 상태대로 (변기 때 3단 × 막힘 — 굽는다) · 물줄기 · '사용 금지' 불은 장마다
             {
-                int wk = _washKind[i], wr = WashRise(wk), ws = WashState(life, i, wk);
-                var wbody = Cached(Key(5, 9100 + wk * 16 + ws, bw, bh, 0), (wk, ws), static q => Shadowed(WashBody(q.wk, q.ws), WashRise(q.wk)));
+                int wk = _washKind[i], wr = WashRise(wk);
+                var wbody = WashBodyImg(life, i);
                 int wx = Px(bx), wy = Py(by) - wr;
                 Put(img, wbody, wx, wy);
                 _front.Add((wbody, wx, wy, by + bh - 1));   // 앞 가림 (솟은 몸 — 변기 6 · 세면대 10 · 샤워 칸 14도트)
@@ -690,7 +690,7 @@ public sealed partial class Painter
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2)
                 {
-                    if (L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0) FootPool(img, c, Px(x), Py(y), water);   // 화장실 설비 칸: 설비를 덮지 않고 발치에
+                    if (L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0) WashWater(img, life, c, Px(x), Py(y), water, frame);   // 화장실 설비 칸: 설비를 덮지 않고 발치에 (많이 고이면 설비가 물에 선다)
                     else Put(img, Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
                 }
                 if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && f.DoorOpen[L.DoorAt[c]] < 0.05f) continue;   // 닫힌 문 칸은 기체 칸이 아니다 (기압 0으로 읽혀 늘 서리로 덮였다 — 하늘색 문)

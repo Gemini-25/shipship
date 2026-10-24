@@ -300,11 +300,11 @@ public sealed partial class Painter
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 int px = (x - x0) * D, py = (y - y0) * D;
                 double water = f.Stored(f.T.sWater, c);
-                if (water > 2 && L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0)   // 화장실 설비 칸: 발치 웅덩이 (32도트로 그려 줄인다)
+                if (water > 2 && L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0)   // 화장실 설비 칸: 발치 웅덩이 · 많이 고이면 설비가 물에 선다 (32도트로 그려 줄인다)
                 {
                     var pool = _stainInto!;
                     Array.Clear(pool.Px);
-                    FootPool(pool, c, 0, 0, water);
+                    WashWater(pool, life, c, 0, 0, water, frame);
                     PutDown(img, pool, k, px, py, T, T);
                 }
                 else if (water > 2) Put(img, DownOf(Cached(Key(6, frame & 3, c & 7), (f4: frame & 3, c8: c & 7), static q => DotFx.WaterTile(q.f4, q.c8)), k), px, py, false, (float)Math.Min(0.85, water / 60));
