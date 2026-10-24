@@ -119,6 +119,12 @@ public sealed class ItemDef
     public double Co2;
     /// <summary>무게 (kg) — 감압 바람에 밀리나 · 문틀에 걸리나 · 맞으면 얼마나 아프나.</summary>
     public double Kg = 2;
+    // ── 도트 꼴 (docs/PHYSICS.md §2-5 — 데이터만): 크기 [가로, 세로, 높이] m · 재질 · 둥긂 (구른다) · 든 물 (몰) · 짠 꼴 이름 (forms.json — 없으면 이 이름) ──
+    public double[]? Size;
+    public string? Mat;
+    public bool Round;
+    public double Liquid;
+    public string? Form;
 }
 
 /// <summary>⑪ 만들기: 어느 설비에서 · 몇 분 · 무엇이 드나 · 배에 몇 개를 두려 하나.</summary>
@@ -145,6 +151,37 @@ public sealed class EquipmentDef
     public double Heat;
     /// <summary>포장되어 상하지 않는다 (식량 보관함).</summary>
     public bool Sealed;
+    // ── 도트 꼴 (docs/PHYSICS.md §2-5 — 데이터만): 높이 (m — × 16 = 그림 앞면 도트 · 0이면 1m) · 발자국 [가로, 깊이] m (없으면 칸 상자) · 볼트가 견디는 가속 (g — 0: 놓였다) ──
+    public double H;
+    public double[]? Foot;
+    public double AnchorG = 16;
+}
+
+/// <summary>
+/// 짠 도트 꼴 (forms.json — docs/PHYSICS.md §2-1): 기본형의 합. 가구는 남쪽을 보는 틀 (뒤 = 북쪽 벽)에서 칸 상자를 따라 늘고 · 물건은 제 크기.
+/// </summary>
+public sealed class FormDef
+{
+    /// <summary>가구: 옆 테두리 (도트 — 그림과 같게) · 깊이 [한 칸 깊이일 때, 두 칸 넘게 깊을 때] (도트 · 0 이하면 칸 깊이에서 뺀다).</summary>
+    public int Mx = 2;
+    public int[] Depth = { -4, -4 };
+    /// <summary>물건: 발자국 (도트) · 무게 (물건 표에 없는 새 물건만 — kg) · 든 물 (몰).</summary>
+    public int W, D;
+    public double Kg, Liquid;
+    public bool Round;
+    /// <summary>이음매 문턱 (J/kg — 부위가 바뀌는 곳).</summary>
+    public double Joint = 20;
+    public List<FormPart> Parts = new();
+}
+
+/// <summary>기본형 하나: 네모 [x, y, w, d] 아니면 원판 (지름 · 가운데) · 층 [아래, 위) · 재질 · 부위 (0~15). 음수 x · y는 끝에서 · 0 이하 w · d · 위 층은 끝까지에서 뺀 값.</summary>
+public sealed class FormPart
+{
+    public int[]? Rect;
+    public double Disc;
+    public int[] Z = { 0, 0 };
+    public string Mat = "steel";
+    public int Part;
 }
 
 public sealed class MaterialDef
@@ -165,6 +202,8 @@ public sealed class MaterialDef
     public double Alpha = 12e-6;
     /// <summary>젖은 곳의 고른 부식 (µm/년 — ISO 9223 C3~C4) · 공식(구멍 부식) 배율 · 전위 (V — 바닷물 속 갈바닉 서열 · 낮을수록 먼저 녹는다).</summary>
     public double Corr, Pit = 1, Potential;
+    /// <summary>운동 마찰 (강철 바닥 위) · 반발 (docs/PHYSICS.md §2-5 — 데이터만).</summary>
+    public double Mu = 0.4, Rest = 0.3;
 }
 
 // ── 실행 중의 모양 ──
@@ -261,6 +300,8 @@ public sealed class Tables
     /// <summary>장치 표 (옛 설비 이름 → 역할 · 숫자). 없는 설비는 장치가 아니다 (의자 · 침대 …).</summary>
     public Dictionary<string, DeviceDef> Devices = new();
     public PeopleTable People = new();
+    /// <summary>짠 도트 꼴 (forms.json — 이름 → 꼴).</summary>
+    public Dictionary<string, FormDef> Forms = new();
     public DeviceDef? Dev(string type) => Devices.TryGetValue(type, out var d) ? d : null;
 
     /// <summary>별 · 행성 · 파편 표 (⑤ 바깥 세계).</summary>
@@ -366,6 +407,20 @@ public sealed class Tables
         foreach (var (k, st) in t.People.Stock)
             foreach (var it in st.Keys)
                 if (!t.People.Items.ContainsKey(it)) throw new InvalidDataException($"사람 표: '{k}'에 든 '{it}'이 물건 표에 없다");
+        t.Forms = DataFiles.Load<Dictionary<string, FormDef>>("forms.json");
+        foreach (var (k, f) in t.Forms)
+            foreach (var p in f.Parts)
+            {
+                if (!t._matById.ContainsKey(p.Mat)) throw new InvalidDataException($"꼴 표: '{k}'의 재질 '{p.Mat}'이 재질 표에 없다");
+                if (p.Rect == null == (p.Disc <= 0) || p.Rect is { Length: not 4 } || p.Z.Length != 2 || p.Part is < 0 or > 15)
+                    throw new InvalidDataException($"꼴 표: '{k}'의 기본형은 네모 [x, y, w, d] 아니면 원판 하나 · 층 둘 · 부위 0~15");
+            }
+        foreach (var (k, it) in t.People.Items)
+        {
+            if (it.Mat != null && !t._matById.ContainsKey(it.Mat)) throw new InvalidDataException($"사람 표: 물건 '{k}'의 재질 '{it.Mat}'이 재질 표에 없다");
+            if (it.Size is { Length: not 3 }) throw new InvalidDataException($"사람 표: 물건 '{k}'의 크기는 [가로, 세로, 높이]");
+            if (it.Form != null && !t.Forms.ContainsKey(it.Form)) throw new InvalidDataException($"사람 표: 물건 '{k}'의 꼴 '{it.Form}'이 꼴 표에 없다");
+        }
         foreach (var key in new[] { "walk", "run", "crawl", "carry", "robot", "drone" })
             if (!t.People.Speed.ContainsKey(key)) throw new InvalidDataException($"사람 표: 빠르기 '{key}'가 없다");
         foreach (var (k, p) in t.Space.Planets)

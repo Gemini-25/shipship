@@ -1,0 +1,68 @@
+// 도트 꼴 (docs/PHYSICS.md §2-1) — 짠 꼴: 기본형의 합. 도트 = 1/32m (발자국) · 층 = 1/16m (높이 — 2.5m 칸이 40층).
+//   가구 (설비 표 이름): 남쪽을 보는 틀 (뒤 = 북쪽 벽)에서 칸 상자를 따라 는다 — mx 옆 테두리 (도트) · depth [한 칸 깊이일 때, 두 칸 넘게 깊을 때] (도트 · 0 이하면 칸 깊이에서 뺀다)
+//     둘 다 새 가구 그림 (ArtFurniture)의 윗면과 같게 · 층 수는 설비 표 h × 16 · 짠 꼴이 없는 가구는 칸 상자에서 테두리 2도트를 뺀 상자 (재질 몫대로)
+//   물건: w · d 발자국 (도트) · kg (물건 표에 없는 새 물건만) · liquid 든 물 (몰) · round 둥글다 (구른다)
+//   parts: { rect [x, y, w, d] 아니면 disc 지름 (가운데) · z [아래, 위) · mat · part 부위 0~15 } — 음수 x · y는 끝에서 · 0 이하 w · d · 위 층은 끝까지에서 뺀 값 · 뒤가 앞을 덮는다
+//   joint: 이음매 문턱 (J/kg — 기본 20)
+{
+  // ── 가구: 새 그림 열여섯 (그림의 옆 테두리 · 윗면 깊이) ──
+  "Table": { "mx": 1, "depth": [-6, -4], "parts": [
+      { "rect": [0, 0, 0, 0], "z": [-1, 0], "mat": "aluminum", "part": 0 },
+      { "rect": [1, 1, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 }, { "rect": [-3, 1, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 },
+      { "rect": [1, -3, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 }, { "rect": [-3, -3, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 } ] },
+  "Bed": { "mx": 1, "depth": [-6, -4], "parts": [
+      { "rect": [0, 0, 0, 0], "z": [0, 4], "mat": "steel", "part": 0 },
+      { "rect": [1, 1, -1, -1], "z": [4, -1], "mat": "foam", "part": 1 },
+      { "rect": [1, 1, -1, -1], "z": [-1, 0], "mat": "fabric", "part": 2 } ] },
+  "Shelf": { "mx": 0, "depth": [10, -4], "parts": [
+      { "rect": [0, 0, 0, 0], "z": [0, 1], "mat": "steel", "part": 0 }, { "rect": [0, 0, 0, 0], "z": [8, 9], "mat": "steel", "part": 0 },
+      { "rect": [0, 0, 0, 0], "z": [17, 18], "mat": "steel", "part": 0 }, { "rect": [0, 0, 0, 0], "z": [-1, 0], "mat": "steel", "part": 0 },
+      { "rect": [0, 0, 1, 0], "z": [0, 0], "mat": "steel", "part": 1 }, { "rect": [-1, 0, 1, 0], "z": [0, 0], "mat": "steel", "part": 1 },
+      { "rect": [0, 0, 0, 1], "z": [0, 0], "mat": "polymer", "part": 2 } ] },
+  "Bookshelf": { "mx": 0, "depth": [8, -4], "parts": [
+      { "rect": [0, 0, 0, 0], "z": [0, 0], "mat": "fabric", "part": 2 },
+      { "rect": [0, 0, 0, 0], "z": [0, 1], "mat": "steel", "part": 0 }, { "rect": [0, 0, 0, 0], "z": [10, 11], "mat": "steel", "part": 0 },
+      { "rect": [0, 0, 0, 0], "z": [20, 21], "mat": "steel", "part": 0 }, { "rect": [0, 0, 0, 0], "z": [-1, 0], "mat": "steel", "part": 0 },
+      { "rect": [0, 0, 1, 0], "z": [0, 0], "mat": "steel", "part": 1 }, { "rect": [-1, 0, 1, 0], "z": [0, 0], "mat": "steel", "part": 1 } ] },
+  "FoodLocker": { "mx": 2, "depth": [10, -4] },
+  "CargoCrate": { "mx": 3, "depth": [-6, -6] },
+  "CargoNet": { "mx": 2, "depth": [5, -4] },
+  "SuitLocker": { "mx": 3, "depth": [10, -4] },
+  "ToolWall": { "mx": 0, "depth": [4, 4] },
+  "OxygenMaskBox": { "mx": 5, "depth": [6, 6] },
+  "Console": { "mx": 2, "depth": [-6, -4], "parts": [
+      { "rect": [0, 0, 0, 0], "z": [0, 8], "mat": "steel", "part": 0 },
+      { "rect": [0, 0, 0, -8], "z": [8, 0], "mat": "polymer", "part": 1 },
+      { "rect": [1, 1, -1, 2], "z": [-1, 0], "mat": "glass", "part": 2 } ] },
+  "GrowRack": { "mx": 1, "depth": [-6, -4] },
+  "PlantRack": { "mx": 1, "depth": [-6, -4] },
+  "ClothesRack": { "mx": 2, "depth": [6, 6], "parts": [
+      { "rect": [0, 0, 0, 0], "z": [0, 1], "mat": "steel", "part": 0 },
+      { "rect": [0, 3, 2, 2], "z": [0, 0], "mat": "steel", "part": 1 }, { "rect": [-2, 3, 2, 2], "z": [0, 0], "mat": "steel", "part": 1 },
+      { "rect": [2, 2, -2, -2], "z": [8, -2], "mat": "fabric", "part": 2 },
+      { "rect": [0, 3, 0, 2], "z": [-2, -1], "mat": "steel", "part": 1 } ] },
+  "RobotDock": { "mx": 2, "depth": [-6, -6] },
+  "OxygenGenerator": { "mx": 3, "depth": [10, -4] },
+  // ── 가구: 그림은 옛것이지만 꼴이 상자가 아닌 것 ──
+  "Seat": { "parts": [
+      { "rect": [1, 1, 2, 2], "z": [0, 7], "mat": "steel", "part": 1 }, { "rect": [-3, 1, 2, 2], "z": [0, 7], "mat": "steel", "part": 1 },
+      { "rect": [1, -3, 2, 2], "z": [0, 7], "mat": "steel", "part": 1 }, { "rect": [-3, -3, 2, 2], "z": [0, 7], "mat": "steel", "part": 1 },
+      { "rect": [0, 0, 0, 0], "z": [7, 8], "mat": "polymer", "part": 0 },
+      { "rect": [0, 0, 0, 3], "z": [8, 0], "mat": "polymer", "part": 2 } ] },
+  "GameTable": { "parts": [
+      { "rect": [0, 0, 0, 0], "z": [-1, 0], "mat": "aluminum", "part": 0 },
+      { "rect": [1, 1, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 }, { "rect": [-3, 1, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 },
+      { "rect": [1, -3, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 }, { "rect": [-3, -3, 2, 2], "z": [0, -1], "mat": "aluminum", "part": 1 } ] },
+
+  // ── 물건 (물건 표의 이름 — 표에 없는 꼴은 크기 · 재질 상자) ──
+  "소화기": { "w": 5, "d": 5, "round": true, "parts": [ { "disc": 5, "z": [0, 8], "mat": "steel", "part": 0 }, { "disc": 2, "z": [8, 9], "mat": "polymer", "part": 1 } ] },
+  "식량 상자": { "w": 13, "d": 10, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 5], "mat": "polymer", "part": 0 } ] },
+  "우주복": { "w": 19, "d": 13, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 5], "mat": "fabric", "part": 0 }, { "rect": [6, 0, 7, 5], "z": [0, 5], "mat": "glass", "part": 1 } ] },
+  // ── 새 물건 여섯 (아직 세계에 없다 — PH9가 생활 소품으로 둔다) ──
+  "컵": { "w": 3, "d": 3, "kg": 0.3, "liquid": 11, "round": true, "joint": 5, "parts": [ { "disc": 3, "z": [0, 3], "mat": "glass", "part": 0 } ] },
+  "물병": { "w": 2, "d": 2, "kg": 0.6, "liquid": 28, "round": true, "parts": [ { "disc": 2, "z": [0, 8], "mat": "polymer", "part": 0 } ] },
+  "유리병": { "w": 3, "d": 3, "kg": 0.5, "round": true, "joint": 5, "parts": [ { "disc": 3, "z": [0, 7], "mat": "glass", "part": 0 }, { "disc": 1, "z": [7, 8], "mat": "polymer", "part": 1 } ] },
+  "접시": { "w": 8, "d": 8, "kg": 0.4, "round": true, "joint": 5, "parts": [ { "disc": 8, "z": [0, 1], "mat": "ceramic", "part": 0 } ] },
+  "공구 상자": { "w": 14, "d": 6, "kg": 5, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 5], "mat": "steel", "part": 0 }, { "rect": [5, 2, 4, 2], "z": [5, 6], "mat": "steel", "part": 1 } ] },
+  "책": { "w": 7, "d": 5, "kg": 0.5, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 1], "mat": "fabric", "part": 0 } ] }
+}
