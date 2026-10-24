@@ -419,6 +419,9 @@ public sealed partial class Painter
                 }
         }
         lt = Lap("넓은: 연기", lt);
+        // ── 부스러기 알갱이 (빛을 받는다 — Frame과 같다) ──
+        if (st != null) Shards(img, st, x0, y0, D);
+        lt = Lap("넓은: 부스러기", lt);
 
         // ── 빛: 곱하고 · 설비 빛 · 불꽃 (맨 앞) ──
         if (Lighting)
@@ -454,7 +457,7 @@ public sealed partial class Painter
         lt = Lap("넓은: 불", lt);
         if (Show != Overlay.None) DrawOverlay(img, f, net, x0, y0, w, h, D);
         lt = Lap("넓은: 겹쳐 보기", lt);
-        // ── 떨어져 나간 조각: 제 칸만 32도트로 그려 자세대로 돌려 붙인다 (Frame과 같다 — 붙이는 도트만 D) · 부스러기 알갱이 ──
+        // ── 떨어져 나간 조각: 제 칸만 32도트로 그려 자세대로 돌려 붙인다 (Frame과 같다 — 붙이는 도트만 D) ──
         if (multi)
             for (int b = 1; b < st!.Bodies.Count; b++)
             {
@@ -474,7 +477,6 @@ public sealed partial class Painter
                 Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1, D);
             }
         _only = -1; _stc = null;
-        if (st != null) Shards(img, st, x0, y0, D);
         Lap("넓은: 조각", lt);
         return img;
     }

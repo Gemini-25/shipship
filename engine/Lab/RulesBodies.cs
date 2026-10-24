@@ -502,6 +502,100 @@ public static partial class Program
                 $"몸 {st3.Bodies.Count} · 갈라지기 전 조각 각 {was3:0.000}rad · 새 몸 틱 사이 {new0:0.000} → {new1:0.000}rad");
         }
 
+        // ── (아) 부스러기 틱 사이: 틱 사이 장마다 그 때 자리 (지금 자리에서 진공을 곧게 뒤로 늘인다) · 제 돎만큼 판이 돈다 · 방의 빛을 받는다 · 이번 틱 충돌 잔걸음에 난 것은 나기 전 자리 (배 안 바닥)에 그리지 않는다 ──
+        {
+            static double Luma(Rgba c) => 0.299 * c.R + 0.587 * c.G + 0.114 * c.B;
+            // 알갱이 하나만 둔 그림 − 하나도 없는 그림: 다른 도트 (세계는 그대로 돌려놓는다 — 그림은 읽기만)
+            static List<(int x, int y, double l, bool core)> Dots(Painter p, Sim s, Structure st, int keep, int x0, int y0, int w, int h)
+            {
+                var all = st.Shards.ToList();
+                st.Shards.Clear(); var bare = p.Frame(s, x0, y0, w, h, 0);
+                if (keep >= 0) st.Shards.Add(all[keep]); else st.Shards.AddRange(all);
+                var with = p.Frame(s, x0, y0, w, h, 0);
+                st.Shards.Clear(); st.Shards.AddRange(all);
+                var d = new List<(int, int, double, bool)>();
+                for (int y = 0; y < with.H; y++)
+                    for (int x = 0; x < with.W; x++)
+                    {
+                        int i = (y * with.W + x) * 4;
+                        if (with.Px[i] != bare.Px[i] || with.Px[i + 1] != bare.Px[i + 1] || with.Px[i + 2] != bare.Px[i + 2]) { var c = with.Get(x, y); d.Add((x, y, Luma(c), c.R == 0x9a && c.G == 0xa2 && c.B == 0xb0)); }
+                    }
+                return d;
+            }
+            static (double x, double y) Mid(List<(int x, int y, double l, bool core)> d)   // 밝은 도트 (판 몸 — 우주에서는 빛을 받지 않는다)
+            {
+                var b = d.Where(q => q.core).ToList();
+                return b.Count == 0 ? (double.NaN, double.NaN) : (b.Average(q => q.x), b.Average(q => q.y));
+            }
+            static string Shape(List<(int x, int y, double l, bool core)> d)
+            {
+                var b = d.Where(q => q.core).ToList();
+                if (b.Count == 0) return "";
+                int mx = b.Min(q => q.x), my = b.Min(q => q.y);
+                return string.Join(";", b.Select(q => $"{q.x - mx},{q.y - my}").OrderBy(t => t, StringComparer.Ordinal));
+            }
+            var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s = Worlds.Full(lay, 2);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            double sy = lay.H + 4;   // 배 아래 우주 (배는 서 있다)
+            st.Throw(s, 2, sy, 20, 0, 5, 0);          // 20m/s — 한 틱에 48m
+            st.Throw(s, 2, sy + 6, 20, 0, 225, 0);    // 5도트 판
+            var spun = st.Shards[1]; spun.Spin = 225 * 0.25 * 0.25 / 6 * 1.0; st.Shards[1] = spun;   // 제 돎 1rad/s (보기 어림 — 25cm 판)
+            var show = new ShipView.LiveShow(s, "아령") { SpeedOverride = 1, Follow = false };
+            int ran = show.Advance(1.0);
+            int wx0 = 0, wy0 = (int)sy - 2, ww = 64, wh = 10;
+            ran += show.Advance(0.25); show.Render();
+            var a0 = Dots(show.Painter, s, st, 0, wx0, wy0, ww, wh); var b0 = Dots(show.Painter, s, st, 1, wx0, wy0, ww, wh);
+            ran += show.Advance(0.5); show.Render();
+            var a1 = Dots(show.Painter, s, st, 0, wx0, wy0, ww, wh); var b1 = Dots(show.Painter, s, st, 1, wx0, wy0, ww, wh);
+            var (ax0, ay0) = Mid(a0); var (ax1, ay1) = Mid(a1);
+            double moved = ax1 - ax0, expect = 20 * Time.SecondsPerTick * 0.5 * Painter.T;
+            string sh0 = Shape(b0), sh1 = Shape(b1), sa0 = Shape(a0), sa1 = Shape(a1);
+            // 이번 틱 충돌 잔걸음에 난 것처럼: 왼쪽 방 아래 외판 바로 밖 · 아래로 2m/s · 난 때 = 이번 틱 → 틱 사이 0.1에 뒤로 늘인 자리는 방 바닥 (아직 나지 않았다)
+            ran += show.Advance(0.35); show.Render();   // 다음 틱 · 틱 사이 0.1
+            double f01 = 0.1;
+            var crash = new Shard { X = 4.5, Y = lay.H - 0.2, Vx = 0, Vy = 2, Kg = 30, From = 0, Born = s.Tick - 1 };
+            double backY = crash.Y - crash.Vy * Time.SecondsPerTick * (1 - f01);
+            int backCell = lay.Index(4, (int)Math.Floor(backY));
+            st.Shards.Add(crash);
+            int ci = st.Shards.Count - 1;
+            static int OnFloor(List<(int x, int y, double l, bool core)> d, Layout lay, Structure st, int x0, int y0) =>
+                d.Count(q => { int cx = x0 + q.x / Painter.T, cy = y0 + q.y / Painter.T; if (!lay.In(cx, cy)) return false; int c = lay.Index(cx, cy); return lay.Kind[c] == CellKind.Floor && st.BodyOf(c) == 0; });
+            var cNow = Dots(show.Painter, s, st, ci, -2, -2, lay.W + 4, lay.H + 4);
+            var cEnd = Dots(new Painter(lay), s, st, ci, -2, -2, lay.W + 4, lay.H + 4);   // 틱 끝 (틱 사이 1) — 지금 자리에는 그린다
+            int crashFloor = OnFloor(cNow, lay, st, -2, -2);
+            st.Shards.RemoveAt(ci);
+            // 방의 빛: 바닥에 멈춘 알갱이 — 켠 방 · 불 끈 방
+            var lt = s.Get<Light>();
+            st.Throw(s, 4.5, 4.5, 0, 0, 100, 0);
+            int li = st.Shards.Count - 1;
+            var pl = new Painter(lay);
+            for (int r = 0; r < lay.Rooms.Count; r++) lt.Lamp[r] = 300;
+            var lit = Dots(pl, s, st, li, 2, 2, 6, 5);
+            for (int r = 0; r < lay.Rooms.Count; r++) lt.Lamp[r] = 0;
+            var dim = Dots(pl, s, st, li, 2, 2, 6, 5);
+            double litL = lit.Count > 0 ? lit.Max(q => q.l) : 0, dimL = dim.Count > 0 ? dim.Max(q => q.l) : 0;
+            st.Shards.RemoveAt(li);
+            // 아령 외판이 부서진 틱: 틱 사이 0.1 장에 부스러기가 배 안 바닥 칸 위에 없다 (외판 칸에서 바깥으로 — 틱 처음에 났다)
+            var sD = Worlds.Full(lay, 2);
+            var stD = sD.Get<Structure>();
+            sD.Run(3);
+            var showD = new ShipView.LiveShow(sD, "아령 외판") { SpeedOverride = 1, Follow = false };
+            stD.Destroy(sD, Worlds.At(lay, 16, 0), 0);
+            int ranD = showD.Advance(1.0);
+            ranD += showD.Advance(0.1); showD.Render();
+            var dD = Dots(showD.Painter, sD, stD, -1, -8, -8, lay.W + 16, lay.H + 16);
+            int hullFloor = OnFloor(dD, lay, stD, -8, -8);
+            Check("부스러기 틱 사이: 틱 사이 장마다 그 때 자리 (20m/s 알갱이가 틱 사이 ¼ → ¾에 24m) · 제 돎만큼 판이 돈다 (돌지 않으면 같은 꼴) · 불 끈 방에서는 어둡다 · 충돌 잔걸음에 난 것은 나기 전 자리 (배 안 바닥)에 그리지 않는다 · 외판이 부서진 틱에도 배 안 바닥 위에 없다",
+                ran == 2 && a0.Count > 0 && a1.Count > 0 && Math.Abs(moved - expect) <= 2 && Math.Abs(ay1 - ay0) <= 1 && sa0 == sa1 && sh0 != "" && sh1 != "" && sh0 != sh1 &&
+                lay.Kind[backCell] == CellKind.Floor && crashFloor == 0 && cEnd.Count > 0 && dimL < litL * 0.6 &&
+                ranD == 1 && stD.Shards.Count > 0 && dD.Count > 0 && hullFloor == 0,
+                $"틱 {ran} · ¼ → ¾ 밝은 도트 무게중심 {moved:0.0}도트 (기대 {expect:0}) · 세로 {ay1 - ay0:0.0} · 판 꼴 돎 {(sh0 != sh1 ? "바뀜" : "같음")} · 안 돎 {(sa0 == sa1 ? "같음" : "바뀜")} · " +
+                $"충돌에 난 것 뒤로 늘인 자리 {lay.Kind[backCell]} · 그 장 바닥 위 도트 {crashFloor} · 틱 끝 도트 {cEnd.Count} · 밝기 켠 방 {litL:0} / 불 끈 방 {dimL:0} · " +
+                $"외판 틱 {ranD} · 부스러기 {stD.Shards.Count} · 그린 도트 {dD.Count} · 배 안 바닥 위 {hullFloor}");
+        }
+
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──
         {
             var lay = Worlds.Ascii(Sealed);

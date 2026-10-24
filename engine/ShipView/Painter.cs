@@ -278,6 +278,8 @@ public sealed partial class Painter
     /// <summary>관전 화면이 틱 사이를 메운 몸마다의 배 틀 자세 (없으면 지금 자세) · 배의 자세 (별 — NaN이면 지금).</summary>
     public (double cs, double sn, double tx, double ty)[]? Poses;
     public double SkyTh = double.NaN;
+    /// <summary>관전 화면이 장마다 넣는다: 틱 사이 비율 (0 지난 틱 끝 ~ 1 지금 — 부스러기를 그 때 자리에) · 그 때 배(몸 0) 무게중심의 세상 자리 (NaN이면 지금 — 각은 SkyTh).</summary>
+    public double TickFrac = 1, ShipX = double.NaN, ShipY = double.NaN;
 
     /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.
     /// into: 다시 쓸 그림 (w × h 칸이 들어가면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다 · 남는 곳은 우주색).</summary>
@@ -288,7 +290,7 @@ public sealed partial class Painter
         var st = s.Find<Structure>();
         // 배가 돌면 별도 돈다 (화면은 배를 따라 돈다 — 별은 무한히 멀어 배의 자세만큼만 거꾸로 돈다 · 배의 무게중심을 축으로)
         (_skyTh, _skyX, _skyY) = st != null && st.Bodies.Count > 0 ? (double.IsNaN(SkyTh) ? st.Bodies[0].Th : SkyTh, st.Bodies[0].Lx, st.Bodies[0].Ly) : (0, 0, 0);
-        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; var one = Draw(s, x0, y0, w, h, frame, into, false); if (st != null) Shards(one, st, x0, y0); return one; }
+        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; return Draw(s, x0, y0, w, h, frame, into, false); }
         // ④ 칸 강체: 배를 그리고 · 떨어져 나간 조각마다 제 칸만 따로 그려 자세대로 돌려 붙인다 (가까운 도트 — 도트 그림이 뭉개지지 않게)
         _stc = st; _only = 0;
         var img = Draw(s, x0, y0, w, h, frame, into, false);
@@ -310,30 +312,77 @@ public sealed partial class Painter
             Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1);
         }
         _only = -1; _stc = null;
-        Shards(img, st, x0, y0);
         return img;
     }
 
-    /// <summary>부스러기 알갱이 (배 틀 자리 · 무게만큼 2~6도트 · 날아가는 쪽 반대로 짧은 꼬리).</summary>
-    private static void Shards(Img img, Structure st, int x0, int y0, int dots = T)
+    /// <summary>
+    /// 부스러기 알갱이 (배 틀 자리 · 무게만큼 2~6도트 판 · 제 돎만큼 돌려 · 날아가는 쪽 반대로 짧은 꼬리) — 빛을 받기 전에 그린다 (불 끈 방에서는 어둡다).
+    /// 자리는 틱 사이 비율 TickFrac의 때: 지금 자리에서 (1 − f) · 2.4초만큼 뒤로 (진공을 곧게 난다) · 배 틀은 그 때의 배 자세 (ShipX · ShipY · SkyTh).
+    /// 이번 틱에 났고 뒤로 늘인 자리가 난 몸의 바닥 · 설비 칸이면 그 장에는 그리지 않는다 — 충돌 잔걸음에 난 것은 아직 나지 않았다 (틱 처음에 난 구멍 · 운석 · 갈라짐의 것은 외판 · 끊긴 칸에서 시작한다).
+    /// </summary>
+    private void Shards(Img img, Structure st, int x0, int y0, int dots = T)
     {
         if (st.Shards.Count == 0) return;
         var body = Rgba.Hex("#9aa2b0"); var dark = Rgba.Hex("#3a404c");
         var b0 = st.Bodies.Count > 0 ? st.Bodies[0] : default;
-        double cs = Math.Cos(-b0.Th), sn = Math.Sin(-b0.Th);
+        double f = Math.Clamp(TickFrac, 0, 1), back = (1 - f) * Time.SecondsPerTick;
+        double th = double.IsNaN(SkyTh) ? b0.Th : SkyTh, ox = double.IsNaN(ShipX) ? b0.X : ShipX, oy = double.IsNaN(ShipY) ? b0.Y : ShipY;
+        double cs = Math.Cos(-th), sn = Math.Sin(-th);
         foreach (var sh in st.Shards)
         {
-            var (sx, sy) = st.LocalOf(0, sh.X, sh.Y);
+            double wx = sh.X - sh.Vx * back - ox, wy = sh.Y - sh.Vy * back - oy;
+            double sx = b0.Lx + cs * wx - sn * wy, sy = b0.Ly + sn * wx + cs * wy;
             int px = (int)Math.Round((sx - x0) * dots), py = (int)Math.Round((sy - y0) * dots);
             if (px < -8 || py < -8 || px > img.W + 8 || py > img.H + 8) continue;
+            if (back > 0 && sh.Born == _tick - 1 && NotYet(st, sh, sx, sy)) continue;
             int size = Math.Max(1, Math.Clamp((int)Math.Round(Math.Sqrt(sh.Kg) / 3), 2, 6) * dots / T);
             // 배에서 본 빠르기 쪽 반대로 꼬리
             double vx = sh.Vx - b0.Vx, vy = sh.Vy - b0.Vy, lvx = cs * vx - sn * vy, lvy = sn * vx + cs * vy, vl = Math.Sqrt(lvx * lvx + lvy * lvy);
             double step = 2.0 * dots / T;
             if (vl > 0.5) for (int k = 1; k <= 4; k++) img.Blend(px - (int)(lvx / vl * k * step), py - (int)(lvy / vl * k * step), body, 0.5f - k * 0.1f);
-            img.Fill(px - size / 2 + 1, py - size / 2 + 1, size, size, dark, 0.6f);
-            img.Fill(px - size / 2, py - size / 2, size, size, body);
+            // 판의 각 (배 틀): 알갱이마다 해시 각 (빠르기 · 난 때 — 날며 바뀌지 않는다) + 제 돎 ω · 나이 (ω = Spin / (Kg · 0.25²/6) — 25cm 판의 보기 어림) − 배 각
+            long hv = BitConverter.DoubleToInt64Bits(sh.Vx) ^ BitConverter.DoubleToInt64Bits(sh.Vy) * 31;
+            double age = (_tick - 1 - sh.Born + f) * Time.SecondsPerTick, spin = sh.Kg > 0 ? sh.Spin / (sh.Kg * 0.25 * 0.25 / 6) : 0;
+            double ang = DotHash.F((int)hv, (int)(hv >> 32), (int)sh.Born) * 2 * Math.PI + spin * age - th;
+            var plate = PlateOf(size, ang);
+            foreach (var (dx, dy) in plate) img.Blend(px + dx + 1, py + dy + 1, dark, 0.6f);
+            foreach (var (dx, dy) in plate) img.Blend(px + dx, py + dy, body);
         }
+    }
+
+    // 돌린 판 꼴 (한 변 1~6도트 · 각 단 16 — 네모는 90°마다 같다 · 단 0 = 돌지 않은 네모): 그리는 자리 (px, py)에서의 도트 자리 — 처음 쓸 때 한 번 짓는다
+    private static readonly (int dx, int dy)[]?[] _plates = new (int, int)[]?[7 * 16];
+    private static (int dx, int dy)[] PlateOf(int size, double ang)
+    {
+        int step = (int)(((long)Math.Floor(ang / (Math.PI / 2) * 16) % 16 + 16) % 16), k = size * 16 + step;
+        if (_plates[k] is { } got) return got;
+        // 가운데: 짝수 변은 (px, py) 도트 모서리 · 홀수 변은 그 도트 가운데 (예전 네모와 같다) — 도트 가운데가 판 안이면 칠한다
+        double half = size / 2.0 - 1e-6, a = step * (Math.PI / 2) / 16, ca = Math.Cos(a), sa = Math.Sin(a), hc = (size & 1) * 0.5;
+        int r = (int)Math.Ceiling(half * 1.4143) + 1;
+        var list = new List<(int, int)>();
+        for (int dy = -r; dy <= r; dy++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                double x = dx + 0.5 - hc, y = dy + 0.5 - hc, u = ca * x + sa * y, v = -sa * x + ca * y;
+                if (Math.Abs(u) < half && Math.Abs(v) < half) list.Add((dx, dy));
+            }
+        return _plates[k] = list.ToArray();
+    }
+
+    /// <summary>뒤로 늘인 배 틀 자리 (sx, sy)가 알갱이가 난 몸의 바닥 · 설비 칸인가 (그 몸의 그리는 자세로 — 몸 0은 배 틀 그대로).</summary>
+    private bool NotYet(Structure st, in Shard sh, double sx, double sy)
+    {
+        int b = sh.From > 0 && sh.From < st.Bodies.Count ? sh.From : 0;
+        double qx = sx, qy = sy;
+        if (b > 0)
+        {
+            var (cs, sn, tx, ty) = Poses != null && b < Poses.Length ? Poses[b] : st.ToShipFrame(b);
+            qx = cs * (sx - tx) + sn * (sy - ty); qy = -sn * (sx - tx) + cs * (sy - ty);
+        }
+        int x = (int)Math.Floor(qx), y = (int)Math.Floor(qy);
+        if (!L.In(x, y)) return false;
+        int c = L.Index(x, y);
+        return st.BodyOf(c) == b && (L.Kind[c] == CellKind.Floor || L.FurnitureAt[c] >= 0);
     }
 
     /// <summary>조각 그림을 배 틀에 붙인다: 화면 도트마다 거꾸로 돌려 조각 그림의 도트를 찾는다 (배 틀 q = R·p + t).</summary>
@@ -798,6 +847,9 @@ public sealed partial class Painter
             }
         SmokeVeil(img, f, x0, y0, w, h, frame);
         lt = Lap("연기", lt);
+        // ── 부스러기 알갱이 (배 그림에만 — 빛을 받는다) ──
+        if (!part && st != null) Shards(img, st, x0, y0);
+        lt = Lap("부스러기", lt);
         // ── 빛: 곱하고 · 스스로 빛나는 것 · 불꽃 (맨 앞) ──
         if (Lighting)
         {

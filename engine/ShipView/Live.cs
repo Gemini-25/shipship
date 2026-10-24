@@ -300,7 +300,8 @@ public sealed partial class LiveShow
     /// <summary>마지막 틱 앞: 지금 칸과 앞으로 걸을 길(몇 칸)을 적어 둔다.</summary>
     // ④ 칸 강체: 지난 틱 끝의 몸마다 배 틀 무게중심 자리 · 자세 (틱 사이를 메운다 — 걸음처럼 한 틱 늦게 · 각은 감지 않은 값: 한 틱에 반 바퀴 넘게 도는 몸도 도는 쪽으로) · 배의 자세
     private (double qx, double qy, double th)[] _prevPose = Array.Empty<(double, double, double)>();
-    private double _prevSky;
+    // 지난 틱 끝 배(몸 0)의 세상 자세 · 제 틀 무게중심 (몸이 아직 없었으면 0 — 처음 서는 몸 0은 세상 = 도면 틀에서 선다)
+    private (double x, double y, double th, double lx, double ly) _prevShip;
     private long _prevTick = long.MinValue;
 
     private void Remember()
@@ -310,7 +311,8 @@ public sealed partial class LiveShow
         {
             _prevPose = new (double, double, double)[st.Bodies.Count];
             for (int b = 0; b < _prevPose.Length; b++) _prevPose[b] = PoseNow(st, b);
-            _prevSky = st.Bodies.Count > 0 ? st.Bodies[0].Th : 0;
+            var b0 = st.Bodies.Count > 0 ? st.Bodies[0] : default;
+            _prevShip = (b0.X, b0.Y, b0.Th, b0.Lx, b0.Ly);
             _prevTick = World.Tick;
         }
         var mind = World.Find<Mind>();
@@ -661,10 +663,20 @@ public sealed partial class LiveShow
                 Painter.Poses = poses;
             }
             else Painter.Poses = null;
-            double th0 = stb.Bodies[0].Th;
-            Painter.SkyTh = _prevPose.Length > 0 && World.Tick == _prevTick + 1 ? _prevSky + (th0 - _prevSky) * Math.Clamp(_carry, 0, 1) : th0;   // 감지 않는다 (빨리 도는 배의 별도 도는 쪽으로)
+            // 배의 세상 자세도 지난 틱 끝 → 지금을 틱 사이 비율만큼 곧게 (반-차기 셈이라 틱 안 무게중심 길 · 각이 곧다 — 부스러기를 그 때 자리에 · 각은 감지 않는다: 빨리 도는 배의 별도 도는 쪽으로)
+            var o0 = stb.Bodies[0];
+            if (World.Tick == _prevTick + 1)
+            {
+                double fr = Math.Clamp(_carry, 0, 1), pc = Math.Cos(_prevShip.th), ps = Math.Sin(_prevShip.th);
+                double dx = o0.Lx - _prevShip.lx, dy = o0.Ly - _prevShip.ly;   // 지금 무게중심 (제 틀)이 지난 틱 끝에 있던 세상 자리 (그 사이 떨어져 나간 질량만큼 무게중심이 옮았어도)
+                double wx = _prevShip.x + pc * dx - ps * dy, wy = _prevShip.y + ps * dx + pc * dy;
+                Painter.SkyTh = _prevShip.th + (o0.Th - _prevShip.th) * fr;
+                Painter.ShipX = wx + (o0.X - wx) * fr; Painter.ShipY = wy + (o0.Y - wy) * fr;
+                Painter.TickFrac = fr;
+            }
+            else { Painter.SkyTh = o0.Th; Painter.ShipX = Painter.ShipY = double.NaN; Painter.TickFrac = 1; }   // 되살린 첫 틱 · 건너뛴 틱은 지금 자세로
         }
-        else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
+        else { Painter.Poses = null; Painter.SkyTh = double.NaN; Painter.ShipX = Painter.ShipY = double.NaN; Painter.TickFrac = 1; }
         Painter.Sub = Math.Clamp(_carry, 0, 1);
         Painter.Still = ReferenceEquals(World, _drawnWorld) && World.Tick == _drawnTick;   // 세계는 틱에만 바뀐다 (멈춤 · 느린 연출 · 따라 보기 · 계산 일꾼을 기다리는 장 — 다시보기로 바꾼 세계는 아니다)
         _drawnWorld = World; _drawnTick = World.Tick;
@@ -1283,7 +1295,7 @@ public sealed partial class LiveShow
         _replayDir = new Director(w.Layout) { KeepRing = false, AheadInBackground = true };
         _shots = Dir.Shots(Sim, h);
         _replayEnd = Math.Min(Sim.Tick, Math.Max(h.Last + Time.Minutes(ReplayAfterMin), _shots.Count > 0 ? _shots[^1].To : 0));
-        _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();
+        _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>(); _prevTick = long.MinValue;
         Banner = "다시보기 — " + h.Title; BannerLeft = BannerSec;
         return true;
     }
@@ -1293,7 +1305,7 @@ public sealed partial class LiveShow
     {
         if (_replay == null) return;
         _replay = null; _replayDir = null; _replayOf = null; _shots = new();
-        _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();
+        _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>(); _prevTick = long.MinValue;
     }
 
     private void ClearTrails() { Array.Clear(_trailLen); }
