@@ -1,9 +1,13 @@
 using System.Text.Json;
+using Face = ShipEngine.Facing;   // 안에서는 이름 Facing이 표 (Layout.Facing)를 가리킨다
 
 namespace ShipEngine;
 
 /// <summary>칸의 종류 (도면 — 바뀌지 않는 것). 문이 열렸는지 · 벽에 구멍이 났는지는 엔진 상태에 있다.</summary>
 public enum CellKind : byte { Outside, Floor, Wall, Door }
+
+/// <summary>가구가 보는 쪽 (앞면이 보이는 쪽): 벽에 닿은 쪽이 뒤 — S 앞면이 보인다 · N 뒷판이 보인다 · E · W 옆 (긴 쪽이 세로).</summary>
+public enum Facing : byte { S, N, E, W }
 
 public sealed class RoomDef
 {
@@ -57,6 +61,8 @@ public sealed class Layout
     public List<RoomDef> Rooms = new();
     public List<DoorDef> Doors = new();
     public List<FurnitureDef> Furniture = new();
+    /// <summary>설비 번호 → 보는 쪽 (도면에서 한 번 — 그림 · 도트 꼴 · 물리가 함께 읽는다).</summary>
+    public Facing[] Facing = Array.Empty<Facing>();
 
     public int N => W * H;
     public int Index(int x, int y) => y * W + x;
@@ -95,6 +101,23 @@ public sealed class Layout
             foreach (int j in nb) if (j < 0 || Kind[j] == CellKind.Outside) { Hull[i] = true; break; }
         }
         if (Material.Length != N) Material = new byte[N];
+        Facing = new Face[Furniture.Count];
+        for (int k = 0; k < Furniture.Count; k++)
+        {
+            var cells = Furniture[k].Cells;
+            if (cells.Length > 0) Facing[k] = FacingOfBox(cells.Min(X), cells.Min(Y), cells.Max(X), cells.Max(Y));
+        }
+    }
+
+    /// <summary>가구가 보는 쪽: 북쪽이 벽이면 앞면이 보이고 (S) · 남쪽이 벽이면 뒷판 (N) · 세로로 길면 벽 반대쪽을 보는 옆 (E · W) · 아니면 앞면.</summary>
+    private Face FacingOfBox(int x0, int y0, int x1, int y1)
+    {
+        bool Wall(int x, int y) => !In(x, y) || Kind[Index(x, y)] is CellKind.Wall or CellKind.Door;
+        bool Side(int ax, int ay, int bx, int by) { for (int y = ay; y <= by; y++) for (int x = ax; x <= bx; x++) if (!Wall(x, y)) return false; return true; }
+        if (Side(x0, y0 - 1, x1, y0 - 1)) return Face.S;
+        if (Side(x0, y1 + 1, x1, y1 + 1)) return Face.N;
+        if (y1 - y0 > x1 - x0) return Side(x0 - 1, y0, x0 - 1, y1) ? Face.E : Face.W;
+        return Face.S;
     }
 
     // ── 배 도면 파일 (engine/data/ships/*.json — Lab --shipgen 이 만든다) ──

@@ -560,6 +560,7 @@ public static partial class Program
         LineLaws();
         BodyLaws();
         WashLaws(); WaterLaws(); ScrubLaws(); WorkerLaws();
+        PropLaws();
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>

@@ -43,7 +43,7 @@ public sealed partial class Painter
     private readonly int[] _washFix;     // 화장실 설비 번호들 (넓은 보기의 장마다 덧그림)
     private readonly bool _hasSink;
     private readonly bool[] _newArt;     // 새 가구 그림 (ArtFurniture — 상위 15종)
-    private readonly Facing[] _facing;   // 가구가 보는 쪽 (벽에 닿은 쪽이 뒤 — 도면에서 한 번)
+    private readonly Facing[] _facing;   // 가구가 보는 쪽 (벽에 닿은 쪽이 뒤 — 도면에서 한 번 · Layout.Facing)
     private readonly (int x, int y, int w, int h)[] _fixBox;
     private readonly Dictionary<long, Img> _cache = new();
     private int[]? _fixOrder;
@@ -61,7 +61,7 @@ public sealed partial class Painter
         _washFix = Enumerable.Range(0, L.Furniture.Count).Where(i => _washKind[i] != 0 && L.Furniture[i].Cells.Length > 0).ToArray();
         _hasSink = _washFix.Any(i => _washKind[i] == 2);
         _newArt = L.Furniture.Select(f => ArtFurniture.Has(f.Type)).ToArray();
-        _facing = new Facing[L.Furniture.Count];
+        _facing = L.Facing;
         _fixBox = new (int, int, int, int)[L.Furniture.Count];
         for (int i = 0; i < L.Furniture.Count; i++)
         {
@@ -70,7 +70,6 @@ public sealed partial class Painter
             if (fu.Cells.Length == 0) continue;
             int x0 = fu.Cells.Min(L.X), y0 = fu.Cells.Min(L.Y), x1 = fu.Cells.Max(L.X), y1 = fu.Cells.Max(L.Y);
             _fixBox[i] = (x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-            _facing[i] = FacingOfBox(x0, y0, x1, y1);
         }
     }
 
@@ -173,17 +172,6 @@ public sealed partial class Painter
         int rooms = 0, last = -1;
         foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0 && L.Room[j] != last) { rooms++; last = L.Room[j]; }
         return rooms >= 2 ? DotWall.Partition : DotWall.Panel;
-    }
-
-    /// <summary>가구가 보는 쪽: 북쪽이 벽이면 앞면이 보이고 (S) · 남쪽이 벽이면 뒷판 (N) · 세로로 길면 벽 반대쪽을 보는 옆 (E · W) · 아니면 앞면.</summary>
-    private Facing FacingOfBox(int x0, int y0, int x1, int y1)
-    {
-        bool Wall(int x, int y) => !L.In(x, y) || L.Kind[L.Index(x, y)] is CellKind.Wall or CellKind.Door;
-        bool Side(int ax, int ay, int bx, int by) { for (int y = ay; y <= by; y++) for (int x = ax; x <= bx; x++) if (!Wall(x, y)) return false; return true; }
-        if (Side(x0, y0 - 1, x1, y0 - 1)) return Facing.S;
-        if (Side(x0, y1 + 1, x1, y1 + 1)) return Facing.N;
-        if (y1 - y0 > x1 - x0) return Side(x0 - 1, y0, x0 - 1, y1) ? Facing.E : Facing.W;
-        return Facing.S;
     }
 
     private int _iExt = -2, _iSeal, _iSuit, _iMask;

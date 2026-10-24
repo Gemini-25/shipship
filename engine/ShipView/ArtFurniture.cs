@@ -1,9 +1,7 @@
+using ShipEngine;
 using ShipSim.Art;
 
 namespace ShipView;
-
-/// <summary>가구가 보는 쪽 (앞면이 보이는 쪽): 벽에 닿은 쪽이 뒤 — S 앞면이 보인다 · N 뒷판이 보인다 · E · W 옆 (긴 쪽이 세로).</summary>
-public enum Facing : byte { S, N, E, W }
 
 /// <summary>가구 그림에 넘기는 세계 값 (없으면 0): 선반 · 로커 · 함의 물건 수 (Mind.Stock) · 담요 주인 색 · 낡음 단 (망 장치만).</summary>
 public struct FurnFill
@@ -42,8 +40,8 @@ public static class ArtFurniture
     /// <summary>새 그림이 있는 가구 종류.</summary>
     public static bool Has(string type) => type is "Shelf" or "Bookshelf" or "FoodLocker" or "CargoCrate" or "CargoNet" or "SuitLocker" or "ToolWall" or "OxygenMaskBox" or "Console" or "GrowRack" or "PlantRack" or "ClothesRack" or "RobotDock" or "OxygenGenerator" or "Bed" or "Table";
 
-    /// <summary>앞면 높이 · 윗면 깊이 (도트) — 솟음 = 앞면 + 윗면 − 칸 깊이.</summary>
-    private static (int front, int top) Size(string type, int bw, int bh, Facing f)
+    /// <summary>앞면 높이 · 윗면 깊이 (도트) — 솟음 = 앞면 + 윗면 − 칸 깊이. 도트 꼴 법칙이 앞면 눈금을 견준다 (ShipView는 Lab에 속을 열지 않아 public).</summary>
+    public static (int front, int top) Size(string type, int bw, int bh, Facing f)
     {
         int deep = (f is Facing.E or Facing.W ? Math.Max(bw, bh) : bh) * T;   // 위에서 보이는 깊이 (옆으로 보면 긴 쪽)
         int front = type switch

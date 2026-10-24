@@ -823,7 +823,7 @@ public struct Prop
 - **지문** 같음.
 - **한 것 ✔**: `LiveShow.Advance` — 일꾼을 기다려 멈췄으면 (`waited`) `_carry = Math.Min(_carry + (n − ran), 0.999)` · 그 밖의 `ran < n` (연출이 무거워짐 · 다시보기 끝)은 예전처럼 0. 시험용 `LiveShow.DrawnTick` (지난 틱 + 틱 사이 비율). 시험은 묶음 '화면' (RulesView.cs `ViewRules`가 부른다) · 몸은 LawsWorker.cs `WorkerClockRules` — 1초에 30틱 (장마다 틱 사이 ½)이라야 되감김이 보인다 (60틱이면 장마다 온 틱이라 줄지 않는다). 고치기 전: 240장 가운데 기다린 장 225 · 그리는 때가 장마다 10.5 → 10.0틱으로 되감겼다 (가장 많이 준 것 0.500틱) → 0. **같이 고친 시험**: 규칙 '관전 화면: 틱이 드물면 걸음 사이를 메운다'는 불 난 방의 주컴퓨터 상상을 일꾼이 셈하는 동안 (시험 고리는 장마다 0.1ms 아래라 일꾼이 끝나기 전에 화면 15초가 지난다) 900장 가운데 810장을 기다려 걸은 틱 1에 멈춰 있었고 — 멈춘 틱을 되감아 다시 재생한 덕에 '칸 사이에 그린 횟수' 393으로 통과했다. 이제 붙잡으니 15로 빨강 → 그 시험의 주컴퓨터는 그 틱에 상상한다 (`ShipMind.Inline` — 결과 · 받는 틱은 같다): 걸은 틱 24 · 칸 사이 416. 그리기 비용 0 (그리기 코드는 그대로 — 예산은 PH0d에서). `docs/screens/physics/ph0e_clock.png` (그리는 때 — 예전 10.0 ↔ 10.5 되감김 · 새 10.999에 붙잡음).
 
-### PH1a — 보는 쪽을 월드로 · 물건 지문 (같음)
+### PH1a — 보는 쪽을 월드로 · 물건 지문 (같음) ✔
 - **무엇**:
   - `Facing` 열거와 `FacingOfBox`를 Painter(ShipView)에서 `ShipEngine.Layout`으로 옮긴다 (`Layout.Facing[]` — 도면에서 한 번). Painter `_facing`은 그것을 읽는다.
   - `ArtFurniture.Size`를 internal로 연다.
@@ -832,6 +832,7 @@ public struct Prop
 - **시험** 법칙 '보는 쪽 한 벌': 일곱 척 가구마다 S/N/E/W 문자열 해시 = 옮기기 전 값 (커밋 글에 적은 상수 · 옮기기 전 코드로 한 번 재 둔다).
 - **고치기 전**: 빈 판 `Layout.Facing`이 모두 S → 해시가 달라 빨강.
 - **지문**: 세계 · 흐름 · 행동 같음 · '물건' 줄은 새로 생긴다 (값을 커밋 글에).
+- **한 것 ✔**: `Facing` 열거는 `ShipEngine` (World/Layout.cs) · `Layout.Facing[]`은 `Finish`가 도면에서 한 번 셈한다 (칸이 없는 설비는 S) · Painter `_facing`은 그 표를 읽는다 (Painter `FacingOfBox`는 지웠다). 레이아웃 안에서는 이름 `Facing`이 표를 가리켜 열거는 별칭 `Face`로 쓴다. `ArtFurniture.Size`는 internal이 아니라 public (ShipView는 Lab에 속을 열지 않는다 — PH0b와 같다). 법칙 '보는 쪽 한 벌' (Lab/LawsProps.cs · 묶음 '물체' · Laws.cs 목록에 `PropLaws()`): 일곱 척 가구의 S/N/E/W 문자열 FNV-1a 해시가 옮기기 전 Painter로 잰 값과 같다 (didim eedd48741bc2bb93 · hannuri 7eaa18f4db702dff · hwasal 7957fe64ce798e38 · nareum 29289543d328937b · saetteul 13d64cffb51b55c6 · salpim 7f4072b4d2ba2241 · soedol 7647af24efa023ee) · 고치기 전 (빈 판 — 모두 S) 일곱 척 모두 다름. `--fingerprint flow`에 '물건' 줄 (틱마다 `mind.Loose`의 (칸 · 물건 · 남은 양 비트 · 막은 구멍)을 정렬해 섞고 틱 끝 표시 하나): 디딤 663e5a74e27f4263 · 살핌 717320b4dcf41323 · 새터 729b72bc79454eeb (PH3a가 `st.Props`에서 같은 값을 내야 한다). 세계 · 흐름 · 행동 지문 같음. 묶음 '물체'는 법칙 묶음이라 rule-times.txt (규칙 시간표)에는 PH2의 '물체 그림'부터 넣는다.
 
 ### PH1b — 도트 꼴 (월드 정적 · 아직 안 씀 · 같음)
 - **무엇**: §2-1 DotForm · DotForge · forms.json · §2-5 데이터 열.
