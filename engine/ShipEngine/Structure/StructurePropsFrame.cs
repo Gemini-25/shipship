@@ -81,6 +81,7 @@ public sealed partial class Structure
             jx += m * gx; jy += m * gy; k += m * ((o.X + rx) * gy - (o.Y + ry) * gx) + I * dw;
         }
         if (jx != 0 || jy != 0 || k != 0) TakeBack(all, b, jx, jy, k, false);
+        if (L.Furniture.Count > 0) JoltFurniture(b, lx, ly, dw, cause);   // 제자리 가구 (PH10 — 틱 사이 덜컹)
     }
 
     /// <summary>

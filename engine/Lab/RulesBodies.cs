@@ -425,6 +425,7 @@ public static partial class Program
             var s = Worlds.Full(lay, 2);
             s.Get<Mind>().Crew(s, 2, 0, 0);
             var st = s.Get<Structure>();
+            st.Tearing = false;   // 그림 각만 잰다 — 순간에 돌린 몸의 원심 · 덜컹에 가구가 뜯기지 않게 (PH10)
             s.Run(Time.Minutes(1));
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), 0);
             s.Run(3);
@@ -458,6 +459,7 @@ public static partial class Program
             var lay1 = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
             var s1 = Worlds.Full(lay1, 2);
             var st1 = s1.Get<Structure>();
+            st1.Tearing = false;   // 그림 각만 잰다 (PH10)
             s1.Run(3);
             st1.Destroy(s1, Worlds.At(lay1, 18, 0), 0);   // 오른쪽 방 윗벽 끝 — 통로는 그대로
             var show1 = new ShipView.LiveShow(s1, "아령 구멍") { SpeedOverride = 1, Follow = false };

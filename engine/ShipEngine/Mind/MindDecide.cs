@@ -454,8 +454,9 @@ public sealed partial class Mind
                     return true;
                 }
                 bool shunned = c.Bed >= 0 && BedTaboo(c.Bed);   // ⑨ 숨진 이와 함께 쓰던 침대 — 다른 빈 침대가 없으면 그래도 눕는다
-                int bed = c.Bed >= 0 && !Taken(a, c.Bed) && !shunned ? c.Bed : NearestFree(a, _beds);
-                if (shunned) { if (bed >= 0) BedsShunned++; else if (!Taken(a, c.Bed)) bed = c.Bed; }
+                bool torn = c.Bed >= 0 && _st != null && L.FurnitureAt[c.Bed] >= 0 && !_st.Usable(L.FurnitureAt[c.Bed]);   // 뜯긴 침대에는 눕지 않는다 (PH10 — 빈 침대 · 없으면 바닥)
+                int bed = c.Bed >= 0 && !Taken(a, c.Bed) && !shunned && !torn ? c.Bed : NearestFree(a, _beds);
+                if (shunned && !torn) { if (bed >= 0) BedsShunned++; else if (!Taken(a, c.Bed)) bed = c.Bed; }
                 int airy = ZeroGSleepSpot(c, bed >= 0 ? bed : here);   // 무중력에서 날숨에 깬 적이 있으면 통풍구 앞에 침낭을 묶고 잔다
                 if (airy >= 0) { plan.Add(Go(airy)); plan.Add(Use(UseKind.Sleep, Time.Hours(10))); return true; }
                 if (bed >= 0) plan.Add(Go(bed));
@@ -959,6 +960,7 @@ public sealed partial class Mind
         {
             int cell = L.Furniture[fu].Cells[0];
             if (Taken(a, cell) || BedTaboo(cell)) continue;   // ⑨ 숨진 이의 침대에는 눕지 않는다
+            if (_st != null && !_st.Usable(fu)) continue;   // 뜯긴 · 밀려난 가구는 쓰지 않는다 (PH10)
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell && o.C.Goal is GoalKind.Relax or GoalKind.Socialize or GoalKind.Sleep) { used = true; break; }
             if (used) continue;

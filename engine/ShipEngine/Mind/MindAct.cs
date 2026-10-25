@@ -876,7 +876,17 @@ public sealed partial class Mind
     /// <summary>길찾기 셈 (재기 — 찍지 않는다): 부른 수 · 못 찾은 수 · 펼친 칸 수.</summary>
     public long PathCalls, PathFails, PathExpanded;
 
-    /// <summary>4방향 A*: 가구 +0.5 · 닫힌 문 +2 · 안 열린다고 믿는 문은 막힘 · 불이라 믿는 곳 둘레 +15 · 진공이라 믿는 구역 +25.</summary>
+    /// <summary>시험 · 보기: 그 이가 지금 from에서 to로 잡을 길 (칸 차례 — 잡은 길은 되돌려 놓는다 · 못 잡으면 빈 목록).</summary>
+    public List<int> PathOf(int agent, int from, int to)
+    {
+        var a = Agents[agent];
+        var keep = a.Path.ToList(); int idx = a.PathIdx;
+        var got = FindPath(a, from, to, 0) ? a.Path.ToList() : new List<int>();
+        a.Path.Clear(); a.Path.AddRange(keep); a.PathIdx = idx;
+        return got;
+    }
+
+    /// <summary>4방향 A*: 가구 +0.5 · 쓰러진 가구 · 문짝 +4 · 닫힌 문 +2 · 안 열린다고 믿는 문은 막힘 · 불이라 믿는 곳 둘레 +15 · 진공이라 믿는 구역 +25.</summary>
     private bool FindPath(Agent a, int from, int to, int near, bool throughStuck = false)
     {
         a.Path.Clear(); a.PathIdx = 0;
@@ -913,6 +923,7 @@ public sealed partial class Mind
                 if (outside && !(eva && _hullOut[j])) continue;
                 float cost = outside ? 2 : 1; // 외판 바깥은 자석 발로 천천히
                 if (L.FurnitureAt[j] >= 0) cost += 0.5f;
+                if (_st != null) cost += _st.ClutterAt(j);   // 쓰러진 · 밀린 가구 · 날아간 문짝이 차지한 칸은 돌아간다 (PH10)
                 if (L.Kind[j] == CellKind.Door)
                 {
                     int d = L.DoorAt[j];

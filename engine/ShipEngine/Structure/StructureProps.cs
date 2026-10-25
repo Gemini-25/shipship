@@ -112,6 +112,8 @@ public sealed partial class Structure
         FurnPlaced = new byte[n]; Array.Fill(FurnPlaced, (byte)1);
         FurnAnchor = new byte[n]; Array.Fill(FurnAnchor, (byte)10);
         FurnProp = new int[n]; Array.Fill(FurnProp, -1);
+        FurnAt = new int[n]; Array.Fill(FurnAt, -1);   // PH10 — 연료 · 열용량은 도면의 제자리 칸들에
+        DoorLeafOut = new byte[L.Doors.Count];
     }
 
     /// <summary>물체의 칸 (자리의 floor — 도면 밖이면 −1).</summary>
@@ -204,7 +206,9 @@ public sealed partial class Structure
     public string PropName(in Prop p)
     {
         _itemNames ??= T.People.Items.Keys.ToArray();
-        string name = p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
+        bool furn = p.Kind == 1 || p.Kind == 2 && (p.Flags & FurnPieceFlag) != 0;   // 가구 · 가구 조각 (PH10 — What = 가구 번호)
+        string name = p.Kind == 3 ? "문짝" : furn ? (p.What >= 0 && p.What < L.Furniture.Count ? T.Equip(L.Furniture[p.What].Type).Name : "설비")
+            : p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
         return p.Kind == 2 ? name + " 조각" : name;
     }
 
@@ -329,7 +333,7 @@ public sealed partial class Structure
     private void SaveProps(StateWriter w)
     {
         w.Tag("물체"); w.List(Props); w.List(Masks); w.List(MaskBits);
-        w.Arr(Grit); w.Arr(GritMat); w.Arr(FurnPlaced); w.Arr(FurnAnchor); w.Arr(FurnProp); w.List(PropHits);
+        w.Arr(Grit); w.Arr(GritMat); w.Arr(FurnPlaced); w.Arr(FurnAnchor); w.Arr(FurnProp); w.Arr(FurnAt); w.Arr(DoorLeafOut); w.List(PropHits);
         w.F64(PropPxGone); w.F64(PropPyGone); w.F64(PropLGone); w.F64(FixL); w.F64(ToHostPx); w.F64(ToHostPy); w.F64(ToHostL); w.F64(BrokenKg); w.F64(GritKg);
         w.I32(NextPropId); w.I64(PropSteps); w.I64(Bounces); w.I64(Shattered); w.I64(Toppled); w.I64(TornLoose); w.I64(Rolled); w.I64(IslandMiss);
         SaveActors(w);
@@ -338,12 +342,13 @@ public sealed partial class Structure
     private void LoadProps(StateReader r)
     {
         r.Tag("물체"); Props.Clear(); Props.AddRange(r.List<Prop>()); Masks.Clear(); Masks.AddRange(r.List<PropMask>()); MaskBits.Clear(); MaskBits.AddRange(r.List<ulong>());
-        r.ArrInto(Grit); r.ArrInto(GritMat); r.ArrInto(FurnPlaced); r.ArrInto(FurnAnchor); r.ArrInto(FurnProp); PropHits.Clear(); PropHits.AddRange(r.List<PropHit>());
+        r.ArrInto(Grit); r.ArrInto(GritMat); r.ArrInto(FurnPlaced); r.ArrInto(FurnAnchor); r.ArrInto(FurnProp); r.ArrInto(FurnAt); r.ArrInto(DoorLeafOut); PropHits.Clear(); PropHits.AddRange(r.List<PropHit>());
         PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64();
         NextPropId = r.I32(); PropSteps = r.I64(); Bounces = r.I64(); Shattered = r.I64(); Toppled = r.I64(); TornLoose = r.I64(); Rolled = r.I64(); IslandMiss = r.I64();
         LoadActors(r);
         _pieceForms.Clear();   // 조각 가면 번호 → 꼴 (다른 세계의 가면일 수 있다)
         _plugStale = true;   // 물체 막음 칸은 장의 PlugProp에서 다시 세운다
         Array.Fill(_mouthTick, long.MinValue);   // 구멍 입 틱 안 캐시도 잊는다 (같은 틱 번호의 다른 세계)
+        RestoreFurnMass();   // 뜯긴 가구의 칸 질량 (칸 질량은 찍지 않는다 — 도면 + 제자리 표에서 · PH10)
     }
 }

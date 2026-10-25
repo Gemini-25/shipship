@@ -110,6 +110,8 @@ public sealed partial class Structure
             {
                 double fur = _mass[c] - _smass[c];
                 if (fur > 0) { m += fur; sx += fur * cx; sy += fur * cy; sxx += fur * (cx * cx + cy * cy + kCell); }
+                if (L.Kind[c] == CellKind.Door && L.DoorAt[c] >= 0 && L.DoorAt[c] < DoorLeafOut.Length && DoorLeafOut[L.DoorAt[c]] != 0)   // 날아간 문짝 몫 (PH10 — 판 몫에서 뺀다)
+                { double lk = LeafKg; m -= lk; sx -= lk * cx; sy -= lk * cy; sxx -= lk * (cx * cx + cy * cy + kCell); }
                 if (mk == SubFull) { double ms = _smass[c]; m += ms; sx += ms * cx; sy += ms * cy; sxx += ms * (cx * cx + cy * cy + kCell); }
             }
             if (mk != SubFull || torn)

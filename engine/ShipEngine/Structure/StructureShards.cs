@@ -140,6 +140,14 @@ public sealed partial class Structure
         var (wx, wy) = WorldOf(frame, cx, cy);
         double vx = o.Vx - o.W * (wy - o.Y), vy = o.Vy + o.W * (wx - o.X), spin = fur / 6 * o.W;
         if (!Debris) { ShardKgLost += fur; ShardPxGone += fur * vx; ShardPyGone += fur * vy; ShardLGone += fur * (wx * vy - wy * vx) + spin; return; }
+        int fu = L.FurnitureAt[c];
+        if (fu >= 0 && fu < FurnPlaced.Length)
+        {
+            // 설비는 점 알갱이가 아니라 그 꼴의 물체로 (PH10 — 처음 칸에서 한 번 · 나머지 칸의 몫도 그때 그 칸의 몸에서 뗀다) · 칸 질량은 도면에서 다시
+            if (FurnPlaced[fu] != 0) LumpFurniture(sim, fu, cause, frame, c);
+            RecalcCellMass(c);
+            return;
+        }
         Shards.Add(new Shard { X = wx, Y = wy, Vx = vx, Vy = vy, Kg = (float)fur, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = sim.Facts.SubNow });
         ShardsMade++;
     }

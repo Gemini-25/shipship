@@ -147,6 +147,7 @@ public sealed partial class Painter
         {
             h = (h ^ (ulong)FillOf(i, mind).Key) * 1099511628211UL;
             h = (h ^ (FixOff(net, i) ? 1UL : 2UL)) * 1099511628211UL;
+            if (st != null && i < st.FurnPlaced.Length) h = (h ^ (st.FurnPlaced[i] != 0 ? 5UL : 6UL)) * 1099511628211UL;   // 뜯긴 가구 자리는 다시 굽는다 (PH10)
             if (_washKind[i] == 1) h = (h ^ (ulong)(3 + WashState(life, i, 1))) * 1099511628211UL;   // 변기 몸 (때 3단 × 막힘 — 5단 A1)
         }
         return h;

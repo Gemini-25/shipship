@@ -405,6 +405,7 @@ public sealed partial class Network : IEngine
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         UpdateCuts();
         EnsureLines();
+        Anchors(sim);
         LinkInsulation(sim);
         if (sim.Tick % 25 == 0) { AgeO2Sensor(sim, 25 * dt); MeasureO2(); }
         Faults(sim);
@@ -425,6 +426,23 @@ public sealed partial class Network : IEngine
         ChipStep(sim);          // 판단 이관 (사): 계산 장치의 칩 열 — 느려짐 · 열 보호
         RobotStep(sim, dt);     // 판단 이관 (사): 로봇 몸 — 전지 · 열 · 충격 · 물 · 전기 · 진공
         Lap("마모", t);
+    }
+
+    /// <summary>
+    /// 볼트 단 맞춤 (틱마다 — PH10 · docs/PHYSICS.md §3-7): 장치 → 가구마다 단 = 10 − round(8 × min(1, 풀림)) — ④ 단과 다르면 ④에 요청한다 (볼트 상태는 ⑥ Loose 한 벌 ·
+    /// 시험이 Loose를 바로 써도 · 조이면 (Tighten) 다음 틱에 10으로). 뜯겨 나온 설비는 관 · 선이 끊겼다 — 그 틱에 부서진다 (마모 25틱을 기다리지 않는다).
+    /// </summary>
+    private void Anchors(Sim sim)
+    {
+        if (_stc == null) return;
+        for (int d = 0; d < Devices.Count; d++)
+        {
+            int f = Devices[d].Furniture;
+            if (f < 0 || f >= _stc.FurnAnchor.Length) continue;
+            int level = 10 - (int)Math.Round(8 * Math.Min(1, d < Loose.Length ? Loose[d] : 0));
+            if (_stc.FurnAnchor[f] != level) _stc.SetAnchor(f, level);
+            if (_stc.FurnPlaced[f] == 0 && _stc.FurnBroken[f] != 0 && Broken[d * 4 + (int)Part.Electric] == 0) Smash(sim, d, _stc.FurnCause[f]);
+        }
     }
 
     /// <summary>배의 평균 산소 분압 → 산소 발생기 일 몫 (비례 조절). 조절 센서로 잰다 — 늙으면 낮게 읽어 더 만든다 (② (마) <see cref="O2Gain"/>).</summary>

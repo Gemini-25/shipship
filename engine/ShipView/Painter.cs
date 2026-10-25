@@ -62,7 +62,7 @@ public sealed partial class Painter
         _pst = st;
         foreach (var it in st.Props)
         {
-            if (it.Kind is not (0 or 2)) continue;   // 물건 · 조각 (PH8)
+            if (it.Kind is not (0 or 1 or 2 or 3)) continue;   // 물건 · 뜯긴 가구 · 조각 · 문짝 (PH8 · PH10)
             if (PropAt == null) { yield return (it, it.X, it.Y, it.Th); continue; }
             var (ok, x, y, th) = PropAt(it.Id);
             if (ok) yield return (it, x, y, th);
@@ -71,7 +71,7 @@ public sealed partial class Painter
         if (PropAt == null || tr == null || tr.Tick != _tick - 1) yield break;
         foreach (var it in tr.Gone)
         {
-            if (it.Kind is not (0 or 2)) continue;
+            if (it.Kind is not (0 or 1 or 2 or 3)) continue;
             var (ok, x, y, th) = PropAt(it.Id);
             if (ok) yield return (it, x, y, th);
         }
@@ -769,6 +769,7 @@ public sealed partial class Painter
         {
             var (bx, by, bw, bh) = _fixBox[i];
             if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1 || !Mine(L.Furniture[i].Cells[0])) continue;
+            if (st != null && i < st.FurnPlaced.Length && st.FurnPlaced[i] == 0) continue;   // 뜯긴 · 밀린 가구는 물체로 그린다 (PH10)
             if (L.Furniture[i].Type == "GravityGenerator")   // 제 그림 (옛 도트에 없는 설비)
             {
                 int gdev = DeviceOf(net, i);
@@ -1058,6 +1059,7 @@ public sealed partial class Painter
     private DotForm PropLook(Tables t, in Prop p)
     {
         if (p.Piece > 0 && _pst != null) return _pst.PieceLook(p);   // 조각은 원래 꼴을 그 가면으로 자른 것 (PH8)
+        if (p.Kind is 1 or 3 && _pst != null) return _pst.PropForm(p);   // 뜯긴 가구 · 날아간 문짝은 그 꼴 그대로 (PH10)
         _itemNames ??= t.People.Items.Keys.ToArray();
         return DotForge.Make(t, p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default", lie: p.Pose);
     }

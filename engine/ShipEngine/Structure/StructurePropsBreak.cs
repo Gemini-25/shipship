@@ -44,6 +44,7 @@ public sealed partial class Structure
     public DotForm WholeForm(in Prop p)
     {
         if (p.Piece <= 0) return PropForm(p);
+        if ((p.Flags & FurnPieceFlag) != 0 && p.What >= 0 && p.What < L.Furniture.Count) return FurnWhole(p.What, p.Pose);   // 가구 조각 (PH10)
         var q = p; q.Piece = 0;
         return PropForm(q);
     }
@@ -63,7 +64,7 @@ public sealed partial class Structure
         var q = p; q.Piece = 0;
         _itemNames ??= T.People.Items.Keys.ToArray();
         string name = q.What >= 0 && q.What < _itemNames.Length ? _itemNames[q.What] : "_default";
-        var whole = DotForge.Make(T, name, lie: q.Pose);
+        var whole = (q.Flags & FurnPieceFlag) != 0 && q.What >= 0 && q.What < L.Furniture.Count ? FurnWhole(q.What, q.Pose) : DotForge.Make(T, name, lie: q.Pose);   // 가구 조각은 그 가구 꼴을 (PH10)
         return DotForge.Piece(whole, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(MaskBits).Slice(mk.Bit, mk.H), mk.Y0, mk.Part);
     }
 
@@ -84,7 +85,7 @@ public sealed partial class Structure
     /// </summary>
     private void NoteHit(Sim sim, in Prop p, double e, byte other, double px, double py, double speed, double fall, byte how, double t)
     {
-        if (e <= 0 || p.Kind is not (0 or 2) || p.Kg <= 0) return;
+        if (e <= 0 || p.Kind is not (0 or 1 or 2) || p.Kg <= 0) return;
         double es = MaterialOf(p).E, eo = T.Materials[Math.Min(other, T.Materials.Count - 1)].Def.E;
         byte sub = _tickDt > 0 ? (byte)Math.Clamp((int)Math.Round(t / _tickDt * 255), 0, 255) : sim.Facts.SubNow;   // 닿은 그 때 (잔걸음 처음이 아니라 — 떨어져 닿는 때는 잔걸음 안이다)
         _breakHits.Add(new BreakHit { Id = p.Id, Seq = _breakHits.Count, E = e, S = eo / (eo + 0.1 * es), Speed = speed, Fall = fall, Px = px, Py = py, T = t, Sub = sub, How = how, Mat = other, After = p });
@@ -157,7 +158,7 @@ public sealed partial class Structure
     private void BreakOne(Sim sim, bool world, int i, int k0, int k1)
     {
         var p = Props[i];
-        if (p.Kind is not (0 or 2) || p.State is 5 or 6 or 7) return;
+        if (p.Kind is not (0 or 1 or 2) || p.State is 5 or 6 or 7) return;
         var cur = PropForm(p);
         double m = cur.Mass;
         if (m <= 0) return;
@@ -341,7 +342,7 @@ public sealed partial class Structure
                 Id = NextPropId++, Kind = 2, Form = whole.Id, Piece = Masks.Count, What = p0.What, Mat = BaseMatOf(pf), Parent = p0.Id, Host = p0.Host, On = after.On,
                 X = after.X + rx, Y = after.Y + ry, Th = th, Vx = after.Vx - after.W * ry, Vy = after.Vy + after.W * rx, W = after.W,
                 Z = (float)Math.Max(0, after.Z + (pf.ZShift - cur.ZShift) * DotForm.Layer), Vz = after.Vz, Kg = (float)pf.Mass, Inertia = (float)pf.I, Pose = p0.Pose,
-                State = after.State is 3 or 4 ? after.State : (byte)1, G = after.G, Roll = after.Roll, Flags = (byte)(mat4(pf) ? 4 : 0), Cause = cause, Since = _now,
+                State = after.State is 3 or 4 ? after.State : (byte)1, G = after.G, Roll = after.Roll, Flags = (byte)((mat4(pf) ? 4 : 0) | (p0.Kind == 1 || (p0.Flags & FurnPieceFlag) != 0 ? FurnPieceFlag : 0)), Cause = cause, Since = _now,
             };
             if (q.Z > 0 && q.State == 1) q.State = 3;
             made.Add(q);

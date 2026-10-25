@@ -64,5 +64,7 @@
   "유리병": { "w": 3, "d": 3, "kg": 0.5, "round": true, "joint": 5, "parts": [ { "disc": 3, "z": [0, 7], "mat": "glass", "part": 0 }, { "disc": 1, "z": [7, 8], "mat": "polymer", "part": 1 } ] },
   "접시": { "w": 8, "d": 8, "kg": 0.4, "round": true, "joint": 5, "parts": [ { "disc": 8, "z": [0, 1], "mat": "ceramic", "part": 0 } ] },
   "공구 상자": { "w": 14, "d": 6, "kg": 5, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 5], "mat": "steel", "part": 0 }, { "rect": [5, 2, 4, 2], "z": [5, 6], "mat": "steel", "part": 1 } ] },
-  "책": { "w": 7, "d": 5, "kg": 0.5, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 1], "mat": "fabric", "part": 0 } ] }
+  "책": { "w": 7, "d": 5, "kg": 0.5, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 1], "mat": "fabric", "part": 0 } ] },
+  // ── 날아간 문짝 (PH10 — 열린 문 사이 0.75m를 지나는 0.69m × 2m 알루미늄 판 · 꼴 틀은 동서로 선 판: 좌우를 잇는 문은 남북으로 돌려 둔다) ──
+  "문짝": { "w": 22, "d": 2, "kg": 40, "parts": [ { "rect": [0, 0, 0, 0], "z": [0, 32], "mat": "aluminum", "part": 0 } ] }
 }

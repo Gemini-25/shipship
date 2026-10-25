@@ -30,6 +30,7 @@ public static partial class Program
         }
         BreakRules();   // 묶음 '깨짐' (RulesBreak.cs — PH8)
         DecorRules();   // 묶음 '꾸밈' (RulesDecor.cs — PH9)
+        BoltRules();    // 묶음 '볼트' (RulesBolt.cs — PH10)
         if (Do("물체 그림"))
         {
             Console.WriteLine("\n[물체 그림]");

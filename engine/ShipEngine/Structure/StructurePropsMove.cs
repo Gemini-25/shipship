@@ -16,6 +16,7 @@ public sealed partial class Structure
     public DotForm PropForm(in Prop p)
     {
         if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
+        if (p.Kind is 1 or 3) return FurnPropForm(p);   // 뜯긴 가구 · 날아간 문짝 (PH10)
         int key = p.What * 8 + p.Pose;
         if ((uint)key < (uint)_propFormAt.Length && _propFormAt[key] is { } at) return at;   // 표 차례로 곧장 (섬 짝마다 잔걸음마다 부른다 — 속도만)
         if (_propForms.TryGetValue(key, out var fm)) return fm;
@@ -124,12 +125,19 @@ public sealed partial class Structure
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void MoveProps(Sim sim, double dt)
     {
+        bool any = false, plugged = false, gone = false, world = Bodies.Count > 0;
+        _windy = F.WindCells.Count > 0; _tickDt = dt;
+        // 가구 (PH10): 받는 힘 (틀 · 바람 · 덜컹)이 견디는 힘을 넘으면 뜯는다 · 폭풍 (② 이 틱 기체 폭발 — 물체 · 가구 · 기체가 민 것은 바깥 몫이다) — 물체 목록이 늘어나니 먼저
+        if (L.Furniture.Count > 0)
+        {
+            if (_boltLow < 0) HoldLowAll();   // 가구 버팀 표는 조용한 틱에 미리 (감압 첫 틱에 짓지 않게 — 속도만)
+            any |= FurnLoads(sim, world);
+            foreach (var j in _jolts) JoltFurniture(j.B, j.Dvx, j.Dvy, j.Dw, j.Cause);
+        }
+        if (Props.Count > 0 || L.Furniture.Count > 0) any |= GasBlasts(sim);
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 잠든 것은 베끼지 않고 상태만 본다 (조용한 틱의 거의 전부)
         if (_hostOf.Length < all.Length) GrowFrames(all.Length);   // 물체를 더할 때 (조용한 틱) 미리 — 감압 · 점화 첫 틱에 만들지 않는다
-        bool any = false, plugged = false, world = Bodies.Count > 0;
-        for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; }
-        _windy = F.WindCells.Count > 0; _tickDt = dt;
-        if (all.Length > 0) any |= GasBlasts(sim);             // 폭풍 (② 이 틱 기체 폭발 — 기체가 민 것은 바깥 몫이다)
+        for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; gone |= all[i].State == 5; }
         _framed = false;
         if (all.Length > 0 && (world || ShipAx != 0 || ShipAy != 0)) BeginFrames(all, world);
         if (plugged) any |= Unplug(all);                     // 구멍을 덧댔거나 누르는 힘이 빠졌으면 떨어진다
@@ -146,10 +154,11 @@ public sealed partial class Structure
         if (world && all.Length > 0) Reactions(all);
         if (_breakHits.Count > 0) { long tb = Prof.Start(); Breaks(sim, world); Prof.Lap("구조:깨짐", tb); }       // 깨짐 · 이음매 · 찌그러짐 · 쏟음 (PH8 — 몸이 되받은 뒤 · 맞은 그 때의 상태에서)
         if (_noises.Count > 0) { long tn = Prof.Start(); EmitNoises(sim); Prof.Lap("구조:물체 소리", tn); }       // 물체 소리 (방마다 · 갈래마다 한 번)
-        if (any)
+        if (any || gone)
         {
             plugged = false;
             foreach (var p in all) plugged |= p.State == 6;
+            if (L.Furniture.Count > 0) SettleFurniture(sim);   // 잠든 가구 · 우주로 간 가구 (다시 앉음 · 연료 · 열용량 옮김 — PH10)
             RemoveSpaced(sim, world);
             all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         }

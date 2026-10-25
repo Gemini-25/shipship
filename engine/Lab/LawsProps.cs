@@ -20,6 +20,7 @@ public static partial class Program
         PileLaws();
         HeightLaws();
         BreakLaws();
+        FurnLaws();   // 가구 떼기 · 설비 덩어리 (LawsFurn.cs — PH10)
     }
 
     // 긴 방 (16m) 곁에 작은 방 — 가운데 겹을 끊으면 긴 방이 배 (몸 0 · 무거운 쪽) · 작은 방이 조각

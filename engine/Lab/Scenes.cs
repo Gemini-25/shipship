@@ -208,6 +208,8 @@ public static partial class Program
             case "shatter": ShatterScene(dir); return;
             case "props-ships": PropsShipsScene(dir); return;
             case "mess": MessScene(dir); return;
+            case "unbolt": UnboltScene(dir); return;
+            case "props-blast": PropsBlastScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

@@ -401,7 +401,7 @@ public sealed partial class Structure
             if (L.Kind[c] is CellKind.Wall or CellKind.Door)
             {
                 double load = 2 * kpa / Math.Max(1, Rating(c));   // 벽에 부딪힌 충격파는 두 배로 되튄다
-                if (L.Kind[c] == CellKind.Door) { if (load >= 1 && L.DoorAt[c] >= 0 && DoorJam[L.DoorAt[c]] == 0) { DamageCause[c] = bc; BlowDoor(sim, c, load); } continue; }
+                if (L.Kind[c] == CellKind.Door) { if (load >= 1 && L.DoorAt[c] >= 0 && DoorJam[L.DoorAt[c]] == 0) { DamageCause[c] = bc; BlowDoor(sim, c, load, cell, kpa); } continue; }
                 if (load >= 1.6) Open(sim, c, 2.5f, bc, FactKind.WallBreach, 0);
                 else if (load >= 1) Open(sim, c, (float)Math.Min(2.0, 0.02 + 0.5 * (load - 1)), bc, FactKind.WallBreach, 0);
                 else if (load >= 0.85) SeedCrack(sim, c, 0.05 + 0.5 * (load - 0.85), bc);
@@ -465,7 +465,8 @@ public sealed partial class Structure
     /// </summary>
     private bool BlastProps(int cell, List<(int c, double kpa)> hit, int cause)
     {
-        if (Props.Count == 0 || hit.Count == 0) return false;
+        if (hit.Count == 0) return false;
+        if (Props.Count == 0) return L.Furniture.Count > 0 && BlastFurniture(_sim, cell, hit, cause);
         double sx = L.X(cell) + 0.5, sy = L.Y(cell) + 0.5;
         bool any = false;
         for (int i = 0; i < Props.Count; i++)
@@ -485,6 +486,7 @@ public sealed partial class Structure
             if (j <= 0) continue;
             any |= Shove(p.Id, j * dx / dl, j * dy / dl, 0, cause);
         }
+        if (L.Furniture.Count > 0) any |= BlastFurniture(_sim, cell, hit, cause);   // 제자리 가구 (PH10 — 물체가 된 것은 다음 폭풍부터 물체로 밀린다)
         return any;
     }
 
@@ -492,7 +494,7 @@ public sealed partial class Structure
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool GasBlasts(Sim sim)
     {
-        if (_chem == null || _chem.GasBurstJ.Count == 0 || Props.Count == 0) return false;
+        if (_chem == null || _chem.GasBurstJ.Count == 0 || Props.Count == 0 && L.Furniture.Count == 0) return false;
         bool any = false;
         foreach (var (cell, heat, cause) in _chem.GasBurstJ)
         {

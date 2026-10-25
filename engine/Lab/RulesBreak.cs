@@ -6,7 +6,7 @@ namespace Lab;
 
 /// <summary>
 /// 깨짐 규칙 (PH8 — docs/PHYSICS.md §5 · §6-5 · §10 묶음 '깨짐'): 유리컵 0.75m는 대개 깨지고 0.3m는 드물다 · 고분자는 깨지지 않고 강철은 찌그러진다 ·
-/// 깨진 조각 색 = 원래 · 담긴 물은 그 칸 바닥으로 (원인 = 깨짐) · 쨍그랑이 깨지는 장에 · 떨군 공구 상자는 '쾅' 믿음 · '큰 소리' 사건을 만들지 않는다 · 폭발 곁 소화기는 이음매에서 갈라진다.
+/// 깨진 조각 색 = 원래 · 담긴 물은 그 칸 바닥으로 (원인 = 깨짐) · 쨍그랑이 깨지는 장에 · 떨군 공구 상자는 '쾅' 믿음 · '큰 소리' 사건을 만들지 않는다 · 폭발 곁 소화기 · 탁자 (PH10)는 이음매에서 갈라진다.
 /// </summary>
 public static partial class Program
 {
@@ -121,7 +121,7 @@ public static partial class Program
                 $"덜그럭 {knock.Count} ({(knock.Count > 0 ? $"{knock.Max(e => e.Db):0}dB" : "-")}) · 쾅 {bang} · 마이크 {sm.MicHeard - mic0}");
         }
 
-        // ── 폭발 곁 소화기는 이음매 (노즐)에서 갈라진다 — 강철 몸은 그대로 (탁자 다리는 가구가 물체가 되는 PH10에서) ──
+        // ── 폭발 곁 소화기는 이음매 (노즐)에서 갈라진다 — 강철 몸은 그대로 ──
         {
             var s = PropWorld(1, 8);
             var st = s.Get<Structure>();
@@ -135,6 +135,24 @@ public static partial class Program
             Check("깨짐: 폭발 곁 소화기가 벽에 부딪히면 이음매 (노즐)에서 두 조각으로 갈라진다 — 부위가 다르다 · 원인 사슬이 폭발까지",
                 st.IndexOf(id) < 0 && pieces.Count == 2 && parts == 2 && fact.Kind == FactKind.Shattered && s.Causes.Story(fact.Cause).Contains("배터리가 터졌다"),
                 $"조각 {pieces.Count} · 부위 {parts} · \"{(fact.Kind == FactKind.Shattered ? s.Causes.Story(fact.Cause) : "-")}\"");
+        }
+
+        // ── 폭발 곁 탁자는 이음매에서 다리가 갈라진다 (PH10 — 가구가 물체가 되어 PH8의 소화기 대신 원래 뜻으로): 폭풍에 밀린 탁자가 벽에 부딪혀 다리 (부위 1)와 윗판 (부위 0)이 갈린다 ──
+        {
+            const string art = "\n##########\n#........#\n#.....tt.#\n#.....tt.#\n#........#\n##########";
+            var s = PropWorld(1, 8, art, new Dictionary<char, string> { ['t'] = "Table" });
+            var st = s.Get<Structure>(); var L = s.Layout;
+            int tx = L.Furniture[0].Cells.Min(L.X), ty = L.Furniture[0].Cells.Min(L.Y);
+            s.Step();
+            st.Blast(s, L.Index(tx - 2, ty), 6e6, s.Causes.Add(CauseKind.Setup, "배터리가 터졌다", s.Tick));
+            for (int k = 0; k < 4; k++) s.Step();
+            var legs = st.Props.Where(q => q.Kind == 2 && (q.Flags & Structure.FurnPieceFlag) != 0 && q.What == 0).ToList();
+            int parts = legs.Select(q => st.Masks[q.Piece - 1].Part).Distinct().Count();
+            var fact = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Shattered);
+            string story = fact.Kind == FactKind.Shattered ? s.Causes.Story(fact.Cause) : "-";
+            Check("깨짐: 폭발 곁 탁자가 밀려 벽에 부딪히면 이음매에서 다리와 윗판이 갈라진다 — 조각은 탁자 꼴 (가구 조각) · 원인 사슬이 폭발까지",
+                st.FurnPlaced[0] == 0 && legs.Count >= 2 && parts == 2 && story.Contains("배터리가 터졌다"),
+                $"조각 {legs.Count} · 부위 {parts} · \"{story}\"");
         }
 
         // ── 칸 가루는 넓은 보기 (16 · 8도트)에도 보인다 (검토가 찾음 — 예전엔 32도트에만: 굽는 덩어리는 칸 덮개 앞에서 멈추고 · 장마다 덮개는 가루를 읽지 않았다) ──

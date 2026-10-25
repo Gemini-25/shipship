@@ -227,7 +227,7 @@ public sealed partial class Structure : IEngine
     public void Step(Sim sim, double dt)
     {
         if (_p.Length != L.N) _p = new double[L.N];
-        _now = sim.Tick;
+        _now = sim.Tick; _sim = sim;
         long t = Prof.Start();
         // 닫힌 문 칸은 벽처럼 (장이 기체를 비워 둔 칸 — 기압 0으로 읽으면 옆 벽이 한쪽이 진공이라고 착각한다)
         for (int i = 0; i < L.N; i++)
@@ -383,7 +383,8 @@ public sealed partial class Structure : IEngine
         if (db > 0) sim.Find<Sound>()?.Emit(sim, NearestAir(c), db, fact == FactKind.WallCrack ? SoundKind.Crack : SoundKind.Bang, cause);
     }
 
-    private void BlowDoor(Sim sim, int c, double load)
+    /// <summary>문이 압력 (load = 받은 압력 / 정격)에 날아간다 — 폭풍이면 blastCell · blastKPa (그 문 칸의 첨두): 문짝은 폭풍의 반대쪽으로 반사 압력의 충격량을 받는다.</summary>
+    private void BlowDoor(Sim sim, int c, double load, int blastCell = -1, double blastKPa = 0)
     {
         int d = L.DoorAt[c];
         DoorsBlown++;
@@ -401,6 +402,25 @@ public sealed partial class Structure : IEngine
         F.SetDoor(d, load > 1.5 ? 1f : 0.35f);
         sim.Facts.Emit(sim.Tick, FactKind.DoorBlown, c, (float)load, cause);
         sim.Find<Sound>()?.Emit(sim, NearestAir(c), 125, SoundKind.Bang, cause);
+        if (load > 1.5)   // 문짝이 통째로 떨어져 낮은 쪽 (폭풍이면 폭풍의 반대쪽)으로 난다 (PH10 — 덜 세면 열린 채 끼인다)
+        {
+            int x = L.X(c), y = L.Y(c), lx = 0, ly = 0; double hi = 0, lo = double.MaxValue, far = -1;
+            foreach (var (ox, oy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
+            {
+                if (!L.In(x + ox, y + oy)) continue;
+                int j = L.Index(x + ox, y + oy);
+                if (!L.IsSpace(j) && !F.IsOut(j)) continue;
+                double pj = F.IsOut(j) ? 0 : F.Pressure(j);
+                hi = Math.Max(hi, pj);
+                if (blastCell >= 0)
+                {
+                    double ex = x + ox - L.X(blastCell), ey = y + oy - L.Y(blastCell), r2 = ex * ex + ey * ey;
+                    if (r2 > far) { far = r2; lo = pj; lx = ox; ly = oy; }
+                }
+                else if (pj < lo) { lo = pj; lx = ox; ly = oy; }
+            }
+            if (lo < double.MaxValue) BlowLeaf(sim, d, c, Math.Max(0, hi - lo) + 2 * blastKPa, lx, ly, cause);
+        }
     }
 
     private void Doors(Sim sim, double dt)

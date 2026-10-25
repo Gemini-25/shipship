@@ -27,6 +27,7 @@ public sealed partial class Structure
     private static int[] NewKeys(int n) { var a = new int[n]; Array.Fill(a, -1); return a; }
     private byte[] _clearFurn = Array.Empty<byte>();  // 그 지도를 셀 때의 가구 제자리
     private (DotForm? form, int ox, int oy)[]? _furnForms;   // 가구마다 꼴 · 꼴 모서리의 도트 자리 (찍지 않는다 — 도면에서 늘 같게)
+    private bool[]? _furnFormSet;
     private sbyte[]? _doorAxis;                       // 문 칸마다 지나는 쪽 (1: 좌우가 벽 — 남북으로 지난다 · 2: 위아래가 벽 · 0 모름)
     private int _steel = -1;
 
@@ -36,16 +37,17 @@ public sealed partial class Structure
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private (DotForm? form, int ox, int oy) FurnForm(int fu)
     {
-        if (_furnForms == null)
+        // 가구마다 처음 부를 때 (상상 복제가 가구 몇 개만 보는데 모두를 짓지 않게 — PH10 · 속도만)
+        if (_furnForms == null) { _furnForms = new (DotForm?, int, int)[L.Furniture.Count]; _furnFormSet = new bool[L.Furniture.Count]; }
+        if (!_furnFormSet![fu])
         {
-            _furnForms = new (DotForm?, int, int)[L.Furniture.Count];
-            for (int i = 0; i < L.Furniture.Count; i++)
+            _furnFormSet[fu] = true;
+            var cells = L.Furniture[fu].Cells;
+            if (cells.Length > 0)
             {
-                var cells = L.Furniture[i].Cells;
-                if (cells.Length == 0) continue;
                 int x0 = cells.Min(L.X), y0 = cells.Min(L.Y), bw = cells.Max(L.X) - x0 + 1, bh = cells.Max(L.Y) - y0 + 1;
-                var fm = DotForge.Make(T, L.Furniture[i].Type, i < L.Facing.Length ? L.Facing[i] : Facing.S, bw, bh);
-                _furnForms[i] = (fm, x0 * 32 + fm.Ox, y0 * 32 + fm.Oy);
+                var fm = DotForge.Make(T, L.Furniture[fu].Type, fu < L.Facing.Length ? L.Facing[fu] : Facing.S, bw, bh);
+                _furnForms[fu] = (fm, x0 * 32 + fm.Ox, y0 * 32 + fm.Oy);
             }
         }
         return _furnForms[fu];

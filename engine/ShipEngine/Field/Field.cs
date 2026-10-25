@@ -273,6 +273,44 @@ public sealed partial class Field : IEngine
     public void AddStore(int i, int s, double moles) { if (moles > 0) Store[s * Cells + i] += moles; }
 
     /// <summary>
+    /// ④의 요청 (PH10 — 뜯긴 가구가 잠든 칸 · 다시 앉은 제자리 · 배를 떠남): 가구 f의 열용량 · 연료를 from에서 to로 옮긴다 (−1 도면의 제자리 칸들 (칸마다 같은 몫) · −2 배를 떠났다 · 그 밖은 그 칸 하나).
+    /// 몫은 <see cref="Furnish.Apply"/>가 박은 그대로다 (재질 kg × 비열 · 탈 것 몰). 열용량은 떠나는 칸 고체 온도의 열을 지고 가 받는 칸과 섞인다 (열 에너지 합 그대로) ·
+    /// 연료는 떠나는 칸에 남은 만큼만 (이미 탄 것은 없다).
+    /// </summary>
+    public void MoveFurnishing(int f, int from, int to)
+    {
+        if (from == to || f < 0 || f >= L.Furniture.Count) return;
+        var fu = L.Furniture[f];
+        int n = fu.Cells.Length;
+        if (n == 0 || from == -2) return;
+        int ns = from == -1 ? n : 1, nd = to == -1 ? n : to >= 0 ? 1 : 0;
+        int Src(int k) => from == -1 ? fu.Cells[k] : from;
+        int Dst(int k) => to == -1 ? fu.Cells[k] : to;
+        foreach (var (matId, kg) in T.Equip(fu.Type).Parts)
+        {
+            var m = T.M(matId);
+            double cap = kg * m.Def.C / ns, heat = 0, took = 0;
+            for (int k = 0; k < ns; k++) { int c = Src(k); double t = Math.Min(Cs[c], cap); Cs[c] -= t; heat += t * Ts[c]; took += t; }
+            for (int k = 0; k < nd; k++)
+            {
+                int c = Dst(k);
+                double add = took / nd, e = heat / nd;
+                if (add <= 0) continue;
+                Ts[c] = (Cs[c] * Ts[c] + e) / (Cs[c] + add);
+                Cs[c] += add;
+            }
+            foreach (var (s, molPerKg) in m.Made)
+            {
+                var sub = T.Substances[s];
+                if (sub.Store < 0 || sub.Phase != MatterPhase.Solid) continue;
+                double share = kg * molPerKg / ns, moved = 0;
+                for (int k = 0; k < ns; k++) { int c = Src(k); double t = Math.Min(Store[sub.Store * Cells + c], share); Store[sub.Store * Cells + c] -= t; moved += t; }
+                for (int k = 0; k < nd; k++) Store[sub.Store * Cells + Dst(k)] += moved / nd;
+            }
+        }
+    }
+
+    /// <summary>
     /// 고인 물에 원인을 단다 (5단 C8 — 위 층의 요청: 지림 · 넘침 · 샌 물관 · 봉함 · 불 끄기 물): 원인을 모르던 칸이거나 · 이번 물이 이미 고인 물보다 많으면 그 원인이 된다.
     /// 퍼지면 이웃이 잇고 마르면 지운다 (<see cref="SpreadLiquids"/>). 물 밖의 저장은 원인을 달지 않는다.
     /// </summary>
