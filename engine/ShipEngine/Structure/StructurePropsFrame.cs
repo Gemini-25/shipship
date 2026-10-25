@@ -145,7 +145,7 @@ public sealed partial class Structure
 
     /// <summary>
     /// 깨우기 — 옆 가속 (§4-1): 잠든 것마다 그 틀의 힘 (빠르기 0일 때) |a| > g' · min(μs 지금 칸, b/Hc)면 깬다 — μs는 지금 칸 값 (젖으면 0.33배) ·
-    /// b는 힘이 미는 쪽 받침 끝까지 (넘어짐 여유 · 넘어짐 자체는 PH7) · 무중력이면 조금이라도. 캐시 없이 틱마다 하나씩 본다.
+    /// b는 힘이 미는 쪽 받침 끝까지 (넘어짐 여유 — 선 꼴만) · 누운 둥근 것은 축에 수직인 몫 &gt; μr g' (구른다) · 무중력이면 조금이라도. 캐시 없이 틱마다 하나씩 본다.
     /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool WakeByFrame(Span<Prop> all, bool world)
@@ -167,9 +167,10 @@ public sealed partial class Structure
             var fm = PropForm(p);
             double cs = Math.Cos(p.Th), sn = Math.Sin(p.Th), u = cs * ax + sn * ay, v = -sn * ax + cs * ay;   // 꼴 틀의 힘 쪽
             int side = Math.Abs(u) >= Math.Abs(v) ? (u > 0 ? 0 : 2) : (v > 0 ? 1 : 3);
-            double tip = fm.Hc > 0 ? fm.TipB[side] / fm.Hc : double.PositiveInfinity;
+            double tip = fm.Hc > 0 && fm.Lie == 0 ? fm.TipB[side] / fm.Hc : double.PositiveInfinity;
             double lim = g * Math.Min(mu, tip);
-            if (a2 <= lim * lim) continue;
+            bool rolls = Roller(p, fm, out double rx, out double ry) && Math.Abs(-ax * ry + ay * rx) > RollMu * g;   // 누운 둥근 것은 축에 수직인 몫이 구름 저항을 넘으면 구른다 (PH7)
+            if (a2 <= lim * lim && !rolls) continue;
             woke |= Wake(ref p, b < 0 ? ShipACause : BodyCause(c));
         }
         return woke;

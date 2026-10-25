@@ -31,7 +31,7 @@ public struct Prop
     public uint Dent0, Dent1;      // 찌그러짐 둘 (u · v · 반지름 도트 8비트씩)
     public int Cause;              // 마지막으로 크게 민 원인
     public float PushImp;          // 그 밂 (틱마다 반)
-    public int Dropper;            // 놓은 이 (꼬리표 + 1 · 로봇은 음수 그대로 · 0 없음 — 놓은 틱 · 다음 틱 동안 그 원판과 닿지 않는다)
+    public int Dropper;            // 놓은 이 (꼬리표 + 1 · 로봇은 음수 그대로 · 0 없음 — 놓은 틱부터 두 틱 동안 그 원판과 닿지 않는다 — ④가 한 틱 늦게 따라가는 걸음까지)
     public float Still;            // 고요하게 지난 초
     public long Since;             // 놓인 · 마지막으로 선 틱
     public int Spare0, Spare1;     // 판을 이 단에서 한 번만 올리려고 남긴 칸
@@ -130,12 +130,18 @@ public sealed partial class Structure
         return -1;
     }
 
-    /// <summary>요청: 바닥에 물건을 놓는다 (그 칸 가운데 · 남은 양 그대로) — 새 물체 Id.</summary>
+    /// <summary>
+    /// 요청: 물건을 놓는다 (그 칸 가운데 · 남은 양 그대로) — 새 물체 Id. 높이 z (밑면 m — 0이면 손 높이에서 내려놓듯 그 아래 받침 (탁자 윗면 · 바닥)에 선다) ·
+    /// 받침보다 높으면 그 높이에서 떨어진다 (PH7).
+    /// </summary>
     public int PutItem(int item, float charge, int cell, float z = 0)
     {
         if (item < 0 || cell < 0 || cell >= L.N) return -1;
         int id = NextPropId++;
-        Props.Add(new Prop { Id = id, Kind = 0, What = (short)item, X = L.X(cell) + 0.5, Y = L.Y(cell) + 0.5, Z = z, Charge = charge });
+        double x = L.X(cell) + 0.5, y = L.Y(cell) + 0.5, zs = SupportAt(x, y, Math.Max(z, HandZ), out int on, out _);
+        var p = new Prop { Id = id, Kind = 0, What = (short)item, X = x, Y = y, Z = (float)Math.Max(z, zs), On = on, Charge = charge, G = F.Grav[cell] };
+        if (z > zs + ZEps) { FillBody(ref p); p.State = 3; p.On = 0; }
+        Props.Add(p);
         return id;
     }
 

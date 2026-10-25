@@ -33,6 +33,17 @@ public static class TrackPlay
         return (true, p.X, p.Y, p.Th);
     }
 
+    /// <summary>물체 id의 그 때 밑면 높이 (m — 기록대로 · 기록이 없으면 지금 · 없으면 0).</summary>
+    public static double PropZ(Sim w, int id, double f)
+    {
+        var st = w.Find<Structure>();
+        if (st == null) return 0;
+        var tr = Of(w);
+        if (tr != null && tr.Height(MotionTrack.WhoProp, id, Math.Clamp(f, 0, 1) * Time.SecondsPerTick, out double z)) return z;
+        int i = st.IndexOf(id);
+        return i >= 0 ? st.Props[i].Z : 0;
+    }
+
     /// <summary>몸 b의 그 때 세상 자세 (몸 열쇠틀 — 없으면 지금).</summary>
     public static (double x, double y, double th) BodyWorld(Structure st, MotionTrack? tr, int b, double t)
     {
@@ -57,6 +68,7 @@ public static class TrackPlay
     public static void Apply(Painter p, Sim w, double f)
     {
         p.PropAt = id => Prop(w, id, f);
+        p.PropZAt = id => PropZ(w, id, f);
         var st = w.Find<Structure>();
         var tr = Of(w);
         p.TickFrac = tr != null ? Math.Clamp(f, 0, 1) : 1;

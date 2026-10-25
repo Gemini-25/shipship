@@ -4,7 +4,7 @@ namespace ShipEngine;
 /// ④ 걷는 이 · 놓기 · 밟기 (docs/PHYSICS.md §7 · PH6b): Actors는 열어 보지 않는 꼬리표의 원판 (R 0.25m) — ⑧이 지난 틱 끝에 알린 길 (그 틱에 지나간 칸 ≤ 8)을
 /// 같은 걸음 시간표 (칸마다 같은 때 — 화면의 걸음 메우기와 같다 · 한 틱 늦다)로 따라간다. 물체만 충격량을 받는다 (반발 e 0.2 · 미는 힘 한도 150N · 발 마찰 √(μ × 0.6)) —
 /// 걷던 이가 바닥 상자를 차서 밀고 · 날아든 것은 선 이 · 누운 이에게도 튄다. 원판은 밀려나지 않고 · 겹친 것을 자리로 떼지 않는다 (발밑의 것은 밟고 선다 — 다가올 때만 민다).
-/// 놓은 이 (Dropper)와는 놓은 틱 · 다음 틱 동안 닿지 않는다 (놓자마자 차지 않게) · 집으려는 이는 그것을 차지 않는다 (차며 도는 고리가 없게). 놓는 자리는 원판 바깥이다 (0.25m + 닿는 반지름 + 1도트 · 걷던 쪽 앞 → 오른쪽 → 왼쪽 → 뒤 · 막혔으면 다음 쪽).
+/// 놓은 이 (Dropper)와는 놓은 틱부터 두 틱 동안 닿지 않는다 (놓고 걸어 나가는 걸음을 ④는 한 틱 늦게 따라간다) (놓자마자 차지 않게) · 집으려는 이는 그것을 차지 않는다 (차며 도는 고리가 없게). 놓는 자리는 원판 바깥이다 (0.25m + 닿는 반지름 + 1도트 · 걷던 쪽 앞 → 오른쪽 → 왼쪽 → 뒤 · 막혔으면 다음 쪽).
 /// </summary>
 public sealed partial class Structure
 {
@@ -28,8 +28,8 @@ public sealed partial class Structure
         vx = (x1 - x0) * (n - 1) / dt; vy = (y1 - y0) * (n - 1) / dt;
     }
 
-    /// <summary>그 원판과 닿지 않는가: 놓은 이 (놓은 틱 · 다음 틱 — Dropper는 꼬리표 + 1 · 로봇은 음수 그대로 · 0 없음) · 집으려는 이 (곁에서 손을 뻗는다 — 차지 않는다).</summary>
-    private bool DropperOf(in Prop p, in PropActor a) => a.Target != 0 && a.Target == p.Id || p.Dropper != 0 && p.Dropper == (a.Tag >= 0 ? a.Tag + 1 : a.Tag) && _now - p.Since <= 1;
+    /// <summary>그 원판과 닿지 않는가: 놓은 이 (놓은 틱부터 두 틱 — 놓고 걸어 나간 걸음을 ④가 다음 틱에 따라간다 · Dropper는 꼬리표 + 1 · 로봇은 음수 그대로 · 0 없음) · 집으려는 이 (곁에서 손을 뻗는다 — 차지 않는다).</summary>
+    private bool DropperOf(in Prop p, in PropActor a) => a.Target != 0 && a.Target == p.Id || p.Dropper != 0 && p.Dropper == (a.Tag >= 0 ? a.Tag + 1 : a.Tag) && _now - p.Since <= 2;
 
     /// <summary>원판의 길 (지금 · 지나간 칸 가운데)에서 그 점까지 가장 가까운 거리 (m).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -133,7 +133,7 @@ public sealed partial class Structure
     /// <summary>
     /// 요청 (⑧ — 내려놓기 · 쓰러지며 떨굼 · 벗어 든 것): 물건을 원판 바깥에 놓는다 — 놓은 이의 자리 (x, y) · 걷던 빠르기 (vx, vy — 그대로 미끄러져 간다) ·
     /// 앞 쪽 (걷던 쪽 · 서 있었으면 face) → 오른쪽 → 왼쪽 → 뒤 가운데 벽 · 가구 · 닫힌 문에 걸리지 않는 첫 자리 (0.25m + 닿는 반지름 + 1도트 · 모두 막혔으면 제자리) ·
-    /// 놓은 이 (꼬리표)와는 놓은 틱 · 다음 틱 동안 닿지 않는다. 높이 z는 PH7 (떨어짐)부터 쓴다 — 지금은 바닥에. 물체 Id (못 놓으면 −1).
+    /// 놓은 이 (꼬리표)와는 놓은 틱부터 두 틱 동안 닿지 않는다. 높이 z: 0이면 내려놓기 (그 자리 받침 — 탁자 위면 윗면) · 아니면 그 높이에서 놓친다 (손 1m — 걷던 빠르기로 날아 떨어진다 · PH7). 물체 Id (못 놓으면 −1).
     /// </summary>
     public int DropItem(int item, float charge, double x, double y, float z, double vx, double vy, int cause, int tag, double faceX = 0, double faceY = 1)
     {
@@ -145,21 +145,27 @@ public sealed partial class Structure
         var fm = PropForm(p);
         double v = Math.Sqrt(vx * vx + vy * vy), fx = v > 1e-9 ? vx / v : faceX, fy = v > 1e-9 ? vy / v : faceY, fl = Math.Sqrt(fx * fx + fy * fy);
         if (fl > 0) { fx /= fl; fy /= fl; } else { fx = 0; fy = 1; }
-        double d = ActorR + fm.Shape.Hit.reach + DotForm.Dot;
+        double d = ActorR + fm.Shape.Hit.reach + DotForm.Dot, hm = HeightOf(fm);
         Span<double> dirs = stackalloc[] { fx, fy, -fy, fx, fy, -fx, -fx, -fy };   // 앞 · 오른쪽 · 왼쪽 · 뒤 (도면 y는 남쪽 — 앞을 시계로 돌린 쪽이 오른쪽)
         double px = x, py = y;
         for (int k = 0; k < 4; k++)
         {
             double qx = x + dirs[2 * k] * d, qy = y + dirs[2 * k + 1] * d;
-            if (!FitsAt(fm, qx, qy)) continue;
+            double zq = z > 0 ? z : RestHeight(qx, qy);   // 내려놓기는 그 아래 받침 (탁자 위면 윗면) · 떨굼은 손 높이
+            _zLo = zq; _zHi = zq + hm;
+            bool fits = FitsAt(fm, qx, qy);
+            FullHeight();
+            if (!fits) continue;
             px = qx; py = qy;
             break;
         }
+        double zs = SupportAt(px, py, Math.Max(z, HandZ), out int on, out _);
         p.X = px; p.Y = py; p.Dropper = tag >= 0 ? tag + 1 : tag; p.Since = _now; p.Cause = cause;
-        if (v > 1e-9)
+        p.Z = (float)(z > 0 ? Math.Max(z, zs) : zs); p.On = on; p.Vz = 0;
+        if (v > 1e-9 || p.Z > zs + ZEps)
         {
             if (p.Kg <= 0) FillBody(ref p);
-            p.Vx = vx; p.Vy = vy; p.State = 1; p.Asleep = 0; p.Still = 0;
+            p.Vx = vx; p.Vy = vy; p.State = (byte)(p.Z > zs + ZEps ? 3 : 1); p.Asleep = 0; p.Still = 0;
         }
         Props[i] = p;
         return id;

@@ -19,7 +19,7 @@ public sealed partial class Structure
     internal static bool PairsOn = true;
 
     /// <summary>
-    /// 물체 셈의 자세함 (docs/PHYSICS.md §4-2): 1 온전 · 0 가벼움 (주컴퓨터 상상 복제 — 섬마다 잔걸음 4 · 물체끼리 · 원판 닿음 끔 · 깨짐 · 넘어짐은 PH7 · PH8이 따른다).
+    /// 물체 셈의 자세함 (docs/PHYSICS.md §4-2): 1 온전 · 0 가벼움 (주컴퓨터 상상 복제 — 섬마다 잔걸음 4 · 물체끼리 · 원판 닿음 · 넘어짐 끔 · 깨짐은 PH8이 따른다).
     /// 찍지 않는다 — 복제를 만드는 코드가 늘 정한다 (<see cref="ShipMind.Imagined"/> · 벽시계로 정하지 않는다: 1코어 = 4코어 · 다시보기 · 되살린 세계는 온전 그대로).
     /// </summary>
     public int PropDetail = 1;
@@ -53,6 +53,11 @@ public sealed partial class Structure
         // 잔걸음 셈값
         public double PreX, PreY, PreTh, PreVx, PreVy, PreW, Gp, MuK, Room, Speed, Fx, Fy, Tq, Wfx, Wfy, Wtq, Wb, Ax, Ay, Al, Acc, Px0, Py0, L0, Lw, StopAt;
         public bool Windy, Framed, Blown;
+        // 높이 (PH7): 떠 있음 (떨어지는 중 · 무중력) · 이 잔걸음이 닿는 때로 끝난다 · 받침 높이 · 받침 · 재질 · 수직 중력 · 넘어지는 힘 (그 쪽 몫 · 높이) · 구름 (축)
+        public bool Air, Roll;
+        public int On;
+        public byte ZMat;
+        public double Gz, Zs, Hz, TipFa, TipHf, RAx, RAy, Radius;
         public int Cell;
     }
 
@@ -341,7 +346,7 @@ public sealed partial class Structure
                     {
                         if (j == i || !Collides(all[j]) || (world ? _hostOf[j] : -1) != hi || _role[j] != 0 && Find(j) == ri) continue;
                         double dx = all[i].X - all[j].X, dy = all[i].Y - all[j].Y, rr = r - pad + SamplesOf(PropForm(all[j])).reach;
-                        if (dx * dx + dy * dy < rr * rr && PairSeparation(all[i], all[j]) < -Slop) IslandMiss++;
+                        if (dx * dx + dy * dy < rr * rr && ZMeet(all[i], all[j]) && PairSeparation(all[i], all[j]) < -Slop) IslandMiss++;
                     }
         }
     }
@@ -546,8 +551,8 @@ public sealed partial class Structure
         var tr = Track;
         if (tr != null)
         {
-            if (tau > 0) { tr.Add(MotionTrack.WhoProp, p.Id, tau, p.X, p.Y, p.Th, 0, 0, 0); r.LastKey = tau; }
-            else { tr.Add(MotionTrack.WhoProp, p.Id, 0, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W); r.LastKey = 0; }
+            if (tau > 0) { tr.Add(MotionTrack.WhoProp, p.Id, tau, p.X, p.Y, p.Th, 0, 0, 0, MotionTrack.EvNone, p.Z, 0); r.LastKey = tau; }
+            else { tr.Add(MotionTrack.WhoProp, p.Id, 0, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvNone, p.Z, p.Vz); r.LastKey = 0; }
         }
     }
 
@@ -631,6 +636,7 @@ public sealed partial class Structure
                 ref var ra = ref _runs[ka]; ref var rb = ref _runs[kb];
                 if (!ra.Active && !rb.Active) continue;
                 ref var a = ref all[ra.I]; ref var b = ref all[rb.I];
+                if (!ZMeet(a, b)) continue;   // 높이가 겹치지 않는다 (탁자 위 · 바닥)
                 double reachA = ra.Reach, reachB = rb.Reach;
                 double dx = a.X - b.X, dy = a.Y - b.Y, gap = Math.Sqrt(dx * dx + dy * dy) - reachA - reachB;
                 double rvx = a.Vx - b.Vx, rvy = a.Vy - b.Vy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(a.W) * reachA + Math.Abs(b.W) * reachB;
@@ -658,7 +664,9 @@ public sealed partial class Structure
                     var pk = p;   // 받은 힘만큼 빨라진 길로 닿을 곳을 찾는다
                     if (r.Blown) { pk.Vx += r.Ax * h; pk.Vy += r.Ay * h; pk.W += r.Al * h; }
                     if (r.Wb != 0) Coriolis(ref pk, -2 * r.Wb * h);
+                    HeightWindow(pk, r.Fm);
                     int nc = FindContacts(pk, r.Sm, h, r.Mat.Mu, r.Mat.Rest);
+                    FullHeight();
                     if (nc > 0)
                     {
                         p = pk; r.Velo = true; r.Ns = nc;
@@ -675,7 +683,7 @@ public sealed partial class Structure
                 {
                     int ai = _runNear[4 * k + q];
                     ref var ac = ref _actors[ai];
-                    if (DropperOf(p, ac)) continue;
+                    if (DropperOf(p, ac) || p.Z >= ac.H) continue;   // 머리 위 (탁자 · 선반 위 높이)는 지나간다
                     ActorAt(ac, tau, dt, out double ax, out double ay, out double avx, out double avy);
                     double sep = DiscSeparation(p, r.Sh, ax, ay, ac.R, out double nx, out double ny, out double cpX, out double cpY);
                     double rvx = p.Vx - avx, rvy = p.Vy - avy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(p.W) * r.Sm.reach;
@@ -703,6 +711,7 @@ public sealed partial class Structure
                 ref var ra = ref _runs[ka]; ref var rb = ref _runs[kb];
                 if (ra.Done || rb.Done || !ra.Active && !rb.Active) continue;
                 ref var a = ref all[ra.I]; ref var b = ref all[rb.I];
+                if (!ZMeet(a, b)) continue;
                 double reachA = ra.Reach, reachB = rb.Reach;
                 double rvx = a.Vx - b.Vx, rvy = a.Vy - b.Vy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(a.W) * reachA + Math.Abs(b.W) * reachB;
                 double margin = rel * h + Slop, dx = a.X - b.X, dy = a.Y - b.Y, far = reachA + reachB + margin;
@@ -751,7 +760,7 @@ public sealed partial class Structure
                     // 힘 반 → 마찰의 정확한 걸음 → 힘 반 (마찰로 선 채 정지 타원 안이면 그대로)
                     if (r.Blown) { p.Vx += 0.5 * r.Ax * h; p.Vy += 0.5 * r.Ay * h; p.W += 0.5 * r.Al * h; }
                     if (r.Wb != 0) Coriolis(ref p, -r.Wb * h);
-                    Friction(ref p, h, r.Gp * r.MuK, r.M, r.In, r.Rho, true, out r.StopAt);
+                    FloorFriction(ref p, in r, h, true, out r.StopAt);
                     if (r.Wb != 0) Coriolis(ref p, -r.Wb * h);
                     if (r.Blown && !(p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(r.Fx, r.Fy, r.Tq, StaticShare * r.MuK, r.M * r.Gp, r.Rho))) { p.Vx += 0.5 * r.Ax * h; p.Vy += 0.5 * r.Ay * h; p.W += 0.5 * r.Al * h; }
                     continue;
@@ -763,9 +772,9 @@ public sealed partial class Structure
                     if (r.Wb != 0) Coriolis(ref p, -2 * r.Wb * h);
                     r.Velo = true;
                 }
-                if (!r.Paired) { Friction(ref p, h, r.Gp * r.MuK, r.M, r.In, r.Rho, false); r.Tvx = p.Vx; r.Tvy = p.Vy; r.Tw = p.W; continue; }
+                if (!r.Paired) { FloorFriction(ref p, in r, h, false, out _); r.Tvx = p.Vx; r.Tvy = p.Vy; r.Tw = p.W; continue; }
                 var pf = p;
-                Friction(ref pf, h, r.Gp * r.MuK, r.M, r.In, r.Rho, false);
+                FloorFriction(ref pf, in r, h, false, out _);
                 r.Tvx = pf.Vx; r.Tvy = pf.Vy; r.Tw = pf.W;
                 r.FloorL = r.Gp * r.MuK * r.M * h; r.Ffx = r.Ffy = r.Ffw = 0;
             }
@@ -965,16 +974,56 @@ public sealed partial class Structure
         var sm = r.Sm;
         double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
         double muK = r.Mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
+        // 높이 (PH7): 받침 · 떨어짐 · 떠 있음 (떠 있으면 바닥이 누르지 않는다 — 마찰 · 붙듦 · 잠 없음 · 닿는 때로 끊는다) · 덜컹에 넘어짐 · 구름
+        double hz = rem;
+        r.Air = HeightBegin(sim, ref r, ref p, c, tau, ref hz);
+        if (r.Air) gp = 0;
+        if (PropDetail > 0 && !r.Air && p.State == 1 && p.Pose == 0 && r.Gz > TipG * Gravity && (p.Vx != r.PreVx || p.Vy != r.PreVy) && r.PreVx == 0 && r.PreVy == 0 && r.PreW == 0)
+        {
+            // 덜컹 문턱 (놓여 있던 것이 바닥이 바뀐 몫 Δv를 받았다): ω₀ = m Δv Hc / Iₚ · ½ Iₚ ω₀² ≥ m g' (R − Hc)면 넘어진다 (받침 모서리가 붙든다 — 평면 빠르기는 0)
+            int js = TipSide(p.Th, p.Vx, p.Vy, out double jv);
+            var (_, jhc, jR, _, jip) = Pivot(r.Fm, js, m);
+            double w0 = m * jv * jhc / jip;
+            if (0.5 * jip * w0 * w0 >= m * r.Gz * (jR - jhc)) StartTip(ref p, js, w0);
+        }
+        r.Roll = !r.Air && p.State != 2 && Roller(p, r.Fm, out r.RAx, out r.RAy);
+        r.Radius = r.Roll ? r.Fm.Hc : 0;
         double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
         // 바람 · 구멍 입 · 몸의 틀 (−a · 원심 · 오일러 — 잔걸음 처음 때 · 코리올리는 빠르기를 돌린다) — 놓인 채 정지 타원 안이면 그대로
         double wfx = 0, wfy = 0, wtq = 0, wb = 0, ffx = 0, ffy = 0, ftq = 0;
         bool windy = _windy && WindForce(p, r.Fm, tau, out wfx, out wfy, out wtq);
         bool framed = _framed && FrameForce(p, host, tau, r.Jw, m, I, out ffx, out ffy, out ftq, out wb);
+        if (p.State == 4 && AirForce(p, r.Fm, c, out double afx, out double afy)) { wfx += afx; wfy += afy; windy = true; }   // 떠 있으면 공조 바람에 흘러간다
         double fx = wfx + ffx, fy = wfy + ffy, tq = wtq + ftq;
         bool blown = windy || framed;
         if (p.Cause == 0 && (windy || framed)) p.Cause = windy ? WindCauseAt(c) : host >= 0 ? BodyCause(c) : ShipACause;   // 작은 덜컹에 깬 것도 미는 힘의 원인을 잇는다
-        if (blown && p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho)) { blown = windy = false; fx = fy = tq = wfx = wfy = wtq = 0; }
-        double ax = fx / m, ay = fy / m, al = tq / I, acc = blown ? Math.Sqrt(ax * ax + ay * ay) + Math.Abs(al) * sm.reach : 0;
+        // 넘어짐 (§3-4): 놓인 채 선 꼴이 옆 힘에 F h_F > m g' b이고 F < μs N이면 모서리를 축으로 (아니면 미끄러진다 — 다만 μk h_F > b면 미끄러지는 밑이 걸려 넘어진다) · 넘어지는 중이면 평면은 받침이 붙든다
+        if (blown && PropDetail > 0 && !r.Air && p.State == 1 && p.Pose == 0 && p.Vx == 0 && p.Vy == 0 && p.W == 0 && r.Gz > TipG * Gravity && Tips(r.Fm, p.Th, m, r.Gz, wfx, wfy, ffx, ffy, out int ts, out double tsh)
+            && (fx * fx + fy * fy < StaticShare * muK * m * r.Gz * (StaticShare * muK * m * r.Gz) || muK * tsh > r.Fm.TipB[ts]))   // 미끄러질 만해도 바닥 마찰 μk가 b/h_F를 넘으면 밑이 걸려 넘어진다
+            StartTip(ref p, ts, 0);
+        if (p.State == 2)
+        {
+            var (tdx, tdy) = SideDir(p.Th, p.TiltDir);
+            Tips(r.Fm, p.Th, m, r.Gz, wfx, wfy, ffx, ffy, out _, out double thF);
+            r.TipFa = fx * tdx + fy * tdy; r.TipHf = thF;
+            double ht = Math.Min(rem, TipH);
+            if (r.NextJolt - tau < ht) ht = Math.Max(1e-9, r.NextJolt - tau);
+            r.Steps++;
+            r.H = ht; r.Gp = 0; r.MuK = muK; r.Room = ClearAt(c) - sm.reach; r.Speed = 0;
+            r.Fx = r.Fy = r.Tq = r.Wfx = r.Wfy = r.Wtq = r.Wb = r.Ax = r.Ay = r.Al = r.Acc = 0;
+            r.Windy = r.Framed = r.Blown = false; r.Roll = false;
+            return true;
+        }
+        if (r.Roll && blown)
+        {
+            // 구르는 것: 구르는 쪽 힘은 구름 저항 (μr N)만 붙든다 · 축 쪽은 바닥 정지 마찰 · 구르는 쪽 가속은 구르는 관성 1.5m으로 나눈다 (아래)
+            double fu = fx * r.RAx + fy * r.RAy, fq = -fx * r.RAy + fy * r.RAx;
+            if (p.Vx == 0 && p.Vy == 0 && p.W == 0 && Math.Abs(fq) <= RollMu * m * gp && Holds(fu * r.RAx, fu * r.RAy, tq, StaticShare * muK, m * gp, rho)) { blown = windy = false; fx = fy = tq = wfx = wfy = wtq = 0; }
+        }
+        else if (blown && p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho)) { blown = windy = false; fx = fy = tq = wfx = wfy = wtq = 0; }
+        double ax = fx / m, ay = fy / m, al = tq / I;
+        if (r.Roll) { double au = ax * r.RAx + ay * r.RAy, aq = (-ax * r.RAy + ay * r.RAx) / RollMass; ax = au * r.RAx - aq * r.RAy; ay = au * r.RAy + aq * r.RAx; }
+        double acc = blown ? Math.Sqrt(ax * ax + ay * ay) + Math.Abs(al) * sm.reach : 0;
         double room = ClearAt(c) - sm.reach, gap = room, h = rem;
         int nNear = _nearCount[k];
         double hAct = double.PositiveInfinity;
@@ -1003,6 +1052,7 @@ public sealed partial class Structure
             Holds(efx, efy, etq, StaticShare * muK, m * gp, rho) && Holds(wfx + efx, wfy + efy, wtq + etq, StaticShare * muK, m * gp, rho));
         if ((speed > 0 || blown) && gp > 0 && muK > 0 || (_windy || framed) && !held) h = Math.Min(h, MaxPropH);   // 바람 · 틀의 힘은 틱 안에서 준다
         if (r.NextJolt - tau < h) h = Math.Max(1e-9, r.NextJolt - tau);   // 덜컹 때에 맞춰 끊는다
+        if (r.Air && r.Hz < h) h = r.Hz;   // 받침 · 바닥 · 천장에 닿는 때 (정확히)
         r.Steps++;
         r.H = h; r.Gp = gp; r.MuK = muK; r.Room = room; r.Speed = speed;
         r.Fx = fx; r.Fy = fy; r.Tq = tq; r.Wfx = wfx; r.Wfy = wfy; r.Wtq = wtq; r.Wb = wb; r.Ax = ax; r.Ay = ay; r.Al = al; r.Acc = acc;
@@ -1017,6 +1067,26 @@ public sealed partial class Structure
         var tr = Track;
         double m = r.M, I = r.In;
         int host = r.Host;
+        // 높이 (PH7): 넘어지는 중 (평면은 받침이 붙든다) · 떨어지는 · 떠 있는 것의 오르내림 · 닿음
+        if (p.State == 2) TipStep(sim, ref r, ref p, h, dt - rem);
+        else if (r.Air) HeightEnd(sim, ref r, ref p, dt - rem - h, h);
+        if (p.State == 4 && r.Ns > 0)
+        {
+            // 무중력: 평면 부딪힘 (벽 · 가구)의 0.2|Δv|를 오르내림으로 (쪽은 Id · 틱 · 잔걸음으로 정한다 — 벽이 평면에 꼭 수직이지 않은 흩어짐 어림)
+            // 에너지는 늘지 않는다: 오르내림이 얻은 몫만큼 평면 빠르기 · 돎을 같은 비로 줄인다
+            double dv = 0;
+            for (int c = r.S0; c < r.S0 + r.Ns; c++) if (_ic[c].Jn > 0) dv += _ic[c].Jn / m;
+            if (dv > 0)
+            {
+                double vz1 = p.Vz + ((DotHash(p.Id, (int)(sim.Tick * 64 + r.Steps)) & 1) == 0 ? AirToVz * dv : -AirToVz * dv);
+                double ep = 0.5 * m * (p.Vx * p.Vx + p.Vy * p.Vy) + 0.5 * I * p.W * p.W, de = 0.5 * m * (vz1 * vz1 - (double)p.Vz * p.Vz);
+                if (de <= 0 || ep > de)
+                {
+                    double kv = de > 0 ? Math.Sqrt(1 - de / ep) : 1;
+                    p.Vx *= kv; p.Vy *= kv; p.W *= kv; p.Vz = (float)vz1;
+                }
+            }
+        }
         // 장부: 바닥 · 벽 · 가구가 받은 몫 — 몸이 없는 배에 준 몫 (바람 · 점화의 틀 힘이 준 몫은 뺀다 · 물체끼리 준 몫은 짝이 서로 지운다) · 몸이 있으면 틱 끝에 그 몸이 되받는다 (바람 몫은 기체가 잃는다)
         if (host < 0) { ToHostPx -= m * p.Vx - r.Px0 - r.Fx * h; ToHostPy -= m * p.Vy - r.Py0 - r.Fy * h; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - r.L0 - r.Lw; }
         else if (r.Windy) WindToWorld(p, host, tau, r.Wfx, r.Wfy, r.Wtq, h);
@@ -1039,13 +1109,13 @@ public sealed partial class Structure
             for (int c = 0; c < _nic && !bounced; c++) if ((_ic[c].A == k || _ic[c].B == k) && _ic[c].Bounce && _ic[c].Jn > 0) bounced = true;
             if (bounced)
             {
-                if (tau > r.LastKey + 1e-9) tr.Add(MotionTrack.WhoProp, p.Id, tau, r.PreX, r.PreY, r.PreTh, r.PreVx, r.PreVy, r.PreW);   // 튀기 앞 (그 잔걸음은 튄 빠르기로 곧게 갔다)
-                tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvHit); r.LastKey = t1;
+                if (tau > r.LastKey + 1e-9) tr.Add(MotionTrack.WhoProp, p.Id, tau, r.PreX, r.PreY, r.PreTh, r.PreVx, r.PreVy, r.PreW, MotionTrack.EvNone, p.Z, p.Vz);   // 튀기 앞 (그 잔걸음은 튄 빠르기로 곧게 갔다)
+                tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvHit, p.Z, p.Vz); r.LastKey = t1;
             }
             else
             {
-                if (r.StopAt >= 0) { tr.Add(MotionTrack.WhoProp, p.Id, tau + r.StopAt, p.X, p.Y, p.Th, 0, 0, p.W, MotionTrack.EvStop); r.LastKey = tau + r.StopAt; }
-                if (Math.Floor(t1 * 16 / dt + 1e-9) > Math.Floor(tau * 16 / dt + 1e-9) && t1 > r.LastKey + 1e-9) { tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W); r.LastKey = t1; }
+                if (r.StopAt >= 0) { tr.Add(MotionTrack.WhoProp, p.Id, tau + r.StopAt, p.X, p.Y, p.Th, 0, 0, p.W, MotionTrack.EvStop, p.Z, p.Vz); r.LastKey = tau + r.StopAt; }
+                if (Math.Floor(t1 * 16 / dt + 1e-9) > Math.Floor(tau * 16 / dt + 1e-9) && t1 > r.LastKey + 1e-9) { tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvNone, p.Z, p.Vz); r.LastKey = t1; }
             }
         }
         // 구멍 벽에 닿았다 (밀어 닿았거나 겹침) → 빨아들이는 구멍이면 막거나 우주로 (아니면 보통 벽 — 이미 튀었다)
@@ -1056,7 +1126,7 @@ public sealed partial class Structure
             if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
         }
         if (gone) { TrackEnd(tr, p, dt - rem, ref r.LastKey); r.Done = true; return; }
-        bool still = r.Gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0 && double.IsPositiveInfinity(r.NextJolt) && !r.Walked;   // 걷는 원판이 아직 지나가는 틱이면 자지 않는다 (깨운 까닭)
+        bool still = r.Gp > 0 && !r.Air && p.State == 1 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Tilt == 0 && double.IsPositiveInfinity(r.NextJolt) && !r.Walked;   // 걷는 원판이 아직 지나가는 틱이면 자지 않는다 (깨운 까닭)
         p.Still = still ? p.Still + (float)h : 0;
         if (p.Still >= SleepSec)
         {

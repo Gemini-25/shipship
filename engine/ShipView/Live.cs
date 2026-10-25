@@ -169,7 +169,7 @@ public sealed partial class LiveShow
         if (sim.Find<Mind>() is { } jm) jm.Journal = true;   // 판단 일지 · 주컴퓨터 일지를 켠다 (쓰기만 — 법칙 '판단 일지는 세계를 바꾸지 않는다') — 로봇 카드 · 말 창이 읽는다
         if (sim.Find<ShipMind>() is { } jc) jc.NoteOn = true;
         Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다) · 하루 목표는 띄우는 쪽이 고른다 (게임 · --live는 3분)
-        Painter = new Painter(sim.Layout) { Nudge = Nudge, PropAt = PropDrawn };
+        Painter = new Painter(sim.Layout) { Nudge = Nudge, PropAt = PropDrawn, PropZAt = id => TrackPlay.PropZ(World, id, Math.Clamp(_carry, 0, 1)) };
         if (sim.Find<Structure>() is { } sst) sst.Track ??= new MotionTrack();   // 틱 안 기록 (보기용 — 세계를 바꾸지 않는다 · 연출의 미리 보기 세계는 켜지 않는다)
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;

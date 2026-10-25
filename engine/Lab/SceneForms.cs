@@ -278,4 +278,90 @@ public static partial class Program
         Png.WriteRgba(Path.Combine(dir, "props-burn.png"), sheet.W, sheet.H, sheet.Px);
         Console.WriteLine($"  props-burn: {dir}/props-burn.png ({sheet.W}×{sheet.H}) — 점화 앞 · 첫 틱 · 둘째 · 넷째 틱 (0.40g · 물건 열 · 젖은 바닥 한 줄)");
     }
+
+    /// <summary>
+    /// 장면 한 장 (관찰 틀 — 그 때 f의 틱 안 기록대로): 그림판에 지난 틱 기록 f를 넣어 그린다 (기록이 없으면 지금 자세) · 확대.
+    /// </summary>
+    private static Img SceneFrame(Painter painter, Sim s, double f, int x, int y, int w, int h, int frame, int zoom)
+    {
+        TrackPlay.Apply(painter, s, f);
+        return painter.Frame(s, x, y, w, h, frame).Scale(zoom);
+    }
+
+    /// <summary>
+    /// topple 틀 (PH7 — docs/PHYSICS.md §3-3 · §3-4): 몸이 없는 배가 0.40g로 점화 (틀의 힘은 서쪽) — 소화기 · 물병은 넘어져 눕고 · 식량 상자는 미끄러지고 · 공구 상자 · 탁자 위 컵은 그대로 ·
+    /// 탁자 위에 누운 유리병은 굴러 끝에서 바닥으로 떨어진다. 점화 앞 · 첫 틱 안 1/8 · 2/8 · 3/8 · 4/8 · 첫 틱 끝 · 둘째 틱 끝 (틱 안 기록으로 메운 때).
+    /// </summary>
+    private static void ToppleScene(string dir)
+    {
+        const string art = "\n################\n#..............#\n#....tt........#\n#....tt........#\n#..............#\n#..............#\n#..............#\n################";
+        var s = PropWorld(1f, 12, art, new Dictionary<char, string> { ['t'] = "Table" });
+        var st = s.Get<Structure>();
+        st.Track = new MotionTrack();
+        int ext = Slide(s, "소화기", 12.5, 3.5, 0, 0), water = Slide(s, "물병", 10.5, 6.0, 0, 0), box = Slide(s, "식량 상자", 13.5, 6.5, 0, 0), tools = Slide(s, "공구 상자", 9.5, 4.5, 0, 0);
+        int cup = Slide(s, "컵", 7.4, 3.6, 0, 0), bottle = Slide(s, "유리병", 7.0, 4.4, 0, 0);
+        { int i = st.IndexOf(bottle); var p = st.Props[i]; p.Pose = 2; st.Props[i] = p; }   // 누운 병 (축이 남북 — 점화 쪽으로 구른다)
+        s.Step();
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 2;
+        (int tick, double f)[] at = { (1, 1), (2, 0.125), (2, 0.25), (2, 0.375), (2, 0.5), (2, 1), (3, 1), (4, 1) };
+        int fw = 16 * Painter.T * zoom, fh = 8 * Painter.T * zoom, gap = 6;
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 1;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k].tick) { if (done == 1) st.ShipAx = 0.4 * 9.8; s.Step(); done++; }
+            var img = SceneFrame(painter, s, at[k].f, 1, 1, 16, 8, done * 8 + k, zoom);
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            string Of(int id) { var p = st.Props[st.IndexOf(id)]; return $"({p.X:0.00}, {p.Y:0.00}, {p.Z:0.00}) 누움 {p.Pose} 상태 {p.State}"; }
+            Console.WriteLine($"  topple {done - 1}틱 + {at[k].f:0.000}: 소화기 {Of(ext)} · 물병 {Of(water)} · 유리병 {Of(bottle)} · 넘어짐 {st.Toppled}");
+        }
+        Console.WriteLine($"  topple: 식량 상자 Δx {st.Props[st.IndexOf(box)].X - 13.5:0.00}m · 공구 상자 Δx {st.Props[st.IndexOf(tools)].X - 9.5:0.00}m · 컵 Δx {st.Props[st.IndexOf(cup)].X - 7.4:0.00}m · 사실 {string.Join(" · ", s.Facts.Since(0).Where(f => f.Kind is FactKind.Toppled or FactKind.ItemFell).Select(f => s.Causes.Text(f.Cause) is { Length: > 0 } c ? $"{f.Kind} {c}" : f.Kind.ToString()))}");
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "topple.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  topple: {dir}/topple.png ({sheet.W}×{sheet.H}) — 0.40g 점화: 소화기 · 물병이 눕고 · 상자가 미끄러지고 · 탁자 위 누운 유리병이 굴러 떨어진다 (첫 틱 안 네 장)");
+    }
+
+    /// <summary>
+    /// props-zerog 틀 (PH7 — docs/PHYSICS.md §3-3 무중력): 놓인 물건 여덟 · 통풍구 (공조 바람 0.5 · 곁 0.25m/s) — 중력이 꺼지면 조금 들떠 떠오르고 · 공조 바람에 흘러가고 · 벽에 부딪히면 위아래로도 튄다 ·
+    /// 일곱째 틱에 중력이 돌아오면 그 높이에서 떨어진다 (그림자 · 들어 올림). 꺼지기 앞 · 첫 · 셋째 · 여섯째 틱 끝 · 돌아온 틱 안 0.15 · 0.3 · 0.6초 · 다음 틱.
+    /// </summary>
+    private static void PropsZeroGScene(string dir)
+    {
+        const string art = "\n##############\n#............#\n#............#\n#............#\n#............#\n#............#\n#............#\n##############";
+        var s = PropWorld(1f, 13, art);
+        var st = s.Get<Structure>(); var f = s.Get<Field>(); var L = s.Layout;
+        st.Track = new MotionTrack();
+        (string name, double x, double y)[] put = { ("식량 상자", 4.5, 3.5), ("공구 상자", 6.5, 3.2), ("컵", 7.5, 4.5), ("책", 10.5, 3.5), ("수리 꾸러미", 4.5, 6.5), ("접시", 6.8, 6.3), ("물병", 9.0, 6.6), ("구급 상자", 11.5, 6.4) };
+        (int k, double vx, double vy)[] nudge = { (0, 1.2, 0), (1, 0, 0.8), (3, -1.0, 0.3), (5, 0.2, -0.9) };   // 중력이 꺼질 때 곁을 지나던 이가 건드린 것처럼
+        var ids = put.Select(q => Slide(s, q.name, q.x, q.y, 0, 0)).ToArray();
+        int vent = L.Index(7, 5);
+        void Vent() { f.Airflow[vent] = 0.5f; Span<int> nb = stackalloc int[4]; L.Neighbors(vent, nb); foreach (int j in nb) if (j >= 0) f.Airflow[j] = 0.25f; }
+        Vent();
+        s.Step();
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 2;
+        (int tick, double f)[] at = { (1, 1), (2, 1), (4, 1), (7, 1), (8, 0.0625), (8, 0.125), (8, 0.25), (9, 1) };
+        int fw = 14 * Painter.T * zoom, fh = 8 * Painter.T * zoom, gap = 6;
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 1;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k].tick)
+            {
+                if (done == 1) { Array.Fill(f.Grav, 0f); s.Step(); foreach (var (k2, vx, vy) in nudge) { var q = st.Props[st.IndexOf(ids[k2])]; st.Shove(ids[k2], q.Kg * vx, q.Kg * vy); } done++; continue; }   // 중력이 꺼진다 (첫 틱에 들뜬다) · 넷은 건드려 벽에 부딪힌다
+                if (done == 7) Array.Fill(f.Grav, 1f);                                     // 중력이 돌아온다
+                Vent(); s.Step(); done++;
+            }
+            var img = SceneFrame(painter, s, at[k].f, 1, 1, 14, 8, done * 8 + k, zoom);
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            Console.WriteLine($"  props-zerog {done - 1}틱 + {at[k].f:0.00}: 중력 {f.Grav[L.Index(6, 4)]:0} · 높이 {string.Join(" ", ids.Select(id => st.Props[st.IndexOf(id)].Z.ToString("0.00")))} · 떠 있음 {st.Props.Count(p => p.State == 4)}");
+        }
+        Console.WriteLine($"  props-zerog: 사실 {string.Join(" · ", s.Facts.Since(0).Where(x => x.Kind == FactKind.ItemFell).Select(x => $"떨어졌다 {x.Size:0.00}m"))}");
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-zerog.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-zerog: {dir}/props-zerog.png ({sheet.W}×{sheet.H}) — 중력이 꺼져 떠오르고 · 공조 바람에 흘러가고 · 돌아오면 떨어진다");
+    }
 }

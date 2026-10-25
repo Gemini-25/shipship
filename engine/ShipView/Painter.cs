@@ -53,6 +53,8 @@ public sealed partial class Painter
     public Func<Agent, (int dx, int dy)>? Nudge;
     /// <summary>물체 Id를 그릴 자리 · 자세 (도면 m — 관전 화면이 틱 안 기록으로 메운다 · 거짓이면 그리지 않는다 · null이면 지금 자리).</summary>
     public Func<int, (bool ok, double x, double y, double th)>? PropAt;
+    /// <summary>물체 id를 그릴 밑면 높이 (m — 관전 화면이 틱 안 기록으로 메운다 · null이면 지금 높이).</summary>
+    public Func<int, double>? PropZAt;
 
     /// <summary>바닥 물건마다 그릴 자리 (이번 틱에 사라진 것도 — 틱 안 기록의 마지막 때까지).</summary>
     private IEnumerable<(Prop p, double x, double y, double th)> DrawnProps(Structure st)
@@ -838,9 +840,12 @@ public sealed partial class Painter
                 if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
-                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(ith));
+                var (look, sx, sy, z) = PropPose(s.Tables, it, ix, iy);
+                var d = _stacks.Get(look, PropStep(ith));
                 var (nx, ny) = SamePlace(it);
-                Put(img, d.Img, (int)Math.Round((ix - x0) * T - d.Ax) + nx, (int)Math.Round((iy - y0) * T - d.Ay) + ny);
+                int rise = (int)Math.Round(z * 16);   // 1층 (1/16m) = 1도트 (3/4 시점)
+                if (rise > 0) PropShadow(img, (sx - x0) * T + nx, (sy - y0) * T + ny, d.Img.W, z, 1);
+                Put(img, d.Img, (int)Math.Round((sx - x0) * T - d.Ax) + nx, (int)Math.Round((sy - y0) * T - d.Ay) + ny - rise);
             }
         }
 
@@ -1048,6 +1053,31 @@ public sealed partial class Painter
     {
         _itemNames ??= t.People.Items.Keys.ToArray();
         return DotForge.Make(t, p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default", lie: p.Pose);
+    }
+
+    /// <summary>
+    /// 물체를 그릴 꼴 · 자리 · 높이 (PH7): 밑면 높이 (틱 안 기록 — 없으면 지금) · 넘어지는 중이면 기울기 단 (π/4 앞은 선 꼴 · 뒤는 누운 꼴 — 넘어지는 쪽으로 (b + Hc) × ψ/(π/2)만큼 옮겨 그린다).
+    /// </summary>
+    private (DotForm look, double x, double y, double z) PropPose(Tables t, in Prop it, double x, double y)
+    {
+        double z = PropZAt?.Invoke(it.Id) ?? it.Z;
+        if (it.State != 2 || it.Tilt <= 0) return (PropLook(t, it), x, y, z);
+        var stand = PropLook(t, it);
+        int side = it.TiltDir & 3;
+        double c = Math.Cos(it.Th), sn = Math.Sin(it.Th);
+        var (dx, dy) = side switch { 0 => (c, sn), 1 => (-sn, c), 2 => (-c, -sn), _ => (sn, -c) };
+        double k = Math.Clamp(it.Tilt / (Math.PI / 2), 0, 1) * (stand.TipB[side] + stand.Hc);
+        if (it.Tilt < Math.PI / 4) return (stand, x + dx * k, y + dy * k, z);
+        var lay = it; lay.Pose = (byte)(side + 1);
+        return (PropLook(t, lay), x + dx * k, y + dy * k, z);
+    }
+
+    /// <summary>떠 있는 · 떨어지는 물체의 그림자 (바닥 자리 · 그림 너비의 2/3 · 높을수록 옅다 — scale 1 = 32도트).</summary>
+    private static void PropShadow(Img img, double px, double py, int width, double z, int scale)
+    {
+        int w = Math.Max(2, width * 2 / 3), h = Math.Max(1, w / 3);
+        float a = (float)(0.32 * Math.Clamp(1 - z / Structure.Ceiling, 0.2, 1));
+        img.Fill((int)Math.Round(px - w / 2.0), (int)Math.Round(py - h / 2.0), w, h, Rgba.Hex("#05070a"), a);
     }
 
     /// <summary>자세 → 쌓아 그리기 각 단 (64단 · 감지 않은 각도 그대로).</summary>

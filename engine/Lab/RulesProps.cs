@@ -23,12 +23,102 @@ public static partial class Program
             Console.WriteLine("\n[물체 부딪힘]");
             PairRules();
         }
+        if (Do("넘어짐 · 높이"))
+        {
+            Console.WriteLine("\n[넘어짐 · 높이]");
+            TipRules();
+        }
         if (Do("물체 그림"))
         {
             Console.WriteLine("\n[물체 그림]");
             StackRules();
             TrackDrawRules();
             ShardTimeRule();
+        }
+    }
+
+    /// <summary>
+    /// 넘어짐 · 높이 (PH7 — docs/PHYSICS.md §3-3 · §3-4 · §10 '넘어짐 · 높이'): 0.40g 점화에 소화기는 눕고 식량 상자는 미끄러진다 · 탁자 위에 누운 유리병이 굴러 끝에서 떨어진다 ·
+    /// 걷다 쓰러진 이가 손 (1m)에서 놓친 컵은 걷던 쪽으로 날아 떨어진다 · 중력이 꺼지면 놓인 상자가 떠오르고 돌아오면 떨어진다 · 탁자 위 컵은 그 밑을 지나는 바닥 상자와 부딪히지 않는다.
+    /// </summary>
+    private static void TipRules()
+    {
+        const string tableRoom = "\n############\n#..........#\n#....tt....#\n#....tt....#\n#..........#\n#..........#\n############";
+        var legend = new Dictionary<char, string> { ['t'] = "Table" };
+        // ── 0.40g 점화: 소화기는 눕고 상자는 미끄러진다 ──
+        {
+            var s = PropWorld(1, 7);
+            var st = s.Get<Structure>();
+            int ext = Slide(s, "소화기", 8.5, 3.5, 0, 0), box = Slide(s, "식량 상자", 8.5, 6.5, 0, 0);
+            s.Step();
+            st.ShipAx = 0.4 * 9.8;
+            s.Run(2);
+            var pe = st.Props[st.IndexOf(ext)]; var pb = st.Props[st.IndexOf(box)];
+            bool fact = s.Facts.Since(0).Any(f => f.Kind == FactKind.Toppled && f.Other == ext);
+            Check("넘어짐: 0.40g 점화 — 소화기 (b/Hc 0.31 < 0.40 < μs 0.5)는 엔진 반대쪽으로 넘어져 눕고 (사실 '넘어졌다') · 식량 상자 (μs 0.375 < 0.40 < b/Hc 1.0)는 눕지 않고 미끄러진다",
+                pe.Pose == 3 && fact && pe.X < 8.5 - 0.3 && pb.Pose == 0 && pb.X < 8.5 - 0.3 && st.Toppled == 1,
+                $"소화기 누움 {pe.Pose} · Δx {pe.X - 8.5:0.00} · 사실 {fact} / 식량 상자 누움 {pb.Pose} · Δx {pb.X - 8.5:0.00} · 넘어짐 {st.Toppled}");
+        }
+        // ── 탁자 위에 누운 유리병이 굴러 끝에서 떨어진다 (축이 점화와 수직 — 구른다: 정지 마찰 0.56로는 붙들리지만 구름 저항 0.02는 못 붙든다) ──
+        {
+            var s = PropWorld(1, 8, tableRoom, legend);
+            var st = s.Get<Structure>();
+            int bottle = Slide(s, "유리병", 7.0, 4.0, 0, 0);   // 탁자 (칸 6 ~ 7 · 3 ~ 4 — 서쪽 끝 x 6.03)의 가운데
+            int i = st.IndexOf(bottle); var p = st.Props[i]; p.Pose = 2; st.Props[i] = p;
+            float z0 = st.Props[i].Z;
+            s.Step();
+            st.ShipAx = 0.4 * 9.8;
+            s.Run(2);
+            var q = st.Props[st.IndexOf(bottle)];
+            var fell = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.ItemFell && f.Other == bottle);
+            Check("높이: 탁자 위 (0.75m)에 누운 유리병이 0.40g 점화에 굴러 탁자 끝을 넘어 바닥에 떨어진다 (사실 '떨어졌다' 0.75m · 굴렀다)",
+                z0 == 0.75f && q.Z == 0 && q.X < 6 && fell.Kind == FactKind.ItemFell && Math.Abs(fell.Size - 0.75) < 0.02 && q.Roll != 0,
+                $"처음 높이 {z0:0.00}m · 지금 ({q.X:0.00}, {q.Y:0.00}, {q.Z:0.00}) · 떨어진 높이 {fell.Size:0.00}m · 구른 각 {q.Roll:0.0}rad");
+        }
+        // ── 걷다 쓰러진 이의 컵: 손 높이 1m에서 걷던 빠르기로 날아 떨어진다 (내려놓은 컵은 발치 앞에 그대로) ──
+        {
+            var s = PropWorld(1, 9);
+            var st = s.Get<Structure>();
+            int cup = s.Tables.People.Items.Keys.ToList().IndexOf("컵");
+            int thrown = st.DropItem(cup, 0, 3.5, 3.5, 1f, 1.7, 0, 0, 3), put = st.DropItem(cup, 0, 3.5, 6.5, 0f, 0, 0, 0, 4, 1, 0);
+            var t0 = st.Props[st.IndexOf(thrown)]; var u0 = st.Props[st.IndexOf(put)];
+            s.Run(2);
+            var t1 = st.Props[st.IndexOf(thrown)]; var u1 = st.Props[st.IndexOf(put)];
+            var fell = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.ItemFell && f.Other == thrown);
+            Check("높이: 쓰러지며 놓친 컵은 손 높이 1m에서 걷던 쪽 (동쪽 1.7m/s)으로 날아 떨어진다 (원판 앞보다 0.5m 넘게 · 사실 '떨어졌다' 1m) · 내려놓은 컵은 발치 앞 바닥에 그대로",
+                t0.Z == 1 && t1.Z == 0 && t1.X > t0.X + 0.5 && Math.Abs(fell.Size - 1) < 0.02 && u0.Z == 0 && u1.X == u0.X && u1.Y == u0.Y && u1.State == 0,
+                $"놓친 컵 처음 ({t0.X:0.00}, {t0.Z:0.00}) → ({t1.X:0.00}, {t1.Z:0.00}) · 떨어진 높이 {fell.Size:0.00}m · 내려놓은 컵 ({u0.X:0.00}, {u0.Z:0.00}) → ({u1.X:0.00}) 상태 {u1.State}");
+        }
+        // ── 중력이 꺼지면 놓인 상자가 떠오르고 · 돌아오면 그 높이에서 떨어진다 ──
+        {
+            var s = PropWorld(1, 10);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            int box = Slide(s, "식량 상자", 6.5, 4.5, 0, 0);
+            s.Step();
+            byte asleep = st.Props[st.IndexOf(box)].State;
+            Array.Fill(f.Grav, 0f);
+            s.Run(2);
+            var up = st.Props[st.IndexOf(box)];
+            Array.Fill(f.Grav, 1f);
+            s.Run(2);
+            var down = st.Props[st.IndexOf(box)];
+            Check("높이: 중력이 꺼지면 놓인 식량 상자가 깨어 떠오르고 (떠 있음 · 높이 > 3cm) · 중력이 돌아오면 떨어져 바닥에 선다",
+                asleep == 0 && up.State == 4 && up.Z > 0.03 && up.Vz > 0 && down.Z == 0 && down.Vz == 0 && down.State is 0 or 1,
+                $"처음 상태 {asleep} · 무중력 상태 {up.State} 높이 {up.Z:0.000}m 오름 {up.Vz:0.000}m/s · 돌아온 뒤 상태 {down.State} 높이 {down.Z:0.000}");
+        }
+        // ── 탁자 위 컵은 탁자 밑을 지나는 바닥 상자와 부딪히지 않는다 (높이가 겹칠 때만 닿는다 · 상자는 다리 사이로 지난다) ──
+        {
+            var s = PropWorld(1, 11, tableRoom, legend);
+            var st = s.Get<Structure>();
+            int cup = Slide(s, "컵", 7.0, 4.0, 0, 0);
+            s.Step();
+            var c0 = st.Props[st.IndexOf(cup)];
+            int box = Slide(s, "식량 상자", 4.5, 4.0, 4.5, 0);   // 다리 (탁자 네 귀 — y 3.1 · 4.9) 사이로
+            s.Run(2);
+            var c1 = st.Props[st.IndexOf(cup)]; var b1 = st.Props[st.IndexOf(box)];
+            Check("높이: 탁자 위 (0.75m) 컵은 그 밑으로 4.5m/s로 미끄러져 지나간 바닥 식량 상자와 부딪히지 않는다 (물체끼리 0 · 컵 그대로) · 상자는 탁자 다리 사이로 지난다",
+                c0.Z == 0.75f && c1.X == c0.X && c1.Y == c0.Y && c1.Z == c0.Z && st.PairHits == 0 && b1.X > 7.2 && b1.Z == 0,
+                $"컵 높이 {c0.Z:0.00}m · 움직임 {Math.Abs(c1.X - c0.X) + Math.Abs(c1.Y - c0.Y):0.0e0} · 물체끼리 {st.PairHits} · 상자 x {b1.X:0.00} 높이 {b1.Z:0.00}");
         }
     }
 
@@ -395,9 +485,9 @@ public static partial class Program
                 Math.Abs(st.Bodies[right].W) > 1.4 && r1 > r0 + 0.25 && byWall,
                 $"분에 {Math.Abs(st.Bodies[right].W) * 60 / (2 * Math.PI):0.0}바퀴 · 상자 무게중심에서 {r0:0.00} → {r1:0.00}m · 벽 곁 {byWall}");
         }
-        // 점화: 몸이 없는 배 (평시) — 0.2g 마른 바닥 식량 상자 그대로 · 젖으면 (×0.33) 미끄러진다 · 0.4g면 마른 바닥에서도 · 0.33g에 잠든 소화기가 깬다 (넘어짐 문턱 b/Hc < 0.33 — 넘어짐은 PH7) · 식량 상자는 깨지 않는다
+        // 점화: 몸이 없는 배 (평시) — 0.2g 마른 바닥 식량 상자 그대로 · 젖으면 (×0.33) 미끄러진다 · 0.4g면 마른 바닥에서도 · 0.33g에 잠든 소화기가 깨어 넘어진다 (넘어짐 문턱 b/Hc 0.31 < 0.33 < μs 0.5 — PH7) · 식량 상자는 깨지 않는다
         {
-            (double dx, byte state, long woken) Burn(string name, double g, bool wet, int wetAfter = -1)
+            (double dx, byte state, long woken, byte pose) Burn(string name, double g, bool wet, int wetAfter = -1)
             {
                 var s = PropWorld(1);
                 var st = s.Get<Structure>(); var f = s.Get<Field>();
@@ -407,13 +497,13 @@ public static partial class Program
                 st.ShipAx = g * 9.8;
                 for (int k = 0; k < 3; k++) { if (k == wetAfter) f.AddStore(cell, f.T.sWater, 300); s.Step(); }
                 var p = st.Props[st.IndexOf(id)];
-                return (p.X - 8.5, p.State, st.PropWoken);
+                return (p.X - 8.5, p.State, st.PropWoken, p.Pose);
             }
             var dry2 = Burn("식량 상자", 0.2, false); var wet2 = Burn("식량 상자", 0.2, true); var dry4 = Burn("식량 상자", 0.4, false);
             var ext = Burn("소화기", 0.33, false); var box33 = Burn("식량 상자", 0.33, false); var late = Burn("식량 상자", 0.2, true, 2);
-            Check("점화: 몸이 없는 배 — 0.2g 마른 바닥 식량 상자는 그대로 · 젖은 바닥 (마찰 ×0.33)이면 엔진 반대쪽으로 미끄러진다 · 0.4g면 마른 바닥에서도 · 0.33g에 잠든 소화기가 깬다 (넘어짐 문턱 b/Hc) · 식량 상자는 깨지 않는다",
-                dry2.dx == 0 && dry2.woken == 0 && wet2.dx < -0.3 && dry4.dx < -0.3 && ext.woken > 0 && ext.dx == 0 && box33.woken == 0 && box33.dx == 0,
-                $"0.2g 마름 {dry2.dx:0.00}m · 젖음 {wet2.dx:0.00}m · 0.4g 마름 {dry4.dx:0.00}m · 0.33g 소화기 깸 {ext.woken} ({ext.dx:0.00}m) · 식량 상자 깸 {box33.woken}");
+            Check("점화: 몸이 없는 배 — 0.2g 마른 바닥 식량 상자는 그대로 · 젖은 바닥 (마찰 ×0.33)이면 엔진 반대쪽으로 미끄러진다 · 0.4g면 마른 바닥에서도 · 0.33g에 잠든 소화기가 깨어 엔진 반대쪽으로 넘어진다 (넘어짐 문턱 b/Hc) · 식량 상자는 깨지 않는다",
+                dry2.dx == 0 && dry2.woken == 0 && wet2.dx < -0.3 && dry4.dx < -0.3 && ext.woken > 0 && ext.pose != 0 && ext.dx < -0.2 && box33.woken == 0 && box33.dx == 0,
+                $"0.2g 마름 {dry2.dx:0.00}m · 젖음 {wet2.dx:0.00}m · 0.4g 마름 {dry4.dx:0.00}m · 0.33g 소화기 깸 {ext.woken} 누움 {ext.pose} ({ext.dx:0.00}m) · 식량 상자 깸 {box33.woken}");
             Check("점화 중 젖음: 0.2g 점화 중 잠든 식량 상자의 칸이 젖으면 (둘째 틱 뒤) 지금 칸 값으로 다시 보아 깨어 미끄러진다",
                 late.dx < -0.05 && late.woken > 0, $"{late.dx:0.00}m · 깸 {late.woken}");
         }

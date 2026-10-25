@@ -202,6 +202,8 @@ public static partial class Program
             case "kick": KickScene(dir); return;
             case "props-breach": PropsBreachScene(dir); return;
             case "props-burn": PropsBurnScene(dir); return;
+            case "topple": ToppleScene(dir); return;
+            case "props-zerog": PropsZeroGScene(dir); return;
             case "props-track": PropsTrackScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }

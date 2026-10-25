@@ -129,6 +129,7 @@ public sealed partial class Structure
         if (_jolts.Count > 0) any |= WakeByJolts(all);        // 덜컹 (몸 걸음 안의 밂)
         if (_framed) any |= WakeByFrame(all, world);           // 옆 가속 (점화 · 뿜는 틈 · 도는 몸)
         if (_nActors > 0 && PropDetail > 0 && all.Length > 0) any |= WakeByActors(all);   // 걷는 이 (지난 틱 길에 닿을 잠든 것)
+        if (all.Length > 0) any |= WakeByGravity(all);         // 중력이 사라진 칸의 놓인 것은 들뜬다 (PH7)
         if (any)
         {
             BuildClearance();
@@ -151,7 +152,7 @@ public sealed partial class Structure
     {
         if (tr == null || double.IsPositiveInfinity(lastKey)) return;
         byte ev = p.State == 5 ? MotionTrack.EvGone : p.State == 6 ? MotionTrack.EvPlug : MotionTrack.EvNone;
-        if (t > lastKey + 1e-9 || ev != MotionTrack.EvNone) tr.Add(MotionTrack.WhoProp, p.Id, Math.Max(t, lastKey), p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, ev);
+        if (t > lastKey + 1e-9 || ev != MotionTrack.EvNone) tr.Add(MotionTrack.WhoProp, p.Id, Math.Max(t, lastKey), p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, ev, p.Z, p.Vz);
         lastKey = double.PositiveInfinity;   // 이 틱은 끝 (한 번만)
     }
 
@@ -195,6 +196,14 @@ public sealed partial class Structure
     /// 빠르기 · 각속도가 0에 닿으면 그때 멈춘다 (넘어 뒤집히지 않는다). exact면 자리도 (x += v t + ½ a t²).
     /// </summary>
     private static void Friction(ref Prop p, double h, double k, double m, double I, double rho, bool exact) => Friction(ref p, h, k, m, I, rho, exact, out _);
+
+    /// <summary>잔걸음의 바닥 마찰 (그 물체 걸음 값으로 — 누운 둥근 것은 구른다 · 떠 있으면 r.Gp가 0이라 그대로 간다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
+    private static void FloorFriction(ref Prop p, in PropRun r, double h, bool exact, out double stopAt)
+    {
+        if (r.Roll && r.Gp > 0) RollFriction(ref p, h, r.Gp * r.MuK, r.Gp, r.RAx, r.RAy, r.M, r.In, r.Rho, r.Radius, exact, out stopAt);
+        else Friction(ref p, h, r.Gp * r.MuK, r.M, r.In, r.Rho, exact, out stopAt);
+    }
 
     /// <summary>바닥 마찰 — 미끄러짐이 그친 때 (잔걸음 처음에서 초 · 그치지 않았으면 −1)도 (틱 안 기록의 '섰다').</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]

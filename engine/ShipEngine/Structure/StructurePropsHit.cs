@@ -2,7 +2,7 @@ namespace ShipEngine;
 
 /// <summary>
 /// ④ 물체 닿음 — 정적 틀 (docs/PHYSICS.md §3-5 · PH4a): 벽 · 문 칸은 남은 25cm 잔칸 상자 (구멍은 실제 틈) · 닫힌 문은 벽 · 열린 문 칸은 양옆 12.5cm 기둥 (PH4b: 닫혀 오는 문짝 판도) ·
-/// 제자리 가구는 그 꼴의 기둥 (높이 겹침 없이 기둥만 — 높이는 PH7). 모두 도트 (1/32m) 격자 위라 한 도트가 막혔나로 묻는다.
+/// 제자리 가구는 그 꼴의 기둥 (물체가 차지한 높이와 겹치는 기둥만 — PH7). 모두 도트 (1/32m) 격자 위라 한 도트가 막혔나로 묻는다.
 /// 닿음은 물체 껍질 꼭짓점 · 테두리 표본이 이번 잔걸음에 갈 길을 도트마다 따라가 본다 (투기적 닿음 — 빠른 것도 잔칸을 건너뛰지 않는다) ·
 /// 법선은 잔칸 면 · 가구 기둥은 8이웃의 빈 쪽 기울기 · 사분면마다 가장 가까운 점 (많아야 4). 풀이는 순차 충격량 (법선 jn ≥ 0 · 쿨롱 |jt| ≤ μ jn ·
 /// 다가오는 빠르기 0.5m/s 넘으면 반발 e = 둘 가운데 작은 것) · 겹침이 0.5도트 넘는 몫의 20%만 자리를 옮긴다 (빠르기는 그대로).
@@ -96,7 +96,7 @@ public sealed partial class Structure
                 var (fm, ox, oy) = FurnForm(fu);
                 if (fm == null) return false;
                 int x = dx - ox, y = dy - oy;
-                if (!fm.Solid(x, y)) return false;
+                if (!fm.Solid(x, y) || !ColumnBlocks(fm, x, y)) return false;   // 높이 창 밖 (탁자 윗면 위 · 다리 사이 밑)이면 막지 않는다 (PH7)
                 mat = fm.Mat[y * fm.W + x]; furn = true;
                 return true;
             }

@@ -9,8 +9,8 @@ namespace ShipEngine;
 public sealed class MotionTrack
 {
     public const byte WhoProp = 0, WhoBody = 1;
-    /// <summary>사건: 없음 · 부딪힘 (이 열쇠틀로 가는 토막은 곧게) · 섰다 (마찰로 — 그 때 그대로) · 사라짐 (우주로) · 막음.</summary>
-    public const byte EvNone = 0, EvHit = 1, EvStop = 2, EvGone = 3, EvPlug = 4;
+    /// <summary>사건: 없음 · 부딪힘 (이 열쇠틀로 가는 토막은 곧게) · 섰다 (마찰로 — 그 때 그대로) · 사라짐 (우주로) · 막음 · 닿음 (떨어져 받침 · 바닥에 — PH7).</summary>
+    public const byte EvNone = 0, EvHit = 1, EvStop = 2, EvGone = 3, EvPlug = 4, EvLand = 5;
 
     public struct Key
     {
@@ -19,6 +19,7 @@ public sealed class MotionTrack
         public float T;              // 틱 처음에서 초 (0 ~ 2.4)
         public double X, Y, Th;      // 물체: 도면 m · 몸: 세상 m
         public double Vx, Vy, W;
+        public float Z, Vz;          // 물체 밑면 높이 · 오르내림 (PH7 — 몸은 0)
     }
 
     /// <summary>기록한 틱 (그 틱의 걸음 — Tick − 1 끝에서 Tick 끝까지 · 그 밖이면 열쇠틀은 쓸모가 없다).</summary>
@@ -40,8 +41,8 @@ public sealed class MotionTrack
     /// <summary>틱 처음 (④ 움직임 앞): 지난 틱 기록을 비운다.</summary>
     public void Begin(long tick, double dt) { Tick = tick; Dt = dt; Keys.Clear(); Gone.Clear(); _index.Clear(); _count = 0; }
 
-    public void Add(byte who, int id, double t, double x, double y, double th, double vx, double vy, double w, byte ev = EvNone) =>
-        Keys.Add(new Key { Who = who, Id = id, T = (float)t, X = x, Y = y, Th = th, Vx = vx, Vy = vy, W = w, Ev = ev });
+    public void Add(byte who, int id, double t, double x, double y, double th, double vx, double vy, double w, byte ev = EvNone, float z = 0, float vz = 0) =>
+        Keys.Add(new Key { Who = who, Id = id, T = (float)t, X = x, Y = y, Th = th, Vx = vx, Vy = vy, W = w, Ev = ev, Z = z, Vz = vz });
 
     /// <summary>틱 끝: 누구마다 때 차례로 묶는다 (그리는 쪽이 찾기 쉽게).</summary>
     public void End()
@@ -88,6 +89,30 @@ public sealed class MotionTrack
         x = h00 * a.X + h10 * h * a.Vx + h01 * b.X + h11 * h * b.Vx;
         y = h00 * a.Y + h10 * h * a.Vy + h01 * b.Y + h11 * h * b.Vy;
         th = h00 * a.Th + h10 * h * a.W + h01 * b.Th + h11 * h * b.W;
+        return true;
+    }
+
+    /// <summary>
+    /// 틱 처음에서 t초의 밑면 높이 (열쇠틀 사이 에르미트 — 오르내림으로 · 닿음 (떨어져 받침에)으로 가는 토막은 곧게 · 처음보다 앞이면 처음 · 끝보다 뒤면 끝). 열쇠틀이 없으면 거짓.
+    /// </summary>
+    public bool Height(byte who, int id, double t, out double z)
+    {
+        var k = Of(who, id);
+        z = 0;
+        if (k.Length == 0) return false;
+        if (t <= k[0].T) { z = k[0].Z; return true; }
+        if (t >= k[^1].T) { z = k[^1].Z; return true; }
+        int i = 1;
+        while (i < k.Length - 1 && k[i].T < t) i++;
+        ref readonly var a = ref k[i - 1];
+        ref readonly var b = ref k[i];
+        double h = b.T - a.T;
+        if (h <= 1e-9) { z = b.Z; return true; }
+        double s = (t - a.T) / h;
+        if (b.Ev == EvHit) { z = a.Z + (b.Z - a.Z) * s; return true; }
+        double s2 = s * s, s3 = s2 * s;
+        double vb = b.Ev == EvLand ? 2 * (b.Z - a.Z) / h - a.Vz : b.Vz;   // 닿는 열쇠틀의 오르내림은 튄 뒤 값 — 닿기 바로 앞 (고른 가속)으로
+        z = (2 * s3 - 3 * s2 + 1) * a.Z + (s3 - 2 * s2 + s) * h * a.Vz + (-2 * s3 + 3 * s2) * b.Z + (s3 - s2) * h * vb;
         return true;
     }
 

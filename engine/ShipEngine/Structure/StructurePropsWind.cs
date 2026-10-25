@@ -175,12 +175,14 @@ public sealed partial class Structure
             // 넉넉한 어림으로 먼저 거른다: 가장 센 칸 바람 × 가장 넓은 앞면 (돌림힘 몫까지)이 가장 미끄러운 바닥의 정지 마찰도 못 넘으면 그대로
             double aMax = fm.AreaMax;
             double rg = 3 * SamplesOf(fm).reach / Math.Max(1e-3, fm.Rho);   // 힘 점은 무게중심에서 많아야 (몫의 가운데 차 2 + 압력 중심 1) × 닿는 반지름
-            if (qMax * fm.Cd * aMax * Math.Sqrt(1 + rg * rg) <= StaticShare * MinMu() * WetShare * fm.Mass * Gravity * F.Grav[c]) continue;
+            double tipShare = fm.Lie == 0 && HeightOf(fm) > 0 ? 2 * fm.TipB.Min() / HeightOf(fm) : fm.Round ? RollMu : double.PositiveInfinity;   // 바람이 꼴 높이의 반에 걸려 넘길 만한 몫 · 누운 둥근 것은 구름 저항 (PH7)
+            if (qMax * fm.Cd * aMax * Math.Sqrt(1 + rg * rg) <= Math.Min(StaticShare * MinMu() * WetShare, tipShare) * fm.Mass * Gravity * F.Grav[c]) continue;
             var q = p;
             if (q.Kg <= 0) FillBody(ref q);
             if (!WindForce(q, fm, 0, out double fx, out double fy, out double tq)) continue;
             double gp = Gravity * F.Grav[c], mu = T.Materials[Math.Min(q.Mat, T.Materials.Count - 1)].Def.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);
-            if (Holds(fx, fy, tq, StaticShare * mu, q.Kg * gp, fm.Rho)) continue;
+            bool rolls = Roller(q, fm, out double rx, out double ry) && Math.Abs(-fx * ry + fy * rx) > RollMu * q.Kg * gp;   // 누운 둥근 것은 구른다 (PH7)
+            if (Holds(fx, fy, tq, StaticShare * mu, q.Kg * gp, fm.Rho) && !rolls && !(gp > TipG * Gravity && Tips(fm, q.Th, q.Kg, gp, fx, fy, 0, 0, out _, out _))) continue;   // 붙들어도 넘길 만하면 깬다 (PH7)
             q.State = 1; q.Asleep = 0; q.Still = 0;
             int cause = WindCauseAt(c);
             if (cause != 0) q.Cause = cause;

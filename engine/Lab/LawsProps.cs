@@ -18,6 +18,7 @@ public static partial class Program
         FrameLaws();
         TrackLaws();
         PileLaws();
+        HeightLaws();
     }
 
     // 긴 방 (16m) 곁에 작은 방 — 가운데 겹을 끊으면 긴 방이 배 (몸 0 · 무거운 쪽) · 작은 방이 조각
@@ -418,8 +419,8 @@ public static partial class Program
             var p = st.Props[st.IndexOf(id)];
             double time = 50 * Time.SecondsPerTick, ke = 0.5 * p.Kg * (p.Vx * p.Vx + p.Vy * p.Vy) + 0.5 * p.Inertia * p.W * p.W;
             double ex = Math.Abs(p.X - (p0.X + p0.Vx * time)), ey = Math.Abs(p.Y - (p0.Y + p0.Vy * time)), eth = Math.Abs(p.Th - (p0.Th + p0.W * time));
-            Check("평면 움직임 — 힘이 없으면 그대로: 무중력 · 공기 없는 방의 식량 상자 (0.05, 0.02)m/s · 0.5rad/s → 50틱 뒤 x₀ + vt · θ = ωt (1e-9) · 운동 에너지 비트까지",
-                ex <= 1e-9 && ey <= 1e-9 && eth <= 1e-9 && BitConverter.DoubleToInt64Bits(ke) == BitConverter.DoubleToInt64Bits(ke0) && p.State == 1,
+            Check("평면 움직임 — 힘이 없으면 그대로: 무중력 · 공기 없는 방의 식량 상자 (0.05, 0.02)m/s · 0.5rad/s → 50틱 뒤 x₀ + vt · θ = ωt (1e-9) · 운동 에너지 비트까지 · 떠 있음 (PH7 — 높이 그대로)",
+                ex <= 1e-9 && ey <= 1e-9 && eth <= 1e-9 && BitConverter.DoubleToInt64Bits(ke) == BitConverter.DoubleToInt64Bits(ke0) && p.State == 4 && p.Z == 0,
                 $"x 어긋남 {ex:0.0e0} · y {ey:0.0e0} · θ {eth:0.0e0} ({p.Th:0.000}rad) · 운동 에너지 {ke0:R} → {ke:R} · 상태 {p.State}");
         }
         // 법칙 3: 마찰로 선다 — 1g 마른 강철 바닥 · 식량 상자 (고분자 μk 0.3): 3m/s → v²/2μg = 1.5306m · 돌기만 3rad/s → Δθ = Iω²/(2 μk m g ρ)
@@ -475,26 +476,27 @@ public static partial class Program
             Check("평면 움직임 — 결정론: 미끄러지며 벽에 튀는 상자 20개를 1틱 뒤 찍고 되살려 60틱 — 바이트 같음 · 1코어 = 4코어",
                 one.same && four.same && one.hash == four.hash && one.hash != 0, $"되살림 같음 {one.same}/{four.same} · {one.hash:x16} / {four.hash:x16} · 61틱 뒤 깨어 있음 {one.awake}");
         }
-        // 닫힌 문은 벽 · 제자리 가구는 기둥: 1g 상자 3 · 4m/s가 닫힌 문 · 탁자 앞에서 튀어 선다 (문 칸 · 탁자 발자국 안으로 들어가지 않는다)
+        // 닫힌 문은 벽 · 제자리 가구는 기둥: 1g 상자 3 · 4m/s가 닫힌 문 · 작업대 앞에서 튀어 선다 (문 칸 · 작업대 발자국 안으로 들어가지 않는다 — 바닥까지 찬 가구 · 탁자는 다리 사이로 지난다: PH7)
         {
             const string art = "\n############\n#.......tt.#\n#.......tt.#\n#..........#\n#####D######\n#..........#\n############";
-            var s = PropWorld(1, 1, art, new Dictionary<char, string> { ['t'] = "Table" });
+            var s = PropWorld(1, 1, art, new Dictionary<char, string> { ['t'] = "Workbench" });
             var st = s.Get<Structure>(); var L = s.Layout;
-            var table = L.Furniture.Single(fu => fu.Type == "Table");
-            var tf = DotForge.Make(t, "Table", L.Facing[table.Id], 2, 2);
+            var table = L.Furniture.Single(fu => fu.Type == "Workbench");
+            var tf = DotForge.Make(t, "Workbench", L.Facing[table.Id], 2, 2);
             int lx = int.MaxValue; for (int y = 0; y < tf.D; y++) for (int x = 0; x < tf.W; x++) if (tf.Solid(x, y)) lx = Math.Min(lx, x);
             double tableLeft = (table.Cells.Min(L.X) * 32 + tf.Ox + lx) * dot;   // 탁자 발자국 왼쪽 끝 (m)
             int a = Slide(s, "식량 상자", 6.5, 3.5, 0, 3), b = Slide(s, "식량 상자", 6.5, 2.9, 4, 0);
             s.Run(2);
             var pa = st.Props[st.IndexOf(a)]; var pb = st.Props[st.IndexOf(b)];
             double south = pa.Y + box.Hull.Max(v => v.y) - box.Cy, east = pb.X + box.Hull.Max(v => v.x) - box.Cx;
-            Check("평면 움직임 — 닫힌 문은 벽 · 제자리 가구는 기둥: 3 · 4m/s 상자가 닫힌 문 앞 · 탁자 발자국 앞에서 튀어 선다 (안으로 0.5도트 넘게 들어가지 않는다 · 닿을 만큼 갔다)",
+            Check("평면 움직임 — 닫힌 문은 벽 · 제자리 가구는 기둥: 3 · 4m/s 상자가 닫힌 문 앞 · 작업대 발자국 앞에서 튀어 선다 (안으로 0.5도트 넘게 들어가지 않는다 · 닿을 만큼 갔다)",
                 south <= 5 + 0.5 * dot && south > 4.85 && east <= tableLeft + 0.5 * dot && east > tableLeft - 0.15 && pa.Asleep == 1 && pb.Asleep == 1 && st.Bounces >= 2,
-                $"문 앞 상자 남쪽 끝 {south:0.000}/5 · 탁자 앞 상자 동쪽 끝 {east:0.000}/{tableLeft:0.000}m · 튐 {st.Bounces} · 잠 {pa.Asleep}{pb.Asleep}");
+                $"문 앞 상자 남쪽 끝 {south:0.000}/5 · 작업대 앞 상자 동쪽 끝 {east:0.000}/{tableLeft:0.000}m · 튐 {st.Bounces} · 잠 {pa.Asleep}{pb.Asleep}");
         }
-        // 벽을 건너뛰지 않는다: 20m/s 상자 — 무중력 하나 (벽에 튀어 e = min(고분자 0.5, 강철 0.4)씩 줄어든다) · 1g 하나 (튀고 미끄러져 벽에 선다) — 매 틱 끝 겹침 ≤ 0.5도트
+        // 벽을 건너뛰지 않는다: 20m/s 상자 — 0.02g 하나 (벽에 튀어 e = min(고분자 0.5, 강철 0.4)씩 줄어든다 — 떠 있지 않을 만큼의 중력: 무중력이면 부딪힘의 0.2가 오르내림으로 가 평면이 e²가 아니다 · PH7) ·
+        // 1g 하나 (튀고 미끄러져 벽에 선다) — 매 틱 끝 겹침 ≤ 0.5도트
         {
-            var s = PropWorld(0);
+            var s = PropWorld(0.02f);
             var st = s.Get<Structure>();
             var f = s.Get<Field>();
             for (int c = 0; c < s.Layout.N; c++) if (s.Layout.Y(c) >= 5) f.Grav[c] = 1;   // 아래 반은 1g
@@ -509,10 +511,22 @@ public static partial class Program
             var pb = st.Props[st.IndexOf(b)]; var pc = st.Props[st.IndexOf(cc)];
             double gap = 12 - (pc.X + box.Hull.Max(v => v.x) - box.Cx);
             double e = 0.4, want = 20 * Math.Pow(e, 2);
-            Check("평면 움직임 — 벽을 건너뛰지 않는다: 20m/s 상자 둘 (무중력 · 1g) — 매 틱 끝 벽 겹침 ≤ 0.5도트 · 무중력 상자는 두 번 튀어 20 × 0.4² = 3.2m/s (±2%) · 1g 상자는 방 안에 선다 · 느리게 닿은 상자는 벽에 붙어 잔다 (틈 ≤ 1도트)",
+            {
+                // 0.02g 바닥 마찰 (μk g' — 고른 감속)까지 넣은 한 줄 셈 (튈 때마다 e · 벽은 x 2 · 12에서 상자 반 길이만큼 안): 한 틱 뒤 빠르기
+                double half = box.Hull.Max(v => v.x) - box.Cx, decel = MaterialMu(t, "polymer") * 9.8 * 0.02, x = 10.5, v = 20, left = Time.SecondsPerTick;
+                for (int n = 0; n < 8 && left > 0 && v != 0; n++)
+                {
+                    double wall = v > 0 ? 12 - half : 2 + half, d = Math.Abs(wall - x), sp = Math.Abs(v);
+                    double tHit = sp * sp >= 2 * decel * d ? (sp - Math.Sqrt(sp * sp - 2 * decel * d)) / decel : double.PositiveInfinity;
+                    if (tHit >= left) { sp = Math.Max(0, sp - decel * left); v = Math.Sign(v) * sp; break; }
+                    left -= tHit; sp -= decel * tHit; x = wall; v = -Math.Sign(v) * e * sp;
+                }
+                want = Math.Abs(v);
+            }
+            Check("평면 움직임 — 벽을 건너뛰지 않는다: 20m/s 상자 둘 (0.02g · 1g) — 매 틱 끝 벽 겹침 ≤ 0.5도트 · 0.02g 상자는 두 번 튀어 20 × 0.4² (바닥 마찰 몫까지 한 줄로 셈한 값 ±2%) · 1g 상자는 방 안에 선다 · 느리게 닿은 상자는 벽에 붙어 잔다 (틈 ≤ 1도트)",
                 worst <= 0.5 * dot && Math.Abs(pa1.Vx - want) <= 0.02 * want && Math.Abs(pa1.Vy) < 1e-3 && Math.Abs(pa1.W) < 1e-3 && bounces1 >= 2 && pb.Vx == 0 && pb.X > 2 && pb.X < 12
                 && pc.Asleep == 1 && Math.Abs(gap) <= dot,
-                $"겹침 {worst / dot:0.00}도트 · 무중력 상자 1틱 뒤 vx {pa1.Vx:0.000}/{want:0.000} · vy {pa1.Vy:0.0e0} · ω {pa1.W:0.000} · 튐 {bounces1} · 1g 상자 x {pb.X:0.000} vx {pb.Vx:0.###} · 붙어 선 상자 틈 {gap / dot:0.00}도트 · 잠 {pc.Asleep}");
+                $"겹침 {worst / dot:0.00}도트 · 0.02g 상자 1틱 뒤 vx {pa1.Vx:0.000}/{want:0.000} · vy {pa1.Vy:0.0e0} · ω {pa1.W:0.000} · 튐 {bounces1} · 1g 상자 x {pb.X:0.000} vx {pb.Vx:0.###} · 붙어 선 상자 틈 {gap / dot:0.00}도트 · 잠 {pc.Asleep}");
         }
     }
 
@@ -522,17 +536,118 @@ public static partial class Program
     private static double Kinetic(Structure st)
     {
         double e = 0;
-        foreach (var p in st.Props) if (p.Kg > 0) e += 0.5 * p.Kg * (p.Vx * p.Vx + p.Vy * p.Vy) + 0.5 * p.Inertia * p.W * p.W;
+        foreach (var p in st.Props) if (p.Kg > 0) e += 0.5 * p.Kg * (p.Vx * p.Vx + p.Vy * p.Vy + (double)p.Vz * p.Vz) + 0.5 * p.Inertia * p.W * p.W;   // 오르내림까지 (PH7 — 무중력의 3D 흩어짐)
         return e;
     }
 
-    /// <summary>물체 쌍 가운데 가장 깊은 겹침 (m — 껍질 SAT · 겹치지 않으면 0).</summary>
+    /// <summary>
+    /// 높이 · 넘어짐 (PH7 — docs/PHYSICS.md §3-3 · §3-4 · §10 법칙 4 · 5 · 12): 0.75m에서 놓친 상자는 1g 0.3912초 · 0.3g 0.7143초에 닿는다 (틱 안 기록 사건 1e-6) · 튄 높이 e²h ·
+    /// 소화기는 b/Hc × 1.02의 옆 가속에 넘어지고 × 0.98에는 그대로 · μs &lt; b/Hc면 미끄러진다 · 넘어져 닿는 에너지 = m g' Δh (±1%) · 떠 있는 중 · 넘어지는 중에 찍고 되살려 60틱 바이트 같음.
+    /// </summary>
+    private static void HeightLaws()
+    {
+        var t = Tables.Default;
+        // 법칙 5: 떨어짐 — 닿는 때 (이차식으로 정확히 끊는다) · 튄 높이
+        foreach (float g in new[] { 1f, 0.3f })
+        {
+            var s = PropWorld(g, 2);
+            var st = s.Get<Structure>();
+            st.Track = new MotionTrack();
+            int item = s.Tables.People.Items.Keys.ToList().IndexOf("식량 상자");
+            int id = st.PutItem(item, 0, s.Layout.Index(6, 4), 0.75f);
+            s.Step();
+            var lands = st.Track.Of(MotionTrack.WhoProp, id).ToArray().Where(k => k.Ev == MotionTrack.EvLand).ToArray();
+            double gp = 9.8 * g, want = Math.Sqrt(2 * 0.75 / gp), e = 0.4, apex = lands.Length > 0 ? lands[0].Vz * (double)lands[0].Vz / (2 * gp) : 0;
+            double second = lands.Length > 1 ? lands[1].T - lands[0].T : 0, wantSecond = 2 * e * Math.Sqrt(2 * gp * 0.75) / gp;
+            Check($"높이 — 떨어짐 (법칙 5): 0.75m에서 놓친 식량 상자가 {g}g에 {want:0.0000}초에 닿는다 (틱 안 기록 사건 1e-6) · 튄 높이 e²h (e = min(고분자 0.5, 강철 0.4)) · 다시 닿는 때 2eV/g'",
+                lands.Length >= 2 && Math.Abs(lands[0].T - want) <= 1e-6 && Math.Abs(apex - e * e * 0.75) <= 1e-4 && Math.Abs(second - wantSecond) <= 1e-5,
+                $"닿음 {lands.Length} · 처음 {(lands.Length > 0 ? lands[0].T : 0):0.000000}/{want:0.000000}초 · 튄 높이 {apex:0.00000}/{e * e * 0.75:0.00000}m · 다음 닿음까지 {second:0.00000}/{wantSecond:0.00000}초");
+        }
+        // 법칙 4: 미끄러짐 대 넘어짐 — 몸이 없는 배의 옆 가속 a (틀의 힘은 무게중심 높이): a/g > b/Hc이고 μs > b/Hc면 넘어진다
+        {
+            var ext = DotForge.Make(t, "소화기");
+            double tip = ext.TipB[2] / ext.Hc;   // −x 쪽 (점화가 +x로 가속 — 틀의 힘은 −x)
+            (byte pose, double dx, long toppled, byte state) Push(string name, double a)
+            {
+                var s = PropWorld(1, 3);
+                var st = s.Get<Structure>();
+                int id = Slide(s, name, 7.5, 4.5, 0, 0);
+                s.Step();
+                st.ShipAx = a * 9.8;
+                for (int k = 0; k < 3; k++) s.Step();
+                var p = st.Props[st.IndexOf(id)];
+                return (p.Pose, p.X - 7.5, st.Toppled, p.State);
+            }
+            var below = Push("소화기", 0.98 * tip); var above = Push("소화기", 1.02 * tip); var box = Push("식량 상자", 0.5);
+            Check($"높이 — 미끄러짐 대 넘어짐 (법칙 4): 소화기 (b/Hc {tip:0.000} < μs 0.5)는 옆 가속 b/Hc × 0.98에 그대로 · × 1.02에 −x 쪽으로 넘어져 눕는다 (b + Hc 옮긴다) · 식량 상자 (μs 0.375 < b/Hc 1.0)는 0.5g에 미끄러질 뿐",
+                below.pose == 0 && below.toppled == 0 && below.dx == 0 && above.pose == 3 && above.toppled == 1 && Math.Abs(above.dx + ext.TipB[2] + ext.Hc) < 0.01 && box.pose == 0 && box.toppled == 0 && box.dx < -0.3,
+                $"× 0.98 누움 {below.pose} · 넘어짐 {below.toppled} · Δx {below.dx:0.000} / × 1.02 누움 {above.pose} · 넘어짐 {above.toppled} · Δx {above.dx:0.000} (−{ext.TipB[2] + ext.Hc:0.000}) / 식량 상자 누움 {box.pose} · Δx {box.dx:0.00}");
+        }
+        // 법칙 4: 넘어져 닿는 에너지 = m g' Δh (모서리 축 위 거의 선 자리 β + 0.01rad에서 힘 없이 넘어진다 — 무게중심이 R cos(0.01)에서 b까지 내려간다)
+        {
+            var s = PropWorld(1, 4);
+            var st = s.Get<Structure>();
+            int id = Slide(s, "소화기", 7.5, 4.5, 0, 0);
+            var fm = DotForge.Make(t, "소화기");
+            double b = fm.TipB[0], hc = fm.Hc, R = Math.Sqrt(b * b + hc * hc), beta = Math.Atan2(b, hc);
+            int i = st.IndexOf(id); var p = st.Props[i];
+            p.Kg = (float)fm.Mass; p.Inertia = (float)fm.I; p.State = 2; p.TiltDir = 0; p.Tilt = (float)(beta + 0.01); p.TiltW = 0; st.Props[i] = p;
+            double tilt0 = st.Props[i].Tilt;
+            st.LastLandJ = 0;
+            for (int k = 0; k < 3 && st.Toppled == 0; k++) s.Step();
+            double want = fm.Mass * 9.8 * (R * Math.Cos(beta - tilt0) - b);
+            var q = st.Props[st.IndexOf(id)];
+            Check("높이 — 넘어져 닿는 에너지 (법칙 4): 소화기가 모서리 축 위 (β + 0.01rad)에서 힘 없이 넘어져 눕는다 — 닿는 에너지 ½ Iₚ ψ'² = m g' Δh (±1%) · 사실 '넘어졌다'",
+                st.Toppled == 1 && q.Pose == 1 && Math.Abs(st.LastLandJ - want) <= 0.01 * want && s.Facts.Since(0).Any(f => f.Kind == FactKind.Toppled && f.Other == id),
+                $"넘어짐 {st.Toppled} · 누움 {q.Pose} · 닿는 에너지 {st.LastLandJ:0.0000}/{want:0.0000}J");
+        }
+        // 법칙 12: 찍고 되살려 60틱 바이트 같음 — 떠 있는 중 (무중력 · z > 0 · 오르내림) · 넘어지는 중 (모서리 축 위에서 천천히 기우는 동안)
+        {
+            bool RoundTrip(Sim s, Action<Sim> setup, out string why)
+            {
+                var r = new Sim(s.Setup); r.Load(s.Save()); setup(r);
+                for (int k = 0; k < 60; k++) { s.Step(); r.Step(); }
+                bool same = s.Save().AsSpan().SequenceEqual(r.Save());
+                why = same ? "" : "다름";
+                return same;
+            }
+            var fl = PropWorld(0, 5);
+            var fst = fl.Get<Structure>();
+            Slide(fl, "식량 상자", 5.5, 4.5, 0.3, 0.1, 0.4); Slide(fl, "컵", 8.5, 5.5, -0.5, 0.2);
+            for (int k = 0; k < 2; k++) { int i = k; var p = fst.Props[i]; p.Vz = 0.4f + 0.3f * k; p.State = 4; fst.Props[i] = p; }
+            fl.Run(2);
+            double z0 = fst.Props.Max(p => p.Z);
+            bool fsame = RoundTrip(fl, _ => { }, out _);
+            var tp = PropWorld(1, 6);
+            var tst = tp.Get<Structure>();
+            Slide(tp, "소화기", 7.5, 4.5, 0, 0);
+            {
+                // 모서리 축 위 (β + 1e-9rad — 떨어지는 곳에서 e^{5.3t}로 자란다: 한 틱 뒤에도 기운 채)
+                var ext = DotForge.Make(t, "소화기");
+                var p = tst.Props[0];
+                p.Kg = (float)ext.Mass; p.Inertia = (float)ext.I; p.State = 2; p.TiltDir = 1; p.Tilt = (float)(Math.Atan2(ext.TipB[1], ext.Hc) + 1e-6); p.TiltW = 0; tst.Props[0] = p;
+            }
+            tp.Step();
+            byte mid = tst.Props[0].State; float tilt = tst.Props[0].Tilt;
+            bool tsame = RoundTrip(tp, _ => { }, out _);
+            Check("높이 — 결정론 (법칙 12): 찍고 되살려 60틱 바이트 같음 — 떠 있는 중 (무중력 · 높이 > 0 · 천장 · 바닥에 튄다) · 넘어지는 중 (기운 채 찍었다)",
+                fsame && z0 > 0.1 && tsame && mid == 2 && tilt > 0,
+                $"떠 있는 중 같음 {fsame} (가장 높이 {z0:0.00}m) · 넘어지는 중 같음 {tsame} (상태 {mid} · 기욺 {tilt:0.000}rad)");
+        }
+    }
+
+    private static double MaterialMu(Tables t, string id) => t.Materials.First(m => m.Id == id).Def.Mu;
+
+    private static bool HeightsMeet(Structure st, in Prop a, in Prop b) =>
+        a.Z < b.Z + st.PropForm(b).H * DotForm.Layer - 1e-6 && b.Z < a.Z + st.PropForm(a).H * DotForm.Layer - 1e-6;
+
+    /// <summary>물체 쌍 가운데 가장 깊은 겹침 (m — 껍질 SAT · 높이가 겹치는 것끼리 · 겹치지 않으면 0).</summary>
     private static double WorstPairOverlap(Structure st, IEnumerable<int> ids)
     {
         var list = ids.Select(st.IndexOf).Where(i => i >= 0).Select(i => st.Props[i]).ToList();
         double worst = 0;
         for (int a = 0; a < list.Count; a++)
-            for (int b = a + 1; b < list.Count; b++) worst = Math.Max(worst, -st.PairSeparation(list[a], list[b]));
+            for (int b = a + 1; b < list.Count; b++) if (HeightsMeet(st, list[a], list[b])) worst = Math.Max(worst, -st.PairSeparation(list[a], list[b]));   // 높이가 겹치는 것끼리만 (PH7)
         return worst;
     }
 
@@ -652,7 +767,7 @@ public static partial class Program
             for (int k = 0; k < 60; k++) { s.Step(); r.Step(); if (k >= 50) worst = Math.Max(worst, WorstPairOverlap(st, ids)); }
             bool same = s.Save().AsSpan().SequenceEqual(r.Save());
             int awake = st.Props.Count(p => Structure.Awake(p));
-            Check("물체끼리 — 쌓인 중 왕복 (법칙 12 · 14): 몸이 없는 배가 비스듬히 점화해 무중력 바닥의 10개가 구석에 쌓인다 — 10틱 뒤 찍고 되살려 60틱 바이트 같음 · 섬 놓침 0 · 쌓인 것끼리 겹침 ≤ 1도트",
+            Check("물체끼리 — 쌓인 중 왕복 (법칙 12 · 14): 몸이 없는 배가 비스듬히 점화해 무중력 방의 10개가 떠서 구석에 쌓인다 (PH7 — 부딪힘의 0.2가 오르내림으로 · 높이가 겹치는 것끼리 닿는다) — 10틱 뒤 찍고 되살려 60틱 바이트 같음 · 섬 놓침 0 · 쌓인 것끼리 겹침 ≤ 1도트",
                 same && st.IslandMiss == 0 && worst <= dot && st.PairHits > 0 && awake == 10,
                 $"되살림 같음 {same} · 섬 놓침 {st.IslandMiss} · 마지막 10틱 가장 깊은 겹침 {worst / dot:0.00}도트 · 물체끼리 {st.PairHits} · 깨어 있음 {awake}");
         }
