@@ -614,13 +614,13 @@ public sealed partial class Structure
             {
                 ref var r = ref _runs[k];
                 r.Velo = false; r.Paired = false; r.FloorL = 0;
+                r.S0 = nStage; r.Ns = 0;   // 쉬는 것 · 끝난 것도 비운다 (잠들기 전 잔걸음의 닿음 자리가 차례에 다시 들지 않게)
                 if (!r.Active || r.Done) continue;
                 ref var p = ref all[r.I];
                 r.Px0 = r.M * p.Vx; r.Py0 = r.M * p.Vy; r.L0 = r.M * (p.X * p.Vy - p.Y * p.Vx) + r.In * p.W;
                 r.Lw = r.Blown ? (p.X * r.Fy - p.Y * r.Fx + r.Tq) * h : 0;   // 바람이 준 각운동량 (원점 둘레)
                 double speedEnd = r.Speed + r.Acc * h;
                 r.StopAt = -1;
-                r.S0 = nStage; r.Ns = 0;
                 if (speedEnd > 0 && r.Room < speedEnd * h + 2 * DotForm.Dot)
                 {
                     var pk = p;   // 받은 힘만큼 빨라진 길로 닿을 곳을 찾는다

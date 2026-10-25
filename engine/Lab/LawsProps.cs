@@ -569,8 +569,8 @@ public static partial class Program
             Check("물체끼리 — 에너지는 늘지 않는다 (법칙 8): 닫힌 무중력 · 공기 없는 방에서 물체 열 개가 서로 · 벽에 튄다 — 운동 에너지가 틱마다 줄기만 한다 · 물체끼리 충격량을 주고받았다",
                 rise <= 1e-12 * e0 && prev < e0 && st.PairHits > 0,
                 $"운동 에너지 {e0:0.00} → {prev:0.00}J · 틱 사이 가장 큰 늚 {rise:0.0e0}J · 물체끼리 {st.PairHits} · 튐 {st.Bounces}");
-            Check("물체끼리 — 운동량 장부 (법칙 6 · 몸이 없는 배): 물체 + 벽이 받은 몫 = 처음 (운동량 1e-9 · 각운동량은 + 바로잡음 FixL)",
-                worstP <= 1e-9 * scale && worstL <= 1e-9 * scale * 20, $"남는 운동량 {worstP:0.0e0} · 각운동량 {worstL:0.0e0} (운동량 크기 {scale:0.0}) · FixL {st.FixL:0.0e0}");
+            Check("물체끼리 — 운동량 장부 (법칙 6 · 몸이 없는 배): 물체 + 벽이 받은 몫 = 처음 (운동량 1e-9 · 각운동량은 + 바로잡음 FixL) · 물체끼리 충격량을 주고받았다",
+                worstP <= 1e-9 * scale && worstL <= 1e-9 * scale * 20 && st.PairHits > 0, $"남는 운동량 {worstP:0.0e0} · 각운동량 {worstL:0.0e0} (운동량 크기 {scale:0.0}) · FixL {st.FixL:0.0e0} · 물체끼리 {st.PairHits}");
         }
         // 법칙 6 (몸 위): 갈라진 두 방 — 3m/s로 밀린 몸 1의 바닥에서 상자 둘이 미끄러져 (바닥이 빠져나간다) 앞 상자는 벽에 · 뒤 상자는 앞 상자에 부딪힌다 — 몸 + 물체 = 민 것 (1e-9)
         {

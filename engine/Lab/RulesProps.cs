@@ -71,6 +71,37 @@ public static partial class Program
                 worst <= dot && wall <= dot && st.PairHits > 0 && meanX < 4.5 && meanY < 4.5 && st.IslandMiss == 0,
                 $"서로 가장 깊은 겹침 {worst / dot:0.00}도트 · 벽 {wall / dot:0.00}도트 · 물체끼리 {st.PairHits} · 가운데 ({meanX:0.00}, {meanY:0.00}) (처음 6.55, 5.15) · 섬 놓침 {st.IslandMiss}");
         }
+        {
+            // 쉬는 이웃: 서쪽 벽 곁 두 칸에만 부는 바람 (200Pa · 0.2g)이 상자 하나를 벽에 눌러 그 틱 안에 잠들게 한다 (바람의 쓸린 상자가 방을 덮어 셋이 한 섬) —
+            // 그 뒤 같은 섬에서 3m/s로 미끄러진 상자가 선 상자에 맞는다. 잠든 것은 닿음을 내지 않는다: 둘의 걸음 · 튐 · 물체끼리 셈이 잠든 상자 없는 세계와 비트까지 같다
+            // (고치기 전: 잠든 것의 지난 잔걸음 닿음 자리가 이번 잔걸음 닿음 (두 상자의 짝)을 한 번 더 베껴 넣는다)
+            (Sim s, Structure st, int a, int b, int c) Make(bool sleeper)
+            {
+                var (s, f) = WindWorld(0.2f);
+                var st = s.Get<Structure>();
+                for (int y = 4; y <= 5; y++) Blow(f, s.Layout.Index(2, y), 200, -1, 0);
+                int a = sleeper ? Slide(s, "식량 상자", 2.3, 5.0, -0.05, 0) : -1;
+                int b = Slide(s, "식량 상자", 5.5, 6.8, 3, 0), c = Slide(s, "식량 상자", 9.0, 6.8, 0, 0);
+                return (s, st, a, b, c);
+            }
+            var w = Make(true); var o = Make(false);
+            w.s.Step(); o.s.Step();
+            var pa = w.st.Props[w.st.IndexOf(w.a)];
+            var fa = w.st.PropForm(pa);
+            double gapA = fa.Hull.Min(v => pa.X + Math.Cos(pa.Th) * (v.Item1 - fa.Cx) - Math.Sin(pa.Th) * (v.Item2 - fa.Cy)) - 2;   // 서쪽 벽 (x 2m)까지
+            bool slept = pa.State == 0 && pa.Asleep == 1 && gapA < dot;   // 벽에 닿은 채 잠들었다
+            w.s.Step(); o.s.Step();
+            bool same = true;
+            foreach (var (iw, io) in new[] { (w.b, o.b), (w.c, o.c) })
+            {
+                var p = w.st.Props[w.st.IndexOf(iw)]; var q = o.st.Props[o.st.IndexOf(io)];
+                same &= p.X == q.X && p.Y == q.Y && p.Th == q.Th && p.Vx == q.Vx && p.Vy == q.Vy && p.W == q.W;
+            }
+            var pb = w.st.Props[w.st.IndexOf(w.b)]; var qb = o.st.Props[o.st.IndexOf(o.b)];
+            Check("물체 부딪힘: 벽에 눌려 잠든 상자는 같은 섬의 다른 것에 닿음을 내지 않는다 — 그 뒤 미끄러진 상자가 선 상자에 맞아도 둘의 걸음 · 튐 · 물체끼리 셈 (짝 · 잔걸음마다 한 번)이 잠든 상자 없는 세계와 비트까지 같다",
+                slept && same && w.st.PairHits == o.st.PairHits && o.st.PairHits > 0 && w.st.Bounces == o.st.Bounces,
+                $"잠듦 {slept} (State {pa.State} · 벽까지 {gapA / dot:0.00}도트) · 걸음 같음 {same} (미끄러진 상자 x {pb.X:0.000000}/{qb.X:0.000000}) · 물체끼리 {w.st.PairHits}/{o.st.PairHits} · 튐 {w.st.Bounces}/{o.st.Bounces}");
+        }
     }
 
     // 두 방 사이 문 하나 (문 칸은 위아래가 벽 — 동서로 지나고 문짝은 남북으로 닫힌다)
