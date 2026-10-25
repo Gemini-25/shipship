@@ -20,7 +20,7 @@ public sealed partial class ShipMind
     private void Weather(Sim sim)
     {
         if (sim.Tick % 5 != 0 || _mind == null || _out == null) return;
-        byte kind = 0; int cause = 0; double eta = 0, ux = 0, uy = 0; string what = "";
+        byte kind = 0; int cause = 0, cloud = -1; double eta = 0, ux = 0, uy = 0; string what = "";
         double half = Math.Max(L.W, L.H) / 2.0;
         foreach (var c in _out.Clouds)
         {
@@ -30,7 +30,7 @@ public sealed partial class ShipMind
             double gap = dist - c.Radius - half;
             bool coming = c.X * c.Vx + c.Y * c.Vy < 0;
             if (gap >= 0 && (!coming || gap / Math.Max(1, sp) > ShelterLeadMin * 60)) continue;
-            kind = 1; cause = c.Cause; eta = Math.Max(0, gap) / Math.Max(1, sp); ux = c.Vx / Math.Max(1, sp); uy = c.Vy / Math.Max(1, sp); what = _out.DebrisName(c.Kind);
+            kind = 1; cause = c.Cause; cloud = c.Id; eta = Math.Max(0, gap) / Math.Max(1, sp); ux = c.Vx / Math.Max(1, sp); uy = c.Vy / Math.Max(1, sp); what = _out.DebrisName(c.Kind);
             break;
         }
         // 양성자 폭풍: X선 감시가 조짐을 잡았거나(⑥) · 배 안 선량계가 바깥 방사선이 평소의 두 배를 넘은 것을 잰다 (조짐을 못 잡았으면 폭풍이 와서야)
@@ -55,7 +55,7 @@ public sealed partial class ShipMind
                 if (room < 0) return;
                 bool fresh = ShelterOn != kind;
                 ShelterOn = kind; ShelterRoomAt = room;
-                if (fresh) { ShelterFrom = sim.Tick; Shelters++; }
+                if (fresh) { ShelterFrom = sim.Tick; Shelters++; Guessed(new Guess { Tick = sim.Tick, Kind = GuessKind.Shelter, Room = room, Obj = kind == 1 ? cloud : _out.FlareCause, Incident = -1, A = (float)eta, Verdict = kind }); }   // 화면용 예측 고리: 닿기까지 초
                 string rn = Ko.Euro(RoomName(room));
                 string text = kind == 1
                     ? (fresh ? $"주컴퓨터가 대피를 알렸다 — {Ko.I(what)} {eta / 60:0}분 뒤 닿는다 · 배 안 문을 닫고 {rn}" : $"주컴퓨터가 대피실을 {rn} 옮겼다 — 앞 대피실이 위험하다")

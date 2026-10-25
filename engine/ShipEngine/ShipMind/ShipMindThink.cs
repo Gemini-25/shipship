@@ -27,6 +27,7 @@ public sealed partial class ShipMind
     public const float ReflexKPa = 8f;
     private readonly List<Thought> _thoughts = new();
     private readonly List<Task<(Imagined wait, Imagined now)>?> _thoughtJobs = new();
+    private readonly List<ImagineEnd[]?> _thoughtEnds = new();   // 화면용 상상 그림 (NoteOn일 때만 · 찍지 않는다 — 되살리면 없다)
 
     /// <summary>맡긴 셈 수 (받기 전).</summary>
     public int Thinking => _thoughts.Count;
@@ -69,11 +70,12 @@ public sealed partial class ShipMind
     }
 
     /// <summary>받을 틱이 된 셈을 받는다 (아직 셈 중이면 기다린다).</summary>
-    private (Imagined wait, Imagined now, ulong reflex) TakeThought(int i)
+    private (Imagined wait, Imagined now, ulong reflex) TakeThought(int i, out ImagineEnd[]? ends)
     {
         Settle(i);
         var th = _thoughts[i];
-        _thoughts.RemoveAt(i); _thoughtJobs.RemoveAt(i);
+        ends = i < _thoughtEnds.Count ? _thoughtEnds[i] : null;
+        _thoughts.RemoveAt(i); _thoughtJobs.RemoveAt(i); if (i < _thoughtEnds.Count) _thoughtEnds.RemoveAt(i);
         return (th.Wait, th.Now, th.ReflexMask);
     }
 
@@ -91,7 +93,7 @@ public sealed partial class ShipMind
     {
         long tick = sim.Tick;
         for (int i = _thoughts.Count - 1; i >= 0; i--)
-            if (_thoughts[i].Due < tick) { Settle(i); var th = _thoughts[i]; _thoughts.RemoveAt(i); _thoughtJobs.RemoveAt(i); Unreflex(sim, th.Room, th.ReflexMask, th.Incident); }
+            if (_thoughts[i].Due < tick) { Settle(i); var th = _thoughts[i]; _thoughts.RemoveAt(i); _thoughtJobs.RemoveAt(i); if (i < _thoughtEnds.Count) _thoughtEnds.RemoveAt(i); Unreflex(sim, th.Room, th.ReflexMask, th.Incident); }
     }
 
     /// <summary>틱 t에 맡긴다: 주 스레드는 세계를 찍기만 하고 (1코어 · 미리 보기 복제면 그 자리에서 돌린다) · 일꾼이 그 바이트로 복제 둘을 만들어 돌린다.</summary>
@@ -99,11 +101,12 @@ public sealed partial class ShipMind
     {
         ThoughtsStarted++;
         var th = new Thought { Room = room, Incident = incident, Start = sim.Tick, Due = sim.Tick + ThinkTicks };
+        var ends = NoteOn && !Imagining ? new[] { new ImagineEnd(), new ImagineEnd() } : null;   // 화면용 상상 그림 (셈에는 쓰지 않는다)
         if (Par.Threads <= 1 || Inline)
         {
-            (th.Wait, th.Now) = Imagine(sim, room);   // 찍은 뒤에 반사한다 (두 미래는 반사 없는 지금에서)
+            (th.Wait, th.Now) = Imagine(sim, room, ends);   // 찍은 뒤에 반사한다 (두 미래는 반사 없는 지금에서)
             Reflex(sim, room, incident, ref th);
-            _thoughts.Add(th); _thoughtJobs.Add(null);
+            _thoughts.Add(th); _thoughtJobs.Add(null); _thoughtEnds.Add(ends);
             return;
         }
         byte[]? snap = null;
@@ -120,12 +123,12 @@ public sealed partial class ShipMind
                 if (WorkerDelayMs > 0) Thread.Sleep(WorkerDelayMs);
                 var w0 = new Sim(setup); w0.Load(snap!, len);
                 var w1 = new Sim(setup); w1.Load(snap!, len);
-                return ImagineRuns(layout, doors, room, tick, Imagined(w0), Imagined(w1), true);
+                return ImagineRuns(layout, doors, room, tick, Imagined(w0), Imagined(w1), true, ends);
             }
             finally { thread.Priority = pri; Sim.InWorker = false; }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         Reflex(sim, room, incident, ref th);
-        _thoughts.Add(th); _thoughtJobs.Add(job);
+        _thoughts.Add(th); _thoughtJobs.Add(job); _thoughtEnds.Add(ends);
     }
 
     /// <summary>반사: 기압이 빠르게 빠지는 방은 생각하는 동안 문을 먼저 닫는다 (한 틱 늦은 '지금 닫음'이 옆 방 기압을 65 → 42kPa로) · 기다림을 고르면 다시 연다. 찍은 뒤에 (두 미래는 반사 없는 지금에서).</summary>
@@ -150,6 +153,6 @@ public sealed partial class ShipMind
     {
         r.Tag("생각");
         _thoughts.Clear(); _thoughts.AddRange(r.List<Thought>());
-        _thoughtJobs.Clear(); for (int i = 0; i < _thoughts.Count; i++) _thoughtJobs.Add(null);
+        _thoughtJobs.Clear(); _thoughtEnds.Clear(); for (int i = 0; i < _thoughts.Count; i++) { _thoughtJobs.Add(null); _thoughtEnds.Add(null); }
     }
 }

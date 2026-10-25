@@ -70,6 +70,8 @@ public sealed class LiveFrame
     public string[] DetailTabs = Array.Empty<string>();
     /// <summary>자세히 머리의 둘째 줄 ('식당 · 불을 끈다 ▸ 소화기를 가지러 · 3분째').</summary>
     public string DetailLine = "";
+    /// <summary>방마다 도면 상자 (칸 — x0 · y0 · x1 · y1) — 판 줄의 작은 그림 (상상 그림)이 방 자리를 그린다.</summary>
+    public float[] RoomBoxes = Array.Empty<float>();
     /// <summary>자세히 머리의 얼굴 (사람 줄 얼굴 그림의 칸 · -1 없음) · 그 이를 따라가는 중인가.</summary>
     public int DetailFace = -1;
     public bool DetailFollow;
@@ -104,7 +106,9 @@ public readonly record struct Gauge(string Icon, string Name, string Value, int 
 public readonly record struct CrewFace(int Id, string Name, string State, int Level, int Slot);
 
 /// <summary>판의 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등) — 사람 판은 얼굴(사람 줄 얼굴 그림의 칸)과 상태 막대도.</summary>
-public readonly record struct PanelRow(string Main, string Sub, bool On, int Face = -1, PanelBar[]? Bars = null, long Key = 0, string Act = "", bool ActOn = true, string Why = "");
+public readonly record struct PanelRow(string Main, string Sub, bool On, int Face = -1, PanelBar[]? Bars = null, long Key = 0, string Act = "", bool ActOn = true, string Why = "", PanelBoard[]? Boards = null);
+/// <summary>판 줄의 작은 그림 하나 (U8 상상 그림): 제목 · 방마다 기압 (kPa) · 사람마다 칸과 상태 (0 멀쩡 · 1 쓰러짐 · 2 숨짐) · 테두리 (0 보통 · 1 고른 미래 · 2 안 고른 미래 · 3 실제). 방 자리는 그림의 <see cref="LiveFrame.RoomBoxes"/>.</summary>
+public sealed record PanelBoard(string Title, float[] RoomKPa, int[] Cells, byte[] States, int Level);
 /// <summary>판 줄의 막대 하나 (UI U3): 이름 · 0~1 · 단계 (0 괜찮다 · 1 조심 · 2 위험).</summary>
 public readonly record struct PanelBar(string Name, float Value, int Level);
 
@@ -191,6 +195,9 @@ public sealed partial class LiveShow
     private int[][] _trail = Array.Empty<int[]>();
     private int[] _trailLen = Array.Empty<int>();
 
+    /// <summary>예측 장부 (docs/UI2.md §4.5 — 새 배를 띄우면 새 장부).</summary>
+    public readonly ForecastBook Book = new();
+
     public LiveShow(Sim sim, string shipName)
     {
         Sim = sim; ShipName = shipName;
@@ -232,7 +239,7 @@ public sealed partial class LiveShow
     /// <summary>화면 없이 앞으로 감기 (연출은 함께 본다 — 하이라이트 · 다시보기 고리가 쌓인다). 확인 · 화면 사진용.</summary>
     public void FastForward(long ticks)
     {
-        for (long i = 0; i < ticks; i++) { Sim.Step(); Dir.Observe(Sim); }
+        for (long i = 0; i < ticks; i++) { Sim.Step(); Dir.Observe(Sim); Book.Observe(Sim); }
         WatchComputer(0);
         _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
     }
@@ -273,6 +280,7 @@ public sealed partial class LiveShow
                 w.Step(); AL("세계");
                 CollectStrikes();
                 d.Observe(w); AL("연출");
+                if (_replay == null) Book.Observe(w);   // 예측 장부 (산 세계만 — 다시보기 중에는 멈춘다)
                 ran++;
                 if (_replay != null && w.Tick >= _replayEnd) break;
                 if (SpeedOverride <= 0 && _replay == null && d.Speed < v0 * 0.5) break;   // 묶음 가운데 분위기가 무거워졌다 — 그 틱에서 멈춘다 (빨리 지나치지 않게)
@@ -829,7 +837,7 @@ public sealed partial class LiveShow
             StoryIsChain = ChainNow().Count > 0, Spots = spots,
             Bubbles = Bubbles(), SpeechOn = SpeechBubbles, ThoughtsOn = ThoughtBubbles,
             Detail = Panel == PanelKind.None ? DetailKind.None : Detail, DetailId = DetailId, DetailSub = DetailSub, DetailTabs = Panel == PanelKind.None ? Array.Empty<string>() : DetailTabsOf(Detail),
-            DetailLine = Panel == PanelKind.None ? "" : DetailLineNow(), DetailFace = Panel == PanelKind.None ? -1 : DetailFaceNow(), DetailFollow = Detail is DetailKind.Person or DetailKind.Robot && Selected == DetailId && FollowSelected,
+            RoomBoxes = RoomBoxes(), DetailLine = Panel == PanelKind.None ? "" : DetailLineNow(), DetailFace = Panel == PanelKind.None ? -1 : DetailFaceNow(), DetailFollow = Detail is DetailKind.Person or DetailKind.Robot && Selected == DetailId && FollowSelected,
             Armed = Armed, ArmedSize = ArmedSize, Aim = HandAimNow(), HandWaiting = Sim.Find<Hand>()?.Waiting.Count ?? 0, HandMarks = HandMarksNow(), CanHand = HandBlocked().Length == 0, HandWhy = HandBlocked(),
             HandSizes = Panel == PanelKind.Hand ? HandSizes() : Array.Empty<byte>(),
             CardIs = cardIs, Look = cardIs == CardKind.Thing ? Look : default, LookHandOk = lookHand.kind != HandKind.None, LookHandWhy = cardIs == CardKind.Thing ? lookHand.why : "",

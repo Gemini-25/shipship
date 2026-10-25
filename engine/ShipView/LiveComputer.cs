@@ -17,7 +17,7 @@ public sealed partial class LiveShow
         switch (DetailSub)
         {
             case 0: JournalRows(rows); break;   // 지금 — J 판 줄 그대로 (옛 시험이 그대로 통과한다)
-            case 1: rows.Add(new PanelRow("곧 — 주컴퓨터가 한 예측과 실제 · 맞음 몫", "그려 보는 중 " + sm.Thinking + " · 봉쇄 상상 · 미리 돌려 보기 · 걸음 시간 · 물자 · 대피를 실제와 맞댄다", false, Key: -1)); break;
+            case 1: PredictRows(w, sm, rows); break;   // 예측 — 지금 하는 예측 · 정확도 · 지난 예측과 실제 (LiveForecast.cs — U8)
             case 2: KnowsTable(w, sm, rows); break;
             case 3: ChoreRows(w, sm, rows); break;
             case 4: SayRows(w, sm, rows); break;
@@ -26,7 +26,7 @@ public sealed partial class LiveShow
     }
 
     /// <summary>주컴퓨터 머리의 둘째 줄: '켜짐 · 센서 12초마다 · 빨아들이는 공기 31℃ · 붙잡은 사건 2 · 그려 보는 중 1 · 못 보는 방 1'.</summary>
-    private static string ComputerHeadLine(Sim w)
+    private string ComputerHeadLine(Sim w)
     {
         var sm = w.Find<ShipMind>();
         if (sm == null) return "이 배에는 주컴퓨터가 없다";
@@ -36,6 +36,7 @@ public sealed partial class LiveShow
         int open = sm.Incidents.Count(x => x.Active != 0);
         bits.Add(open > 0 ? $"붙잡은 사건 {open}" : "붙잡은 사건 없음");
         if (sm.Thinking > 0) bits.Add($"그려 보는 중 {sm.Thinking}");
+        if (ForecastHead() is { Length: > 0 } fh) bits.Add(fh);
         int blind = 0;
         for (int r = 0; r < w.Layout.Rooms.Count && r < sm.RoomSeen.Length; r++) if (w.Layout.Rooms[r].Cells.Length > 0 && sm.RoomSeen[r] == 0) blind++;
         if (blind > 0) bits.Add($"못 보는 방 {blind}");

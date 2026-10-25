@@ -211,6 +211,7 @@ public static partial class Program
             case "unbolt": UnboltScene(dir); return;
             case "props-blast": PropsBlastScene(dir); return;
             case "hand": HandScene(dir); return;   // 함장의 손 (docs/UI2.md U2 — SceneHand.cs)
+            case "forecast": ForecastScene(dir); return;   // 예측 장부 (docs/UI2.md U8 — SceneForecast.cs)
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

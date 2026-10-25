@@ -64,6 +64,7 @@ public sealed partial class ShipMind
         double food = Days(sim, Res.Food, RationFoodOn != 0 ? Policy.RationShare : 1), water = WaterDays(sim, RationWaterOn != 0 ? WaterShare : 1);
         byte fOn = (byte)(food < Policy.RationBelow || RationFoodOn != 0 && food < Policy.RationBelow * 1.5f ? 1 : 0);
         byte wOn = (byte)(water < Policy.RationBelow || RationWaterOn != 0 && water < Policy.RationBelow * 1.5f ? 1 : 0);
+        Guessed(new Guess { Tick = sim.Tick, Kind = GuessKind.Supply, Room = -1, Obj = crew, Incident = -1, A = (float)food, B = (float)water, Verdict = (byte)(fOn | wOn << 1) });   // 화면용 예측 고리: 보통으로 쓰면 며칠
         if (fOn == RationFoodOn && wOn == RationWaterOn) return;
         bool opening = fOn > RationFoodOn || wOn > RationWaterOn;
         RationFoodOn = fOn; RationWaterOn = wOn;

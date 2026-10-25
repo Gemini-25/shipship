@@ -20,6 +20,40 @@ public struct Judgment
 /// <summary>주컴퓨터 일지의 갈래.</summary>
 public enum NoteKind : byte { Other, Assign, Defer, Release, Block, Seal, Door, Vent, Power, Plan, Ask, Job, Stuck }
 
+/// <summary>주컴퓨터가 한 예측의 갈래 (docs/UI2.md §4.5 — 화면용 예측 고리): 봉쇄 상상 · 미리 돌려 보기 · 걸음 시작 · 걸음 끝 · 물자 날 · 대피 도착.</summary>
+public enum GuessKind : byte { Seal, Rehearse, Step, StepEnd, Supply, Shelter }
+
+/// <summary>
+/// 예측 하나 (숫자 · 번호만 — 글을 짓지 않는다): 때 · 갈래 · 방 · 대상 (문 · 걸음 번호 · 구름) · 사건 · 값 셋 · 고른 것.
+/// Seal: A 죽음 · B 쓰러짐 · C 다른 방이 잃은 기압 (고른 미래) · Verdict 0 기다림 · 1 지금 닫음 / Rehearse: A 쓰러짐 (더) · B 잃는 공기 몰 · C 셈한 공기 몰 · Verdict 1 연다 · 0 하지 않는다 /
+/// Step: A 걸릴 분 / StepEnd: Verdict 1 됐다 · 0 못 했다 / Supply: A 식량 날 · B 물 날 · Verdict 배급 비트 / Shelter: A 닿기까지 초 · Verdict 1 파편 · 2 방사선.
+/// </summary>
+public struct Guess
+{
+    public long Tick;
+    public GuessKind Kind;
+    public int Room, Obj, Incident;
+    public float A, B, C;
+    public byte Verdict;
+}
+
+/// <summary>상상 그림 (화면용 — 찍지 않는다 · 판단은 읽지 않는다): 복제 하나가 5분 뒤 끝난 모습 — 방마다 첫 칸 기압 · 사람마다 칸과 상태 (0 멀쩡 · 1 쓰러짐 · 2 숨짐).</summary>
+public sealed class ImagineEnd
+{
+    public float[] RoomKPa = Array.Empty<float>();
+    public int[] Cell = Array.Empty<int>();
+    public byte[] State = Array.Empty<byte>();
+}
+
+/// <summary>마지막 봉쇄 상상의 두 그림 (화면용 · 마지막 하나 · 찍지 않는다): 상상한 때 · 방 · 사건 · 고른 안 · 기다림 · 지금 닫음.</summary>
+public sealed class ImagineShot
+{
+    public long Tick;
+    public int Room, Incident;
+    public byte Chosen;
+    public ImagineEnd? Wait, Now;
+}
+
 /// <summary>주컴퓨터가 한 말 하나 — 갈래 · 맡긴 로봇 · 사건 번호 · 까닭 갈래 · 글 (이미 지은 글을 그대로 담는다).</summary>
 public struct ComputerNote
 {

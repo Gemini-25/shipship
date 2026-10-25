@@ -396,6 +396,52 @@ void fragment() {
         }
     }
 
+    /// <summary>
+    /// 판 줄의 작은 그림 (U8 상상 그림 — docs/OBSERVER.md §8-10): 나란히 놓인 작은 판마다 배 도면 (방 상자를 기압 빛으로) · 사람 점 (흰 · 쓰러짐 주황 · 숨짐 빨강) ·
+    /// 테두리 (고른 미래 노랑 · 안 고른 미래 옅게 · 실제 흰색). 방 자리는 그림의 RoomBoxes (칸).
+    /// </summary>
+    private void DrawBoards(LiveFrame f, PanelBoard[] boards, Rect2 area)
+    {
+        var bx = f.RoomBoxes;
+        int nRooms = bx.Length / 4;
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        for (int r = 0; r < nRooms; r++) { if (bx[r * 4 + 2] <= bx[r * 4]) continue; minX = Math.Min(minX, bx[r * 4]); minY = Math.Min(minY, bx[r * 4 + 1]); maxX = Math.Max(maxX, bx[r * 4 + 2]); maxY = Math.Max(maxY, bx[r * 4 + 3]); }
+        if (minX >= maxX || minY >= maxY) return;
+        int lw = Math.Max(1, _show?.Sim.Layout.W ?? (int)Math.Round(maxX));   // 칸 번호 → 자리 (도면 폭 — 도면은 바뀌지 않아 메인에서 읽어도 된다)
+        float gap = 8 * U, bw = Math.Min(260 * U, (area.Size.X - gap * (boards.Length - 1)) / boards.Length), bh = area.Size.Y;
+        for (int i = 0; i < boards.Length; i++)
+        {
+            var b = boards[i];
+            var box = new Rect2(area.Position.X + i * (bw + gap), area.Position.Y, bw, bh);
+            DrawRect(box, new Color(0.04f, 0.06f, 0.1f, 0.95f));
+            var edge = b.Level switch { 1 => new Color(1f, 0.85f, 0.35f), 2 => new Color(0.45f, 0.5f, 0.6f, 0.7f), 3 => new Color(0.95f, 0.97f, 1f), _ => new Color(0.4f, 0.52f, 0.7f) };
+            DrawRect(box, edge, false, b.Level == 1 ? 2 : 1);
+            DrawString(_font, new Vector2(box.Position.X + 6 * U, box.Position.Y + 14 * U), b.Title, HorizontalAlignment.Left, bw - 12 * U, Fs(13), b.Level == 2 ? InkDim : Ink);
+            var map = new Rect2(box.Position.X + 6 * U, box.Position.Y + 20 * U, bw - 12 * U, bh - 26 * U);
+            float sc = Math.Min(map.Size.X / (maxX - minX), map.Size.Y / (maxY - minY));
+            float ox = map.Position.X + (map.Size.X - (maxX - minX) * sc) / 2 - minX * sc, oy = map.Position.Y + (map.Size.Y - (maxY - minY) * sc) / 2 - minY * sc;
+            for (int r = 0; r < nRooms && r < b.RoomKPa.Length; r++)
+            {
+                if (bx[r * 4 + 2] <= bx[r * 4]) continue;
+                float kpa = b.RoomKPa[r];
+                var col = kpa >= 90 ? new Color(0.28f, 0.42f, 0.6f) : kpa >= 60 ? new Color(0.62f, 0.56f, 0.3f) : kpa >= 20 ? new Color(0.78f, 0.38f, 0.22f) : new Color(0.45f, 0.1f, 0.1f);
+                var rr = new Rect2(ox + bx[r * 4] * sc, oy + bx[r * 4 + 1] * sc, (bx[r * 4 + 2] - bx[r * 4]) * sc, (bx[r * 4 + 3] - bx[r * 4 + 1]) * sc);
+                DrawRect(rr, col);
+                DrawRect(rr, new Color(0.02f, 0.03f, 0.05f, 0.8f), false, 1);
+            }
+            for (int k = 0; k < b.Cells.Length && k < b.States.Length; k++)
+            {
+                int c = b.Cells[k];
+                if (c < 0) continue;
+                var at = new Vector2(ox + (c % lw + 0.5f) * sc, oy + (c / lw + 0.5f) * sc);
+                float rad = Math.Max(2f, 2.5f * U);
+                var dot = b.States[k] switch { 2 => new Color(1f, 0.25f, 0.25f), 1 => new Color(1f, 0.66f, 0.25f), _ => new Color(0.95f, 0.97f, 1f) };
+                DrawCircle(at, rad + 1, new Color(0, 0, 0, 0.8f));
+                DrawCircle(at, rad, dot);
+            }
+        }
+    }
+
     /// <summary>화면 사진용 차림 (--ui=장면[:작은 탭] — 작업 스레드): 사람 · 로봇 자세히 (첫 사람 · 첫 로봇) · 로봇 판 · 주컴퓨터 · 사고 판.</summary>
     private static void SetUpUi(LiveShow s, string ui)
     {
@@ -420,6 +466,26 @@ void fragment() {
             }
             case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
+            case "computer-breach":
+            {
+                // 외판 구멍 (U8): 사람이 가장 많은 방에 닿은 외판에 큰 구멍을 낸다 (함장의 손) — 주컴퓨터가 봉쇄를 그려 보고 · 5분 뒤 장부가 실제와 맞댄다 · 주컴퓨터 자세히 '예측'
+                var L = s.Sim.Layout; var life = s.Sim.Find<ShipEngine.Life>();
+                var count = new int[L.Rooms.Count];
+                if (mind != null && life != null) foreach (var a in mind.Agents) if (a.IsPerson && a.C.Cell >= 0 && L.Room[a.C.Cell] >= 0) count[L.Room[a.C.Cell]]++;
+                int at = -1, best = -1;
+                for (int c = 0; c < L.N; c++)
+                {
+                    if (L.Kind[c] != CellKind.Wall || !L.Hull[c]) continue;
+                    int room = -1;
+                    foreach (int j in new[] { c - 1, c + 1, c - L.W, c + L.W }) if (j >= 0 && j < L.N && L.Room[j] >= 0) room = L.Room[j];
+                    if (room < 0 || count[room] <= best || ShipEngine.Hand.Why(s.Sim, new HandOrder { Kind = HandKind.Hole, Cell = c, Size = 1 }).Length > 0) continue;
+                    best = count[room]; at = c;
+                }
+                if (at >= 0) { s.ArmHand(HandKind.Hole, 1); s.HandAt(L.X(at) + 0.5, L.Y(at) + 0.5); for (int k = 0; k < 40 && !s.Book.Closed.Any(x => x.G.Kind == GuessKind.Seal); k++) s.FastForward(10); }   // 봉쇄 상상을 맞댈 때까지 앞으로 (많아야 400틱 — 연출이 결정적 순간으로 늦추기 전에)
+                s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub);
+                if (s.Book.Closed.LastOrDefault(x => x.G.Kind == GuessKind.Seal) is { } seal) s.PanelPickKey = LiveShow.KeyDetail(sub, 1000 + seal.Seq);   // 맞댄 봉쇄 상상 줄 (두 그림 → 실제)을 고른다 — 판이 그 줄까지 넘어간다
+                break;
+            }
             case "computer-cut":
             {
                 // 센서 선을 끊은 뒤 (U7): 방 안 센서 선 칸 하나를 끊는다 (함장의 손 — 월드 길) · 주컴퓨터 자세히 '아는 것'
@@ -1249,6 +1315,11 @@ void fragment() {
                     bx += bw + 8 * U;
                 }
                 ty += 16 * U;
+            }
+            if (row.Boards is { Length: > 0 } boards)
+            {
+                DrawBoards(f, boards, new Rect2(x0 + lx, ty + 2 * U, r.Size.X - 24 * U - lx, 132 * U));
+                ty += 138 * U;
             }
             if (row.Sub.Length > 0)
                 DrawMultilineString(_font, new Vector2(x0 + lx, ty + Fs(15) * 0.95f), row.Sub, HorizontalAlignment.Left, r.Size.X - 24 * U - lx, Fs(15), 8, new Color(0.68f, 0.73f, 0.83f));

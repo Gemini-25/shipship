@@ -513,6 +513,7 @@ public sealed partial class ShipMind
                 if (!BeginStep(sim, x, ref st, ra)) continue;   // 미리 돌려 보니 안 된다 — 계획을 접었다
                 st.State = 1; st.Start = t;
                 si = Put(st);
+                Guessed(new Guess { Tick = t, Kind = GuessKind.Step, Room = -1, Obj = st.Uid, Incident = id, A = st.Expect });   // 화면용 예측 고리: 걸릴 분
             }
             // 로봇의 막힘 (이 걸음을 시작한 뒤)
             if (ra.C.SnagTick >= st.Start && Mind.Telling(ra.C.Snag) && ra.C.SnagGoal == ra.C.AssignedGoal && st.Act is (byte)ActKind.Go or (byte)ActKind.Patch or (byte)ActKind.Unjam or (byte)ActKind.Tape or (byte)ActKind.Suit or (byte)ActKind.Brace)   // 맡긴 걸음의 막힘만
@@ -523,6 +524,7 @@ public sealed partial class ShipMind
                 st.State = 2;
                 si = Put(st);
                 StopStep(st);
+                Guessed(new Guess { Tick = t, Kind = GuessKind.StepEnd, Room = -1, Obj = st.Uid, Incident = id, Verdict = 1 });
                 if (BodyStep(st.Act)) { int nx = PlanSteps.FindIndex(s => s.Incident == id && s.State != 2); Hold(sim, ra, t, nx >= 0 && PlanSteps[nx].Side > 0 ? PlanSteps[nx].Side - 1 : -1); }   // 다음 걸음까지 제자리 (제 일로 떠나 문을 지나면 계획이 어긋난다)
                 if (st.Act == (byte)ActKind.Patch && si >= 0) AfterPatch(sim, x, si, st);
                 continue;
@@ -896,6 +898,7 @@ public sealed partial class ShipMind
     private void FailStep(Sim sim, int id, in PlanStepRec st, SnagKind k, int subject, string why)
     {
         PlanFails++;
+        if (st.State == 1) Guessed(new Guess { Tick = sim.Tick, Kind = GuessKind.StepEnd, Room = -1, Obj = st.Uid, Incident = id, Verdict = 0 });   // 하던 걸음이 막혔다 · 시간을 넘겼다
         if (PlanLog && !Imagining && _mind != null && st.Robot >= 0)
         {
             var ra = _mind.Agents[st.Robot];
@@ -999,6 +1002,7 @@ public sealed partial class ShipMind
         else if (lost > allow) why = $"미리 돌려 보니 공기를 {lost:0}몰 잃는다 (셈한 것은 {st.From:0}몰)";
         if (dbg) Console.WriteLine($"      [미리 보기] {sw.ElapsedMilliseconds}ms");
         Say(sim, $"미리 돌려 보기: {DoorName(st.Obj)}을 열면 5분 뒤 — 쓰러짐 {down} · 잃는 공기 {lost:0}몰 (셈 {st.From:0}) → {(why.Length == 0 ? "연다" : "하지 않는다")}");
+        Guessed(new Guess { Tick = sim.Tick, Kind = GuessKind.Rehearse, Room = -1, Obj = st.Obj, Incident = x.Id, A = down, B = (float)lost, C = st.From, Verdict = (byte)(why.Length == 0 ? 1 : 0) });
         if (why.Length > 0) { RehearsalVetoes++; return false; }
         return true;
     }

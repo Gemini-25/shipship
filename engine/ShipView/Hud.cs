@@ -558,12 +558,13 @@ public static class HudLayout
         if (s.PanelSeen != f.Panel || s.DetailSeen != seen) { s.PanelSeen = f.Panel; s.DetailSeen = seen; s.PanelFirst = 0; s.PickSeen = long.MinValue; s.WheelAcc = 0; }
         bool detail = f.Detail != DetailKind.None;
         float inner = box0.W - 36 - 18;
+        const float BoardH = 132;   // 판 줄의 작은 그림 (상상 그림 — 제목 18 + 도면 114)
         float RowH(PanelRow r)
         {
             float face = r.Face >= 0 ? 56 : 0;
             float main = th((r.On ? "● " : "") + r.Main, 16, inner - face - (r.Act.Length > 0 ? 104 : HandChips(f, r) ? 184 : 0), 2);
             float sub = r.Sub.Length > 0 ? th(r.Sub, 15, inner - face, 8) + 4 : 0;
-            return Math.Max(Math.Max(28, r.Face >= 0 ? 54 : 0), 10 + main + (r.Bars is { Length: > 0 } ? 16 : 0) + sub + 4);
+            return Math.Max(Math.Max(28, r.Face >= 0 ? 54 : 0), 10 + main + (r.Bars is { Length: > 0 } ? 16 : 0) + (r.Boards is { Length: > 0 } ? BoardH + 6 : 0) + sub + 4);
         }
         bool aimRow = f.Panel == PanelKind.Hand && (f.Armed != HandKind.None || f.HandWaiting > 0);   // 겨눔 줄 (겨누는 중 · 기다리는 손)
         float top = box0.Y + (detail ? 92 : 50) + (f.Holding && f.Panel == PanelKind.Route || aimRow ? 52 : 0);

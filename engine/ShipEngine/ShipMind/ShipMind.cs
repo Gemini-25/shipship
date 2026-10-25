@@ -99,6 +99,11 @@ public sealed partial class ShipMind : IEngine
     /// <summary>관찰용: 주컴퓨터 일지 512칸 (갈래 · 로봇 · 사건 — 찍지 않는다 · 판단은 읽지 않는다 · 화면만) · 켜기 NoteOn (세계마다 · 기본 끔).</summary>
     public Ring<ComputerNote>? Notes;
     public bool NoteOn;
+    /// <summary>관찰용: 화면용 예측 고리 128칸 (docs/UI2.md §4.5 (가) — Notes와 같은 규칙: NoteOn일 때만 · 찍지 않는다 · 판단은 읽지 않는다 · 숫자 · 번호만) · 마지막 봉쇄 상상의 두 그림.</summary>
+    public Ring<Guess>? Guesses;
+    public ImagineShot? LastImagine;
+    /// <summary>예측을 적는다 (쓰기만 — 원인 · 사실 · 소리 · 난수를 부르지 않는다).</summary>
+    internal void Guessed(in Guess g) { if (NoteOn && !Imagining) (Guesses ??= new Ring<Guess>(128)).Add(g); }
     public bool Online;
     public float[] RoomKPa, RoomKPaPrev, RoomO2, RoomSoot, RoomSootPrev, RoomCO, RoomCO2, RoomTemp;
     public byte[] RoomCO2Hold = Array.Empty<byte>();   // 이산화탄소가 한계를 넘어 머문 읽기 수 (6이면 1분 — 경보)
@@ -1288,10 +1293,16 @@ public sealed partial class ShipMind : IEngine
                 StartThinking(sim, x.Room, x.Id);
             else if (ti >= 0 && _thoughts[ti].Due <= t)
             {
-                var (wait, now, reflex) = TakeThought(ti);
+                var (wait, now, reflex) = TakeThought(ti, out var ends);
                 bool sealNow = now.Score < wait.Score - 1;
                 if (!sealNow) Unreflex(sim, x.Room, reflex, x.Id);
                 wait.Chosen = (byte)(sealNow ? 0 : 1); now.Chosen = (byte)(sealNow ? 1 : 0);
+                if (NoteOn && !Imagining)
+                {
+                    var pick = sealNow ? now : wait;   // 화면용 예측 고리 (고른 미래) · 두 그림 (마지막 하나)
+                    Guessed(new Guess { Tick = wait.Tick, Kind = GuessKind.Seal, Room = x.Room, Obj = -1, Incident = x.Id, A = pick.Dead, B = pick.Down, C = pick.LostKPa, Verdict = (byte)(sealNow ? 1 : 0) });
+                    LastImagine = new ImagineShot { Tick = wait.Tick, Room = x.Room, Incident = x.Id, Chosen = (byte)(sealNow ? 1 : 0), Wait = ends?[0], Now = ends?[1] };
+                }
                 Imaginations.Add(wait); Imaginations.Add(now);
                 if (Imaginations.Count > 40) Imaginations.RemoveRange(0, Imaginations.Count - 40);
                 Say(sim, $"{RoomName(x.Room)}: 5분 뒤 — 기다리면 죽음 {wait.Dead} · 쓰러짐 {wait.Down} / 지금 닫으면 죽음 {now.Dead} · 쓰러짐 {now.Down} → {(sealNow ? "지금 닫는다" : "기다린다")}", NoteKind.Plan, -1, x.Id);
@@ -1353,14 +1364,15 @@ public sealed partial class ShipMind : IEngine
     }
 
     /// <summary>세계를 복제해 두 안(기다림 · 지금 봉쇄)을 각각 5분 돌려 본다 (그 틱에 바로 — 1코어 · 연출의 미리 보기 복제). 복제 안의 주컴퓨터는 상상하지 않고 규칙대로만 한다.</summary>
-    private (Imagined wait, Imagined now) Imagine(Sim sim, int room)
+    private (Imagined wait, Imagined now) Imagine(Sim sim, int room, ImagineEnd[]? ends = null)
     {
         var ws = sim.Clones(2);   // 복제는 차례로 (원래 세계를 동시에 읽지 않게)
-        return ImagineRuns(L, _roomDoors[room], room, sim.Tick, Imagined(ws[0]), Imagined(ws[1]), false);
+        return ImagineRuns(L, _roomDoors[room], room, sim.Tick, Imagined(ws[0]), Imagined(ws[1]), false, ends);
     }
 
     /// <summary>두 복제를 돌려 두 미래를 잰다 — 주컴퓨터 상태를 읽지 않는다 (일꾼에서도 돈다). 두 복제는 서로 닿지 않아 함께 돌린다 · 결과는 순서와 상관없이 같다.</summary>
-    private static (Imagined wait, Imagined now) ImagineRuns(Layout L, int[] doors, int room, long tick, Sim w0, Sim w1, bool worker)
+    /// <summary>ends: 화면용 상상 그림 (NoteOn일 때만 — 두 복제가 끝난 모습을 적어 둔다 · 셈에는 쓰지 않는다).</summary>
+    private static (Imagined wait, Imagined now) ImagineRuns(Layout L, int[] doors, int room, long tick, Sim w0, Sim w1, bool worker, ImagineEnd[]? ends = null)
     {
         Imagined Run(byte option, Sim w)
         {
@@ -1393,6 +1405,14 @@ public sealed partial class ShipMind : IEngine
                 double lost = 0;
                 for (int r = 0; r < L.Rooms.Count; r++)
                     if (r != room && L.Rooms[r].Cells.Length > 0) lost += Math.Max(0, before[r] - f0.Pressure(L.Rooms[r].Cells[0]));
+                if (ends != null && option < ends.Length && ends[option] is { } end)
+                {
+                    end.RoomKPa = new float[L.Rooms.Count];
+                    for (int r = 0; r < L.Rooms.Count; r++) end.RoomKPa[r] = L.Rooms[r].Cells.Length > 0 ? (float)f0.Pressure(L.Rooms[r].Cells[0]) : 0;
+                    var people = mind.Agents.Where(q => q.IsPerson).ToList();
+                    end.Cell = new int[people.Count]; end.State = new byte[people.Count];
+                    for (int k = 0; k < people.Count; k++) { var bk = life.Bodies[people[k].C.Body]; end.Cell[k] = bk.Cell; end.State[k] = (byte)(bk.Alive == 0 ? 2 : bk.Conscious == 0 || bk.Hypoxia > 0.3f ? 1 : 0); }
+                }
                 return new Imagined { Tick = tick, Room = room, Option = option, Dead = dead, Down = down, LostKPa = (float)lost, Score = (float)(dead * 100 + down * 30 + lost * 0.5) };
             }
             finally { Sim.InWorker = was; }
