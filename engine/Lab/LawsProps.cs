@@ -187,6 +187,49 @@ public static partial class Program
                 left != right && scale > 0 && worstP <= 1e-9 * scale && worstL <= 1e-9 * scale * 20 && pl.State == 0 && pc.X > 3.7 && bounced > 0,
                 $"몸 {left}/{right} · 점화 {Math.Sqrt(st.BurnPx * st.BurnPx + st.BurnPy * st.BurnPy) / 1000:0.0}kN·s · 남는 운동량 {worstP:0.0e0} · 각운동량 {worstL:0.0e0} · 컵 x {pc.X:0.000} · 몸 0 상자 {(pl.State == 0 ? "잠" : "깸")} · 몸 1 상자 x {pr.X:0.000} (튐 {bounced}틱)");
         }
+        // 법칙 6 운동량 장부 — 틱 사이 덜컹에 잠든 채 실려 가는 것 (검토 고침): 갈라진 두 방의 몸 1을 0.02m/s로 비스듬히 민다 (식량 상자는 깨지 않는다) ·
+        // 같은 배를 잠든 식량 상자 둘과 함께 가른다 (조각 빠르기 하한 0.02m/s) — 몸 + 물체 = 민 것 (밀자마자 · 3~4틱 뒤까지 1e-9 · 실려 간 몫까지 몸이 함께 받는다)
+        {
+            var (s, st) = SplitWorld(Sealed, 6);
+            int right = st.BodyOf(s.Layout.Index(10, 3));
+            int box = Slide(s, "식량 상자", 9.9, 3.4, 0, 0);
+            var e0 = WorldBook(st);
+            var o = st.Bodies[right];
+            double jx = o.Mass * 0.02, jy = o.Mass * 0.003, pushL = (o.X + 0.3) * jy - (o.Y - 0.2) * jx, scaleA = Math.Sqrt(jx * jx + jy * jy);
+            st.Push(right, o.X + 0.3, o.Y - 0.2, jx, jy);
+            double worstA = 0, worstAL = 0;
+            for (int k = 0; k <= 3; k++)
+            {
+                if (k > 0) s.Step();
+                var e = WorldBook(st);
+                double ex = e.px - e0.px - jx, ey = e.py - e0.py - jy;
+                worstA = Math.Max(worstA, Math.Sqrt(ex * ex + ey * ey)); worstAL = Math.Max(worstAL, Math.Abs(e.l - e0.l - pushL));
+            }
+            bool slept = st.Props[st.IndexOf(box)].State == 0;
+            // 가르기: 물건을 먼저 두고 가운데 겹을 끊는다 — 닫힌 계라 장부는 처음 그대로
+            var lay = Worlds.Ascii(Sealed);
+            var s2 = FieldStructure(lay, 5);
+            var st2 = s2.Get<Structure>();
+            st2.Debris = false;
+            s2.Run(3);
+            int boxL = Slide(s2, "식량 상자", 3.5, 3.6, 0, 0), boxR = Slide(s2, "식량 상자", 9.9, 3.4, 0, 0);
+            var g0 = WorldBook(st2);
+            for (int y = 0; y < 5; y++) st2.Destroy(s2, Worlds.At(lay, 6, y), 0);
+            double scaleB = 0, worstB = 0, worstBL = 0;
+            for (int k = 0; k <= 4; k++)
+            {
+                if (k > 0) s2.Step();
+                double sb = 0;
+                foreach (var b in st2.Bodies) if (b.Mass > 0) sb += b.Mass * Math.Sqrt(b.Vx * b.Vx + b.Vy * b.Vy);
+                scaleB = Math.Max(scaleB, sb);
+                var e = WorldBook(st2);
+                worstB = Math.Max(worstB, Math.Sqrt((e.px - g0.px) * (e.px - g0.px) + (e.py - g0.py) * (e.py - g0.py))); worstBL = Math.Max(worstBL, Math.Abs(e.l - g0.l));
+            }
+            bool slept2 = st2.Props[st2.IndexOf(boxL)].State == 0 && st2.Props[st2.IndexOf(boxR)].State == 0;
+            Check("운동량 장부 (틱 사이 덜컹): 갈라진 몸 1을 0.02m/s로 비스듬히 밀어도 · 잠든 식량 상자 둘을 둔 배를 갈라도 상자는 잠든 채 실려 가고 몸 + 물체 = 민 것 (밀자마자 · 몇 틱 뒤까지 운동량 1e-9 · 각운동량 2e-8 — 실려 간 몫까지 몸이 함께 받는다)",
+                slept && slept2 && st2.Bodies.Count >= 2 && scaleB > 0 && worstA <= 1e-9 * scaleA && worstAL <= 1e-9 * scaleA * 20 && worstB <= 1e-9 * scaleB && worstBL <= 1e-9 * scaleB * 20,
+                $"민 몸: 남는 운동량 {worstA:0.0e0}N·s · 각운동량 {worstAL:0.0e0} (민 것 {scaleA:0}N·s · 상자 {(slept ? "잠" : "깸")}) · 가른 배: {worstB:0.0e0}N·s · {worstBL:0.0e0} (조각 {scaleB:0}N·s · 상자 {(slept2 ? "잠" : "깸")})");
+        }
     }
 
     /// <summary>

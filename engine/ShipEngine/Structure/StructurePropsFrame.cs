@@ -50,23 +50,34 @@ public sealed partial class Structure
     /// <summary>덜컹이 깨우는 미끄러질 길 (m — 이보다 짧으면 잠든 채 실려 간다: 부스러기 반동 같은 작은 밂이 배 안 물건을 다 깨우지 않게).</summary>
     public const double JoltWakeM = 1e-3;
 
-    /// <summary>덜컹 (틱 사이 — 시험의 요청 · 갈라짐 · 부스러기 반동): 그 몸 위 물체마다 바닥에 대한 빠르기 −(Δv + Δω × r) · 제 돎 −Δω (세상 빠르기는 그대로) · 잠든 것은 1mm 넘게 미끄러질 만큼이면 깬다.</summary>
+    /// <summary>
+    /// 덜컹 (틱 사이 — 시험의 요청 · 갈라짐 · 부스러기 반동): 그 몸 위 물체마다 바닥에 대한 빠르기 −(Δv + Δω × r) · 제 돎 −Δω (세상 빠르기는 그대로) · 잠든 것은 1mm 넘게 미끄러질 만큼이면 깬다 —
+    /// 깨지 않은 것 (잠든 것 · 막은 것 · 낀 것)은 바닥과 함께 실려 가 그만큼 세상 운동량을 얻으니 곧장 몸이 되받는다 (몸 걸음 안의 덜컹은 틱 끝 반작용이 — 장부가 밀자마자 맞는다).
+    /// </summary>
     private void JoltProps(int b, double lx, double ly, double dw, int cause)
     {
         if (lx == 0 && ly == 0 && dw == 0) return;
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         var o = Bodies[b];
+        double cs = Math.Cos(o.Th), sn = Math.Sin(o.Th), jx = 0, jy = 0, k = 0;
         for (int i = 0; i < all.Length; i++)
         {
             ref var p = ref all[i];
-            if (p.State is 5 or 6 or 7) continue;
+            if (p.State == 5) continue;
             int c = CellOf(p);
             if (BodyOf(c) != b) continue;
             double dx = p.X - o.Lx, dy = p.Y - o.Ly, ux = lx - dw * dy, uy = ly + dw * dx;
-            if (!Awake(p) && !JoltWakes(p, c, ux, uy, dw)) continue;
-            Wake(ref p, cause != 0 ? cause : BodyCause(c));
-            p.Vx -= ux; p.Vy -= uy; p.W -= dw;
+            if (Awake(p) || p.State == 0 && JoltWakes(p, c, ux, uy, dw))
+            {
+                Wake(ref p, cause != 0 ? cause : BodyCause(c));
+                p.Vx -= ux; p.Vy -= uy; p.W -= dw;
+                continue;
+            }
+            var (m, I) = MassOf(p);   // 실려 간다 — 세상 빠르기가 바닥과 함께 (Δv + Δω × r) 바뀐 몫
+            double gx = cs * ux - sn * uy, gy = sn * ux + cs * uy, rx = cs * dx - sn * dy, ry = sn * dx + cs * dy;
+            jx += m * gx; jy += m * gy; k += m * ((o.X + rx) * gy - (o.Y + ry) * gx) + I * dw;
         }
+        if (jx != 0 || jy != 0 || k != 0) TakeBack(all, b, jx, jy, k, false);
     }
 
     /// <summary>
@@ -192,8 +203,7 @@ public sealed partial class Structure
 
     /// <summary>
     /// 틱 끝 반작용 (몸이 있을 때): 물체마다 세상 운동량이 바뀐 몫 (바람 몫은 뺐다)을 그 몸이 되받는다 — 걸음을 셈한 것 · 우주로 간 것 (가져간 몫은 장부 '우주로') ·
-    /// 움직인 몸에 실려 간 잠든 것 · 막은 것. 그 몸과 실려 가는 것을 한 덩어리로 (질량 S · 첫 모멘트 Q · 둘째 R²) ΔV · Δω를 풀어 —
-    /// (M + S)ΔV + Δω × Q = −J · Q × ΔV + (I + R²)Δω = −K — 깨어 있는 것은 덜컹처럼 바닥에 대한 빠르기만 고친다 (세상 빠르기 그대로). 사람이 느끼는 덜컹에는 넣지 않는다.
+    /// 움직인 몸에 실려 간 잠든 것 · 막은 것 — 그 몸과 실려 가는 것을 한 덩어리로 (TakeBack).
     /// </summary>
     private void Reactions(Span<Prop> all)
     {
@@ -214,31 +224,40 @@ public sealed partial class Structure
         for (int b = 0; b < nb; b++)
         {
             double jx = _rJ[3 * b], jy = _rJ[3 * b + 1], k = _rJ[3 * b + 2];
-            if (jx == 0 && jy == 0 && k == 0) continue;
-            var o = Bodies[b];
-            if (o.Mass <= 0) continue;
-            double S = 0, qx = 0, qy = 0, r2 = 0, c = Math.Cos(o.Th), s = Math.Sin(o.Th);
-            for (int i = 0; i < all.Length; i++)
-            {
-                if (_hostOf[i] != b || Awake(all[i]) || all[i].State == 5) continue;
-                var (m, I) = MassOf(all[i]);
-                double dx = all[i].X - o.Lx, dy = all[i].Y - o.Ly, rx = c * dx - s * dy, ry = s * dx + c * dy;
-                S += m; qx += m * rx; qy += m * ry; r2 += m * (rx * rx + ry * ry) + I;
-            }
-            double M = o.Mass + S, kx = k - (o.X * jy - o.Y * jx);   // 몸 무게중심에 대한 몫
-            double dw = (-kx + (qx * jy - qy * jx) / M) / (o.Inertia + r2 - (qx * qx + qy * qy) / M);
-            double dvx = (-jx + dw * qy) / M, dvy = (-jy - dw * qx) / M;
-            o.Vx += dvx; o.Vy += dvy; o.W += dw; o.PVx += dvx; o.PVy += dvy; o.PW += dw;
-            if (dvx != 0 || dvy != 0 || dw != 0) o.Asleep = 0;
-            Bodies[b] = o;
-            double lx = c * dvx + s * dvy, ly = -s * dvx + c * dvy;
-            for (int i = 0; i < all.Length; i++)
-            {
-                ref var p = ref all[i];
-                if (_hostOf[i] != b || !Awake(p)) continue;
-                double dx = p.X - o.Lx, dy = p.Y - o.Ly;
-                p.Vx -= lx - dw * dy; p.Vy -= ly + dw * dx; p.W -= dw;
-            }
+            if (jx != 0 || jy != 0 || k != 0) TakeBack(all, b, jx, jy, k, true);
+        }
+    }
+
+    /// <summary>
+    /// 몸 b가 물체가 얻은 세상 운동량 (jx, jy) · 원점에 대한 각운동량 k를 되받는다 — 그 몸과 실려 가는 것 (깨지 않은 것 — 잠든 것 · 막은 것 · 낀 것)을 한 덩어리로 (질량 S · 첫 모멘트 Q · 둘째 R²)
+    /// (M + S)ΔV + Δω × Q = −J · Q × ΔV + (I + R²)Δω = −K를 풀고 · 깨어 있는 것은 덜컹처럼 바닥에 대한 빠르기만 고친다 (세상 빠르기 그대로). 사람이 느끼는 덜컹에는 넣지 않는다.
+    /// 실린 몸은 틱 끝이면 틱 처음 것 (tickEnd) · 틱 사이면 지금 칸의 몸.
+    /// </summary>
+    private void TakeBack(Span<Prop> all, int b, double jx, double jy, double k, bool tickEnd)
+    {
+        var o = Bodies[b];
+        if (o.Mass <= 0) return;
+        double S = 0, qx = 0, qy = 0, r2 = 0, c = Math.Cos(o.Th), s = Math.Sin(o.Th);
+        for (int i = 0; i < all.Length; i++)
+        {
+            if ((tickEnd ? _hostOf[i] : BodyOf(CellOf(all[i]))) != b || Awake(all[i]) || all[i].State == 5) continue;
+            var (m, I) = MassOf(all[i]);
+            double dx = all[i].X - o.Lx, dy = all[i].Y - o.Ly, rx = c * dx - s * dy, ry = s * dx + c * dy;
+            S += m; qx += m * rx; qy += m * ry; r2 += m * (rx * rx + ry * ry) + I;
+        }
+        double M = o.Mass + S, kx = k - (o.X * jy - o.Y * jx);   // 몸 무게중심에 대한 몫
+        double dw = (-kx + (qx * jy - qy * jx) / M) / (o.Inertia + r2 - (qx * qx + qy * qy) / M);
+        double dvx = (-jx + dw * qy) / M, dvy = (-jy - dw * qx) / M;
+        o.Vx += dvx; o.Vy += dvy; o.W += dw; o.PVx += dvx; o.PVy += dvy; o.PW += dw;
+        if (dvx != 0 || dvy != 0 || dw != 0) o.Asleep = 0;
+        Bodies[b] = o;
+        double lx = c * dvx + s * dvy, ly = -s * dvx + c * dvy;
+        for (int i = 0; i < all.Length; i++)
+        {
+            ref var p = ref all[i];
+            if ((tickEnd ? _hostOf[i] : BodyOf(CellOf(p))) != b || !Awake(p)) continue;
+            double dx = p.X - o.Lx, dy = p.Y - o.Ly;
+            p.Vx -= lx - dw * dy; p.Vy -= ly + dw * dx; p.W -= dw;
         }
     }
 }
