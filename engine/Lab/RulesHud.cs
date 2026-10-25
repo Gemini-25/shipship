@@ -33,7 +33,15 @@ public static partial class Program
         {
             f.Panel = kind;
             f.PanelTitle = kind switch { PanelKind.Robots => "로봇 · 드론", PanelKind.Hand => "사고 일으키기", PanelKind.Journal => "주컴퓨터", _ => "사람" };
-            if (kind == PanelKind.Hand) f.PanelRows = new[] { new PanelRow("곧 — 불씨 · 외판 구멍 · 고장 · 운석 …", "줄을 누르면 겨눈다 · 배 위를 누르면 일어난다", false, Key: -1) };
+            if (kind == PanelKind.Hand)
+            {
+                // 사고 판 (U3): 갈래 줄 열여섯 (크기 칩) · 겨눔 줄 (겨누는 중 · 기다리는 손 둘)
+                var kinds = Enum.GetValues<HandKind>().Where(k => k is not (HandKind.None or HandKind.Route)).ToList();
+                f.PanelRows = new[] { new PanelRow("배 안 — 누른 자리에", "", false, Key: -11) }.Concat(kinds.Select(k => new PanelRow(LiveShow.HandName(k), "탈 것 위를 누른다 · 산소 · 탈 것대로 번진다\n주컴퓨터는 연기 · 열 센서로 안다", k == HandKind.Fire, Key: LiveShow.KeyHandKind(k)))).ToArray();
+                f.Armed = detail == DetailKind.None && people % 2 == 1 ? HandKind.Gravity : HandKind.Fire; f.ArmedSize = 1; f.HandWaiting = 2; f.HandSizes = Enumerable.Repeat((byte)1, 17).ToArray();
+                f.Aim = new HandAim(true, 10, 5.5, 3.5, 0, 0, "불씨 · 보통 — 식당 침대", "");
+                f.PanelFoot = "줄을 누르면 겨눈다 · 배 위를 누르면 일어난다 · 오른쪽 누르기로 그만두기 (X)";
+            }
             f.Detail = detail;
             if (detail != DetailKind.None)
             {
@@ -74,6 +82,15 @@ public static partial class Program
                         HudLayout.Build(f, st, pw, ph, Hud.Approx, Hud.ApproxLines, hud);
                         layouts++;
                         string tag = mode switch { 0 => "켬", 1 => "말 창", 2 => "끔", 3 => "사람 자세히", 4 => "로봇 자세히", 5 => "주컴퓨터", 6 => "사고 판", _ => "로봇 판" };
+                        if (mode == 6)
+                        {
+                            // 사고 판: 겨눔 줄 (그만두기 · 겨누지 않는 갈래면 일으키기) · 크기 칩 셋이 줄 안 · 판 안
+                            var aimRow = hud.Area("겨눔 줄"); var box = hud.Area("판");
+                            bool stop = hud.Hits.Any(x => x.Act == UiAct.HandCancel), now = hud.Hits.Any(x => x.Act == UiAct.HandNow);
+                            var chipHits = hud.Hits.Where(x => x.Act == UiAct.HandSize).ToList();
+                            if (aimRow.Empty || !stop || now != LiveShow.HandAimless(f.Armed) || chipHits.Count == 0 || chipHits.Count % 3 != 0 || chipHits.Any(x => x.R.Right > box.Right || x.R.X < box.X))
+                                bad.Add($"{pw}×{ph} {tag}: 겨눔 줄 {!aimRow.Empty} · 그만두기 {stop} · 일으키기 {now} · 칩 {chipHits.Count}");
+                        }
                         foreach (var o in hud.Overlaps()) bad.Add($"{pw}×{ph} 사람 {n} {tag}: {o}");
                         foreach (var o in hud.Outside()) bad.Add($"{pw}×{ph} 사람 {n} {tag}: 밖 {o}");
                         // 탭 일곱 · 자세한 판 (넓은 폭 · 작은 탭 한 줄 · 판 안 · [목록] · [따라가기]은 사람 · 로봇만) · 카드 [자세히 보기]
@@ -97,7 +114,7 @@ public static partial class Program
                             if (h.R.H + 0.01f < need || h.R.W + 0.01f < (h.Act == UiAct.PanelBar ? 18 : Math.Min(need, 28))) small.Add($"{pw}×{ph} 사람 {n}: {h.Act} {h.R.W:0}×{h.R.H:0}");
                         }
                     }
-            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 · 자세한 판 (사람 · 로봇 · 주컴퓨터) · 사고 판 · 로봇 판 — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상) · 탭 일곱 · 자세한 판은 넓은 폭 · 작은 탭 한 줄 (docs/UI2.md M1)",
+            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 · 자세한 판 (사람 · 로봇 · 주컴퓨터) · 사고 판 (겨눔 줄 · 크기 칩 — 겨눈 갈래가 사람 수 홀짝으로 불씨 · 인공 중력 발생기) · 로봇 판 — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상) · 탭 일곱 · 자세한 판은 넓은 폭 · 작은 탭 한 줄 (docs/UI2.md M1)",
                 bad.Count == 0 && small.Count == 0, $"자리표 {layouts}가지 · 겹침 · 밖 {bad.Count} {string.Join(" | ", bad.Take(4))} · 작은 자리 {small.Count} {string.Join(" | ", small.Take(3))}");
         }
         // 3: 누름이 새지 않는다 · 같은 손잡이일 때만 · 자막 위는 세계로
@@ -122,19 +139,21 @@ public static partial class Program
         // 4 (M2): 오른쪽 누르기는 뒤로 — 확인 창 → 펼친 목록 → 도움말 → 자세히 (목록으로) → 판 → 고른 이 → 없음 (다시보기는 끝내지 않는다) · 주컴퓨터는 목록이 없어 판을 닫는다
         {
             var f = FakeFrame(3, true, true, PanelKind.People, DetailKind.Person); var st = new HudState { Ask = HudAsk.Restart, Open = HudOpen.Menu, Help = true };
+            f.Armed = HandKind.Fire;   // 사고 판에서 겨눈 채 사람 자세히로 옮겼다
             var steps = new List<BackStep>();
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < 8; i++)
             {
                 var b = st.Back(f);
                 steps.Add(b);
+                if (b == BackStep.Disarm) f.Armed = HandKind.None;
                 if (b == BackStep.CloseDetail) f.Detail = DetailKind.None;
                 if (b == BackStep.ClosePanel) f.Panel = PanelKind.None;
                 if (b == BackStep.Release) f.Selected = -1;
             }
-            var want = new[] { BackStep.CloseAsk, BackStep.CloseOpen, BackStep.CloseHelp, BackStep.CloseDetail, BackStep.ClosePanel, BackStep.Release, BackStep.None };
+            var want = new[] { BackStep.CloseAsk, BackStep.CloseOpen, BackStep.CloseHelp, BackStep.Disarm, BackStep.CloseDetail, BackStep.ClosePanel, BackStep.Release, BackStep.None };
             var fc = FakeFrame(3, true, true, PanelKind.Journal, DetailKind.Computer);
             var computer = new HudState().Back(fc);
-            Check("마우스 뒤로: 오른쪽 누르기 일곱 번 — 확인 창 → 펼친 목록 → 도움말 → 자세히 (목록으로) → 판 → 고른 이 → 없음 (다시보기는 끝내지 않는다 — 다시보기 띠의 ■ · B) · 주컴퓨터 자세히는 목록이 없어 판을 닫는다 (docs/UI2.md M2)",
+            Check("마우스 뒤로: 오른쪽 누르기 여덟 번 — 확인 창 → 펼친 목록 → 도움말 → 겨눔 (그만두기) → 자세히 (목록으로) → 판 → 고른 이 → 없음 (다시보기는 끝내지 않는다 — 다시보기 띠의 ■ · B) · 주컴퓨터 자세히는 목록이 없어 판을 닫는다 (docs/UI2.md M2)",
                 steps.SequenceEqual(want) && f.Replaying && computer == BackStep.ClosePanel, string.Join(" → ", steps) + $" · 주컴퓨터 {computer}");
         }
         // 14: 분수 휠 셋 (0.4 × 3)이면 한 줄 · 끝을 넘지 않는다
@@ -252,9 +271,11 @@ public static partial class Program
             long t0 = show.Sim.Tick;
             for (int i = 0; i < 30; i++) show.Advance(1 / 60.0);
             bool still = show.Sim.Tick == t0 && show.Holding && show.Panel == PanelKind.Route;
-            bool picked = show.PanelClick(8) && show.Sim.Get<Outside>().Route == 8 && show.Holding;
+            bool picked = show.PanelClick(8) && show.RouteShown == 8 && show.Sim.Get<Outside>().Route != 8 && show.Holding && show.RouteLine().Contains("출항 때");   // 멈춘 채 고른 항로는 함장의 손으로 받아 둔다 (U3 — 다시보기에 남게)
             show.SetSpeed(2);
             bool gone = !show.Holding && !show.Paused && show.Panel == PanelKind.None;
+            show.FastForward(1);
+            picked &= show.Sim.Get<Outside>().Route == 8;   // 떠나는 첫 틱 맨 처음에 그 항로로
             double left = show.DepartInMin();
             for (int k = 0; k < 400 && !double.IsNaN(show.DepartInMin()); k++)
             {
@@ -263,7 +284,7 @@ public static partial class Program
             show.TogglePanel(PanelKind.Route);
             bool clicked = show.PanelClick(2);
             bool locked = !clicked && show.Notice.Contains("이미 떠났다");
-            Check("마우스 출항 준비: 띄우면 세계가 멈춘 채 항로 판 (틱 그대로) · 항로를 누르면 고르기만 (아직 멈춤) · 빠르기 단추로 떠난다 · 출발 점화가 시작된 뒤엔 항로를 못 고르고 까닭을 알린다 (예전엔 점화 중에도 받아 항해를 다시 짰다)",
+            Check("마우스 출항 준비: 띄우면 세계가 멈춘 채 항로 판 (틱 그대로) · 항로를 누르면 고르기만 (아직 멈춤 — 바뀜 U3: 고른 항로는 함장의 손으로 받아 두어 '출항 때'로 보이고 떠나는 첫 틱에 바뀐다) · 빠르기 단추로 떠난다 · 출발 점화가 시작된 뒤엔 항로를 못 고르고 까닭을 알린다 (예전엔 점화 중에도 받아 항해를 다시 짰다)",
                 still && picked && gone && locked, $"멈춤 {still} · 항로 8 고름 {picked} · 떠남 {gone} (출발까지 {left:0}분) · 떠난 뒤 {locked}");
         }
         // 8 · 13: 커서 쪽 확대 (그 칸이 화면의 같은 자리에 남는다) · 올림과 누름이 같은 사람

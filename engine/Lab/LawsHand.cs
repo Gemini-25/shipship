@@ -1,4 +1,5 @@
 using ShipEngine;
+using ShipView;
 
 namespace Lab;
 
@@ -9,9 +10,9 @@ namespace Lab;
 public static partial class Program
 {
     /// <summary>손의 과녁 (디딤호에서 찾는다): 침대 칸 · 바깥이 곧게 트인 외판 칸 · 급전선 칸과 그 방 · 센서 선 칸 · 물관 · 냉각관 칸 · 문 칸 · 산소 발생기 칸 · 바닥 물체 Id.</summary>
-    internal sealed record HandAim(int Bed, int Hull, int Power, int PowerRoom, int Data, int Water, int Coolant, int Door, int O2Gen, int Prop);
+    internal sealed record HandTarget(int Bed, int Hull, int Power, int PowerRoom, int Data, int Water, int Coolant, int Door, int O2Gen, int Prop);
 
-    internal static HandAim HandTargets(Sim s)
+    internal static HandTarget HandTargets(Sim s)
     {
         var L = s.Layout; var net = s.Get<Network>(); var f = s.Get<Field>(); var st = s.Get<Structure>();
         int bed = L.Furniture.First(x => x.Type == "Bed").Cells[0];
@@ -40,7 +41,7 @@ public static partial class Program
         int o2 = net.Devices.First(d => d.Def.Role == "o2gen").Cell;
         var loose = st.Props.Where(p => p.Kind == 0 && p.State == 0).ToList();   // 놓인 물건 — 깨지지 않는 상자부터 (밀어 던지기 시험 · 유리는 벽에 깨진다)
         int prop = (loose.FirstOrDefault(p => st.PropName(p) == "공구 상자") is { Id: > 0 } box ? box : loose.FirstOrDefault(p => st.PropName(p) is not ("유리병" or "컵" or "접시"))).Id;
-        return new HandAim(bed, hull, power, powerRoom, data, Line(LineKind.Water), Line(LineKind.Coolant), door, o2, prop);
+        return new HandTarget(bed, hull, power, powerRoom, data, Line(LineKind.Water), Line(LineKind.Coolant), door, o2, prop);
     }
 
     internal static HandOrder Order(HandKind k, int cell, byte size = 1, int obj = 0, float x = 0, float y = 0, byte part = 0) => new() { Kind = k, Cell = cell, Size = size, Obj = obj, X = x, Y = y, Part = part };
@@ -123,6 +124,32 @@ public static partial class Program
             var fed = Replay(true); var bare = Replay(false); var want = live.Save();
             Check("함장의 손 H3: 다시보기 = 산 세계 — 첫 손 앞에서 찍은 것을 되살려 한 손 장부의 손을 그 틱에 먹이면 200틱 뒤 찍기 바이트가 같다 (같은 틱 · 같은 차례) · 먹이지 않으면 다르다",
                 fed.AsSpan().SequenceEqual(want) && !bare.AsSpan().SequenceEqual(want), $"먹임 같음 {fed.AsSpan().SequenceEqual(want)} · 먹이지 않음 다름 {!bare.AsSpan().SequenceEqual(want)} · 한 손 {h.Done.Count}");
+        }
+        // H3 (화면 길 — U3): 관전 화면으로 손을 받아 두고 (불씨 · 외판 구멍 · 운석) 그 앞 찍기에서 다시보면 되살린 세계가 같은 틱에 같은 손을 먹어 바이트까지 같다
+        {
+            var show = LiveShow.Crewed("Didim", 44);
+            show.FrameBudget = 1000; show.SpeedOverride = 1;   // 화면 1초에 한 틱
+            for (int i = 0; i < 3; i++) show.Advance(1);
+            long t0 = show.Dir.Ring[^1].tick;
+            var a2 = HandTargets(show.Sim); var L2 = show.Sim.Layout;
+            byte[] at = Array.Empty<byte>(); long tAt = -1;
+            int stage = 0;
+            for (int i = 0; i < 20000 && tAt < 0; i++)   // 화면 장마다 한 틱 (주컴퓨터 일꾼을 기다리는 장은 틱이 서 있다)
+            {
+                long t = show.Sim.Tick - t0;
+                if (stage == 0 && t >= 3) { show.ArmHand(HandKind.Fire, 2); show.HandAt(L2.X(a2.Bed) + 0.5, L2.Y(a2.Bed) + 0.5); stage = 1; }
+                if (stage == 1 && t >= 10) { show.ArmHand(HandKind.Hole, 1); show.HandAt(L2.X(a2.Hull) + 0.5, L2.Y(a2.Hull) + 0.5); show.ArmHand(HandKind.Rock, 0); show.HandAt(L2.X(a2.Hull) + 0.5, L2.Y(a2.Hull) + 0.5); stage = 2; }
+                show.Advance(1);
+                if (stage == 2 && show.Sim.Tick - t0 >= 50 && show.Sim.Get<Hand>().Waiting.Count == 0) { show.Sim.Get<ShipMind>().WaitThoughts(); at = show.Sim.Save(); tAt = show.Sim.Tick; }   // 기다리는 손이 없는 틱 (되살린 세계는 손을 그 틱 바로 앞에 먹는다) · 주컴퓨터 일꾼의 셈을 받아 둔 뒤에 찍는다 (셈 중에 찍으면 바이트가 그때그때)
+            }
+            for (int i = 0; i < 20000 && show.Sim.Tick < tAt + 5; i++) show.Advance(1);   // 산 세계를 조금 더 (다시보기는 산 세계의 틱에서 끝난다 — 찍은 틱에 다시보기가 살아 있게)
+            int taken = show.Sim.Get<Hand>().Done.Count(o => o.Cause != 0);
+            show.StartReplay(new Highlight { Tick = show.Sim.Tick, StartTick = t0, Last = show.Sim.Tick, Title = "함장의 손" });
+            while (show.Replaying && show.World.Tick < tAt) show.Advance(1);
+            if (show.Replaying) show.World.Get<ShipMind>().WaitThoughts();
+            bool same = show.Replaying && show.World.Tick == tAt && show.World.Save().AsSpan().SequenceEqual(at);
+            Check("함장의 손 H3 (화면 길): 관전 화면에서 손 셋을 받아 두고 (불씨 · 외판 구멍 · 운석) 그 앞 찍기에서 다시보면 되살린 세계가 한 손 장부의 손을 같은 틱에 먹어 50틱 넘게 뒤 (기다리는 손이 없는 틱) 찍기 바이트가 같다",
+                taken == 3 && same, $"일어난 손 {taken} · 다시보기 {show.World.Tick}/{tAt}틱 · 같음 {same}");
         }
         // H4: 마음을 건드리지 않는다 — 갈래마다 손의 걸음만 부른 뒤 마음 · 사회 · 주컴퓨터 · 생명의 찍기 조각이 쌍둥이와 같다
         {

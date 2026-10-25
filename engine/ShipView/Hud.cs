@@ -17,7 +17,7 @@ public enum UiAct
 {
     Pause, Speed, FixedMenu, Fixed, Sound, Captions, Help, Menu, MenuShip, ShipPick, MenuRestart, MenuStart, Tab, PanelClose, PanelRow, PanelRowAct, PanelBar, ChainLines, Depart,
     CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts, Robot, RobotMore, Talk,
-    DetailTab, DetailBack, DetailFollow, DetailOpen,
+    DetailTab, DetailBack, DetailFollow, DetailOpen, HandSize, HandCancel, HandNow,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -31,7 +31,7 @@ public readonly record struct Route(RouteKind Kind, UiHit? Hit = null, string Bl
 /// <summary>열린 펼친 목록 · 창.</summary>
 public enum HudOpen { None, Fixed, Overlay, Menu, Ships }
 public enum HudAsk { None, Ship, Restart, Start }
-public enum BackStep { None, CloseAsk, CloseOpen, CloseHelp, CloseDetail, ClosePanel, Release }
+public enum BackStep { None, CloseAsk, CloseOpen, CloseHelp, Disarm, CloseDetail, ClosePanel, Release }
 
 /// <summary>
 /// 자리표 (docs/UI.md 1.1 · 2): 화면에 그릴 것과 누를 자리를 모두 순수 C#으로 셈한다 — Godot은 그리기와 '여기 무엇?'만 묻는다 · 실험실이 겹침 · 새는 누름 · 뒤로 차례를 시험한다.
@@ -142,6 +142,10 @@ public sealed class HudState
     public double WheelAcc;
     public int HoverAgent = -1;
     public int DetailSeen = -1;
+    /// <summary>밀어 던지기 끌기 (docs/UI2.md §6.3): 누른 물체 Id (0 없음) · 시작 자리 (칸 · 소수).</summary>
+    public int HandDrag; public double HandDragX, HandDragY;
+    /// <summary>마지막으로 작업 스레드에 보낸 올린 자리 (칸이 0.02 넘게 바뀔 때만 다시 보낸다).</summary>
+    public double HoverSentX = double.NaN, HoverSentY = double.NaN;
 
     /// <summary>누름: 가리는 판 · 손잡이면 끌기를 막는다 · 펼친 목록 밖을 누르면 목록만 닫는다.</summary>
     public void Press(Route r)
@@ -170,12 +174,13 @@ public sealed class HudState
         return r.Hit.Act == p.Act && r.Hit.Key == p.Key ? r.Hit : null;
     }
 
-    /// <summary>뒤로 (오른쪽 누르기 · Esc): 확인 창 → 펼친 목록 → 도움말 → 자세히 (목록으로 — 사람 · 로봇) → 판 → 고른 이 → 없음. 다시보기는 끝내지 않는다 (docs/UI2.md §6.5).</summary>
+    /// <summary>뒤로 (오른쪽 누르기 · Esc): 확인 창 → 펼친 목록 → 도움말 → 겨눔 (그만두기) → 자세히 (목록으로 — 사람 · 로봇) → 판 → 고른 이 → 없음. 다시보기는 끝내지 않는다 (docs/UI2.md §6.5).</summary>
     public BackStep Back(LiveFrame f)
     {
         if (Ask != HudAsk.None) { Ask = HudAsk.None; return BackStep.CloseAsk; }
         if (Open != HudOpen.None) { Open = HudOpen.None; return BackStep.CloseOpen; }
         if (Help) { Help = false; return BackStep.CloseHelp; }
+        if (f.Armed != HandKind.None) return BackStep.Disarm;
         if (f.Panel != PanelKind.None && f.Detail is DetailKind.Person or DetailKind.Robot) return BackStep.CloseDetail;   // 주컴퓨터 판은 목록이 없다 — 판을 닫는다
         if (f.Panel != PanelKind.None) return BackStep.ClosePanel;
         if (f.Selected >= 0) return BackStep.Release;
@@ -541,6 +546,9 @@ public static class HudLayout
         return y;
     }
 
+    /// <summary>사고 판의 크기 칩이 붙는 줄 (크기가 있는 갈래).</summary>
+    private static bool HandChips(LiveFrame f, PanelRow r) => f.Panel == PanelKind.Hand && r.Key >> 40 == 5 && LiveShow.HandSized((HandKind)(r.Key - LiveShow.KeyHandKind(HandKind.None)));
+
     /// <summary>판: 머리 50 (제목 · [사슬 선] · ×) · 출항 준비 줄 · 보이는 줄 (넘기기 — PanelFirst부터 · 고른 줄이 바뀌면 보이게) · 넘김 막대 · 바닥 34.
     /// 자세한 판 (docs/UI2.md §5.2): 머리 56 (얼굴 · 이름 · 둘째 줄 · [따라가기][목록][×]) · 작은 탭 30 (+56) · 줄은 +92부터.</summary>
     private static void LayoutPanel(LiveFrame f, HudState s, Hud h, RectF box0, Func<string, int, bool, float> tw, Func<string, int, float, int, float> th)
@@ -552,11 +560,12 @@ public static class HudLayout
         float RowH(PanelRow r)
         {
             float face = r.Face >= 0 ? 56 : 0;
-            float main = th((r.On ? "● " : "") + r.Main, 16, inner - face - (r.Act.Length > 0 ? 104 : 0), 2);
+            float main = th((r.On ? "● " : "") + r.Main, 16, inner - face - (r.Act.Length > 0 ? 104 : HandChips(f, r) ? 184 : 0), 2);
             float sub = r.Sub.Length > 0 ? th(r.Sub, 15, inner - face, 8) + 4 : 0;
             return Math.Max(Math.Max(28, r.Face >= 0 ? 54 : 0), 10 + main + (r.Bars is { Length: > 0 } ? 16 : 0) + sub + 4);
         }
-        float top = box0.Y + (detail ? 92 : 50) + (f.Holding && f.Panel == PanelKind.Route ? 52 : 0);
+        bool aimRow = f.Panel == PanelKind.Hand && (f.Armed != HandKind.None || f.HandWaiting > 0);   // 겨눔 줄 (겨누는 중 · 기다리는 손)
+        float top = box0.Y + (detail ? 92 : 50) + (f.Holding && f.Panel == PanelKind.Route || aimRow ? 52 : 0);
         float room = box0.Bottom - 34 - top;
         int total = f.PanelRows.Length;
         h.PanelTotal = total;
@@ -609,6 +618,17 @@ public static class HudLayout
             }
             h.Areas["작은 탭"] = new RectF(box.X + 12, box.Y + 56, Math.Max(0, sx - 6 - box.X - 12), 30);
         }
+        if (aimRow)
+        {
+            var aim = new RectF(box.X + 8, box.Y + 50, box.W - 16, 44);
+            h.Areas["겨눔 줄"] = aim;
+            if (f.Armed != HandKind.None)
+            {
+                var stop = new RectF(aim.Right - 4 - 120, aim.Y + 4, 120, 36);
+                h.Hits.Add(new UiHit(stop, UiAct.HandCancel, 0, false, true, "그만두기 (오른쪽 누르기 · Esc)"));
+                if (LiveShow.HandAimless(f.Armed)) h.Hits.Add(new UiHit(new RectF(stop.X - 6 - 120, aim.Y + 4, 120, 36), UiAct.HandNow, 0, false, f.CanHand && f.Aim.Ok, "누르면 곧 일어난다 — 되돌릴 수 없다 (다시보기로 볼 수는 있다)", f.CanHand ? f.Aim.Why : f.HandWhy));
+            }
+        }
         if (f.Holding && f.Panel == PanelKind.Route)
         {
             var hold = new RectF(box.X + 8, box.Y + 50, box.W - 16, 44);
@@ -622,7 +642,19 @@ public static class HudLayout
             var r = new RectF(box.X + 6, y, box.W - 12 - (total > last - s.PanelFirst ? 18 : 0), heights[i - s.PanelFirst]);
             h.PanelLines.Add((i, r));
             if (row.Act.Length > 0) h.Hits.Add(new UiHit(new RectF(r.Right - 4 - 96, r.Y + 2, 96, 28), UiAct.PanelRowAct, row.Key, false, row.ActOn, row.ActOn ? "그 장면 다시보기 (Enter)" : row.Why, row.Why));
-            if (row.Key != 0) h.Hits.Add(new UiHit(r, UiAct.PanelRow, row.Key, i == f.PanelPick, f.Panel != PanelKind.Route || row.ActOn || row.Key < 1, "", row.Why));
+            if (HandChips(f, row))
+            {
+                // 크기 칩 셋 (작게 · 보통 · 크게 — 줄 오른쪽 위 · docs/UI2.md §5.3)
+                var k = (HandKind)(row.Key - LiveShow.KeyHandKind(HandKind.None));
+                for (int z = 0; z < 3; z++)
+                {
+                    bool on = (int)k < f.HandSizes.Length && f.HandSizes[(int)k] == z;
+                    h.Hits.Add(new UiHit(new RectF(r.Right - 4 - 176 + z * 60, r.Y + 2, 56, 26), UiAct.HandSize, LiveShow.KeyHandSize(k, z), on && f.Armed == k, row.ActOn,
+                        row.ActOn ? $"{LiveShow.HandName(k)} · {LiveShow.HandSizeNames[z]}로 겨눈다" : row.Why, row.Why));
+                }
+            }
+            bool en = f.Panel == PanelKind.Route ? row.ActOn || row.Key < 1 : f.Panel != PanelKind.Hand || row.ActOn || row.Key < 1;
+            if (row.Key != 0) h.Hits.Add(new UiHit(r, UiAct.PanelRow, row.Key, i == f.PanelPick, en, f.Panel == PanelKind.Hand && row.Key >> 40 == 5 ? (f.Armed == (HandKind)(row.Key - LiveShow.KeyHandKind(HandKind.None)) ? "그만두기" : "겨눈다 — 배 위를 누르면 일어난다") : "", row.Why));
             y += r.H;
         }
         if (total > last - s.PanelFirst)

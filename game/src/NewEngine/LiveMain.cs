@@ -133,7 +133,8 @@ void fragment() {
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
             else if (a.StartsWith("--view=")) _view = a[7..] == "all" ? 0 : double.TryParse(a[7..], out var vw) ? vw : -1;
             else if (a.StartsWith("--ui=")) _ui = a[5..];
-            else if (a.StartsWith("--shot=")) { _shotName = a[7..]; _nextShot = 5; _shotEvery = 1e9; }
+            else if (a.StartsWith("--shot=")) { _shotName = a[7..]; _nextShot = Math.Max(_nextShot, 5); _shotEvery = 1e9; }
+            else if (a.StartsWith("--shotat=")) _nextShot = double.Parse(a[9..], System.Globalization.CultureInfo.InvariantCulture);   // --shot= 한 장을 찍는 초 (기본 5)
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a == "--ignite") _ignite = true;
             else if (a == "--help") _helpOnce = true;
@@ -323,9 +324,18 @@ void fragment() {
             agent = LiveShow.Nearest(_shown!.Spots, cx, cy);
         }
         if (agent != _hs.HoverAgent) { _hs.HoverAgent = agent; int a = agent; _cmds.Enqueue(s => s.SetHover(a)); }
+        bool aiming = _shown!.Armed != HandKind.None && r.Kind == RouteKind.World;
+        if (aiming && _hs.HandDrag == 0 && _shotName == null)   // 화면 사진 (--shot)은 차린 겨눔 자리를 그대로 둔다
+        {
+            // 겨누는 중: 올린 칸을 작업 스레드에 (칸이 0.02 넘게 바뀔 때만 — 겨눔 미리 보기 한 점)
+            var (hx, hy) = CellAt(mouse);
+            if (double.IsNaN(_hs.HoverSentX) || Math.Abs(hx - _hs.HoverSentX) > 0.02 || Math.Abs(hy - _hs.HoverSentY) > 0.02) { _hs.HoverSentX = hx; _hs.HoverSentY = hy; _cmds.Enqueue(s => s.SetHoverAt(hx, hy)); }
+        }
         long hk = r.Hit != null ? ((long)r.Hit.Act << 40) ^ r.Hit.Key : long.MinValue;
         if (hk != _hs.HoverKey) { _hs.HoverKey = hk; _hs.HoverSince = _clock; }
-        var shape = _dragging && _dragDist >= 6 || _midDrag ? Input.CursorShape.Drag : r.Hit is { Enabled: true } || agent >= 0 ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow;
+        var shape = _hs.HandDrag != 0 || _dragging && _dragDist >= 6 || _midDrag ? Input.CursorShape.Drag
+            : aiming ? (_shown.Aim.Ok || _shown.Armed == HandKind.Shove ? Input.CursorShape.Cross : Input.CursorShape.Forbidden)   // 겨누는 중: 십자 · 안 되는 칸은 금지
+            : r.Hit is { Enabled: true } || agent >= 0 ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow;
         if (shape != _cursor) { _cursor = shape; Input.SetDefaultCursorShape(shape); }
     }
 
@@ -396,6 +406,38 @@ void fragment() {
             case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
             case "hand": if (s.Panel != PanelKind.Hand) s.TogglePanel(PanelKind.Hand); break;
+            case "hand-armed" or "hand-fire":
+            {
+                // 침대 위에 불씨를 겨눈다 (hand-fire는 곧 일으킨다 — 몇 초 뒤 연기 · 말 창 · 사건 띠)
+                var L = s.Sim.Layout;
+                var bed = L.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                if (bed == null) break;
+                int c = bed.Cells[0];
+                if (s.Panel != PanelKind.Hand) s.TogglePanel(PanelKind.Hand);
+                s.ArmHand(HandKind.Fire, (byte)(parts[0] == "hand-fire" ? 2 : 1));
+                s.SetHoverAt(L.X(c) + 0.5, L.Y(c) + 0.5);
+                if (parts[0] == "hand-fire") s.HandAt(L.X(c) + 0.5, L.Y(c) + 0.5);
+                s.LookAt(c); s.ViewW = 26; s.CamX += 6;   // 판이 오른쪽을 가린다 — 겨눔 이름표가 보이게 왼쪽으로
+                break;
+            }
+            case "hand-rock":
+            {
+                // 외판 칸에 운석을 겨눈다 (바깥에서 그 칸까지 오는 줄)
+                var L = s.Sim.Layout;
+                int best = -1; double bd = double.MaxValue, mx = L.W / 2.0, my = L.H / 2.0;
+                for (int c = 0; c < L.N; c++)
+                {
+                    if (L.Kind[c] != CellKind.Wall || !L.Hull[c] || ShipEngine.Hand.Why(s.Sim, new HandOrder { Kind = HandKind.Rock, Cell = c, Size = 1 }).Length > 0) continue;
+                    double d = Math.Abs(L.X(c) + 0.5 - mx) + Math.Abs(L.Y(c) + 0.5 - (my - L.H));   // 위쪽 가운데 외판
+                    if (d < bd) { bd = d; best = c; }
+                }
+                if (best < 0) break;
+                if (s.Panel != PanelKind.Hand) s.TogglePanel(PanelKind.Hand);
+                s.ArmHand(HandKind.Rock, 1);
+                s.SetHoverAt(L.X(best) + 0.5, L.Y(best) + 0.5);
+                s.LookAt(best); s.ViewW = 40;
+                break;
+            }
         }
     }
 
@@ -473,11 +515,12 @@ void fragment() {
         DrawTip();
     }
 
-    /// <summary>세계 위: 고른 이의 고리 · 마우스를 올린 이의 옅은 고리와 머리 위 이름.</summary>
+    /// <summary>세계 위: 고른 이의 고리 · 마우스를 올린 이의 옅은 고리와 머리 위 이름 · 함장의 손 (겨눔 고리 · 이름표 · 운석 줄 · 구름 화살표 · 끄는 화살표 · 누른 칸 고리 · 기다리는 손 점).</summary>
     private void DrawWorldMarks(LiveFrame f, Vector2 vp)
     {
         Vector2 Px(double x, double y) => new((float)((x - f.CamLeft) / f.CamW * vp.X), (float)((y - f.CamTop) / f.CamH * vp.Y));
         float cellPx = (float)(vp.X / f.CamW);
+        DrawHandMarks(f, vp, Px, cellPx);
         if (!double.IsNaN(f.SelX)) DrawArc(Px(f.SelX, f.SelY), cellPx * 0.62f, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.45f, 0.9f), 2.5f);
         if (f.HoverId >= 0 && f.HoverId != f.Selected && f.HoverName.Length > 0)
         {
@@ -493,6 +536,69 @@ void fragment() {
                 DrawString(_bold, new Vector2(box.Position.X + 8, box.End.Y - 6), t, HorizontalAlignment.Left, -1, Fs(14), Ink);
             }
         }
+    }
+
+    private static readonly Color Amber = new(1f, 0.72f, 0.3f), Refuse = new(1f, 0.36f, 0.3f);
+
+    /// <summary>함장의 손 표 (docs/UI2.md §6.4 — 그리기만): 누른 칸에 0.5초 퍼지는 고리 · 기다리는 손 깜빡이는 점 · 겨눔 고리 (되면 호박색 · 안 되면 빨강) · 이름표 · 운석이 오는 줄 · 구름 화살표 · 끄는 화살표와 빠르기.</summary>
+    private void DrawHandMarks(LiveFrame f, Vector2 vp, Func<double, double, Vector2> px, float cellPx)
+    {
+        float blink = 0.5f + 0.5f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau * 1.5f);
+        foreach (var m in f.HandMarks)
+        {
+            var c = px(m.X, m.Y);
+            if (m.Waiting) DrawCircle(c, 5 * U, new Color(Amber, 0.35f + 0.65f * blink));
+            else DrawArc(c, cellPx * (0.3f + m.Age * 2.4f), 0, Mathf.Tau, 40, new Color(Amber, Math.Max(0, 1 - m.Age / 0.5f)), 3 * U);
+        }
+        if (_hs.HandDrag != 0)
+        {
+            var a = px(_hs.HandDragX, _hs.HandDragY); var b = _mouse;
+            var d = b - a; float len = d.Length();
+            if (len > 2)
+            {
+                float v = Math.Min(8, len / cellPx * 2);
+                var tip = len / cellPx * 2 > 8 ? a + d / len * (cellPx * 4) : b;
+                DrawLine(a, tip, Amber, 3 * U);
+                var u = (tip - a).Normalized(); var n = new Vector2(-u.Y, u.X);
+                DrawPolygon(new[] { tip, tip - u * 12 * U + n * 7 * U, tip - u * 12 * U - n * 7 * U }, new[] { Amber });
+                DrawLabel($"{v:0.0}m/s", tip + new Vector2(10 * U, -10 * U), Amber);
+            }
+            return;
+        }
+        if (f.Armed == HandKind.None || double.IsNaN(f.Aim.X)) return;
+        var col = f.Aim.Ok ? Amber : Refuse;
+        var at = px(f.Aim.X, f.Aim.Y);
+        if (f.Armed == HandKind.Rock && f.Aim.Ok)
+        {
+            var far = px(f.Aim.X + f.Aim.Dx * 14, f.Aim.Y + f.Aim.Dy * 14);
+            DrawDashedLine(far, at, new Color(col, 0.85f), 2 * U, 10 * U);
+        }
+        if (f.Armed == HandKind.Cloud && (f.Aim.Dx != 0 || f.Aim.Dy != 0))
+        {
+            var from = px(f.Aim.X + f.Aim.Dx * 6, f.Aim.Y + f.Aim.Dy * 6);
+            var u = (at - from).Normalized(); var n = new Vector2(-u.Y, u.X);
+            DrawLine(from, at, col, 3 * U);
+            DrawPolygon(new[] { at, at - u * 14 * U + n * 8 * U, at - u * 14 * U - n * 8 * U }, new[] { col });
+        }
+        float rr = cellPx * 0.55f;
+        DrawArc(at, rr, 0, Mathf.Tau, 40, col, 2.5f * U);
+        DrawLine(at + new Vector2(-rr * 1.4f, 0), at + new Vector2(-rr * 0.6f, 0), col, 2 * U); DrawLine(at + new Vector2(rr * 0.6f, 0), at + new Vector2(rr * 1.4f, 0), col, 2 * U);
+        DrawLine(at + new Vector2(0, -rr * 1.4f), at + new Vector2(0, -rr * 0.6f), col, 2 * U); DrawLine(at + new Vector2(0, rr * 0.6f), at + new Vector2(0, rr * 1.4f), col, 2 * U);
+        DrawLabel(f.Aim.Ok ? f.Aim.Label : $"여기는 안 된다 — {f.Aim.Why}", at + new Vector2(0, -rr * 1.6f - 14 * U), col, true);
+    }
+
+    /// <summary>세계 위 이름표 (어두운 바탕 · 가운데 맞춤이면 그 자리 위 가운데).</summary>
+    private void DrawLabel(string t, Vector2 at, Color col, bool center = false)
+    {
+        var sz = _bold.GetStringSize(t, HorizontalAlignment.Left, -1, Fs(14));
+        var box = new Rect2(at.X - (center ? sz.X / 2 + 8 : 0), at.Y - sz.Y, sz.X + 16, sz.Y + 6);
+        // 판 · 카드가 가리지 않게 (그 사이 세계 칸 안으로 민다)
+        float lo = _hud.Areas.TryGetValue("카드", out var cd) ? (cd.Right + 8) * U : 8, hi = (_hud.Areas.TryGetValue("판", out var pa) ? pa.X - 8 : _hud.W - 8) * U;
+        if (box.End.X > hi) box.Position = new Vector2(Math.Max(lo, hi - box.Size.X), box.Position.Y);
+        if (box.Position.X < lo) box.Position = new Vector2(lo, box.Position.Y);
+        DrawRect(box, new Color(0.03f, 0.04f, 0.07f, 0.88f));
+        DrawRect(box, new Color(col, 0.8f), false, 1);
+        DrawString(_bold, new Vector2(box.Position.X + 8, box.End.Y - 7), t, HorizontalAlignment.Left, -1, Fs(14), col);
     }
 
     private readonly StyleBoxFlat _speech = new() { CornerRadiusTopLeft = 7, CornerRadiusTopRight = 7, CornerRadiusBottomLeft = 7, CornerRadiusBottomRight = 7, AntiAliasing = true };
@@ -644,7 +750,12 @@ void fragment() {
             if (h.Act != UiAct.Tab) continue;
             string label = HudLayout.TabNames[h.Key] + (h.Key == 0 && f.Highlights > 0 ? $" {f.Highlights}" : "");
             DrawButton(h, label);
-            if (HudLayout.TabKinds[h.Key] == PanelKind.Hand && !h.On) DrawRect(R(h.R), new Color(1f, 0.72f, 0.3f, 0.85f), false, 1.5f);   // 사고 탭: 호박색 (세계를 바꾸는 손)
+            if (HudLayout.TabKinds[h.Key] == PanelKind.Hand)
+            {
+                // 사고 탭: 호박색 (세계를 바꾸는 손) · 겨누는 중이면 깜빡인다
+                float pulse = f.Armed != HandKind.None ? 0.55f + 0.45f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau * 1.2f) : 1;
+                if (!h.On || f.Armed != HandKind.None) DrawRect(R(h.R), new Color(1f, 0.72f, 0.3f, 0.85f * pulse), false, f.Armed != HandKind.None ? 2.5f : 1.5f);
+            }
             if (h.Key == 2 && f.JournalNew) DrawCircle(R(h.R).Position + new Vector2(R(h.R).Size.X - 7 * U, 7 * U), 4 * U, new Color(1f, 0.72f, 0.3f));
         }
     }
@@ -984,6 +1095,22 @@ void fragment() {
             else if (h.Act == UiAct.DetailFollow) DrawButton(h, f.DetailFollow ? "따라가는 중" : "따라가기", 14);
             else if (h.Act == UiAct.DetailTab && h.Key < f.DetailTabs.Length) DrawButton(h, f.DetailTabs[h.Key], 15);
         }
+        if (_hud.Areas.TryGetValue("겨눔 줄", out var ar))
+        {
+            // 겨눔 줄 (호박색 바탕): 겨누는 갈래 · 할 일 · 기다리는 손
+            var r = R(ar);
+            DrawRect(r, new Color(0.24f, 0.15f, 0.04f, 0.95f));
+            DrawRect(r, new Color(1f, 0.72f, 0.3f, 0.9f), false, 1.5f);
+            string t = f.Armed == HandKind.None ? "" : $"겨누는 중: {LiveShow.HandName(f.Armed)}{(LiveShow.HandSized(f.Armed) ? " · " + LiveShow.HandSizeNames[Math.Min((int)f.ArmedSize, 2)] : "")} — {(LiveShow.HandAimless(f.Armed) ? "[일으키기]를 누른다" : f.Armed == HandKind.Shove ? "물건 위에서 눌러 끌고 놓는다" : "배 위를 누른다")}";
+            if (f.HandWaiting > 0) t += (t.Length > 0 ? " · " : "") + $"기다리는 손 {f.HandWaiting} — 시간이 가면 일어난다";
+            float bw = 0; foreach (var h in _hud.Hits) if (h.Act is UiAct.HandCancel or UiAct.HandNow) bw += (h.R.W + 6) * U;
+            DrawString(_font, new Vector2(r.Position.X + 10 * U, r.Position.Y + r.Size.Y / 2 + Fs(15) * 0.36f), t, HorizontalAlignment.Left, Math.Max(10, r.Size.X - 20 * U - bw), Fs(15), new Color(1f, 0.9f, 0.7f));
+            foreach (var h in _hud.Hits)
+            {
+                if (h.Act == UiAct.HandCancel) DrawButton(h, "그만두기");
+                else if (h.Act == UiAct.HandNow) DrawButton(h, "일으키기", 15, true);
+            }
+        }
         if (_hud.Areas.TryGetValue("출항 줄", out var ho))
         {
             var r = R(ho);
@@ -1012,7 +1139,7 @@ void fragment() {
                 DrawRect(dst.Grow(2), row.On ? new Color(1f, 0.35f, 0.3f) : new Color(0.4f, 0.52f, 0.7f, 0.7f), false, 1);
             }
             bool act = row.Act.Length > 0;
-            bool dim = f.Panel == PanelKind.Route && row.Key >= 1 && !row.ActOn;
+            bool dim = f.Panel == PanelKind.Route && row.Key >= 1 && !row.ActOn || f.Panel == PanelKind.Hand && row.Key >> 40 == 5 && !row.ActOn;
             var head = dim ? new Color(0.55f, 0.58f, 0.66f) : row.On ? new Color(1f, 0.88f, 0.55f) : new Color(0.9f, 0.92f, 0.97f);
             float mainW = r.Size.X - 24 * U - lx - (act ? 104 * U : 0);
             DrawMultilineString(_bold, new Vector2(x0 + lx, y + 6 * U + Fs(16) * 0.9f), (row.On ? "● " : "") + row.Main, HorizontalAlignment.Left, mainW, Fs(16), 2, head);
@@ -1036,7 +1163,11 @@ void fragment() {
             if (row.Sub.Length > 0)
                 DrawMultilineString(_font, new Vector2(x0 + lx, ty + Fs(15) * 0.95f), row.Sub, HorizontalAlignment.Left, r.Size.X - 24 * U - lx, Fs(15), 8, new Color(0.68f, 0.73f, 0.83f));
         }
-        foreach (var h in _hud.Hits) if (h.Act == UiAct.PanelRowAct) DrawButton(h, "▶ 다시보기", 14);
+        foreach (var h in _hud.Hits)
+        {
+            if (h.Act == UiAct.PanelRowAct) DrawButton(h, "▶ 다시보기", 14);
+            else if (h.Act == UiAct.HandSize) DrawButton(h, LiveShow.HandSizeNames[(int)((h.Key - LiveShow.KeyHandSize(HandKind.None, 0)) % 4)], 14);
+        }
         if (_hud.Areas.TryGetValue("막대", out var bf))
         {
             var bar = R(bf);
@@ -1220,6 +1351,9 @@ void fragment() {
             case UiAct.DetailTab: { int i = (int)k; _cmds.Enqueue(s => s.SetDetailSub(i)); break; }
             case UiAct.DetailBack: _cmds.Enqueue(s => s.DetailBack()); break;
             case UiAct.DetailFollow: _cmds.Enqueue(s => s.DetailFollow()); break;
+            case UiAct.HandSize: _cmds.Enqueue(s => s.HandSizeClick(k)); break;
+            case UiAct.HandCancel: _cmds.Enqueue(s => s.Disarm()); break;
+            case UiAct.HandNow: _cmds.Enqueue(s => s.HandNow()); break;
             case UiAct.DetailOpen: { int id = f?.Selected ?? -1; _cmds.Enqueue(s => s.OpenDetail(DetailKind.Person, id)); break; }   // 로봇이면 OpenDetail이 로봇 자세히로 고친다
             case UiAct.PanelRow: _cmds.Enqueue(s => s.PanelClick(k)); break;
             case UiAct.PanelRowAct: _cmds.Enqueue(s => s.PanelAct(k)); break;
@@ -1270,6 +1404,7 @@ void fragment() {
         if (_shown == null) return false;
         switch (_hs.Back(_shown))
         {
+            case BackStep.Disarm: _cmds.Enqueue(s => s.Disarm()); return true;
             case BackStep.CloseDetail: _cmds.Enqueue(s => s.DetailBack()); return true;
             case BackStep.ClosePanel: _cmds.Enqueue(s => s.ClosePanel()); return true;
             case BackStep.Release: _cmds.Enqueue(s => s.Release()); return true;
@@ -1355,6 +1490,11 @@ void fragment() {
                     _hs.Press(route);
                     _pressAt = pos; _dragDist = 0; _pressDouble = mb.DoubleClick;
                     _dragging = _hs.PressWorld;
+                    if (_hs.PressWorld && _shown is { Armed: HandKind.Shove, Aim: { Ok: true, Obj: > 0 } } sf)
+                    {
+                        // 밀어 던지기: 물체 위에서 누르면 끌기 (카메라는 움직이지 않는다)
+                        _hs.HandDrag = sf.Aim.Obj; _hs.HandDragX = sf.Aim.X; _hs.HandDragY = sf.Aim.Y; _dragging = false;
+                    }
                     if (route.Hit is { Act: UiAct.PanelBar } && _hud.Areas.TryGetValue("막대", out var bar))
                     {
                         // 막대: 손잡이를 끌면 넘기고 · 길을 누르면 한 쪽씩
@@ -1366,6 +1506,16 @@ void fragment() {
                     return;
                 }
                 _hs.DragBarY = float.NaN;
+                if (_hs.HandDrag != 0)
+                {
+                    // 밀어 던지기를 놓았다: 끈 쪽 · 끈 길이 (0.5칸에 1m/s · 8m/s까지)
+                    var (ex, ey) = CellAt(pos);
+                    double vx = (ex - _hs.HandDragX) * 2, vy = (ey - _hs.HandDragY) * 2, v = Math.Sqrt(vx * vx + vy * vy);
+                    if (v > 8) { vx *= 8 / v; vy *= 8 / v; }
+                    int id = _hs.HandDrag; _hs.HandDrag = 0; _hs.Release(route); _dragging = false;
+                    _cmds.Enqueue(s => s.HandShove(id, vx, vy));
+                    return;
+                }
                 bool wasWorld = _hs.PressWorld;
                 var hit = _hs.Release(route);
                 bool dragged = _dragDist >= 6;
@@ -1375,6 +1525,7 @@ void fragment() {
                 {
                     // 세계를 눌렀다: 올린 사람과 같은 셈으로 찾아 고른다 (없으면 놓는다) · 두 번 누르면 그 칸 쪽으로 확대
                     var (cx, cy) = CellAt(pos);
+                    if (_shown!.Armed != HandKind.None) { _cmds.Enqueue(s => s.HandAt(cx, cy)); return; }   // 겨누는 중: 그 자리에 일으킨다 (한 번 누르면 한 번)
                     int id = LiveShow.Nearest(_shown!.Spots, cx, cy);
                     if (id >= 0) _cmds.Enqueue(s => s.SelectAgent(id)); else _cmds.Enqueue(s => s.Release());
                     if (_pressDouble) _cmds.Enqueue(s => s.ZoomAt(0.6, cx, cy));

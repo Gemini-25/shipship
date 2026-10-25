@@ -159,6 +159,7 @@ public sealed partial class LiveShow
                 OpenDetail(Panel == PanelKind.People ? DetailKind.Person : DetailKind.Robot, (int)(key - KeyPerson(0)));
                 return true;
             }
+            case PanelKind.Hand: return HandClick(key);   // 사고 판: 갈래 줄 = 겨눔 · 방금 일으킨 것 = 그 자리로
             default: return true;   // 장면 · 주컴퓨터: 고르기 · 펼치기
         }
     }

@@ -73,6 +73,15 @@ public sealed class LiveFrame
     /// <summary>자세히 머리의 얼굴 (사람 줄 얼굴 그림의 칸 · -1 없음) · 그 이를 따라가는 중인가.</summary>
     public int DetailFace = -1;
     public bool DetailFollow;
+    // ── 함장의 손 (docs/UI2.md §2.3 · §6.1 — 화면 값): 겨눈 갈래 · 크기 · 겨눔 미리 보기 · 기다리는 손 · 세계 위 표 · 쓸 수 있나 · 갈래마다 고른 크기 ──
+    public HandKind Armed;
+    public byte ArmedSize = 1;
+    public HandAim Aim;
+    public int HandWaiting;
+    public HandMark[] HandMarks = Array.Empty<HandMark>();
+    public bool CanHand = true;
+    public string HandWhy = "";
+    public byte[] HandSizes = Array.Empty<byte>();
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -253,6 +262,7 @@ public sealed partial class LiveShow
                 if (thinker != null && thinker.Waiting(w.Tick)) { waited = true; break; }   // 6단 계산 일꾼이 늦었다: 세계만 멈추고 그림은 계속 그린다 (받을 틱 · 결과는 그대로 — docs/ENGINE.md §3-10)
                 if (i == n - 1) Remember();
                 AL("자세 · 걸음");
+                if (_replay != null) FeedReplayHand(w);   // 다시보기: 산 세계의 손을 같은 틱에 먹인다 (docs/UI2.md §2.5)
                 w.Step(); AL("세계");
                 CollectStrikes();
                 d.Observe(w); AL("연출");
@@ -279,6 +289,7 @@ public sealed partial class LiveShow
         }
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         TickNotice(realSec);
+        WatchHand();
         WatchComputer(realSec);
         WatchSpeech(realSec);
         WatchTalk(realSec);
@@ -797,6 +808,8 @@ public sealed partial class LiveShow
             Bubbles = Bubbles(), SpeechOn = SpeechBubbles, ThoughtsOn = ThoughtBubbles,
             Detail = Panel == PanelKind.None ? DetailKind.None : Detail, DetailId = DetailId, DetailSub = DetailSub, DetailTabs = Panel == PanelKind.None ? Array.Empty<string>() : DetailTabsOf(Detail),
             DetailLine = Panel == PanelKind.None ? "" : DetailLineNow(), DetailFace = Panel == PanelKind.None ? -1 : DetailFaceNow(), DetailFollow = Detail is DetailKind.Person or DetailKind.Robot && Selected == DetailId && FollowSelected,
+            Armed = Armed, ArmedSize = ArmedSize, Aim = HandAimNow(), HandWaiting = Sim.Find<Hand>()?.Waiting.Count ?? 0, HandMarks = HandMarksNow(), CanHand = HandBlocked().Length == 0, HandWhy = HandBlocked(),
+            HandSizes = Panel == PanelKind.Hand ? HandSizes() : Array.Empty<byte>(),
             HoverId = HoverOk() ? HoverId : -1, HoverName = HoverOk() ? World.Find<Mind>()!.NameOf(HoverId) : "", HoverDoing = HoverOk() ? World.Find<Mind>()!.Thought(HoverId) : "",
         };
     }
@@ -908,6 +921,8 @@ public sealed partial class LiveShow
             }
             case PanelKind.Route:
                 return ChooseRoute(PanelPick + 1);
+            case PanelKind.Hand:
+                return PanelClick(PanelPickKey);
             case PanelKind.Chain:
             {
                 // 고른 마디의 자리로 카메라를 옮긴다 (손으로 — F로 다시 연출을 따른다)
@@ -1044,7 +1059,7 @@ public sealed partial class LiveShow
                     var r = routes[i];
                     double dv = Outside.HohmannDv(o.VoyageFrom > 0 ? o.VoyageFrom : o.Distance, double.IsNaN(o.PendingTo) ? o.VoyageTo : o.PendingTo, r.Incline).dv1 - flat;
                     bool open = !double.IsNaN(DepartInMin());
-                    rows.Add(new PanelRow($"{i + 1}  {r.Name}", $"{r.Line}\n파편 ×{r.Zones:0.##} · 깊은 우주 ×{r.Deep:0.##} · 지나는 배 ×{r.Traffic:0.##}{(r.Incline > 0 ? $" · 면 {r.Incline:0.#}° (출발 +{dv:0}m/s)" : "")}", o.Route == i + 1,
+                    rows.Add(new PanelRow($"{i + 1}  {r.Name}", $"{r.Line}\n파편 ×{r.Zones:0.##} · 깊은 우주 ×{r.Deep:0.##} · 지나는 배 ×{r.Traffic:0.##}{(r.Incline > 0 ? $" · 면 {r.Incline:0.#}° (출발 +{dv:0}m/s)" : "")}", RouteShown == i + 1,
                         Key: i + 1, ActOn: open, Why: "항로는 출항 때만 고른다"));
                 }
                 var zone = o.ZoneAt(o.Distance); var ahead = o.ZoneAhead(Sim.Tick, 24);
@@ -1108,9 +1123,7 @@ public sealed partial class LiveShow
             }
             case PanelKind.Journal: JournalRows(rows); break;
             case PanelKind.Robots: RobotRows(rows); break;
-            case PanelKind.Hand:
-                rows.Add(new PanelRow("곧 — 불씨 · 외판 구멍 · 전선 끊기 · 설비 고장 · 물관 샘 · 문 끼임 · 폭발 · 운석 · 파편 구름 · 별 폭발", "줄을 누르면 겨누고 배 위를 누르면 일어난다", false, Key: -1));
-                break;
+            case PanelKind.Hand: HandRows(rows); break;
         }
         return rows.ToArray();
     }
@@ -1178,21 +1191,45 @@ public sealed partial class LiveShow
     public void Notify(string text, double seconds = 3, PanelKind link = PanelKind.None) { _notice = text; _noticeLeft = seconds; _noticeLink = link; }
     public void TickNotice(double realSec) => _noticeLeft = Math.Max(0, _noticeLeft - realSec);
 
-    /// <summary>항로 한 줄: 번호 · 이름.</summary>
+    /// <summary>항로 한 줄: 번호 · 이름 (받아 둔 항로 손이 있으면 그것 — 출항 준비로 멈춘 채 고른 것).</summary>
     public string RouteLine()
     {
         var o = Sim.Find<Outside>();
-        return o?.Rt == null ? "" : $"항로 {o.Route} '{o.Rt.Name}'";
+        if (o?.Rt == null) return "";
+        int r = RouteShown;
+        return r == o.Route ? $"항로 {o.Route} '{o.Rt.Name}'" : $"항로 {r} '{Sim.Tables.Space.Routes[r - 1].Name}' (출항 때)";
+    }
+
+    /// <summary>보이는 항로: 받아 둔 항로 손 (마지막 것) · 없으면 지금 항로.</summary>
+    public int RouteShown
+    {
+        get
+        {
+            var o = Sim.Find<Outside>();
+            int r = o?.Route ?? 0;
+            if (Sim.Find<Hand>() is { } h) foreach (var w in h.Waiting) if (w.Kind == HandKind.Route) r = w.Obj;
+            return r;
+        }
     }
 
     /// <summary>
-    /// 항로를 고른다 — 출항 점화 전에만 (전이 궤도에 오른 뒤엔 바꿀 수 없다): 출발 점화를 새 항로의 Δv로 다시 계획한다 (주컴퓨터가 하는 것은 그대로).
+    /// 항로를 고른다 — 출항 점화 전에만 (전이 궤도에 오른 뒤엔 바꿀 수 없다): 판정 · 알림만 하고 함장의 손 '항로'로 받아 둔다 — 다음 틱 맨 처음에 출발 점화를 새 항로의 Δv로 다시 계획한다
+    /// (주컴퓨터가 하는 것은 그대로 · 손 장부에 남아 다시보기가 같은 틱에 같은 항로를 고른다 — docs/UI2.md §7 결함 1). 손이 없는 시험 세계는 예전처럼 곧바로.
     /// </summary>
     public bool ChooseRoute(int route)
     {
         var o = Sim.Find<Outside>();
         if (o == null || route < 1 || route > Sim.Tables.Space.Routes.Count) return false;
         if (double.IsNaN(DepartInMin())) { Notify("이미 떠났다 — 항로는 출항 때만 고른다"); return false; }   // 출발 점화가 시작됐으면 (계획에 남은 출발 점화가 없다) 더는 못 바꾼다
+        if (Sim.Find<Hand>() is { } hand)
+        {
+            string why = HandBlocked();
+            if (why.Length > 0) { Notify(why); return false; }
+            if (RouteShown == route) { Notify(RouteLine() + " — " + Sim.Tables.Space.Routes[route - 1].Line); return true; }
+            if (!hand.Enqueue(new HandOrder { Kind = HandKind.Route, Obj = route, Cell = -1 })) { Notify("손이 밀려 있다 — 시간이 가야 한다"); return false; }
+            Notify(RouteLine() + " — " + Sim.Tables.Space.Routes[route - 1].Line);
+            return true;
+        }
         o.Route = route;
         var due = o.Plan.FirstOrDefault(p => p.Kind == BurnKind.Depart);
         double minutes = due.Kind == BurnKind.Depart ? Math.Max(1, (due.Due - Sim.Tick) / (double)Time.TicksPerHour * 60) : 20;
@@ -1409,6 +1446,10 @@ public sealed partial class LiveShow
         var w = Dir.Replay(Sim, h);
         if (w == null) return false;
         _replay = w; _replayOf = h;
+        // 함장의 손: 되살린 세계 (고리 찍기)에는 그 앞의 손만 있다 — 산 세계 한 손 장부에서 그 뒤의 손 (받은 차례가 되살린 세계보다 뒤)을 옮겨 두고 같은 틱에 먹인다 (docs/UI2.md §2.5)
+        _replayHand.Clear();
+        if (Sim.Find<Hand>() is { } lh && w.Find<Hand>() is { } rh) foreach (var o in lh.Done) if (o.Seq > rh.Seq && o.Tick >= w.Tick) _replayHand.Add(o);
+        Disarm();
         if (w.Find<Structure>() is { } rst) rst.Track = new MotionTrack();   // 다시보기 세계도 틱 사이를 메운다
         _replayDir = new Director(w.Layout) { KeepRing = false, AheadInBackground = true };
         _shots = Dir.Shots(Sim, h);
@@ -1416,6 +1457,15 @@ public sealed partial class LiveShow
         _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>(); _prevTick = long.MinValue;
         Banner = "다시보기 — " + h.Title; BannerLeft = BannerSec;
         return true;
+    }
+
+    private readonly List<HandOrder> _replayHand = new();
+
+    /// <summary>되살린 세계가 이 틱을 돌기 전에 그 틱의 손을 받아 둔다 (같은 차례 — 받은 차례 번호는 되살린 세계가 다시 매겨 같아진다).</summary>
+    private void FeedReplayHand(Sim w)
+    {
+        if (_replayHand.Count == 0 || w.Find<Hand>() is not { } h) return;
+        foreach (var o in _replayHand) if (o.Tick == w.Tick) h.Enqueue(o);
     }
 
     /// <summary>다시보기를 끝내고 산 세계로 돌아간다.</summary>

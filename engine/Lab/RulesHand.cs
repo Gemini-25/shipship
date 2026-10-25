@@ -1,4 +1,5 @@
 using ShipEngine;
+using ShipView;
 
 namespace Lab;
 
@@ -174,5 +175,57 @@ public static partial class Program
                 taken == Hand.MaxWaiting && notHull == "외판 칸을 누른다" && again == "이미 뚫렸다" && last.Kind == HandKind.Shove && last.Cause == 0 && s.Causes.Count == causes0,
                 $"받음 {taken}/9 · '{notHull}' · '{again}' · 헛손 원인 {last.Cause} · 새 원인 {s.Causes.Count - causes0}");
         }
+        // R8 (결함 1 — 고치기 전 빨강): 출발 전 항로를 8로 바꾼 뒤 그 앞 찍기에서 다시보면 항로 8 (예전엔 항로 고르기가 세계를 곧바로 바꿔 다시보기에 남지 않았다 — 4)
+        //    · R7 화면 쪽: 다시보기 중에는 손을 받지 않는다 (산 세계에도 · 되살린 세계에도)
+        {
+            var show = LiveShow.Crewed("Didim", 18);
+            show.FrameBudget = 1000; show.SpeedOverride = 1;   // 화면 1초에 한 틱
+            for (int i = 0; i < 3; i++) show.Advance(1);
+            long t0 = show.Dir.Ring[^1].tick;
+            bool chose = show.ChooseRoute(8);
+            long tChoose = show.Sim.Tick;
+            for (int i = 0; i < 6; i++) show.Advance(1);
+            bool live8 = show.Sim.Get<Outside>().Route == 8;
+            var h = new Highlight { Tick = show.Sim.Tick, StartTick = t0, Last = show.Sim.Tick, Title = "항로를 바꿨다" };
+            bool started = show.StartReplay(h);
+            int before = show.World.Get<Outside>().Route;
+            while (show.Replaying && show.World.Tick <= tChoose) show.Advance(1);
+            int replayRoute = show.Replaying ? show.World.Get<Outside>().Route : -1;
+            show.ArmHand(HandKind.Fire, 1);
+            bool refused = show.Armed == HandKind.None && show.Notice.Contains("다시보기 중에는") && !show.ChooseRoute(3) && show.Sim.Get<Hand>().Waiting.Count == 0;
+            Check("함장의 손 R8 (결함 1): 출발 전 항로를 8로 바꾸면 산 세계도 8 · 그 앞 찍기에서 다시보면 그 틱에 8로 바뀐다 (항로 고르기도 함장의 손 — 예전엔 세계를 곧바로 바꿔 다시보기는 옛 항로 4로 돌았다) · 다시보기 중에는 손 · 항로를 받지 않는다",
+                chose && live8 && started && before == 4 && replayRoute == 8 && refused, $"고름 {chose} · 산 세계 {show.Sim.Get<Outside>().Route} · 다시보기 처음 {before} → 그 틱 뒤 {replayRoute} · 다시보기 중 거절 {refused} ('{show.Notice}')");
+        }
+    }
+
+    /// <summary>사고 판 화면 (docs/UI2.md §8 R9 — 묶음 '화면'): 겨눔 미리 보기 = 실제 판정 · 한 번 누르면 한 번 · 선 갈래는 겹쳐 보기 '선과 관' (그만두면 되돌린다).</summary>
+    private static void HandViewRules()
+    {
+        if (!Do("화면")) return;
+        var show = LiveShow.Crewed("Didim", 21);
+        show.FrameBudget = 1000; show.SpeedOverride = 1;
+        for (int i = 0; i < 3; i++) show.Advance(1);
+        var aim = HandTargets(show.Sim);
+        var L = show.Sim.Layout;
+        (double, double) Mid(int c) => (L.X(c) + 0.5, L.Y(c) + 0.5);
+        show.TogglePanel(PanelKind.Hand);
+        bool armed = show.PanelClick(LiveShow.KeyHandKind(HandKind.Hole)) && show.Armed == HandKind.Hole;
+        show.SetHoverAt(Mid(aim.Bed).Item1, Mid(aim.Bed).Item2);
+        var f1 = show.Render(); show.Recycle(f1.Img);
+        string want1 = Hand.Why(show.Sim, Order(HandKind.Hole, aim.Bed, 1));
+        show.SetHoverAt(Mid(aim.Hull).Item1, Mid(aim.Hull).Item2);
+        var f2 = show.Render(); show.Recycle(f2.Img);
+        bool preview = f1.Armed == HandKind.Hole && !f1.Aim.Ok && f1.Aim.Why == want1 && want1.Length > 0 && f2.Aim.Ok && f2.Aim.Why == "" && f2.Aim.Cell == aim.Hull && f2.Aim.Label.StartsWith("외판 구멍 · 보통");
+        bool miss = !show.HandAt(Mid(aim.Bed).Item1, Mid(aim.Bed).Item2) && show.Armed == HandKind.Hole;   // 안 되는 칸: 알림만 · 겨눔은 그대로
+        bool hit = show.HandAt(Mid(aim.Hull).Item1, Mid(aim.Hull).Item2) && show.Armed == HandKind.None && show.Sim.Get<Hand>().Waiting.Count == 1;
+        show.Show = Overlay.Heat;
+        show.ArmHand(HandKind.PowerCut, 1); bool lines = show.Show == Overlay.Lines;
+        show.ArmHand(HandKind.DataCut, 1); bool still = show.Show == Overlay.Lines;
+        show.Disarm(); bool back = show.Show == Overlay.Heat;
+        var f3 = show.Render(); show.Recycle(f3.Img);
+        bool chips = f3.HandWaiting == 1 && f3.CanHand && f3.PanelRows.Any(r => r.Key == LiveShow.KeyHandKind(HandKind.Rock));
+        Check("화면 R9 사고 판: 겨눔 이름표의 되고 안 됨이 손의 판정과 같다 ('외판 칸을 누른다' · '외판 구멍 · 보통 — …') · 안 되는 칸을 누르면 알림만 (겨눔 그대로) · 되는 칸을 한 번 누르면 받아 두고 겨눔이 풀린다 · 선 갈래는 겹쳐 보기 '선과 관' · 그만두면 예전 것 (열)으로",
+            armed && preview && miss && hit && lines && still && back && chips,
+            $"겨눔 {armed} · 미리 보기 {preview} ('{f1.Aim.Why}' / '{f2.Aim.Label}') · 안 되는 칸 {miss} · 한 번 {hit} · 선과 관 {lines}/{still} → 되돌림 {back} · 기다리는 손 {f3.HandWaiting}");
     }
 }

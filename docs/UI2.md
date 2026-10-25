@@ -625,7 +625,7 @@ _Draw       DrawWorldMarks: 테두리 · 겨눔 고리 · 이름표 · 운석 �
 - 지문: `--fingerprint` 바뀜 (빈 장부 바이트 · 원인 갈래 수) · `--fingerprint flow` 같음 (세 척 — 손이 없으면 같다).
 - 관찰: `Lab --scene hand`. 화면: 없음 (화면 손은 U3). 비용: 손이 없는 틱 0 (빈 목록 하나) · 손을 쓴 틱 그 월드 길만큼 + 연출 미리 보기 다시 복제 한 번.
 
-### U3 — 사고 판 · 겨눔 · 다시보기 먹이기 · 항로를 손으로 (화면 + 손 · 같음) · 어림 3.5시간
+### U3 — 사고 판 · 겨눔 · 다시보기 먹이기 · 항로를 손으로 (화면 + 손 · 같음) · 어림 3.5시간 ✔
 - 무엇: 사고 판 줄 · 크기 칩 · 겨눔 줄 · 겨눔 미리 보기 · 누르기 · 밀어 던지기 끌기 · 선 갈래 겹쳐 보기 · 알림 · 손 카메라 8초 · 기다리는 손 표시 · 다시보기 먹이기 · `ChooseRoute` → `Route` 손.
 - 파일 · 함수: `engine/ShipView/LiveHand.cs` (새 — `ArmHand` · `Disarm` · `HandAt` · `HandShove` · `HandNow` · `HandFrom` · `HandAimNow` · 사고 판 `PanelRows`) · `Live.cs` (`StartReplay` `_replayHand` · `Advance` 먹이기 · `ChooseRoute` · `Render`에 `Armed` · `Aim` · `HandMarks` · `CanHand`) · `Hud.cs` (사고 판 칩 · 겨눔 줄 · 사고 탭 호박색) · `LiveMain.cs` (입력 · `HandDrag` · 커서 · `DrawWorldMarks` · `DrawPanel`).
 - 시험: R8 (고치기 전 빨강) · R9 · H3 (LiveShow 길로 다시).
