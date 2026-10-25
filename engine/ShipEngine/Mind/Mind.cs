@@ -551,6 +551,7 @@ public sealed partial class Mind : IEngine
         FeudStep(sim);     // 판단 이관 (다): 편들기 · 말리기 · 덤비기 · 주먹 · 헤어지기 · 몰래 방해
         SecretStep(sim);   // 판단 이관 (라): 털어놓기 · 숨기기 · 둘러대기 · 들은 말 · 기록 묻기
         GatherStep(sim);   // 판단 이관 (가): 부르기 · 말하기 · 미루기 (사회가 같은 틱에 결과를 계산한다)
+        EndWalks();
         PutActors();
     }
 
@@ -566,6 +567,18 @@ public sealed partial class Mind : IEngine
     {
         if (_walkN.Length < Agents.Count) { _walk = new int[WalkMax * (Agents.Count + 8)]; _walkN = new byte[Agents.Count + 8]; }
         for (int i = 0; i < Agents.Count; i++) { _walk[WalkMax * i] = Agents[i].C.Cell; _walkN[i] = 1; }
+    }
+
+    /// <summary>걸음 끝: 저마다 이번 걸음의 마지막 칸 쪽 (바라보는 쪽 — 걷지 않았으면 그대로) · 걸은 칸 수를 남긴다 (찍는다 — 다음 틱 걸음보다 먼저 쓰러지거나 놓으면 그것을 본다).</summary>
+    private void EndWalks()
+    {
+        for (int i = 0; i < Agents.Count; i++)
+        {
+            ref var c = ref Agents[i].C;
+            var w = WalkOf(i, Agents[i].IsPerson ? _life![c.Body].Cell : c.Cell);
+            c.WalkCells = (byte)(w.Length >= 2 ? w.Length - 1 : 0);
+            if (w.Length >= 2) { c.FaceX = (sbyte)Math.Clamp(L.X(w[^1]) - L.X(w[^2]), -1, 1); c.FaceY = (sbyte)Math.Clamp(L.Y(w[^1]) - L.Y(w[^2]), -1, 1); }
+        }
     }
 
     /// <summary>그 사람 · 로봇이 한 칸 옮겼다 (길에 더한다 — 넘치면 오래된 칸부터 덜어 마지막 여덟 칸).</summary>
@@ -585,14 +598,22 @@ public sealed partial class Mind : IEngine
         return _walk[at + n - 1] == cell ? _walk.AsSpan(at, n) : default;
     }
 
-    /// <summary>걷던 빠르기 (m/s — 이번 걸음 길의 마지막 칸 쪽 · 칸 수만큼): 쓰러지며 떨군 것이 그 빠르기로 날아간다.</summary>
+    /// <summary>
+    /// 걷던 빠르기 (m/s — 걸음 길의 마지막 칸 쪽 · 칸 수만큼): 쓰러지며 떨군 것이 그 빠르기로 날아간다.
+    /// 이번 틱에 걸었으면 이번 걸음 길 · 아직 걷기 전이면 지난 틱 걸음 (쓰러짐 · 점화 · 덜컹임 · 떠오름은 걸음보다 먼저다) · 이번 틱에 업혀 가거나 끌려 옮겨졌으면 0.
+    /// </summary>
     private (double vx, double vy) WalkVelocity(Agent a)
     {
         var w = WalkOf(a.Id, a.C.Cell);
-        if (w.Length < 2) return (0, 0);
-        int c0 = w[^2], c1 = w[^1];
-        double k = (w.Length - 1) / Time.SecondsPerTick;
-        return ((L.X(c1) - L.X(c0)) * k, (L.Y(c1) - L.Y(c0)) * k);
+        if (w.Length >= 2)
+        {
+            int c0 = w[^2], c1 = w[^1];
+            double k = (w.Length - 1) / Time.SecondsPerTick;
+            return ((L.X(c1) - L.X(c0)) * k, (L.Y(c1) - L.Y(c0)) * k);
+        }
+        if ((uint)a.Id >= (uint)_walkN.Length || _walkN[a.Id] != 1 || _walk[WalkMax * a.Id] != a.C.Cell) return (0, 0);
+        double kl = a.C.WalkCells / Time.SecondsPerTick;
+        return (a.C.FaceX * kl, a.C.FaceY * kl);
     }
 
     /// <summary>
@@ -643,18 +664,19 @@ public sealed partial class Mind : IEngine
     private int ActorTag(Agent a) => a.IsPerson ? a.C.Body : a.C.Kind == AgentKind.Robot && a.C.Mech >= 0 ? -1 - a.C.Mech : int.MinValue;
 
     /// <summary>
-    /// 든 것을 바닥에 둔다 (④ 요청 — 원판 바깥 · 걷던 쪽 앞부터): 내려놓기는 그 자리에 (빠르기 0) · 쓰러지며 떨굼은 걷던 빠르기로 · 놓은 이와는 잠깐 닿지 않는다. 물체 Id.
+    /// 든 것을 바닥에 둔다 (④ 요청 — 원판 바깥 · 걷던 쪽 (서 있었으면 바라보던 쪽) 앞부터): 내려놓기는 그 자리에 (빠르기 0) · 쓰러지며 떨굼은 걷던 빠르기로 · 놓은 이와는 잠깐 닿지 않는다. 물체 Id.
     /// </summary>
     private int PutDown(Agent a, byte item, float charge, bool thrown)
     {
         int cell = a.C.Cell;
         if (_st == null || cell < 0 || cell >= L.N) return -1;
         var (vx, vy) = WalkVelocity(a);
-        double v = Math.Sqrt(vx * vx + vy * vy);
         int tag = ActorTag(a);
         if (tag == int.MinValue) return _st.PutItem(item, charge, cell);   // 드론은 떠서 든다 — 그 칸에
-        return _st.DropItem(item, charge, L.X(cell) + 0.5, L.Y(cell) + 0.5, thrown ? 1 : 0, thrown ? vx : 0, thrown ? vy : 0, a.C.GoalCause, tag,
-            v > 0 ? vx / v : 0, v > 0 ? vy / v : 1);
+        bool walking = vx != 0 || vy != 0;
+        double fx = walking ? vx : a.C.FaceX, fy = walking ? vy : a.C.FaceY;   // 앞 = 걷던 쪽 · 서 있었으면 바라보던 쪽 (④가 길이를 맞춘다)
+        if (fx == 0 && fy == 0) fy = 1;   // 아직 걸은 적이 없다 — 남쪽
+        return _st.DropItem(item, charge, L.X(cell) + 0.5, L.Y(cell) + 0.5, thrown ? 1 : 0, thrown ? vx : 0, thrown ? vy : 0, a.C.GoalCause, tag, fx, fy);
     }
 
     /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.

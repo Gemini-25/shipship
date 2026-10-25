@@ -39,7 +39,7 @@ public static partial class Program
 
     /// <summary>
     /// 넘어짐 · 높이 (PH7 — docs/PHYSICS.md §3-3 · §3-4 · §10 '넘어짐 · 높이'): 0.40g 점화에 소화기는 눕고 식량 상자는 미끄러진다 · 탁자 위에 누운 유리병이 굴러 끝에서 떨어진다 ·
-    /// 걷다 쓰러진 이가 손 (1m)에서 놓친 컵은 걷던 쪽으로 날아 떨어진다 · 중력이 꺼지면 놓인 상자가 떠오르고 돌아오면 떨어진다 · 탁자 위 컵은 그 밑을 지나는 바닥 상자와 부딪히지 않는다.
+    /// 걷다 쓰러진 이가 손 (1m)에서 놓친 컵은 걷던 쪽으로 날아 떨어진다 (⑧ 길로도 — 걸음보다 먼저 쓰러지면 지난 틱 걸음 · 걸어와 선 이는 바라보던 쪽 앞에) · 중력이 꺼지면 놓인 상자가 떠오르고 돌아오면 떨어진다 · 탁자 위 컵은 그 밑을 지나는 바닥 상자와 부딪히지 않는다.
     /// </summary>
     private static void TipRules()
     {
@@ -88,6 +88,58 @@ public static partial class Program
             Check("높이: 쓰러지며 놓친 컵은 손 높이 1m에서 걷던 쪽 (동쪽 1.7m/s)으로 날아 떨어진다 (원판 앞보다 0.5m 넘게 · 사실 '떨어졌다' 1m) · 내려놓은 컵은 발치 앞 바닥에 그대로",
                 t0.Z == 1 && t1.Z == 0 && t1.X > t0.X + 0.5 && Math.Abs(fell.Size - 1) < 0.02 && u0.Z == 0 && u1.X == u0.X && u1.Y == u0.Y && u1.State == 0,
                 $"놓친 컵 처음 ({t0.X:0.00}, {t0.Z:0.00}) → ({t1.X:0.00}, {t1.Z:0.00}) · 떨어진 높이 {fell.Size:0.00}m · 내려놓은 컵 ({u0.X:0.00}, {u0.Z:0.00}) → ({u1.X:0.00}) 상태 {u1.State}");
+        }
+        // ── ⑧ 길로: 걷던 이가 쓰러지며 놓친 컵은 걷던 쪽 · 걷던 빠르기로 날아 떨어진다 (쓰러짐은 그 틱 걸음보다 먼저다 — 지난 틱 걸음) · 걸어와 선 이의 컵은 바라보던 쪽 앞에 곧장 떨어진다 ──
+        {
+            var s = ShipWorld.Crewed("Hwasal", 3, 6, 0, 0);
+            var m = s.Get<Mind>(); var st = s.Get<Structure>(); var life = s.Get<Life>(); var lay = s.Layout;
+            byte cupItem = (byte)m.ItemNames.ToList().IndexOf("컵");
+            s.Step();
+            var prev = m.Agents.Select(a => a.C.Cell).ToArray();
+            var moved = new (int dx, int dy)[m.Agents.Count];   // 지난 틱에 옮긴 칸 (선 이는 0)
+            (int who, int cell, int dx, int dy, Prop cup) walker = (-1, 0, 0, 0, default), stood = (-1, 0, 0, 0, default);
+            bool Free(int c) => c >= 0 && c < lay.N && lay.Kind[c] == CellKind.Floor && lay.FurnitureAt[c] < 0;
+            (int, int, int, int, Prop) Trip(Agent a, int dx, int dy)   // 손에 컵을 쥐여 주고 의식을 잃게 한다 → 한 틱 (⑧이 놓치고 ④가 같은 틱에 날려 떨군다)
+            {
+                int cell = a.C.Cell;
+                a.C.Holding = cupItem; a.C.HoldCharge = 0;
+                life[a.C.Body].Conscious = 0;
+                s.Step();
+                foreach (var b in m.Agents) { prev[b.Id] = b.C.Cell; moved[b.Id] = (0, 0); }   // 한 틱 더 갔다 — 옮긴 칸을 다시 잰다
+                return (a.Id, cell, dx, dy, st.Props.LastOrDefault(p => p.Kind == 0 && p.What == cupItem && p.Dropper == a.C.Body + 1));
+            }
+            for (int k = 0; k < 200 && (walker.who < 0 || stood.who < 0); k++)
+            {
+                s.Step();
+                foreach (var a in m.Agents)
+                {
+                    int dx = lay.X(a.C.Cell) - lay.X(prev[a.Id]), dy = lay.Y(a.C.Cell) - lay.Y(prev[a.Id]);
+                    var last = moved[a.Id];
+                    moved[a.Id] = (dx, dy); prev[a.Id] = a.C.Cell;
+                    if (a.C.Up == 0 || a.C.Holding != 255 || a.C.Carrying >= 0 || a.C.CarriedBy >= 0 || life[a.C.Body].Conscious == 0) continue;
+                    int wx = Math.Sign(dx), wy = Math.Sign(dy);   // 한 줄로 걸었으면 마지막 걸음 쪽 = 옮긴 쪽 (꺾여 걸었으면 모른다)
+                    if (walker.who < 0 && (dx, dy) != (0, 0) && (dx == 0 || dy == 0) && Free(a.C.Cell) && Free(lay.Index(lay.X(a.C.Cell) + wx, lay.Y(a.C.Cell) + wy)))
+                    { walker = Trip(a, wx, wy); break; }
+                    int fx = Math.Sign(last.dx), fy = Math.Sign(last.dy);
+                    bool straight = last.dx == 0 || last.dy == 0 || Math.Abs(last.dx) == Math.Abs(last.dy);   // 곧게 걸어왔다 (마지막 걸음 쪽 = 옮긴 쪽)
+                    if (walker.who >= 0 && stood.who < 0 && (dx, dy) == (0, 0) && (fx, fy) != (0, 0) && straight && Free(a.C.Cell))   // 원판 앞 놓는 자리는 제 칸 안이다
+                    { stood = Trip(a, fx, fy); break; }
+                }
+            }
+            // 컵이 칸 가운데에서 간 거리 — 그 쪽으로 · 옆으로 (m)
+            (double along, double side) From((int who, int cell, int dx, int dy, Prop cup) w)
+            {
+                double ox = w.cup.X - (lay.X(w.cell) + 0.5), oy = w.cup.Y - (lay.Y(w.cell) + 0.5), l = Math.Sqrt(w.dx * w.dx + w.dy * w.dy);
+                return l > 0 ? ((ox * w.dx + oy * w.dy) / l, Math.Abs(oy * w.dx - ox * w.dy) / l) : (0, 0);
+            }
+            double front = Structure.ActorR + DotForm.Dot + (walker.cup.Id != 0 ? st.PropForm(walker.cup).Shape.Hit.reach : 0);   // 원판 바깥 앞 (놓는 자리)
+            var wf = From(walker); var sf = From(stood);
+            Check("높이 (⑧): 걷던 이가 쓰러지며 놓친 컵은 원판 앞에서 걷던 쪽으로 걷던 빠르기로 날아 떨어진다 (놓는 자리보다 10cm 넘게 그 쪽으로 · 옆으로는 그보다 덜) — 남쪽에 곧장 떨어지지 않는다",
+                walker.who >= 0 && walker.cup.Id != 0 && walker.cup.Z == 0 && wf.along > front + 0.1 && wf.side < wf.along - front,
+                $"걷던 이 {walker.who} 지난 틱 걸음 쪽 ({walker.dx}, {walker.dy}) · 컵 {(walker.cup.Id != 0 ? $"칸 가운데에서 그 쪽으로 {wf.along:0.00}m · 옆으로 {wf.side:0.00}m (놓는 자리 {front:0.00}m) · 높이 {walker.cup.Z:0.00}m" : "없음")}");
+            Check("놓기 (⑧): 걸어와 선 이가 쓰러지면 컵은 바라보던 쪽 (마지막 걸음 쪽) 원판 앞에 곧장 떨어진다 — 늘 남쪽이 아니다",
+                stood.who >= 0 && stood.cup.Id != 0 && Math.Abs(sf.along - front) < 0.05 && sf.side < 0.05,
+                $"선 이 {stood.who} 마지막 걸음 ({stood.dx}, {stood.dy}) · 컵 {(stood.cup.Id != 0 ? $"칸 가운데에서 그 쪽으로 {sf.along:0.00}m · 옆으로 {sf.side:0.00}m" : "없음")}");
         }
         // ── 중력이 꺼지면 놓인 상자가 떠오르고 · 돌아오면 그 높이에서 떨어진다 ──
         {

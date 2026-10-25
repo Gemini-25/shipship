@@ -179,6 +179,9 @@ public struct AgentCore
 
     // 걷기
     public float MoveBudget;
+    /// <summary>바라보는 쪽 (마지막 걸음의 칸 쪽 −1~1 — 서 있으면 그대로 · 0, 0이면 남쪽) · 지난 틱에 걸은 칸 수 (⑧ 걸음 끝에 남긴다: 다음 틱 걸음보다 먼저 쓰러지면 그 빠르기 · 쪽으로 떨군다).</summary>
+    public sbyte FaceX, FaceY;
+    public byte WalkCells;
     public int WaitDoor, WaitTicks;
     public int OpenedDoor;     // 내가 연 문 (-1) — 지나가면 다시 닫는다
     public byte CloseHard;     // 1: 공기 때문에 도망 중 — 지나자마자 닫는다
