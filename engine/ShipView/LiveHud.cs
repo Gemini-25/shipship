@@ -181,7 +181,7 @@ public sealed partial class LiveShow
     public void SetOverlay(Overlay o) => Show = o;
     public void DirectorCam() { Follow = true; Overview = false; Selected = -1; FollowSelected = false; }
     public void ToggleOverview() => Overview = !Overview;
-    public void Release() { Selected = -1; FollowSelected = false; }
+    public void Release() { Selected = -1; FollowSelected = false; Look = default; }   // 고른 이 · 고른 물건을 놓는다
     public void FollowAgain() { if (Selected >= 0) { FollowSelected = true; Overview = false; } }
 
     /// <summary>그 사람 · 로봇이 그려진 자리로 카메라를 (따라가기는 그대로 — 손으로 옮긴 것과 같다).</summary>
@@ -286,14 +286,21 @@ public sealed partial class LiveShow
     }
 
     /// <summary>0.9칸 안의 가장 가까운 이 (그림은 칸 위쪽으로 0.15 솟는다) — 없으면 -1. 올림과 누름이 같은 셈을 쓴다.</summary>
-    public static int Nearest(IReadOnlyList<AgentSpot> spots, double x, double y)
+    public static int Nearest(IReadOnlyList<AgentSpot> spots, double x, double y) => Nearest(spots, x, y, out _);
+
+    /// <summary>
+    /// 0.9칸 안의 가장 가까운 이 · 그 거리 (칸): 사람 · 로봇이 겹치면 사람 (로봇보다 0.25칸 더 멀어도 — docs/UI2.md §3.2 · 사람을 따라가려다 곁의 로봇을 고르지 않게).
+    /// </summary>
+    public static int Nearest(IReadOnlyList<AgentSpot> spots, double x, double y, out double dist)
     {
-        int best = -1; double bd = 0.9 * 0.9;
+        int best = -1; double score = double.MaxValue; dist = double.NaN;
         foreach (var s in spots)
         {
             if (double.IsNaN(s.X)) continue;
-            double d = (s.X - x) * (s.X - x) + (s.Y - y - 0.15) * (s.Y - y - 0.15);
-            if (d < bd) { bd = d; best = s.Id; }
+            double d = Math.Sqrt((s.X - x) * (s.X - x) + (s.Y - y - 0.15) * (s.Y - y - 0.15));
+            if (d >= 0.9) continue;
+            double v = d + (s.Robot ? 0.25 : 0);
+            if (v < score) { score = v; best = s.Id; dist = d; }
         }
         return best;
     }

@@ -631,11 +631,12 @@ _Draw       DrawWorldMarks: 테두리 · 겨눔 고리 · 이름표 · 운석 �
 - 시험: R8 (고치기 전 빨강) · R9 · H3 (LiveShow 길로 다시).
 - 지문: 같음 (U2 기준 — 확인용 띄우기는 손이 없다). 화면: `u3_hand_armed.png` (불씨 · 침대 위 겨눔) · `u3_hand_fire.png` (일으킨 뒤 8초 — 연기 · 말 창 · 사건 띠) · `u3_hand_rock.png` (운석 줄). 비용: 겨눔 미리 보기 한 점 0.01ms.
 
-### U4 — 물건 살펴보기 (화면 · 같음) · 어림 3시간
+### U4 — 물건 살펴보기 (화면 · 같음) · 어림 3시간 ✔
 - 무엇: §3 전부.
 - 파일 · 함수: `engine/ShipView/LiveLook.cs` (새 — `PickKind` · `PickKey` · `PickAt` · `CellUnder` · `SetHoverAt` · `Inspect` · `InspectAt` · `LookClose` · `LookCard` 갈래마다 · `OutlineOf`) · `Live.cs` (`Card()`가 갈래로 나눈다 · `Render`에 `HoverLook` · `Outlines`) · `LiveHud.cs` (`Nearest` 사람 먼저) · `Network.cs` (`BrokenCause`) · `StructurePropsBreak.cs` (`HurtShare`) · `LiveMain.cs` (누름 · 올림 · 테두리 · 커서).
 - 시험: V1 ~ V4 · 예전 '올림과 누름이 같은 사람' 그대로.
 - 지문: 같음. 화면: `u4_look_cup.png` · `u4_look_door.png` · `u4_look_wall.png` · `u4_look_water.png`. 비용: 올림 셈 한 점 ≤ 0.03ms (한누리 물체 300 · 가구 200) · 카드 짓기 0.02ms.
+- 한 대로 (코드와 다른 점): `SetHoverAt` · `CellUnder`는 U3의 `LiveHand.cs`에서 `LiveLook.cs`로 옮겼다 (여유를 함께 받는 `SetHoverAt(x, y, pad)` · 떨어져 나간 조각 위 칸) · `PickAt(x, y, pad, spots)` (메인 스레드의 그린 자리 · 시험이 넣는다) · 사람 고르기 규칙은 `AgentAt` 하나 (메인 스레드 · 작업 스레드가 같은 셈) · `Release()`가 고른 물건도 놓는다 (`LookClose` 따로 부르지 않는다) · 이름 줄은 `CardGo()` · 물체 상자는 밑면 높이와 꼴 꼭대기 두 자리 · 식당 가구 표 이름은 '탁자' · 가구의 '탈 것' · 주컴퓨터가 읽은 때 ('4초 전')는 아직 없다 (같다 · 다르다 · 못 본다 · 무선만) · [사고 ›] 갈래: 물체 밀어 던지기 · 가구 고장 → 불씨 → 폭발 · 문 끼임 → 폭발 · 외판 구멍 → 운석 → 선 · 관 · 바닥 불씨 → 물관 → 선 · 폭발 (그 자리에 되는 첫 갈래를 그 자리에 겨눈다) · 빈 바닥 위 커서는 화살표 · 시험 '[사고 ›]' 하나 더 (밀린 손이면 옅게 · 까닭).
 
 ### U5 — 사람 자세히 (화면 · 같음) · 어림 2.5시간
 - 무엇: §4.2 작은 탭 여섯 · 판단 일지 32칸.

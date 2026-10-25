@@ -17,7 +17,7 @@ public enum UiAct
 {
     Pause, Speed, FixedMenu, Fixed, Sound, Captions, Help, Menu, MenuShip, ShipPick, MenuRestart, MenuStart, Tab, PanelClose, PanelRow, PanelRowAct, PanelBar, ChainLines, Depart,
     CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts, Robot, RobotMore, Talk,
-    DetailTab, DetailBack, DetailFollow, DetailOpen, HandSize, HandCancel, HandNow,
+    DetailTab, DetailBack, DetailFollow, DetailOpen, HandSize, HandCancel, HandNow, LookHand,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -183,7 +183,7 @@ public sealed class HudState
         if (f.Armed != HandKind.None) return BackStep.Disarm;
         if (f.Panel != PanelKind.None && f.Detail is DetailKind.Person or DetailKind.Robot) return BackStep.CloseDetail;   // 주컴퓨터 판은 목록이 없다 — 판을 닫는다
         if (f.Panel != PanelKind.None) return BackStep.ClosePanel;
-        if (f.Selected >= 0) return BackStep.Release;
+        if (f.Selected >= 0 || f.CardIs == CardKind.Thing) return BackStep.Release;   // 고른 이 · 고른 물건
         return BackStep.None;
     }
 
@@ -332,12 +332,13 @@ public static class HudLayout
         {
             float lh = 0;
             for (int i = 0; i < f.Card.Length; i++) lh += Math.Max(26, Th(f.Card[i], i == 0 ? 19 : 16, CardW - 28, i == 0 ? 1 : 2) + 6);
-            bool more = f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] (docs/UI2.md §5.4)
+            bool thing = f.CardIs == CardKind.Thing, more = !thing && f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] · 물건 카드: [사고 ›] (docs/UI2.md §5.4)
             var card = new RectF(Side, leftY, CardW, Math.Min(20 + lh + 8 + (more ? 36 : 0), lowTop - leftY - 40));
             if (more) h.Hits.Add(new UiHit(new RectF(Side + 8, card.Bottom - 36, CardW - 16, 28), UiAct.DetailOpen, 0, false, true, "자세히 보기 — 몸 · 마음 · 하는 일 · 아는 것 · 일지"));
             h.Areas["카드"] = card;
             h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28, leftY + 6, 28, 28), UiAct.CardClose, 0, false, true, "놓기 (Esc · 오른쪽 누르기)"));
-            h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.CardFollow, 0, f.FollowSelected, true, f.FollowSelected ? "따라가는 중" : "다시 따라가기"));
+            if (thing) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.LookHand, 0, false, f.LookHandOk, "이것에 사고를 일으킨다 — 사고 판이 열리고 겨눈다", f.LookHandWhy));
+            else h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.CardFollow, 0, f.FollowSelected, true, f.FollowSelected ? "따라가는 중" : "다시 따라가기"));
             h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8, 30), UiAct.CardName, 0, false, true, "그 자리로"));
             h.Blocks.Add(("카드", card));
             leftY = card.Bottom + 8;

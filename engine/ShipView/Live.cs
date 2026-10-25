@@ -82,6 +82,13 @@ public sealed class LiveFrame
     public bool CanHand = true;
     public string HandWhy = "";
     public byte[] HandSizes = Array.Empty<byte>();
+    // ── 살펴보기 (docs/UI2.md §3 · §6.1 — 화면 값): 카드 갈래 · 고른 물건 · [사고 ›] · 올린 것 · 테두리 ──
+    public CardKind CardIs;
+    public PickKey Look, HoverLook;
+    public bool LookHandOk, HoverInside;
+    public string LookHandWhy = "", HoverLookName = "";
+    public double HoverAtX = double.NaN, HoverAtY;
+    public Outline[] Outlines = Array.Empty<Outline>();
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -573,11 +580,15 @@ public sealed partial class LiveShow
     {
         int best = Nearest(SpotsNow(), x, y);   // 메인 스레드가 올림에 쓰는 것과 같은 셈 (올린 사람과 누른 사람이 늘 같다)
         Selected = best; FollowSelected = best >= 0;
+        if (best >= 0) Look = default;
         return best >= 0;
     }
 
+    /// <summary>왼쪽 카드 (갈래로 나눈다 — docs/UI2.md §3.1): 고른 사람 · 로봇 · 아니면 고른 물건 (<see cref="LookCard"/>).</summary>
+    public string[] Card() => Selected >= 0 ? AgentCard() : Look.Any ? LookCard() : Array.Empty<string>();
+
     /// <summary>고른 이의 카드: 이름 · 맡은 일 / 지금 생각 / 몸 / 마음 · 바람 (로봇: 전지 · 손상) / 죽었으면 그 까닭.</summary>
-    public string[] Card()
+    private string[] AgentCard()
     {
         if (Selected < 0) return Array.Empty<string>();
         var w = World;
@@ -775,6 +786,17 @@ public sealed partial class LiveShow
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         var (shx, shy) = Shake();
         var prows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows();
+        // 살펴보기 (docs/UI2.md §3.3): 올린 한 점만 셈한다 (겨누는 중에는 겨눔 미리 보기가 그 점을 쓴다) · 카드 갈래 · 테두리 둘까지 · [사고 ›]
+        var spots = SpotsNow();
+        bool hoverInside = false;
+        var hoverLook = Armed == HandKind.None && !double.IsNaN(_hoverX) ? PickAt(_hoverX, _hoverY, _hoverPad, spots, out hoverInside) : default;
+        var card = Card();
+        if (Selected < 0 && Look.Any && card.Length == 0) Look = default;   // 없어진 물건 (깨졌다 · 우주로) — 카드를 닫는다
+        var cardIs = card.Length == 0 ? CardKind.None : Selected >= 0 ? CardKind.Agent : CardKind.Thing;
+        var outlines = new List<Outline>(2);
+        if (hoverLook.Any && hoverLook.Kind != PickKind.Agent && hoverLook != Look && OutlineOf(hoverLook, false) is { } ho) outlines.Add(ho);
+        if (cardIs == CardKind.Thing && OutlineOf(Look, true) is { } lo) outlines.Add(lo);
+        var lookHand = cardIs == CardKind.Thing ? LookHandPick() : default;
         SyncPick(prows);
         var latest = Dir.Highlights.Count > 0 ? Dir.Highlights[^1] : null;
         float sk = D / (float)Painter.T;   // 흔들림은 32도트 자리
@@ -789,7 +811,7 @@ public sealed partial class LiveShow
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
             Tick = World.Tick, Replay = _replayOf == null ? "" : ShotNow is { } sn ? $"{_replayOf.Title} · 컷 {_shots.IndexOf(sn) + 1}/{_shots.Count} {sn.Kind}" : _replayOf.Title,
             CamLeft = left, CamTop = top, CamW = w, CamH = h,
-            Card = Card(), SelX = sel.x, SelY = sel.y,
+            Card = card, SelX = sel.x, SelY = sel.y,
             Notice = Notice, Route = RouteLine(),
             Broadcast = _castLeft > 0 ? _cast : "", BroadcastAlpha = (float)Math.Clamp(Math.Min(_castLeft, CastSec - _castLeft) / 0.5, 0, 1),
             Captions = Ears.Captions ? Ears.CaptionsNow() : Array.Empty<ShipView.Audio.SoundCaption>(),
@@ -804,12 +826,14 @@ public sealed partial class LiveShow
             SpeedPick = SpeedPick, FixedPick = FixedPick, CaptionsOn = Ears.Captions,
             CanReplay = latest != null && CanReplay(latest), ReplayWhy = latest == null ? "아직 볼 만한 장면이 없다" : CanReplay(latest) ? "" : "한 시간 넘게 지나 다시 볼 수 없다",
             Holding = Holding, DepartIn = DepartInMin(), Highlights = Dir.Highlights.Count, JournalNew = JournalNew, NoticeLink = Notice.Length > 0 ? _noticeLink : PanelKind.None,
-            StoryIsChain = ChainNow().Count > 0, Spots = SpotsNow(),
+            StoryIsChain = ChainNow().Count > 0, Spots = spots,
             Bubbles = Bubbles(), SpeechOn = SpeechBubbles, ThoughtsOn = ThoughtBubbles,
             Detail = Panel == PanelKind.None ? DetailKind.None : Detail, DetailId = DetailId, DetailSub = DetailSub, DetailTabs = Panel == PanelKind.None ? Array.Empty<string>() : DetailTabsOf(Detail),
             DetailLine = Panel == PanelKind.None ? "" : DetailLineNow(), DetailFace = Panel == PanelKind.None ? -1 : DetailFaceNow(), DetailFollow = Detail is DetailKind.Person or DetailKind.Robot && Selected == DetailId && FollowSelected,
             Armed = Armed, ArmedSize = ArmedSize, Aim = HandAimNow(), HandWaiting = Sim.Find<Hand>()?.Waiting.Count ?? 0, HandMarks = HandMarksNow(), CanHand = HandBlocked().Length == 0, HandWhy = HandBlocked(),
             HandSizes = Panel == PanelKind.Hand ? HandSizes() : Array.Empty<byte>(),
+            CardIs = cardIs, Look = cardIs == CardKind.Thing ? Look : default, LookHandOk = lookHand.kind != HandKind.None, LookHandWhy = cardIs == CardKind.Thing ? lookHand.why : "",
+            HoverLook = hoverLook, HoverInside = hoverInside, HoverAtX = _hoverX, HoverAtY = _hoverY, HoverLookName = hoverLook.Any ? LookName(hoverLook) : "", Outlines = outlines.ToArray(),
             HoverId = HoverOk() ? HoverId : -1, HoverName = HoverOk() ? World.Find<Mind>()!.NameOf(HoverId) : "", HoverDoing = HoverOk() ? World.Find<Mind>()!.Thought(HoverId) : "",
         };
     }
@@ -939,7 +963,7 @@ public sealed partial class LiveShow
                 // 예전대로 따라가기 + 닫기 · 자세히에서도 그 이 (줄 열쇠로 — 예전엔 차례 번호라 관습 줄이 있으면 한 줄 밀린 사람을 골랐다)
                 int id = Detail is DetailKind.Person or DetailKind.Robot ? DetailId : PanelPickKey >= KeyPerson(0) && PanelPickKey < KeyPerson(0) + (1L << 32) ? (int)(PanelPickKey - KeyPerson(0)) : -1;
                 if (id < 0) return false;
-                Selected = id; FollowSelected = true; Overview = false;
+                Selected = id; FollowSelected = true; Overview = false; Look = default;
                 ClosePanel();
                 return true;
             }
@@ -1403,7 +1427,7 @@ public sealed partial class LiveShow
     private Img? _scratchFace, _facesShown;
 
     /// <summary>사람 줄에서 누른 사람을 고른다 (그를 따라간다).</summary>
-    public void SelectAgent(int id) { Selected = id; FollowSelected = id >= 0; Overview = false; }
+    public void SelectAgent(int id) { Selected = id; FollowSelected = id >= 0; Overview = false; if (id >= 0) Look = default; }   // 카드 자리는 하나 — 사람 · 로봇을 고르면 물건 카드는 닫힌다
 
     /// <summary>아래 줄: 지금 장면의 원인 사슬 (가장 최근 하이라이트가 아직 이어지면) — 아니면 연출 자막.</summary>
     /// <summary>

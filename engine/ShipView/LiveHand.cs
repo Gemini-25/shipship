@@ -80,17 +80,6 @@ public sealed partial class LiveShow
         if (_armedLines) { if (Show == Overlay.Lines) Show = _showBeforeArm; _armedLines = false; }
     }
 
-    /// <summary>메인 스레드가 마우스 자리를 알린다 (칸 · 소수 — 겨눔 미리 보기 한 점 · 끌지 않을 때).</summary>
-    public void SetHoverAt(double x, double y) { _hoverX = x; _hoverY = y; }
-
-    /// <summary>화면 자리 (칸 · 소수) 아래의 칸 (도면 밖이면 -1).</summary>
-    public int CellUnder(double x, double y)
-    {
-        var L = Sim.Layout;
-        int ix = (int)Math.Floor(x), iy = (int)Math.Floor(y);
-        return L.In(ix, iy) ? L.Index(ix, iy) : -1;
-    }
-
     /// <summary>그 자리 가장 가까운 물체 (0.7칸 안 · 그린 자리 — 놓인 것 · 미끄러지는 것) — 없으면 0.</summary>
     private int PropNear(double x, double y)
     {
@@ -109,12 +98,15 @@ public sealed partial class LiveShow
     }
 
     /// <summary>겨눈 손 하나를 만든다 (그 자리 · 겨눈 갈래 · 크기) — 운석은 외판 칸 · 구름은 누른 쪽에서 · 고장은 그 설비의 첫 부품 (봉함 · 전기 · 기계 · 거르개 차례).</summary>
-    private HandOrder AimOrder(double x, double y)
+    private HandOrder AimOrder(double x, double y) => OrderFor(Armed, ArmedSize, x, y);
+
+    /// <summary>그 자리 · 갈래 · 크기의 손 하나 (겨눔 · 카드의 [사고 ›]가 같은 셈).</summary>
+    private HandOrder OrderFor(HandKind kind, byte size, double x, double y)
     {
         int cell = CellUnder(x, y);
-        var o = new HandOrder { Kind = Armed, Size = ArmedSize, Cell = cell };
+        var o = new HandOrder { Kind = kind, Size = size, Cell = cell };
         var L = Sim.Layout;
-        switch (Armed)
+        switch (kind)
         {
             case HandKind.Cloud:
             {

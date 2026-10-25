@@ -321,23 +321,27 @@ void fragment() {
         if (r.Kind == RouteKind.World && !_dragging)
         {
             var (cx, cy) = CellAt(mouse);
-            agent = LiveShow.Nearest(_shown!.Spots, cx, cy);
+            agent = LiveShow.AgentAt(_shown!.Spots, cx, cy, _shown.HoverInside);   // 누르기 차례 (docs/UI2.md §3.2): 0.45칸 안이면 늘 · 그 밖은 물체 · 가구 상자 밖일 때만
         }
         if (agent != _hs.HoverAgent) { _hs.HoverAgent = agent; int a = agent; _cmds.Enqueue(s => s.SetHover(a)); }
         bool aiming = _shown!.Armed != HandKind.None && r.Kind == RouteKind.World;
-        if (aiming && _hs.HandDrag == 0 && _shotName == null)   // 화면 사진 (--shot)은 차린 겨눔 자리를 그대로 둔다
+        if (r.Kind == RouteKind.World && !_dragging && _hs.HandDrag == 0 && _shotName == null)   // 화면 사진 (--shot)은 차린 겨눔 · 올린 자리를 그대로 둔다
         {
-            // 겨누는 중: 올린 칸을 작업 스레드에 (칸이 0.02 넘게 바뀔 때만 — 겨눔 미리 보기 한 점)
+            // 올린 칸을 작업 스레드에 (칸이 0.02 넘게 바뀔 때만 — 겨눔 미리 보기 · 살펴보기 올림 한 점 · 여유는 화면 10픽셀)
             var (hx, hy) = CellAt(mouse);
-            if (double.IsNaN(_hs.HoverSentX) || Math.Abs(hx - _hs.HoverSentX) > 0.02 || Math.Abs(hy - _hs.HoverSentY) > 0.02) { _hs.HoverSentX = hx; _hs.HoverSentY = hy; _cmds.Enqueue(s => s.SetHoverAt(hx, hy)); }
+            double pad = LiveShow.PadFor(GetViewportRect().Size.X / _shown.CamW);
+            if (double.IsNaN(_hs.HoverSentX) || Math.Abs(hx - _hs.HoverSentX) > 0.02 || Math.Abs(hy - _hs.HoverSentY) > 0.02) { _hs.HoverSentX = hx; _hs.HoverSentY = hy; _cmds.Enqueue(s => s.SetHoverAt(hx, hy, pad)); }
         }
+        if (_shown.HoverLook != _lookSeen) { _lookSeen = _shown.HoverLook; _lookSince = _clock; }
         long hk = r.Hit != null ? ((long)r.Hit.Act << 40) ^ r.Hit.Key : long.MinValue;
         if (hk != _hs.HoverKey) { _hs.HoverKey = hk; _hs.HoverSince = _clock; }
         var shape = _hs.HandDrag != 0 || _dragging && _dragDist >= 6 || _midDrag ? Input.CursorShape.Drag
             : aiming ? (_shown.Aim.Ok || _shown.Armed == HandKind.Shove ? Input.CursorShape.Cross : Input.CursorShape.Forbidden)   // 겨누는 중: 십자 · 안 되는 칸은 금지
-            : r.Hit is { Enabled: true } || agent >= 0 ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow;
+            : r.Hit is { Enabled: true } || agent >= 0 || r.Kind == RouteKind.World && _shown.HoverLook.Kind is not (PickKind.None or PickKind.Floor) ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow;   // 누를 것 위 = 손 (빈 바닥은 화살표)
         if (shape != _cursor) { _cursor = shape; Input.SetDefaultCursorShape(shape); }
     }
+
+    private PickKey _lookSeen; private double _lookSince;   // 올린 것이 바뀐 때 (0.35초 머물면 풀이 글)
 
     private (double x, double y) CellAt(Vector2 p)
     {
@@ -418,6 +422,53 @@ void fragment() {
                 s.SetHoverAt(L.X(c) + 0.5, L.Y(c) + 0.5);
                 if (parts[0] == "hand-fire") s.HandAt(L.X(c) + 0.5, L.Y(c) + 0.5);
                 s.LookAt(c); s.ViewW = 26; s.CamX += 6;   // 판이 오른쪽을 가린다 — 겨눔 이름표가 보이게 왼쪽으로
+                break;
+            }
+            case "look-cup" or "look-door" or "look-wall" or "look-water":
+            {
+                // 물건 살펴보기 (U4): 식당 탁자 위 컵 · 식당 문 · 식당 곁 외판 · 물관이 샌 바닥 — 카드 · 노랑 테두리
+                var L = s.Sim.Layout; var st = s.Sim.Find<ShipEngine.Structure>();
+                if (st == null) break;
+                int mess = L.Rooms.FindIndex(r => r.Type == "Mess");
+                double mx = L.W / 2.0, my = L.H / 2.0;
+                if (mess >= 0 && L.Rooms[mess].Cells.Length > 0) { mx = L.Rooms[mess].Cells.Average(c => L.X(c) + 0.5); my = L.Rooms[mess].Cells.Average(c => L.Y(c) + 0.5); }
+                double Far(int c) => Math.Abs(L.X(c) + 0.5 - mx) + Math.Abs(L.Y(c) + 0.5 - my);
+                int at = -1;
+                switch (parts[0])
+                {
+                    case "look-cup":
+                    {
+                        int cup = s.Sim.Tables.People.Items.Keys.ToList().IndexOf("컵");
+                        var p = st.Props.Where(q => q.What == cup && q.On > 0).OrderBy(q => Far(st.CellOf(q))).FirstOrDefault();
+                        if (p.Id == 0) break;
+                        s.Inspect(new PickKey(PickKind.Prop, p.Id)); at = st.CellOf(p);
+                        break;
+                    }
+                    case "look-door":
+                    {
+                        int d = Enumerable.Range(0, L.Doors.Count).OrderBy(i => Far(L.Doors[i].Cell)).FirstOrDefault(-1);
+                        if (d < 0) break;
+                        s.Inspect(new PickKey(PickKind.Door, d)); at = L.Doors[d].Cell;
+                        break;
+                    }
+                    case "look-wall":
+                    {
+                        int w = Enumerable.Range(0, L.N).Where(c => L.Kind[c] == CellKind.Wall && L.Hull[c] && L.DoorAt[c] < 0).OrderBy(Far).FirstOrDefault(-1);
+                        if (w < 0) break;
+                        s.Inspect(new PickKey(PickKind.Wall, w)); at = w;
+                        break;
+                    }
+                    default:
+                    {
+                        // 물관 터짐을 일으켜 (함장의 손 — 바닥 물의 원인 '함장이 일으킨 물관 터짐') 그 바닥을 살펴본다
+                        int c = Enumerable.Range(0, L.N).Where(i => L.Kind[i] == CellKind.Floor && ShipEngine.Hand.Why(s.Sim, new HandOrder { Kind = HandKind.WaterLeak, Cell = i, Size = 2 }).Length == 0).OrderBy(Far).FirstOrDefault(-1);
+                        if (c < 0) break;
+                        s.ArmHand(HandKind.WaterLeak, 2); s.HandAt(L.X(c) + 0.5, L.Y(c) + 0.5);
+                        s.Inspect(new PickKey(PickKind.Floor, c)); at = c;
+                        break;
+                    }
+                }
+                if (at >= 0) { s.LookAt(at); s.ViewW = 22; s.CamX -= 3; }   // 카드가 왼쪽을 가린다 — 그것이 가운데보다 조금 오른쪽에
                 break;
             }
             case "hand-rock":
@@ -521,6 +572,14 @@ void fragment() {
         Vector2 Px(double x, double y) => new((float)((x - f.CamLeft) / f.CamW * vp.X), (float)((y - f.CamTop) / f.CamH * vp.Y));
         float cellPx = (float)(vp.X / f.CamW);
         DrawHandMarks(f, vp, Px, cellPx);
+        foreach (var o in f.Outlines)
+        {
+            // 테두리 (docs/UI2.md §3.3): 올린 것 흰 1px (60%) · 고른 것 노랑 1.5px (고른 사람 고리와 같은 빛)
+            var col = o.Picked ? new Color(1f, 0.9f, 0.45f, 0.95f) : new Color(1f, 1f, 1f, 0.6f);
+            float wd = (o.Picked ? 1.5f : 1f) * U;
+            Vector2 a = Px(o.X0, o.Y0), b = Px(o.X1, o.Y1), c = Px(o.X2, o.Y2), d = Px(o.X3, o.Y3);
+            DrawPolyline(new[] { a, b, c, d, a }, col, wd);
+        }
         if (!double.IsNaN(f.SelX)) DrawArc(Px(f.SelX, f.SelY), cellPx * 0.62f, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.45f, 0.9f), 2.5f);
         if (f.HoverId >= 0 && f.HoverId != f.Selected && f.HoverName.Length > 0)
         {
@@ -837,6 +896,14 @@ void fragment() {
         foreach (var h in _hud.Hits)
         {
             if (h.Act == UiAct.CardFollow) DrawButton(h, "따라가기", 14);
+            else if (h.Act == UiAct.LookHand)
+            {
+                // [사고 ›]: 호박색 테두리 · 맞는 갈래가 없으면 옅게 (풀이 글이 까닭)
+                DrawButton(h, "사고", 14);
+                var rr = R(h.R);
+                DrawRect(rr, new Color(1f, 0.72f, 0.3f, h.Enabled ? 0.95f : 0.3f), false, 1.5f);
+                DrawChevron(rr.GetCenter() + new Vector2(MeasureW("사고", Fs(14), false) / 2 + 10 * U, 0), 4 * U, +1, new Color(1f, 0.72f, 0.3f, h.Enabled ? 1 : 0.35f));
+            }
             else if (h.Act == UiAct.CardClose) { DrawButton(h, ""); DrawCross(R(h.R).GetCenter(), 6 * U, Ink); }
             else if (h.Act == UiAct.DetailOpen) { DrawButton(h, "자세히 보기", 14); DrawChevron(R(h.R).GetCenter() + new Vector2(MeasureW("자세히 보기", Fs(14), false) / 2 + 12 * U, 0), 4 * U, +1, InkDim); }
             else if (h.Act == UiAct.CardName && Hovered(h)) DrawLine(new Vector2(box.Position.X + 16 * U, cy + 4 * U), new Vector2(box.Position.X + 16 * U + _bold.GetStringSize(f.Card[0], HorizontalAlignment.Left, -1, Fs(19)).X, cy + 4 * U), new Color(1f, 0.92f, 0.65f), 1);
@@ -849,8 +916,9 @@ void fragment() {
             int size = Fs(head ? 19 : 16);
             float lh = Math.Max(26 * U, (head ? MeasureHB(f.Card[i], size, avail, 1) : MeasureH(f.Card[i], size, avail, 2)) + 6 * U);
             if (cy + lh - 20 * U > cardEnd) break;
+            bool gloss = i == 1 && f.CardIs == CardKind.Thing;   // 물건 카드의 둘째 줄은 옅은 풀이
             DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16 * U, cy), f.Card[i], HorizontalAlignment.Left, avail, size, head ? 1 : 2,
-                head ? new Color(1f, 0.92f, 0.65f) : new Color(0.86f, 0.89f, 0.95f));
+                head ? new Color(1f, 0.92f, 0.65f) : gloss ? InkDim : new Color(0.86f, 0.89f, 0.95f));
             cy += lh;
         }
     }
@@ -1247,6 +1315,7 @@ void fragment() {
         var r = _hud.At(m.X / U, m.Y / U);
         string tip = r.Hit == null ? "" : r.Hit.Enabled ? r.Hit.Tip : (r.Hit.Why.Length > 0 ? r.Hit.Why : r.Hit.Tip);
         if (r.Hit == null && r.Kind == RouteKind.World && _shown is { HoverId: >= 0 } f && f.HoverDoing.Length > 0) tip = $"{f.HoverName} — {f.HoverDoing}";
+        else if (r.Hit == null && r.Kind == RouteKind.World && _shown is { Armed: HandKind.None, HoverLook.Any: true } g && g.HoverLook.Kind != PickKind.Agent && g.HoverLookName.Length > 0 && _clock - _lookSince >= 0.35) tip = $"{g.HoverLookName} — 누르면 살펴본다";
         if (string.IsNullOrEmpty(tip)) return;
         float maxW = 420 * U;
         var sz = _font.GetMultilineStringSize(tip, HorizontalAlignment.Left, maxW, Fs(14), 4);
@@ -1361,7 +1430,8 @@ void fragment() {
             case UiAct.Depart: _cmds.Enqueue(s => s.Depart()); break;
             case UiAct.CardFollow: _cmds.Enqueue(s => s.FollowAgain()); break;
             case UiAct.CardClose: _cmds.Enqueue(s => s.Release()); break;
-            case UiAct.CardName: { int id = f?.Selected ?? -1; _cmds.Enqueue(s => s.CenterOn(id)); break; }
+            case UiAct.CardName: _cmds.Enqueue(s => s.CardGo()); break;
+            case UiAct.LookHand: _cmds.Enqueue(s => s.HandFrom()); break;
             case UiAct.Crew: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
             case UiAct.CrewMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.People || s.Detail != DetailKind.None) { s.ClosePanel(); s.TogglePanel(PanelKind.People); } }); break;
             case UiAct.RobotMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Robots || s.Detail != DetailKind.None) { s.ClosePanel(); s.TogglePanel(PanelKind.Robots); } }); break;
@@ -1526,8 +1596,16 @@ void fragment() {
                     // 세계를 눌렀다: 올린 사람과 같은 셈으로 찾아 고른다 (없으면 놓는다) · 두 번 누르면 그 칸 쪽으로 확대
                     var (cx, cy) = CellAt(pos);
                     if (_shown!.Armed != HandKind.None) { _cmds.Enqueue(s => s.HandAt(cx, cy)); return; }   // 겨누는 중: 그 자리에 일으킨다 (한 번 누르면 한 번)
-                    int id = LiveShow.Nearest(_shown!.Spots, cx, cy);
-                    if (id >= 0) _cmds.Enqueue(s => s.SelectAgent(id)); else _cmds.Enqueue(s => s.Release());
+                    // 누르기 차례 (docs/UI2.md §3.3): 사람 · 로봇 → 고르기 / 올린 것 → 살펴보기 (올린 것과 누른 것이 늘 같다) · 누른 자리가 올린 자리에서 여유 넘게 떨어졌으면 (빠른 손) 그 자리로 다시 셈 / 없으면 놓기
+                    var sf = _shown!;
+                    double pad = LiveShow.PadFor(GetViewportRect().Size.X / sf.CamW);
+                    int id = LiveShow.AgentAt(sf.Spots, cx, cy, sf.HoverInside);
+                    bool far = double.IsNaN(sf.HoverAtX) || Math.Abs(sf.HoverAtX - cx) > pad || Math.Abs(sf.HoverAtY - cy) > pad;
+                    var look = sf.HoverLook;
+                    if (id >= 0) _cmds.Enqueue(s => s.SelectAgent(id));
+                    else if (far) _cmds.Enqueue(s => s.InspectAt(cx, cy, pad));
+                    else if (look.Any) _cmds.Enqueue(s => s.Inspect(look));
+                    else _cmds.Enqueue(s => s.Release());
                     if (_pressDouble) _cmds.Enqueue(s => s.ZoomAt(0.6, cx, cy));
                 }
                 return;

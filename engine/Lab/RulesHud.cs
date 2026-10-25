@@ -8,7 +8,7 @@ namespace Lab;
 public static partial class Program
 {
     /// <summary>자리표 시험용 그림 한 장 (사람 n · 로봇 n/3 · 모두 켬 / 모두 끔 · 판을 닫으면 말 창 · 판 갈래 · 자세히 — docs/UI2.md §8 M1).</summary>
-    private static LiveFrame FakeFrame(int people, bool on, bool panel = true, PanelKind kind = PanelKind.People, DetailKind detail = DetailKind.None)
+    private static LiveFrame FakeFrame(int people, bool on, bool panel = true, PanelKind kind = PanelKind.People, DetailKind detail = DetailKind.None, bool thing = false)
     {
         var f = new LiveFrame
         {
@@ -24,7 +24,13 @@ public static partial class Program
         if (!on) return f;
         if (!panel) f.Talk = new[] { new TalkLine("09:12 로봇 2 → 식당 불", 1, 1), new TalkLine("09:12 식당 봉쇄 (사람이 안에 있다)", 2, 1), new TalkLine("09:13 식당 히터 전원을 내렸다 — 불이 났다", 0, 1) };
         f.Card = new[] { "김하늘 '불꽃' · 기관사", "사람됨: 말이 많고 용감하다 · 꿈: 귀향 · 즐겨 하는 것: 음악을 듣는다 · 짝: 이도윤", "생각: 불이야! 다들 다치면 안 되는데", "몸: 깨어 있음 · 핏속 산소 95% · 체온 37.0℃", "다침: 화상 12", "마음: 두려움 · 긴장" };
-        f.Selected = 0;
+        f.Selected = 0; f.CardIs = CardKind.Agent;
+        if (thing)
+        {
+            // 물건 카드 (U4): 이름 · 옅은 풀이 · 상태 줄 · [사고 ›] · [×] (따라가기 · 자세히 보기는 없다)
+            f.Card = new[] { "컵", "유리 · 지름 9cm · 높이 9cm · 물을 담는다", "무게 0.3kg · 물 200mL", "놓인 곳: 식탁 위 · 높이 75cm · 섰다", "움직임: 놓였다", "깨짐 피로 30% · 찌그러짐 없음", "놓은 이: 김하늘 · 고요하게 2시간" };
+            f.Selected = -1; f.CardIs = CardKind.Thing; f.Look = new PickKey(PickKind.Prop, 5); f.LookHandOk = people % 2 == 0; f.LookHandWhy = f.LookHandOk ? "" : "이것에 일으킬 사고가 없다";
+        }
         f.Feed = Enumerable.Range(0, 5).Select(i => new FeedItem("09:1" + i, "식당 불 — 주컴퓨터: 로봇 2", i % 3, i * 10, true)).ToArray();
         f.Panel = PanelKind.People; f.PanelTitle = "사람";
         f.PanelRows = Enumerable.Range(0, 30).Select(i => new PanelRow("이름 " + i + " — 불을 끈다", "사람됨: …\n생각: …\n몸: 산소 97%", false, i, new[] { new PanelBar("숨", 0.9f, 0) }, LiveShow.KeyPerson(i))).ToArray();
@@ -73,15 +79,24 @@ public static partial class Program
             var bad = new List<string>(); var small = new List<string>(); int layouts = 0;
             foreach (var (pw, ph) in new[] { (1920, 1080), (1920, 1010), (1600, 900), (1366, 768), (1280, 720), (2560, 1440) })
                 foreach (int n in new[] { 3, 12, 40, 100 })
-                    foreach (int mode in new[] { 0, 1, 2, 3, 4, 5, 6, 7 })
+                    foreach (int mode in new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 })
                     {
                         bool on = mode != 2;
                         var (kind, detail) = mode switch { 3 => (PanelKind.People, DetailKind.Person), 4 => (PanelKind.Robots, DetailKind.Robot), 5 => (PanelKind.Journal, DetailKind.Computer), 6 => (PanelKind.Hand, DetailKind.None), 7 => (PanelKind.Robots, DetailKind.None), _ => (PanelKind.People, DetailKind.None) };
-                        var f = FakeFrame(n, on, mode != 1, kind, detail);
+                        var f = FakeFrame(n, on, mode != 1, kind, detail, mode == 8);
                         var st = new HudState();
                         HudLayout.Build(f, st, pw, ph, Hud.Approx, Hud.ApproxLines, hud);
                         layouts++;
-                        string tag = mode switch { 0 => "켬", 1 => "말 창", 2 => "끔", 3 => "사람 자세히", 4 => "로봇 자세히", 5 => "주컴퓨터", 6 => "사고 판", _ => "로봇 판" };
+                        string tag = mode switch { 0 => "켬", 1 => "말 창", 2 => "끔", 3 => "사람 자세히", 4 => "로봇 자세히", 5 => "주컴퓨터", 6 => "사고 판", 7 => "로봇 판", _ => "물건 카드" };
+                        if (mode == 8)
+                        {
+                            // 물건 카드: [사고 ›] (맞는 갈래가 없으면 옅게 · 까닭) · [×] 가 카드 안 · [따라가기] · [자세히 보기]는 없다
+                            var card = hud.Area("카드");
+                            var lh = hud.Hits.FirstOrDefault(x => x.Act == UiAct.LookHand); var cl = hud.Hits.FirstOrDefault(x => x.Act == UiAct.CardClose);
+                            bool inCard = lh != null && cl != null && lh.R.X >= card.X && lh.R.Right <= card.Right && cl.R.Right <= card.Right && lh.R.Right <= cl.R.X;
+                            if (!inCard || lh!.Enabled != f.LookHandOk || (!f.LookHandOk && lh.Why.Length == 0) || hud.Hits.Any(x => x.Act is UiAct.CardFollow or UiAct.DetailOpen))
+                                bad.Add($"{pw}×{ph} {tag}: [사고 ›] {lh != null} · [×] {cl != null} · 카드 안 {inCard} · 따라가기 · 자세히 {hud.Hits.Count(x => x.Act is UiAct.CardFollow or UiAct.DetailOpen)}");
+                        }
                         if (mode == 6)
                         {
                             // 사고 판: 겨눔 줄 (그만두기 · 겨누지 않는 갈래면 일으키기) · 크기 칩 셋이 줄 안 · 판 안
@@ -96,7 +111,7 @@ public static partial class Program
                         // 탭 일곱 · 자세한 판 (넓은 폭 · 작은 탭 한 줄 · 판 안 · [목록] · [따라가기]은 사람 · 로봇만) · 카드 [자세히 보기]
                         int tabs = hud.Hits.Count(x => x.Act == UiAct.Tab);
                         if (tabs != 7) bad.Add($"{pw}×{ph} {tag}: 탭 {tabs}");
-                        if (on && f.Card.Length > 0 && !hud.Hits.Any(x => x.Act == UiAct.DetailOpen)) bad.Add($"{pw}×{ph} {tag}: 카드 [자세히 보기] 없음");
+                        if (on && f.Card.Length > 0 && f.CardIs == CardKind.Agent && !hud.Hits.Any(x => x.Act == UiAct.DetailOpen)) bad.Add($"{pw}×{ph} {tag}: 카드 [자세히 보기] 없음");
                         if (detail != DetailKind.None)
                         {
                             var box = hud.Area("판");
@@ -114,7 +129,7 @@ public static partial class Program
                             if (h.R.H + 0.01f < need || h.R.W + 0.01f < (h.Act == UiAct.PanelBar ? 18 : Math.Min(need, 28))) small.Add($"{pw}×{ph} 사람 {n}: {h.Act} {h.R.W:0}×{h.R.H:0}");
                         }
                     }
-            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 · 자세한 판 (사람 · 로봇 · 주컴퓨터) · 사고 판 (겨눔 줄 · 크기 칩 — 겨눈 갈래가 사람 수 홀짝으로 불씨 · 인공 중력 발생기) · 로봇 판 — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상) · 탭 일곱 · 자세한 판은 넓은 폭 · 작은 탭 한 줄 (docs/UI2.md M1)",
+            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 · 자세한 판 (사람 · 로봇 · 주컴퓨터) · 사고 판 (겨눔 줄 · 크기 칩 — 겨눈 갈래가 사람 수 홀짝으로 불씨 · 인공 중력 발생기) · 로봇 판 · 물건 카드 ([사고 ›] · [×] — 따라가기 · 자세히 보기 없음) — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상) · 탭 일곱 · 자세한 판은 넓은 폭 · 작은 탭 한 줄 (docs/UI2.md M1)",
                 bad.Count == 0 && small.Count == 0, $"자리표 {layouts}가지 · 겹침 · 밖 {bad.Count} {string.Join(" | ", bad.Take(4))} · 작은 자리 {small.Count} {string.Join(" | ", small.Take(3))}");
         }
         // 3: 누름이 새지 않는다 · 같은 손잡이일 때만 · 자막 위는 세계로
@@ -153,8 +168,10 @@ public static partial class Program
             var want = new[] { BackStep.CloseAsk, BackStep.CloseOpen, BackStep.CloseHelp, BackStep.Disarm, BackStep.CloseDetail, BackStep.ClosePanel, BackStep.Release, BackStep.None };
             var fc = FakeFrame(3, true, true, PanelKind.Journal, DetailKind.Computer);
             var computer = new HudState().Back(fc);
-            Check("마우스 뒤로: 오른쪽 누르기 여덟 번 — 확인 창 → 펼친 목록 → 도움말 → 겨눔 (그만두기) → 자세히 (목록으로) → 판 → 고른 이 → 없음 (다시보기는 끝내지 않는다 — 다시보기 띠의 ■ · B) · 주컴퓨터 자세히는 목록이 없어 판을 닫는다 (docs/UI2.md M2)",
-                steps.SequenceEqual(want) && f.Replaying && computer == BackStep.ClosePanel, string.Join(" → ", steps) + $" · 주컴퓨터 {computer}");
+            var ft = FakeFrame(3, true, true, PanelKind.People, DetailKind.None, true); ft.Panel = PanelKind.None;   // 물건 카드만 (U4)
+            var thing = new HudState().Back(ft);
+            Check("마우스 뒤로: 오른쪽 누르기 여덟 번 — 확인 창 → 펼친 목록 → 도움말 → 겨눔 (그만두기) → 자세히 (목록으로) → 판 → 고른 이 → 없음 (다시보기는 끝내지 않는다 — 다시보기 띠의 ■ · B) · 주컴퓨터 자세히는 목록이 없어 판을 닫는다 · 고른 물건도 놓는다 (docs/UI2.md M2)",
+                steps.SequenceEqual(want) && f.Replaying && computer == BackStep.ClosePanel && thing == BackStep.Release, string.Join(" → ", steps) + $" · 주컴퓨터 {computer} · 물건 {thing}");
         }
         // 14: 분수 휠 셋 (0.4 × 3)이면 한 줄 · 끝을 넘지 않는다
         {

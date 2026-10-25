@@ -68,6 +68,18 @@ public sealed partial class Structure
         return DotForge.Piece(whole, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(MaskBits).Slice(mk.Bit, mk.H), mk.Y0, mk.Part);
     }
 
+    /// <summary>읽기 (화면 살펴보기 — 쓰지 않는다): 쌓인 맞음이 깨짐 문턱에 대한 몫 (0.1 Hurt ÷ ε₀ — 맞을 때 더해지는 몫과 같은 셈 · 1이면 다음 맞음 없이도 깨질 만큼).</summary>
+    public double HurtShare(in Prop p)
+    {
+        if (p.Kind is not (0 or 1 or 2)) return 0;
+        var fm = p.Piece > 0 ? PieceLook(p) : PropForm(p);
+        double e0 = BreakEps(fm, MaterialOf(p));
+        return e0 > 0 ? 0.1 * p.Hurt / e0 : 0;
+    }
+
+    /// <summary>읽기: 물체의 겉 재질 (화면 · 원인 글).</summary>
+    public MaterialDef PropMaterial(in Prop p) => MaterialOf(p);
+
     /// <summary>깨짐 문턱 ε₀ (J/kg): 130 G_c / (ρ L) — G_c = K_c² / E (J/m²) · L = 발자국의 가장 긴 변 (m).</summary>
     public static double BreakEps(DotForm fm, MaterialDef m)
     {
