@@ -17,12 +17,59 @@ public static partial class Program
             BreachRules();
             FrameRules();
         }
+        if (Do("물체 부딪힘"))
+        {
+            Console.WriteLine("\n[물체 부딪힘]");
+            PairRules();
+        }
         if (Do("물체 그림"))
         {
             Console.WriteLine("\n[물체 그림]");
             StackRules();
             TrackDrawRules();
             ShardTimeRule();
+        }
+    }
+
+    /// <summary>
+    /// 물체 부딪힘 (PH6a — docs/PHYSICS.md §3-5 · §10): 같은 무게 두 상자가 빠르기를 주고받는다 (무중력 · 공기 없는 방 — 뒤는 v(1 − e)/2 · 앞은 v(1 + e)/2 · 운동량 그대로) ·
+    /// 감압 돌풍에 상자 여덟이 구석에 몰려도 서로 · 벽 안으로 1도트 넘게 겹치지 않는다 (고치기 전: 서로 지나가 한데 포개진다).
+    /// </summary>
+    private static void PairRules()
+    {
+        const double dot = DotForm.Dot;
+        {
+            var s = PropWorld(0, 2);
+            var st = s.Get<Structure>();
+            int a = Slide(s, "식량 상자", 3.5, 5.0, 3, 0), b = Slide(s, "식량 상자", 5.0, 5.0, 0, 0);
+            var pa0 = st.Props[st.IndexOf(a)];
+            double e = s.Tables.Materials[st.PropForm(pa0).Shape.BaseMat].Def.Rest;
+            s.Run(1);   // 한 틱 (맞은 상자가 동쪽 벽에 닿기 전)
+            var pa = st.Props[st.IndexOf(a)]; var pb = st.Props[st.IndexOf(b)];
+            double wantA = 3 * (1 - e) / 2, wantB = 3 * (1 + e) / 2, dp = pa.Kg * pa.Vx + pb.Kg * pb.Vx - pa0.Kg * 3;
+            Check($"물체 부딪힘: 무중력에서 3m/s로 미끄러진 식량 상자가 선 식량 상자에 맞는다 — 빠르기를 주고받는다 (뒤 {wantA:0.00} · 앞 {wantB:0.00}m/s ±2% · e = {e:0.00}) · 운동량 그대로",
+                Math.Abs(pa.Vx - wantA) <= 0.02 * 3 && Math.Abs(pb.Vx - wantB) <= 0.02 * 3 && Math.Abs(dp) <= 1e-9 * pa0.Kg * 3 && Math.Abs(pa.Vy) + Math.Abs(pb.Vy) < 1e-6 && st.PairSeparation(pa, pb) > -dot,
+                $"뒤 {pa.Vx:0.000} · 앞 {pb.Vx:0.000}m/s · 운동량 어긋남 {dp:0.0e0} · 사이 {st.PairSeparation(pa, pb) / dot:0.00}도트");
+        }
+        {
+            // 감압 돌풍 (구멍 쪽으로 쏠리는 900Pa — 1g 마른 바닥의 식량 상자를 미끄러뜨린다)이 방 전체에 북서쪽으로 분다 → 여덟이 북서 구석에 몰려 쌓인다
+            var (s, f) = WindWorld(1);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            for (int c = 0; c < L.N; c++) if (L.Kind[c] == CellKind.Floor) Blow(f, c, 900, -1, -0.6);
+            var ids = new List<int>();
+            for (int k = 0; k < 8; k++)
+            {
+                int id = Slide(s, "식량 상자", 5.2 + k % 4 * 0.9, 4.6 + k / 4 * 1.1, 0, 0);
+                { int i = st.IndexOf(id); var p = st.Props[i]; p.Th = 0.15 * k; st.Props[i] = p; }
+                ids.Add(id);
+            }
+            double worst = 0;
+            for (int k = 0; k < 20; k++) { s.Step(); worst = Math.Max(worst, WorstPairOverlap(st, ids)); }
+            var ps = ids.Select(st.IndexOf).Where(i => i >= 0).Select(i => st.Props[i]).ToList();
+            double meanX = ps.Average(p => p.X), meanY = ps.Average(p => p.Y), wall = ps.Max(p => WallOverlap(st, p));
+            Check("물체 부딪힘: 감압 돌풍 (900Pa)이 방 전체에 북서쪽으로 — 식량 상자 여덟이 북서 구석에 몰려도 서로 1도트 넘게 겹치지 않는다 (틱마다 끝) · 벽 안으로도 · 서로 밀었다 · 섬 놓침 0",
+                worst <= dot && wall <= dot && st.PairHits > 0 && meanX < 4.5 && meanY < 4.5 && st.IslandMiss == 0,
+                $"서로 가장 깊은 겹침 {worst / dot:0.00}도트 · 벽 {wall / dot:0.00}도트 · 물체끼리 {st.PairHits} · 가운데 ({meanX:0.00}, {meanY:0.00}) (처음 6.55, 5.15) · 섬 놓침 {st.IslandMiss}");
         }
     }
 

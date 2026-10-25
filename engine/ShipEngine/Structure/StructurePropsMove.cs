@@ -110,7 +110,7 @@ public sealed partial class Structure
     }
 
     /// <summary>
-    /// 깨어 있는 물체마다 (Id 차례 — 지금은 물체끼리 닿지 않아 하나가 한 섬) 한 틱을 잔걸음으로 — 깨우기 (막음 풀림 · 바람 · 덜컹 · 옆 가속 · 폭풍) 뒤 ·
+    /// 깨어 있는 물체를 섬마다 (가장 작은 Id 차례 — 물체끼리 닿을 만한 것을 한 섬으로) 한 틱을 잔걸음으로 — 깨우기 (막음 풀림 · 바람 · 덜컹 · 옆 가속 · 폭풍) 뒤 ·
     /// 몸이 있으면 바닥 · 벽이 준 몫을 틱 끝에 그 몸이 되받는다.
     /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -131,12 +131,7 @@ public sealed partial class Structure
         if (any)
         {
             BuildClearance();
-            for (int i = 0; i < all.Length; i++)
-            {
-                if (!Awake(all[i])) continue;
-                if (world) _stepped[i] = true;
-                StepProp(sim, ref all[i], dt, world ? _hostOf[i] : -1);   // 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
-            }
+            StepIslands(sim, all, dt, world);   // 섬마다 함께 걷는다 — 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
         }
         if (world && all.Length > 0) Reactions(all);
         if (any)
@@ -147,169 +142,6 @@ public sealed partial class Structure
             all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         }
         WritePlugs(all, plugged);   // 물체 막음 → 장 (다음 틱 흐름부터)
-    }
-
-    /// <summary>
-    /// 물체 하나의 한 틱: 잔걸음마다 길이 ℓ = max(2도트, 틈새 − 닿는 반지름) · 0.1rad · (마찰이 있으면) 0.1초를 넘지 않게 —
-    /// 닿을 것이 없으면 마찰의 정확한 걸음 (x += v h + ½ a h² · 서는 걸음은 v²/2a에서 멈춘다) · 있으면 마찰 빠르기 → 충격량 → 자리 → 바로잡음.
-    /// 빠르기 1mm/s · 각속도 0.01rad/s 아래가 0.5초 이어지면 잔다 (빠르기 0 · 놓임).
-    /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private void StepProp(Sim sim, ref Prop p, double dt, int host)
-    {
-        if (p.Kg <= 0) FillBody(ref p);
-        var fm = PropForm(p);
-        var sm = SamplesOf(fm);
-        var mat = T.Materials[Math.Min(p.Mat, T.Materials.Count - 1)].Def;
-        double m = p.Kg, I = p.Inertia, rho = fm.Rho, rem = dt;
-        int steps = 0;
-        // 맞힐 수 있는 이 (⑧이 알린 원판 — 이번 틱에 닿을 만한 것 · 많아야 4): 틱 처음에 이미 닿아 있던 이는 새로 맞힌 것이 아니다
-        Span<int> near = stackalloc int[4];
-        Span<bool> touching = stackalloc bool[4];
-        int nNear = 0;
-        if (_nActors > 0)
-        {
-            double far = (Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy) + Math.Abs(p.W) * sm.reach) * dt + sm.reach + ActorR;
-            for (int a = 0; a < _nActors && nNear < near.Length; a++)
-            {
-                int ac = _actors[a].Cell;
-                if (ac < 0 || ac >= L.N) continue;
-                double ax = L.X(ac) + 0.5 - p.X, ay = L.Y(ac) + 0.5 - p.Y;
-                if (ax * ax + ay * ay > far * far) continue;
-                near[nNear] = a; touching[nNear] = TouchesActor(p, sm, _actors[a]); nNear++;
-            }
-        }
-        int jp = 0;          // 몸 걸음 안의 덜컹 (때 차례) — 그 때가 지나면 바닥에 대한 빠르기를 고친다
-        double jw = 0;       // 지난 덜컹이 바꾼 몸의 각속도
-        var tr = Track;      // 틱 안 기록 (보기용 — 켰을 때만)
-        double lastKey = 0;
-        tr?.Add(MotionTrack.WhoProp, p.Id, 0, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W);
-        while (rem > 1e-12)
-        {
-            double tau = dt - rem;
-            sim.Facts.SubNow = (byte)Math.Clamp((int)Math.Round(tau / dt * 255), 0, 255);   // 이 잔걸음에 난 사실 · 소리의 때
-            double preX = p.X, preY = p.Y, preTh = p.Th, preVx = p.Vx, preVy = p.Vy, preW = p.W;   // 잔걸음 처음 (틱 안 기록 — 튀기 앞)
-            for (; jp < _jolts.Count && _jolts[jp].T <= tau + 1e-12; jp++)
-            {
-                var j = _jolts[jp];
-                if (j.B != host) continue;
-                var o = Bodies[host];
-                double jdx = p.X - o.Lx, jdy = p.Y - o.Ly;
-                p.Vx -= j.Dvx - j.Dw * jdy; p.Vy -= j.Dvy + j.Dw * jdx; p.W -= j.Dw; jw += j.Dw; p.Still = 0;
-                if (j.Cause != 0) p.Cause = j.Cause;
-            }
-            double nextJolt = double.PositiveInfinity;
-            for (int k = jp; k < _jolts.Count; k++) if (_jolts[k].B == host) { nextJolt = _jolts[k].T; break; }
-            int c = CellOf(p);
-            // 무게중심이 도면 밖 · 바깥에 들었다 → 우주로 · 구멍 벽 칸에 들었다 (큰 구멍의 틈) → 빨아들이면 막거나 우주로 (아니면 틈을 지나 그대로 간다)
-            if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c)) { HoleHit(sim, ref p, -1); TrackEnd(tr, p, tau, ref lastKey); break; }
-            if (L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f && HoleHit(sim, ref p, c)) { TrackEnd(tr, p, tau, ref lastKey); break; }
-            double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
-            double muK = mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
-            double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
-            // 바람 · 구멍 입 · 몸의 틀 (−a · 원심 · 오일러 — 잔걸음 처음 때 · 코리올리는 빠르기를 돌린다) — 놓인 채 정지 타원 안이면 그대로
-            double wfx = 0, wfy = 0, wtq = 0, wb = 0, ffx = 0, ffy = 0, ftq = 0;
-            bool windy = _windy && WindForce(p, fm, tau, out wfx, out wfy, out wtq);
-            bool framed = _framed && FrameForce(p, host, tau, jw, m, I, out ffx, out ffy, out ftq, out wb);
-            double fx = wfx + ffx, fy = wfy + ffy, tq = wtq + ftq;
-            bool blown = windy || framed;
-            if (p.Cause == 0 && (windy || framed)) p.Cause = windy ? WindCauseAt(c) : host >= 0 ? BodyCause(c) : ShipACause;   // 작은 덜컹에 깬 것도 미는 힘의 원인을 잇는다
-            if (blown && p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho)) { blown = windy = false; fx = fy = tq = wfx = wfy = wtq = 0; }
-            double ax = fx / m, ay = fy / m, al = tq / I, acc = blown ? Math.Sqrt(ax * ax + ay * ay) + Math.Abs(al) * sm.reach : 0;
-            double room = ClearAt(c) - sm.reach, gap = room, h = rem;
-            for (int k = 0; k < nNear; k++)   // 원판도 건너뛰지 않게 (닿을 만큼만 간다)
-            {
-                int ac = _actors[near[k]].Cell;
-                double dx = L.X(ac) + 0.5 - p.X, dy = L.Y(ac) + 0.5 - p.Y;
-                gap = Math.Min(gap, Math.Sqrt(dx * dx + dy * dy) - sm.reach - _actors[near[k]].R);
-            }
-            double ell = Math.Max(2 * DotForm.Dot, gap);
-            if (speed > 0) h = Math.Min(h, ell / speed);
-            if (w > 0) h = Math.Min(h, MaxPropTurn / w);
-            if (acc > 0) h = Math.Min(h, 2 * ell / (speed + Math.Sqrt(speed * speed + 2 * acc * ell)));   // 힘을 받아 빨라져도 ℓ 넘게 가지 않는다 (아주 작은 힘에도 0이 되지 않는 꼴)
-            if (blown && al != 0) h = Math.Min(h, 2 * MaxPropTurn / (w + Math.Sqrt(w * w + 2 * Math.Abs(al) * MaxPropTurn)));
-            if ((speed > 0 || blown) && gp > 0 && muK > 0 || _windy || framed) h = Math.Min(h, MaxPropH);   // 바람 · 틀의 힘은 틱 안에서 준다
-            if (nextJolt - tau < h) h = Math.Max(1e-9, nextJolt - tau);   // 덜컹 때에 맞춰 끊는다
-            if (++steps >= MaxPropSteps) h = Math.Min(rem, Math.Max(1e-9, nextJolt - tau));
-            double px0 = m * p.Vx, py0 = m * p.Vy, l0 = m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W;
-            double lw = blown ? (p.X * fy - p.Y * fx + tq) * h : 0;   // 바람이 준 각운동량 (원점 둘레)
-            double speedEnd = speed + acc * h, stopAt = -1;
-            int nc = 0;
-            if (speedEnd > 0 && room < speedEnd * h + 2 * DotForm.Dot)
-            {
-                var pk = p;   // 받은 힘만큼 빨라진 길로 닿을 곳을 찾는다
-                if (blown) { pk.Vx += ax * h; pk.Vy += ay * h; pk.W += al * h; }
-                if (wb != 0) Coriolis(ref pk, -2 * wb * h);
-                nc = FindContacts(pk, sm, h, mat.Mu, mat.Rest);
-                if (nc > 0) p = pk;
-            }
-            if (nc == 0)
-            {
-                // 힘 반 → 마찰의 정확한 걸음 → 힘 반 (마찰로 선 채 정지 타원 안이면 그대로)
-                if (blown) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
-                if (wb != 0) Coriolis(ref p, -wb * h);
-                Friction(ref p, h, gp * muK, m, I, rho, true, out stopAt);
-                if (wb != 0) Coriolis(ref p, -wb * h);
-                if (blown && !(p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho))) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
-            }
-            else
-            {
-                Friction(ref p, h, gp * muK, m, I, rho, false);
-                // 마찰이 바꾼 빠르기로 닿음 목표를 다시 (다가오는 빠르기 · 반발은 닿기 직전 값)
-                bool hit = false;
-                for (int k = 0; k < nc; k++)
-                {
-                    ref var ct = ref _propHits[k];
-                    double vn0 = (p.Vx - p.W * ct.Ry) * ct.Nx + (p.Vy + p.W * ct.Rx) * ct.Ny;
-                    ct.Bounce = -vn0 > BounceV && (ct.Sep <= 0 || -vn0 * h > ct.Sep);
-                    ct.Target = ct.Bounce ? -ct.E * vn0 : -Math.Max(ct.Sep, 0) / h;
-                    hit |= ct.Bounce;
-                }
-                SolveContacts(ref p, nc, steps == 1 || hit ? 16 : 4);   // 틱 첫 잔걸음 · 부딪는 잔걸음은 16번 (따뜻한 시작이 없다)
-                for (int k = 0; k < nc; k++) if (_propHits[k].Bounce && _propHits[k].Jn > 0) { Bounces++; break; }
-                p.X += p.Vx * h; p.Y += p.Vy * h; p.Th += p.W * h;
-            }
-            // 장부: 바닥 · 벽 · 가구가 받은 몫 — 몸이 없는 배에 준 몫 (바람 · 점화의 틀 힘이 준 몫은 뺀다) · 몸이 있으면 틱 끝에 그 몸이 되받는다 (바람 몫은 기체가 잃는다)
-            if (host < 0) { ToHostPx -= m * p.Vx - px0 - fx * h; ToHostPy -= m * p.Vy - py0 - fy * h; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - l0 - lw; }
-            else if (windy) WindToWorld(p, host, tau, wfx, wfy, wtq, h);
-            if (nc > 0) FixOverlap(ref p, nc);
-            for (int k = 0; k < nNear; k++)
-            {
-                bool now = TouchesActor(p, sm, _actors[near[k]]);
-                if (now && !touching[k]) ActorHit(sim, p, _actors[near[k]]);
-                touching[k] = now;
-            }
-            rem -= h;
-            if (tr != null)
-            {
-                double t1 = dt - rem;
-                bool bounced = false;
-                for (int k = 0; k < nc; k++) if (_propHits[k].Bounce && _propHits[k].Jn > 0) { bounced = true; break; }
-                if (bounced)
-                {
-                    if (tau > lastKey + 1e-9) tr.Add(MotionTrack.WhoProp, p.Id, tau, preX, preY, preTh, preVx, preVy, preW);   // 튀기 앞 (그 잔걸음은 튄 빠르기로 곧게 갔다)
-                    tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvHit); lastKey = t1;
-                }
-                else
-                {
-                    if (stopAt >= 0) { tr.Add(MotionTrack.WhoProp, p.Id, tau + stopAt, p.X, p.Y, p.Th, 0, 0, p.W, MotionTrack.EvStop); lastKey = tau + stopAt; }
-                    if (Math.Floor(t1 * 16 / dt + 1e-9) > Math.Floor(tau * 16 / dt + 1e-9) && t1 > lastKey + 1e-9) { tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W); lastKey = t1; }
-                }
-            }
-            // 구멍 벽에 닿았다 (밀어 닿았거나 겹침) → 빨아들이는 구멍이면 막거나 우주로 (아니면 보통 벽 — 이미 튀었다)
-            bool gone = false;
-            for (int k = 0; k < nc && !gone; k++)
-            {
-                ref var ct = ref _propHits[k];
-                if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
-            }
-            if (gone) { TrackEnd(tr, p, dt - rem, ref lastKey); break; }
-            bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0 && double.IsPositiveInfinity(nextJolt);
-            p.Still = still ? p.Still + (float)h : 0;
-            if (p.Still >= SleepSec) { p.Vx = p.Vy = p.W = 0; p.State = 0; p.Asleep = 1; p.Still = 0; p.Since = _now; break; }
-        }
-        TrackEnd(tr, p, dt - rem, ref lastKey);
-        PropSteps += steps;
     }
 
     /// <summary>틱 안 기록의 끝 열쇠틀 (그 때에 아직 없으면 — 사라짐 · 막음은 그 사건으로).</summary>

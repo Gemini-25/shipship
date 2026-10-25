@@ -17,6 +17,7 @@ public static partial class Program
         WindLaws();
         FrameLaws();
         TrackLaws();
+        PileLaws();
     }
 
     // 긴 방 (16m) 곁에 작은 방 — 가운데 겹을 끊으면 긴 방이 배 (몸 0 · 무거운 쪽) · 작은 방이 조각
@@ -512,6 +513,148 @@ public static partial class Program
                 worst <= 0.5 * dot && Math.Abs(pa1.Vx - want) <= 0.02 * want && Math.Abs(pa1.Vy) < 1e-3 && Math.Abs(pa1.W) < 1e-3 && bounces1 >= 2 && pb.Vx == 0 && pb.X > 2 && pb.X < 12
                 && pc.Asleep == 1 && Math.Abs(gap) <= dot,
                 $"겹침 {worst / dot:0.00}도트 · 무중력 상자 1틱 뒤 vx {pa1.Vx:0.000}/{want:0.000} · vy {pa1.Vy:0.0e0} · ω {pa1.W:0.000} · 튐 {bounces1} · 1g 상자 x {pb.X:0.000} vx {pb.Vx:0.###} · 붙어 선 상자 틈 {gap / dot:0.00}도트 · 잠 {pc.Asleep}");
+        }
+    }
+
+    // 공기 없는 20×10 방 (안쪽은 도면 x 2~22 · y 2~12 m) — 물체 60개
+    private const string WideRoom = "\n######################\n#....................#\n#....................#\n#....................#\n#....................#\n#....................#\n#....................#\n#....................#\n#....................#\n#....................#\n#....................#\n######################";
+
+    private static double Kinetic(Structure st)
+    {
+        double e = 0;
+        foreach (var p in st.Props) if (p.Kg > 0) e += 0.5 * p.Kg * (p.Vx * p.Vx + p.Vy * p.Vy) + 0.5 * p.Inertia * p.W * p.W;
+        return e;
+    }
+
+    /// <summary>물체 쌍 가운데 가장 깊은 겹침 (m — 껍질 SAT · 겹치지 않으면 0).</summary>
+    private static double WorstPairOverlap(Structure st, IEnumerable<int> ids)
+    {
+        var list = ids.Select(st.IndexOf).Where(i => i >= 0).Select(i => st.Props[i]).ToList();
+        double worst = 0;
+        for (int a = 0; a < list.Count; a++)
+            for (int b = a + 1; b < list.Count; b++) worst = Math.Max(worst, -st.PairSeparation(list[a], list[b]));
+        return worst;
+    }
+
+    /// <summary>
+    /// 물체끼리 (PH6a — docs/PHYSICS.md §3-5 · §10 법칙 6 · 8 · 9 · 12 · 14): 닫힌 무중력 방에서 서로 · 벽에 튀는 열 개 — 운동 에너지가 틱마다 늘지 않고 · 물체 + 벽이 받은 몫 = 처음 ·
+    /// 갈라진 배의 조각 바닥에서 상자가 상자에 부딪혀도 몸 + 물체 = 민 것 · 비스듬한 충격량 ω = (r × J)/I · 1코어 = 4코어 (60개) · 구석에 쌓이는 10개 왕복 · 섬 놓침 0.
+    /// </summary>
+    private static void PileLaws()
+    {
+        const double dot = DotForm.Dot;
+        string[] names = { "식량 상자", "소화기", "공구 상자", "수리 꾸러미", "책" };
+        // 법칙 8 · 6 (몸이 없는 배): 닫힌 무중력 · 공기 없는 방 — 열 개가 서로 · 벽에 튄다
+        {
+            var s = PropWorld(0, 4);
+            var st = s.Get<Structure>();
+            var rng = new Random(11);
+            for (int k = 0; k < 10; k++)
+            {
+                double a = rng.NextDouble() * 2 * Math.PI, v = 1 + 2 * rng.NextDouble();
+                Slide(s, names[k % names.Length], 3 + k % 5 * 2, 3.5 + k / 5 * 3, v * Math.Cos(a), v * Math.Sin(a), 4 * rng.NextDouble() - 2);
+            }
+            (double px, double py, double l) Book() { var (px, py, l) = st.PropMomentum(); return (px + st.ToHostPx, py + st.ToHostPy, l + st.ToHostL - st.FixL); }
+            var b0 = Book();
+            double e0 = Kinetic(st), prev = e0, rise = 0, worstP = 0, worstL = 0, scale = 0;
+            foreach (var p in st.Props) scale += p.Kg * Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy);
+            for (int k = 0; k < 20; k++)
+            {
+                s.Step();
+                double e = Kinetic(st);
+                rise = Math.Max(rise, e - prev); prev = e;
+                var b = Book();
+                worstP = Math.Max(worstP, Math.Sqrt((b.px - b0.px) * (b.px - b0.px) + (b.py - b0.py) * (b.py - b0.py))); worstL = Math.Max(worstL, Math.Abs(b.l - b0.l));
+            }
+            Check("물체끼리 — 에너지는 늘지 않는다 (법칙 8): 닫힌 무중력 · 공기 없는 방에서 물체 열 개가 서로 · 벽에 튄다 — 운동 에너지가 틱마다 줄기만 한다 · 물체끼리 충격량을 주고받았다",
+                rise <= 1e-12 * e0 && prev < e0 && st.PairHits > 0,
+                $"운동 에너지 {e0:0.00} → {prev:0.00}J · 틱 사이 가장 큰 늚 {rise:0.0e0}J · 물체끼리 {st.PairHits} · 튐 {st.Bounces}");
+            Check("물체끼리 — 운동량 장부 (법칙 6 · 몸이 없는 배): 물체 + 벽이 받은 몫 = 처음 (운동량 1e-9 · 각운동량은 + 바로잡음 FixL)",
+                worstP <= 1e-9 * scale && worstL <= 1e-9 * scale * 20, $"남는 운동량 {worstP:0.0e0} · 각운동량 {worstL:0.0e0} (운동량 크기 {scale:0.0}) · FixL {st.FixL:0.0e0}");
+        }
+        // 법칙 6 (몸 위): 갈라진 두 방 — 3m/s로 밀린 몸 1의 바닥에서 상자 둘이 미끄러져 (바닥이 빠져나간다) 앞 상자는 벽에 · 뒤 상자는 앞 상자에 부딪힌다 — 몸 + 물체 = 민 것 (1e-9)
+        {
+            var (s, st) = SplitWorld(Sealed, 6);
+            int right = st.BodyOf(s.Layout.Index(10, 3));
+            int front = Slide(s, "식량 상자", 9.7, 3.4, 0, 0), back = Slide(s, "식량 상자", 10.9, 3.5, 0, 0);
+            var e0 = WorldBook(st);
+            var o = st.Bodies[right];
+            double jx = o.Mass * 3, jy = o.Mass * 0.2, pushL = (o.X + 0.3) * jy - (o.Y - 0.2) * jx, scale = Math.Sqrt(jx * jx + jy * jy);
+            st.Push(right, o.X + 0.3, o.Y - 0.2, jx, jy);
+            double worstP = 0, worstL = 0;
+            for (int k = 0; k < 6; k++)
+            {
+                s.Step();
+                var e = WorldBook(st);
+                double ex = e.px - e0.px - jx, ey = e.py - e0.py - jy;
+                worstP = Math.Max(worstP, Math.Sqrt(ex * ex + ey * ey)); worstL = Math.Max(worstL, Math.Abs(e.l - e0.l - pushL));
+            }
+            var pf = st.Props[st.IndexOf(front)]; var pb = st.Props[st.IndexOf(back)];
+            Check("물체끼리 — 운동량 장부 (법칙 6 · 몸 위): 3m/s로 밀린 조각 바닥에서 미끄러진 상자 둘 — 앞 상자는 벽에 · 뒤 상자는 앞 상자에 부딪힌다 — 몸 + 물체 + 기체 = 민 것 (운동량 · 각운동량 1e-9)",
+                worstP <= 1e-9 * scale && worstL <= 1e-9 * scale * 20 && st.PairHits > 0 && st.PairSeparation(pf, pb) > -dot,
+                $"남는 운동량 {worstP:0.0e0} · 각운동량 {worstL:0.0e0} · 물체끼리 {st.PairHits} · 두 상자 사이 {st.PairSeparation(pf, pb) / dot:0.00}도트 · 앞 x {pf.X:0.000} · 뒤 x {pb.X:0.000}");
+        }
+        // 법칙 9 (비스듬): 무중력 · 공기 없는 방 — 45° 돈 가벼운 책의 모서리가 선 식량 상자의 서쪽 면을 가운데에서 0.15m 비켜 맞힌다 → 맞은 상자 Δω = (r × J)/I
+        // (J = 상자가 받은 m Δv · r = 맞은 점 (서쪽 면 · 책 모서리 줄) − 무게중심 · 한 점으로 맞고 책이 가벼워 맞는 동안 상자가 거의 돌지 않는다 · ±2%)
+        {
+            var s = PropWorld(0, 2);
+            var st = s.Get<Structure>();
+            int b = Slide(s, "식량 상자", 7.5, 5.0, 0, 0);
+            int a = Slide(s, "책", 6.6, 5.0, 3, 0);
+            { int i = st.IndexOf(a); var p = st.Props[i]; p.Th = Math.PI / 4; st.Props[i] = p; }
+            var pa0 = st.Props[st.IndexOf(a)]; var pb0 = st.Props[st.IndexOf(b)];
+            var fa = st.PropForm(pa0); var fb = st.PropForm(pb0);
+            double c = Math.Cos(pa0.Th), sn = Math.Sin(pa0.Th), tipX = double.MinValue, tipY = 0;
+            foreach (var (hx, hy) in fa.Hull) { double x = pa0.X + c * (hx - fa.Cx) - sn * (hy - fa.Cy), y = pa0.Y + sn * (hx - fa.Cx) + c * (hy - fa.Cy); if (x > tipX) { tipX = x; tipY = y; } }
+            { int i = st.IndexOf(a); var p = st.Props[i]; p.Y += 5.0 - 0.15 - tipY; st.Props[i] = p; }   // 모서리가 가운데에서 0.15m 위로 비켜 맞게
+            pa0 = st.Props[st.IndexOf(a)];
+            double face = pb0.X + fb.Hull.Min(v => v.x) - fb.Cx;
+            s.Run(1);   // 한 틱 (맞은 상자가 동쪽 벽에 닿기 전)
+            var pb = st.Props[st.IndexOf(b)];
+            double jx = pb.Kg * pb.Vx, jy = pb.Kg * pb.Vy, rx = face - pb0.X, ry = -0.15;
+            double want = (rx * jy - ry * jx) / pb.Inertia;
+            Check("물체끼리 — 비스듬한 충격량 (법칙 9): 45° 돈 책의 모서리가 3m/s로 선 식량 상자의 옆면을 가운데에서 0.15m 비켜 맞힌다 — 맞은 상자 ω = (r × J)/I (±2% — 맞는 동안 모서리가 면을 따라 조금 미끄러진다) · 앞으로 밀린다",
+                Math.Abs(pb.W - want) <= 0.02 * Math.Abs(want) && Math.Abs(want) > 0.01 && pb.Vx > 0.01 && st.PairHits > 0,
+                $"맞은 상자 ω {pb.W:0.00000}/{want:0.00000}rad/s · v ({pb.Vx:0.0000}, {pb.Vy:0.0000}) · r ({rx:0.000}, {ry:0.000})m · 책 {pa0.Kg:0.00}kg · 물체끼리 {st.PairHits}");
+        }
+        // 법칙 12 · 14: 1코어 = 4코어 — 60개가 0.1g 바닥에서 서로 · 벽에 튄다 (30틱) · 섬 놓침 0
+        {
+            (ulong hash, long pairs, long miss) Run(int threads)
+            {
+                int keep = Par.Threads; Par.Threads = threads;
+                var s = PropWorld(0.1f, 9, WideRoom);
+                var st = s.Get<Structure>();
+                var rng = new Random(5);
+                for (int k = 0; k < 60; k++)
+                {
+                    double a = rng.NextDouble() * 2 * Math.PI, v = 1 + 4 * rng.NextDouble();
+                    Slide(s, names[k % names.Length], 2.6 + k % 12 * 1.6, 2.7 + k / 12 * 1.9, v * Math.Cos(a), v * Math.Sin(a), 6 * rng.NextDouble() - 3);
+                }
+                s.Run(30);
+                Par.Threads = keep;
+                return (s.Hash(), st.PairHits, st.IslandMiss);
+            }
+            var one = Run(1); var four = Run(4);
+            Check("물체끼리 — 결정론 (법칙 12 · 14): 0.1g 바닥에서 서로 · 벽에 튀는 60개 (30틱) — 1코어 = 4코어 · 섬 놓침 0",
+                one.hash == four.hash && one.pairs > 50 && one.miss == 0 && four.miss == 0, $"{one.hash:x16} / {four.hash:x16} · 물체끼리 {one.pairs} · 섬 놓침 {one.miss}/{four.miss}");
+        }
+        // 법칙 12 · 14: 구석에 쌓이는 10개 — 무중력 바닥 · 몸이 없는 배가 비스듬히 0.6m/s² 점화 (틀의 힘이 +x +y 구석으로 민다) · 10틱 뒤 찍고 되살려 60틱 바이트 같음 · 섬 놓침 0 · 겹침 ≤ 1도트
+        {
+            var s = PropWorld(0, 3);
+            var st = s.Get<Structure>();
+            var ids = new List<int>();
+            for (int k = 0; k < 10; k++) ids.Add(Slide(s, names[k % names.Length], 6.5 + k % 4 * 1.3, 4.2 + k / 4 * 1.2, 0, 0));
+            st.ShipAx = -0.6; st.ShipAy = -0.6;
+            s.Run(10);
+            var r = new Sim(s.Setup); r.Load(s.Save());
+            r.Get<Structure>().ShipAx = st.ShipAx; r.Get<Structure>().ShipAy = st.ShipAy;
+            double worst = 0;
+            for (int k = 0; k < 60; k++) { s.Step(); r.Step(); if (k >= 50) worst = Math.Max(worst, WorstPairOverlap(st, ids)); }
+            bool same = s.Save().AsSpan().SequenceEqual(r.Save());
+            int awake = st.Props.Count(p => Structure.Awake(p));
+            Check("물체끼리 — 쌓인 중 왕복 (법칙 12 · 14): 몸이 없는 배가 비스듬히 점화해 무중력 바닥의 10개가 구석에 쌓인다 — 10틱 뒤 찍고 되살려 60틱 바이트 같음 · 섬 놓침 0 · 쌓인 것끼리 겹침 ≤ 1도트",
+                same && st.IslandMiss == 0 && worst <= dot && st.PairHits > 0 && awake == 10,
+                $"되살림 같음 {same} · 섬 놓침 {st.IslandMiss} · 마지막 10틱 가장 깊은 겹침 {worst / dot:0.00}도트 · 물체끼리 {st.PairHits} · 깨어 있음 {awake}");
         }
     }
 

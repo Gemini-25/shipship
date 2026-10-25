@@ -96,6 +96,41 @@ public static partial class Program
     }
 
     /// <summary>
+    /// 관찰 장면 '더미' (docs/PHYSICS.md PH6a · `Lab --scene pile`): 1g 마른 바닥 · 공기 없는 방 · 몸이 없는 배가 0.45g로 비스듬히 점화한다 —
+    /// 바닥 물건 열둘이 엔진 반대쪽 (남동) 구석으로 미끄러져 서로 부딪히고 · 밀고 · 돌며 쌓인다 (지나가지 않는다 · 겹침 ≤ 1도트) — 틱 0 (방 두 배) · 1 · 2 · 3 · 5 · 8 (남동 구석 네 배).
+    /// </summary>
+    private static void PileScene(string dir)
+    {
+        const string art = "\n##############\n#............#\n#............#\n#............#\n#............#\n#............#\n#............#\n##############";
+        var s = PropWorld(1, 4, art);
+        var st = s.Get<Structure>();
+        string[] names = { "식량 상자", "공구 상자", "수리 꾸러미", "소화기", "책", "식량 상자" };
+        var ids = new List<int>();
+        for (int k = 0; k < 12; k++) ids.Add(Slide(s, names[k % names.Length], 3.0 + k % 4 * 1.9, 2.9 + k / 4 * 1.6, 0, 0, 0));
+        for (int k = 0; k < ids.Count; k++) { int i = st.IndexOf(ids[k]); var p = st.Props[i]; p.Th = 0.4 * k; st.Props[i] = p; }
+        st.ShipAx = -0.45 * 9.8 * 0.8; st.ShipAy = -0.45 * 9.8 * 0.6;   // 엔진은 북서 — 바닥의 것은 남동으로 밀린다
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 2;
+        int[] at = { 0, 1, 2, 3, 5, 8 };
+        int fw = 14 * Painter.T * zoom, fh = 8 * Painter.T * zoom, gap = 6;
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 0;
+        double worst = 0;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k]) { s.Step(); done++; worst = Math.Max(worst, WorstPairOverlap(st, ids)); }
+            var img = k == 0 ? painter.Frame(s, 1, 1, 14, 8, done).Scale(zoom) : painter.Frame(s, 8, 5, 7, 4, done).Scale(2 * zoom);   // 처음 장은 방 · 뒤는 남동 구석 (네 배)
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            int awake = st.Props.Count(p => Structure.Awake(p));
+            Console.WriteLine($"  pile {done}틱: 깨어 있음 {awake} · 물체끼리 {st.PairHits} · 튐 {st.Bounces} · 가장 깊은 겹침 {WorstPairOverlap(st, ids) / DotForm.Dot:0.00}도트 · 섬 놓침 {st.IslandMiss}");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "pile.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  pile: {dir}/pile.png ({sheet.W}×{sheet.H}) — 0.45g 비스듬한 점화 · 물건 열둘이 남동 구석에 쌓인다 · 8틱 동안 가장 깊은 겹침 {worst / DotForm.Dot:0.00}도트");
+    }
+
+    /// <summary>
     /// props-breach 틀 (PH4c — 함장 장면 '부엌 감압'의 틀 · docs/PHYSICS.md §10): 부엌 외판에 0.5m² 구멍 — 바닥의 식량 상자 · 수리 꾸러미 · 공구 상자 · 컵 · 접시 · 책 · 소화기가
     /// 구멍 입 바람에 돌며 미끄러지고 · 구멍보다 큰 것은 빨려 붙어 막고 · 작은 것은 우주로 나간다. 감압 앞 한 장 + 첫 틱 · 둘째 · 넷째 틱 (틱 안 메움은 PH5).
     /// </summary>

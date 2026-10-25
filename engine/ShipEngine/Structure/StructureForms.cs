@@ -57,13 +57,15 @@ public sealed class DotForm
 /// <summary>
 /// 물체 셈이 꼴마다 쓰는 표본 (<see cref="DotForm.Shape"/> — 꼴의 순수 함수 · 한 번 세면 바꾸지 않는다: 여러 스레드가 함께 읽는다):
 /// 닿음 표본 (무게중심에서 — 껍질 꼭짓점 · 테두리 기둥 가운데) · 가장 먼 꼭짓점까지 (m) ·
-/// 바람 발자국 표본 (무게중심에서 — 기둥 가운데 · 꼴 가운데에서 대칭으로 2도트 걸러: 대칭 꼴은 표본도 대칭이다) · 겉 재질 (바닥에 닿은 기둥이 가장 많은 재질).
+/// 바람 발자국 표본 (무게중심에서 — 기둥 가운데 · 꼴 가운데에서 대칭으로 2도트 걸러: 대칭 꼴은 표본도 대칭이다) · 겉 재질 (바닥에 닿은 기둥이 가장 많은 재질) ·
+/// 껍질 (무게중심에서 · 넓이가 +인 차례 — 변 i는 꼭짓점 i → i+1) · 변마다 바깥 법선 (물체끼리 닿음 — 껍질이 셋 아래면 비었다).
 /// </summary>
 public sealed class PropShape
 {
     public readonly (double[] x, double[] y, double reach) Hit;
     public readonly double[] FootX, FootY;
     public readonly byte BaseMat;
+    public readonly double[] HullX, HullY, HullNx, HullNy;
 
     internal PropShape(DotForm fm)
     {
@@ -100,6 +102,21 @@ public sealed class PropShape
             if (++cnt[fm.Mat[i]] > (best < 0 ? 0 : cnt[best])) best = fm.Mat[i];
         }
         BaseMat = (byte)Math.Max(0, best);
+
+        int nh = fm.Hull.Length >= 3 ? fm.Hull.Length : 0;
+        HullX = new double[nh]; HullY = new double[nh]; HullNx = new double[nh]; HullNy = new double[nh];
+        double area = 0;
+        for (int i = 0; i < nh; i++) { var (x0, y0) = fm.Hull[i]; var (x1, y1) = fm.Hull[(i + 1) % nh]; area += x0 * y1 - x1 * y0; }
+        for (int i = 0; i < nh; i++)
+        {
+            int k = area >= 0 ? i : nh - 1 - i;
+            HullX[i] = fm.Hull[k].x - fm.Cx; HullY[i] = fm.Hull[k].y - fm.Cy;
+        }
+        for (int i = 0; i < nh; i++)
+        {
+            double dx = HullX[(i + 1) % nh] - HullX[i], dy = HullY[(i + 1) % nh] - HullY[i], l = Math.Sqrt(dx * dx + dy * dy);
+            if (l > 0) { HullNx[i] = dy / l; HullNy[i] = -dx / l; }
+        }
     }
 }
 

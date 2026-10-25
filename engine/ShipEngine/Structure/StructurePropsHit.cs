@@ -16,7 +16,7 @@ public sealed partial class Structure
     private struct PropContact
     {
         public double Rx, Ry, Nx, Ny, Sep, Mu, E, Kn, Kt, Target, Jn, Jt;
-        public int Cell;   // 닿은 도트의 칸 (구멍 벽인가 — PH4c)
+        public int Cell, Quad;   // 닿은 도트의 칸 (구멍 벽인가 — PH4c) · 표본 사분면 (따뜻한 시작 열쇠 — PH6a)
         public bool Bounce;
     }
 
@@ -242,7 +242,7 @@ public sealed partial class Structure
             double rx = c * sm.x[i] - s * sm.y[i], ry = s * sm.x[i] + c * sm.y[i], nx = bnx[q], ny = bny[q];
             var wall = T.Materials[bmat[q]].Def;
             double rn = rx * ny - ry * nx, rt = rx * nx + ry * ny;   // r × n · r × t (t = (−ny, nx))
-            _propHits[n++] = new PropContact { Rx = rx, Ry = ry, Nx = nx, Ny = ny, Sep = bestSep[q], Mu = Math.Sqrt(muObj * wall.Mu), E = Math.Min(restObj, wall.Rest), Cell = bcell[q],
+            _propHits[n++] = new PropContact { Rx = rx, Ry = ry, Nx = nx, Ny = ny, Sep = bestSep[q], Mu = Math.Sqrt(muObj * wall.Mu), E = Math.Min(restObj, wall.Rest), Cell = bcell[q], Quad = q,
                 Kn = 1 / m + rn * rn / I, Kt = 1 / m + rt * rt / I };   // 목표 (반발 · 다가옴)는 마찰 뒤 빠르기로 부르는 이가 정한다
         }
         return n;

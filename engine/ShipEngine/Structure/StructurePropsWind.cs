@@ -27,8 +27,8 @@ public sealed partial class Structure
     private readonly int[] _wc = new int[MaxWindCells];
     private readonly int[] _wn = new int[MaxWindCells];
     private readonly double[] _wsx = new double[MaxWindCells], _wsy = new double[MaxWindCells], _wrho = new double[MaxWindCells], _wux = new double[MaxWindCells], _wuy = new double[MaxWindCells];
-    /// <summary>셈 (찍지 않는다 — 보기용): 바람에 깬 것 · 우주로 · 막음.</summary>
-    public long PropWoken, PropSpaced, PropPlugged;
+    /// <summary>셈 (찍지 않는다 — 보기용): 바람에 깬 것 · 우주로 · 막음 · 물체끼리 충격량을 주고받은 짝 (잔걸음마다).</summary>
+    public long PropWoken, PropSpaced, PropPlugged, PairHits;
 
     /// <summary>꼴 발자국 표본 (무게중심에서 — 기둥 가운데 · 꼴 가운데에서 대칭으로 2도트 걸러) — 꼴에 한 번 세어 둔다 (<see cref="PropShape"/>).</summary>
     private static (double[] x, double[] y) FootOf(DotForm fm) => (fm.Shape.FootX, fm.Shape.FootY);
