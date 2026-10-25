@@ -72,11 +72,11 @@ public sealed partial class Life
         Grime[toilet] = Math.Min(1, Grime[toilet] + (stool > 0 ? 0.06f : 0.03f));
         if (Clogged[toilet] != 0)
         {
-            if (urine > 0) { F.AddStore(cell, T.sWater, urine); F.AddGas(cell, T.gNH3, urine * 1e-4, F.Temp(cell)); }   // 바닥이 젖고 지린내 (오줌의 요소가 풀린 암모니아)
+            int cause = sim.Causes.Add(CauseKind.Machine, "막힌 변기를 모르고 써서 넘쳤다", sim.Tick, cell, ClogCause[toilet]);
+            if (urine > 0) { F.AddStore(cell, T.sWater, urine, cause); F.AddGas(cell, T.gNH3, urine * 1e-4, F.Temp(cell)); }   // 바닥이 젖고 지린내 (오줌의 요소가 풀린 암모니아 · 고인 물의 원인 '넘쳤다')
             Bowl[toilet] += stool;
             Grime[toilet] = 1;
             Overflows++;
-            int cause = sim.Causes.Add(CauseKind.Machine, "막힌 변기를 모르고 써서 넘쳤다", sim.Tick, cell, ClogCause[toilet]);
             sim.Facts.Emit(sim.Tick, FactKind.Overflowed, cell, (float)urine, cause, actor: body, other: toilet);
             return true;
         }
@@ -130,12 +130,12 @@ public sealed partial class Life
     {
         bool bowel = b.Bowel > BowelMax;
         double urine = b.Bladder;
-        if (urine > 0) { F.AddStore(c, T.sWater, urine); b.Bladder = 0; }   // 바닥이 젖는다 (오줌의 물 — 고인 물 장부)
+        b.SoilCause = sim.Causes.Add(CauseKind.Biology, bowel ? "참지 못하고 옷에 지렸다 (장이 찼다)" : "참지 못하고 옷에 지렸다 (방광이 찼다)", sim.Tick, c);
+        if (urine > 0) { F.AddStore(c, T.sWater, urine, b.SoilCause); b.Bladder = 0; }   // 바닥이 젖는다 (오줌의 물 — 고인 물 장부 · 그 물의 원인)
         if (bowel) b.Bowel = 0;                                               // 대변은 옷에 (씻을 때 오수로)
         b.Dirt = Math.Min(1, b.Dirt + (bowel ? 0.6f : 0.3f));
         b.Wet = 1;
         Soilings++;
-        b.SoilCause = sim.Causes.Add(CauseKind.Biology, bowel ? "참지 못하고 옷에 지렸다 (장이 찼다)" : "참지 못하고 옷에 지렸다 (방광이 찼다)", sim.Tick, c);
         sim.Facts.Emit(sim.Tick, FactKind.Soiled, c, bowel ? 2 : 1, b.SoilCause, actor: id);
     }
 

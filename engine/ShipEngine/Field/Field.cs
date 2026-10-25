@@ -272,6 +272,17 @@ public sealed partial class Field : IEngine
 
     public void AddStore(int i, int s, double moles) { if (moles > 0) Store[s * Cells + i] += moles; }
 
+    /// <summary>
+    /// 고인 물에 원인을 단다 (5단 C8 — 위 층의 요청: 지림 · 넘침 · 샌 물관 · 봉함 · 불 끄기 물): 원인을 모르던 칸이거나 · 이번 물이 이미 고인 물보다 많으면 그 원인이 된다.
+    /// 퍼지면 이웃이 잇고 마르면 지운다 (<see cref="SpreadLiquids"/>). 물 밖의 저장은 원인을 달지 않는다.
+    /// </summary>
+    public void AddStore(int i, int s, double moles, int cause)
+    {
+        if (moles <= 0) return;
+        if (cause != 0 && s == T.sWater && (WetCause[i] == 0 || moles >= Store[s * Cells + i])) WetCause[i] = cause;
+        Store[s * Cells + i] += moles;
+    }
+
     public double TakeStore(int i, int s, double moles)
     {
         int k = s * Cells + i;

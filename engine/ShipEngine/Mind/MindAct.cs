@@ -370,8 +370,8 @@ public sealed partial class Mind
         else
             for (int k = 0; k < n; k++)
             {
-                if (_chem != null) _chem.Douse(fires[k], Extinguishant.Water, amount / n);
-                else F.AddStore(fires[k], T.sWater, amount / n);
+                if (_chem != null) _chem.Douse(fires[k], Extinguishant.Water, amount / n, c.GoalCause);   // 바닥에 고인 물의 원인 = 불을 끄러 온 까닭
+                else F.AddStore(fires[k], T.sWater, amount / n, c.GoalCause);
             }
         c.HoldCharge -= (float)amount;
         if (co2) Co2Sprayed += amount; else WaterSprayed += amount;

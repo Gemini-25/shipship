@@ -125,11 +125,11 @@ public sealed class Chemistry : IEngine
     /// 소화기를 이 칸에 뿜는다 (② (바) — ⑧이 요청): 물은 바닥 저장으로 (겉면을 식혀 끈다 — <see cref="Quench"/>) ·
     /// 이산화탄소는 −78℃(195K) 기체로 (산소 몰분율을 한계 산소 지수 아래로 밀어내 끈다 — 식히지는 못한다 · 남는 것이 없다).
     /// </summary>
-    public void Douse(int cell, Extinguishant kind, double mol)
+    public void Douse(int cell, Extinguishant kind, double mol, int cause = 0)
     {
         if (cell < 0 || cell >= Cells || mol <= 0) return;
         if (kind == Extinguishant.CO2) { F.AddGas(cell, T.gCO2, mol, 195); _jetNext[cell] += mol / Time.SecondsPerTick; }
-        else F.AddStore(cell, T.sWater, mol);
+        else F.AddStore(cell, T.sWater, mol, cause);   // 고인 물의 원인 = 뿌린 까닭 (5단 C8)
     }
 
     /// <summary>불붙는 기체가 이 칸에서 새어 나왔다 (⑥이 요청) — 그 방 칸 모두에 원인을 단다 (기체가 방에 고루 퍼진다).</summary>

@@ -804,7 +804,7 @@ public sealed partial class Network : IEngine
                 case "recycler":
                 {
                     // 봉함이 망가지면 오수 관이 샌다: 펌프가 돌면 압력으로 분에 0.5L(0.46몰/초) · 멈추면 스미는 만큼 (0.02몰/초)
-                    if (sealLeak) { double leak = Math.Min(WaterTank, (p > 0 && mechOk ? 0.46 : 0.02) * dt); WaterTank -= leak; F.AddStore(c, T.sWater, leak); sim.Book.Add(Res.Water, Flow.Leaked, -leak); }
+                    if (sealLeak) { double leak = Math.Min(WaterTank, (p > 0 && mechOk ? 0.46 : 0.02) * dt); WaterTank -= leak; F.AddStore(c, T.sWater, leak, SealLeakCause[d]); sim.Book.Add(Res.Water, Flow.Leaked, -leak); }
                     // 오수(오줌 · 씻은 물) → 증류 · 걸러 마실 물로 (ISS 물 회수 장치: 오줌 처리 약 85% + 소금물 처리 → 전체 94~98% — 여기는 94%) · 남은 진한 소금물은 버린다
                     if (p > 0 && mechOk && WasteWater > 0)
                     {
@@ -1184,9 +1184,10 @@ public sealed partial class Network : IEngine
             SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"{dev.Name} 오수 관이 샌다 — 바닥에 물이 고인다", sim.Tick, dev.Cell, cause);
     }
 
-    /// <summary>젖은 칸의 물이 어디서 왔나: 같은 방 6칸 안에서 새는 물 재생기 (원인 마디 · 0 모름).</summary>
+    /// <summary>젖은 칸의 물이 어디서 왔나: 그 칸 고인 물의 원인 (<see cref="Field.WetCause"/> — 5단 C8) · 모르면 같은 방 6칸 안에서 새는 물 재생기 (원인 마디 · 0 모름).</summary>
     public int SpillNear(int cell)
     {
+        if ((uint)cell < (uint)F.WetCause.Length && F.WetCause[cell] != 0) return F.WetCause[cell];
         int room = L.Room[cell], best = 0, bd = 7;
         foreach (var dev in Devices)
         {

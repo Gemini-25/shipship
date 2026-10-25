@@ -420,13 +420,15 @@ public static partial class Program
                 s.Get<Chemistry>().Ignite(floor[floor.Length / 2], 3e6, 0);
                 int hull = Enumerable.Range(0, f.Cells).First(i => f.L.Hull[i] && f.L.Y(i) == f.L.H / 2);
                 s.Get<Structure>().Impact(s, hull, 2e5, 1, 0, 0);
+                int spill = floor[floor.Length / 3];   // 원인이 있는 고인 물 (5단 C8) — 퍼지며 띠 경계를 넘는다
+                f.AddStore(spill, f.T.sWater, 1500, s.Causes.Add(CauseKind.Setup, "바닥에 물을 쏟았다", s.Tick, spill));
                 s.Run(400);
                 snap = s.Save();
                 Par.Threads = keep;
                 return s.Hash();
             }
             ulong one = Run(1, out var snap1), many = Run(Math.Max(4, Environment.ProcessorCount), out _);
-            Check("모든 엔진: 1코어 = 여러 코어 (불 · 충돌 · 감압 · 소리 · 빛 · 구조)", one == many, $"{one:x16} / {many:x16}");
+            Check("모든 엔진: 1코어 = 여러 코어 (불 · 충돌 · 감압 · 소리 · 빛 · 구조 · 고인 물 원인)", one == many, $"{one:x16} / {many:x16}");
             var b = new Sim(ShipWorld.Setup(Layout.Ship("Didim", Tables.Default), 9));
             b.Load(snap1);
             Check("모든 엔진: 되살린 세계의 지문이 같다", b.Hash() == one, $"{snap1.Length / 1024}KB");

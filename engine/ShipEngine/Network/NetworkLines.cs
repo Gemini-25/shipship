@@ -524,7 +524,7 @@ public sealed partial class Network
             {
                 double n = Math.Min(WaterTank, LeakFlow(c, LineKind.Water) * dt);
                 WaterTank -= n; WaterLeaked += n; sim.Book.Add(Res.Water, Flow.Leaked, -n);
-                if (F.Severed[c] == 0) F.AddStore(c, T.sWater, n);
+                if (F.Severed[c] == 0) F.AddStore(c, T.sWater, n, LineCause[c * 3 + (int)LineKind.Water]);   // 고인 물의 원인 = 그 관이 샌 원인 (5단 C8)
             }
         }
     }

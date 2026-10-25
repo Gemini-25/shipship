@@ -58,9 +58,10 @@ public sealed partial class Network
         }
     }
 
-    /// <summary>그 칸을 적신 까닭: 그 방에서 샌 물관 · 물 재생기 (없으면 0).</summary>
+    /// <summary>그 칸을 적신 까닭: 그 칸 고인 물의 원인 (5단 C8) · 모르면 그 방에서 샌 물관 (없으면 0).</summary>
     private int WetCauseAt(int c)
     {
+        if (F.WetCause[c] != 0) return F.WetCause[c];
         int room = _lineRoom[c];
         foreach (int x in _leakCells) if (_lineRoom[x] == room && PipeLeak[x * 2 + 1] > 0 && LineCause[x * 3 + 2] != 0) return LineCause[x * 3 + 2];
         return 0;
