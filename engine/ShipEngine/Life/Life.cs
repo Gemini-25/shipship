@@ -240,6 +240,26 @@ public sealed partial class Life : IEngine
         sim.Facts.Emit(sim.Tick, FactKind.Hurt, b.Cell, blunt, cause, actor: body);
     }
 
+    /// <summary>날아든 물체에 맞아 다치는 에너지 (J — 이보다 약하면 닿기만 했다).</summary>
+    public const double HitHurtJ = 20;
+
+    /// <summary>
+    /// ④ 물체 맞음 장부를 읽는다 (5틱마다 — 사람 꼬리표 = 몸 번호): 20J 넘으면 타박 E/800 (많아야 1.5) · 날카로우면 피 E/4000 — 원인은 그 맞음 (민 것까지 이어진다).
+    /// 읽은 것은 지운다 (로봇 꼬리표는 ⑥ 몫으로 남긴다).
+    /// </summary>
+    private void TakeHits(Sim sim, Structure st)
+    {
+        var hits = st.PropHits;
+        int n = 0;
+        for (int k = 0; k < hits.Count; k++)
+        {
+            var h = hits[k];
+            if (h.Tag < 0) { hits[n++] = h; continue; }
+            if (h.Tag < Bodies.Count && h.E >= HitHurtJ) Strike(sim, h.Tag, (float)Math.Min(1.5, h.E / 800), h.Sharp != 0 ? h.E / 4000 : 0, h.Cause);
+        }
+        hits.RemoveRange(n, hits.Count - n);
+    }
+
     /// <summary>⑫ 데었다 (⑫ 일하다 뜨거운 관에 — 세상의 확률): 화상 · 아픔 — 원인 마디.</summary>
     public void Scald(Sim sim, int body, float burn, int cause)
     {
@@ -271,6 +291,7 @@ public sealed partial class Life : IEngine
         _flames.Clear();
         if (chem != null && chem.BurningCount > 0)
             for (int i = 0; i < L.N; i++) if (chem.Burning[i] != 0 && chem.Hrr[i] > 0) _flames.Add(i);
+        if (st != null && st.PropHits.Count > 0) TakeHits(sim, st);
         var span = CollectionsMarshal.AsSpan(Bodies);
         for (int b = 0; b < span.Length; b++)
         {

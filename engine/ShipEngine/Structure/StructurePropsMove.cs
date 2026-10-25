@@ -81,7 +81,7 @@ public sealed partial class Structure
         if (!any) return;
         BuildClearance();
         for (int i = 0; i < all.Length; i++)
-            if (Awake(all[i])) StepProp(ref all[i], dt);   // 잔걸음 동안 목록은 그대로다 (더하고 빼는 요청은 틱 밖)
+            if (Awake(all[i])) StepProp(sim, ref all[i], dt);   // 잔걸음 동안 목록은 그대로다 (더하고 빼는 요청은 틱 밖 · 맞음은 장부에만 더한다)
     }
 
     /// <summary>
@@ -89,7 +89,7 @@ public sealed partial class Structure
     /// 닿을 것이 없으면 마찰의 정확한 걸음 (x += v h + ½ a h² · 서는 걸음은 v²/2a에서 멈춘다) · 있으면 마찰 빠르기 → 충격량 → 자리 → 바로잡음.
     /// 빠르기 1mm/s · 각속도 0.01rad/s 아래가 0.5초 이어지면 잔다 (빠르기 0 · 놓임).
     /// </summary>
-    private void StepProp(ref Prop p, double dt)
+    private void StepProp(Sim sim, ref Prop p, double dt)
     {
         if (p.Kg <= 0) FillBody(ref p);
         var fm = PropForm(p);
@@ -97,13 +97,36 @@ public sealed partial class Structure
         var mat = T.Materials[Math.Min(p.Mat, T.Materials.Count - 1)].Def;
         double m = p.Kg, I = p.Inertia, rho = fm.Rho, rem = dt;
         int steps = 0;
+        // 맞힐 수 있는 이 (⑧이 알린 원판 — 이번 틱에 닿을 만한 것 · 많아야 4): 틱 처음에 이미 닿아 있던 이는 새로 맞힌 것이 아니다
+        Span<int> near = stackalloc int[4];
+        Span<bool> touching = stackalloc bool[4];
+        int nNear = 0;
+        if (_nActors > 0)
+        {
+            double far = (Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy) + Math.Abs(p.W) * sm.reach) * dt + sm.reach + ActorR;
+            for (int a = 0; a < _nActors && nNear < near.Length; a++)
+            {
+                int ac = _actors[a].Cell;
+                if (ac < 0 || ac >= L.N) continue;
+                double ax = L.X(ac) + 0.5 - p.X, ay = L.Y(ac) + 0.5 - p.Y;
+                if (ax * ax + ay * ay > far * far) continue;
+                near[nNear] = a; touching[nNear] = TouchesActor(p, sm, _actors[a]); nNear++;
+            }
+        }
         while (rem > 1e-12)
         {
             int c = CellOf(p);
             double gp = c >= 0 ? Gravity * F.Grav[c] : 0;   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
             double muK = c >= 0 ? mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1) : 0;   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
             double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
-            double room = ClearAt(c) - sm.reach, ell = Math.Max(2 * DotForm.Dot, room), h = rem;
+            double room = ClearAt(c) - sm.reach, gap = room, h = rem;
+            for (int k = 0; k < nNear; k++)   // 원판도 건너뛰지 않게 (닿을 만큼만 간다)
+            {
+                int ac = _actors[near[k]].Cell;
+                double ax = L.X(ac) + 0.5 - p.X, ay = L.Y(ac) + 0.5 - p.Y;
+                gap = Math.Min(gap, Math.Sqrt(ax * ax + ay * ay) - sm.reach - _actors[near[k]].R);
+            }
+            double ell = Math.Max(2 * DotForm.Dot, gap);
             if (speed > 0) h = Math.Min(h, ell / speed);
             if (w > 0) h = Math.Min(h, MaxPropTurn / w);
             if (speed > 0 && gp > 0 && muK > 0) h = Math.Min(h, MaxPropH);
@@ -131,12 +154,43 @@ public sealed partial class Structure
             // 장부: 바닥 · 벽 · 가구가 받은 몫 (몸이 없는 배에 준 몫 — 몸 고른 가속은 PH4d)
             ToHostPx -= m * p.Vx - px0; ToHostPy -= m * p.Vy - py0; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - l0;
             if (nc > 0) FixOverlap(ref p, nc);
+            for (int k = 0; k < nNear; k++)
+            {
+                bool now = TouchesActor(p, sm, _actors[near[k]]);
+                if (now && !touching[k]) ActorHit(sim, p, _actors[near[k]]);
+                touching[k] = now;
+            }
             rem -= h;
             bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0;
             p.Still = still ? p.Still + (float)h : 0;
             if (p.Still >= SleepSec) { p.Vx = p.Vy = p.W = 0; p.State = 0; p.Asleep = 1; p.Still = 0; p.Since = _now; break; }
         }
         PropSteps += steps;
+    }
+
+    /// <summary>물체 몸이 그 원판에 닿았나 (가운데 · 껍질 꼭짓점 · 테두리 표본 가운데 하나가 원판 안).</summary>
+    private bool TouchesActor(in Prop p, (double[] x, double[] y, double reach) sm, in PropActor a)
+    {
+        double ax = L.X(a.Cell) + 0.5, ay = L.Y(a.Cell) + 0.5, r2 = a.R * a.R;
+        if ((p.X - ax) * (p.X - ax) + (p.Y - ay) * (p.Y - ay) < r2) return true;
+        double cs = Math.Cos(p.Th), sn = Math.Sin(p.Th);
+        for (int k = 0; k < sm.x.Length; k++)
+        {
+            double x = p.X + cs * sm.x[k] - sn * sm.y[k] - ax, y = p.Y + sn * sm.x[k] + cs * sm.y[k] - ay;
+            if (x * x + y * y < r2) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 물체가 원판에 새로 닿았다 → 맞음 장부 (꼬리표 · 그 칸 · ½mv² · 질량 · 빠르기 · 원인 — 0.5m/s 넘게 부딪으면 '날아든 …에 맞았다' 마디를 민 원인에 잇는다).
+    /// 원판은 아직 물체를 밀어내지 않는다 (원판 충격량은 PH6b) — 맞음만 적는다.
+    /// </summary>
+    private void ActorHit(Sim sim, in Prop p, in PropActor a)
+    {
+        double v2 = p.Vx * p.Vx + p.Vy * p.Vy, speed = Math.Sqrt(v2);
+        int cause = speed > BounceV ? sim.Causes.Add(CauseKind.Impact, $"날아든 {PropName(p)}에 맞았다", sim.Tick, a.Cell, p.Cause) : p.Cause;
+        PropHits.Add(new PropHit { Tag = a.Tag, Cell = a.Cell, E = (float)(0.5 * p.Kg * v2), Kg = p.Kg, Speed = (float)speed, Cause = cause, Tick = sim.Tick });
     }
 
     /// <summary>

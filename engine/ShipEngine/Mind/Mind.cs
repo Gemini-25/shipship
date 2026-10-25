@@ -508,7 +508,7 @@ public sealed partial class Mind : IEngine
         RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
         t = Lap("준비:물건", t);
-        if (Agents.Count == 0) { HoldDoorsByItems(); ApplyPlugs(); return; }
+        if (Agents.Count == 0) { ApplyPlugs(); PutActors(); return; }
         F.RebuildNow();
         t = Lap("준비:장 다시", t);
         IndexBodies();
@@ -552,6 +552,26 @@ public sealed partial class Mind : IEngine
         FeudStep(sim);     // 판단 이관 (다): 편들기 · 말리기 · 덤비기 · 주먹 · 헤어지기 · 몰래 방해
         SecretStep(sim);   // 판단 이관 (라): 털어놓기 · 숨기기 · 둘러대기 · 들은 말 · 기록 묻기
         GatherStep(sim);   // 판단 이관 (가): 부르기 · 말하기 · 미루기 (사회가 같은 틱에 결과를 계산한다)
+        PutActors();
+    }
+
+    private PropActor[] _actorBuf = new PropActor[16];
+
+    /// <summary>④에 산 몸을 원판으로 알린다 (Mind.Step 끝 — 사람 몸 번호 · 칸 · 누웠나): 날아든 물체가 맞힐 수 있는 이 (같은 틱에 ④가 읽는다 · 걷는 길은 PH6b).</summary>
+    private void PutActors()
+    {
+        if (_st == null) return;
+        int n = 0;
+        if (_life != null)
+            for (int b = 0; b < _life.Bodies.Count; b++)
+            {
+                ref var body = ref _life[b];
+                if (body.Alive == 0 || body.Cell < 0) continue;
+                if (n == _actorBuf.Length) Array.Resize(ref _actorBuf, n * 2);
+                byte low = (byte)(body.Conscious == 0 || body.Asleep != 0 ? 1 : 0);
+                _actorBuf[n++] = new PropActor { Tag = b, Cell = body.Cell, R = Structure.ActorR, Kg = (float)PersonKg, H = low != 0 ? 0.4f : 1.7f, Low = low };
+            }
+        _st.SetActors(_actorBuf.AsSpan(0, n));
     }
 
     /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.
@@ -587,7 +607,6 @@ public sealed partial class Mind : IEngine
         }
         if (_life != null) foreach (var b in _life.Bodies) Hold(b.Cell);
         foreach (var a in Agents) if (!a.IsPerson) Hold(a.C.Cell);
-        HoldDoorsByItems();
     }
 
     /// <summary>움직일 수 있나: 사람은 살아 있고 의식이 있고 깨어 있어야 · 로봇은 멀쩡하고 전지가 있어야.</summary>

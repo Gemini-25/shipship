@@ -2,7 +2,7 @@ using ShipEngine;
 
 namespace Lab;
 
-/// <summary>④ 구조 — 날아가는 물건: 감압 돌풍에 밀리고 · 문틀에 끼어 문이 안 닫히고 · 구멍 밖 우주로 (설계서 '파편' 사슬). docs/DEPTH.md</summary>
+/// <summary>④ 구조 — 날아가는 물건: 감압 돌풍에 밀리고 · 닫히는 문짝에 물려 문이 안 닫히고 · 구멍 밖 우주로 (설계서 '파편' 사슬). docs/DEPTH.md · PHYSICS.md</summary>
 public static partial class Program
 {
     /// <summary>왼쪽 화물칸(외판 x=0) · 문 D · 오른쪽 통로.</summary>
@@ -23,7 +23,7 @@ public static partial class Program
 
         // ── 화물칸 외판에 1m² 구멍: 통로 문 곁 식량 상자(13kg)가 돌풍에 밀려 열린 문틀에 끼어 닫으라는 명령에도 문이 안 닫히고 (상자가 없으면 닫힌다) ·
         //    구멍 곁 수리 꾸러미는 구멍 밖 우주로 날아가 장부에 '우주로' (장부가 맞는다) ──
-        (bool jam, float open, string story, int crateCell, bool kitGone, double kitBook, double kitOther, long spaced) Run(bool crate)
+        (bool jam, float open, string story, int crateCell, bool kitGone, double kitBook, double kitOther, long spaced, float target) Run(bool crate)
         {
             var s = Worlds.Full(lay, 1);
             var m = s.Get<Mind>(); var st = s.Get<Structure>(); var f = s.Get<Field>(); var w = s.Get<Work>();
@@ -43,12 +43,12 @@ public static partial class Program
             }
             int crateCell = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0)).Cell;
             return (st.DoorJam[door] != 0, f.DoorOpen[door], s.Causes.Story(st.DamageCause[At(6, 2)]), crateCell, !Worlds.Items(s).Any(x => x.Item == kit),
-                s.Book.OfItem(kit, Flow.Spaced), w.Other(s, Book.Bulk + kit), m.Spaced);
+                s.Book.OfItem(kit, Flow.Spaced), w.Other(s, Book.Bulk + kit), m.Spaced, st.DoorTarget[door]);
         }
         var with = Run(true); var without = Run(false);
-        Check("파편 사슬: 화물칸 외판에 1m² 구멍 — 통로 문 곁 식량 상자(13kg)가 돌풍에 밀려 문틀에 끼어 닫으라는 명령에도 문이 안 닫힌다 (상자가 없으면 닫힌다) · 원인 사슬은 파편까지",
-            with.jam && with.open >= 0.5f && with.crateCell == At(6, 2) && with.story.Contains("파편") && with.story.Contains("식량 상자") && !without.jam && without.open < 0.1f,
-            $"상자 있음: 끼임 {with.jam} · 문 {with.open:0.0} · 상자 {(with.crateCell == At(6, 2) ? "문틀" : with.crateCell.ToString())} · \"{with.story}\" / 상자 없음: 문 {without.open:0.0}");
+        Check("파편 사슬: 화물칸 외판에 1m² 구멍 — 통로 문 곁 식량 상자(13kg)가 돌풍에 밀려 문 칸에 들고 · 닫히는 문짝에 물려 문을 끼운다 (닫으라는 목표는 그대로 · 상자가 없으면 닫힌다) · 원인 사슬은 파편까지",
+            with.jam && with.open >= 0.5f && with.target == 0 && with.crateCell == At(6, 2) && with.story.Contains("파편") && with.story.Contains("식량 상자") && with.story.Contains("문짝에 물려") && !without.jam && without.open < 0.1f,
+            $"상자 있음: 끼임 {with.jam} · 문 {with.open:0.0} · 목표 {with.target:0.0} · 상자 {(with.crateCell == At(6, 2) ? "문틀" : with.crateCell.ToString())} · \"{with.story}\" / 상자 없음: 문 {without.open:0.0}");
         Check("구멍 곁 수리 꾸러미(4kg)는 구멍 밖 우주로 날아가 장부에 '우주로' — 장부가 맞는다",
             with.kitGone && with.spaced >= 1 && Math.Abs(with.kitBook + 1) < 1e-9 && Math.Abs(with.kitOther) < 1e-9,
             $"꾸러미 사라짐 {with.kitGone} · 장부 '우주로' {with.kitBook} · 장부 어긋남 {with.kitOther:0e0}");

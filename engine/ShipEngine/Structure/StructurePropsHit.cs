@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>
-/// ④ 물체 닿음 — 정적 틀 (docs/PHYSICS.md §3-5 · PH4a): 벽 · 문 칸은 남은 25cm 잔칸 상자 (구멍은 실제 틈) · 닫힌 문은 벽 · 열린 문 칸은 양옆 12.5cm 기둥 ·
+/// ④ 물체 닿음 — 정적 틀 (docs/PHYSICS.md §3-5 · PH4a): 벽 · 문 칸은 남은 25cm 잔칸 상자 (구멍은 실제 틈) · 닫힌 문은 벽 · 열린 문 칸은 양옆 12.5cm 기둥 (PH4b: 닫혀 오는 문짝 판도) ·
 /// 제자리 가구는 그 꼴의 기둥 (높이 겹침 없이 기둥만 — 높이는 PH7). 모두 도트 (1/32m) 격자 위라 한 도트가 막혔나로 묻는다.
 /// 닿음은 물체 껍질 꼭짓점 · 테두리 표본이 이번 잔걸음에 갈 길을 도트마다 따라가 본다 (투기적 닿음 — 빠른 것도 잔칸을 건너뛰지 않는다) ·
 /// 법선은 잔칸 면 · 가구 기둥은 8이웃의 빈 쪽 기울기 · 사분면마다 가장 가까운 점 (많아야 4). 풀이는 순차 충격량 (법선 jn ≥ 0 · 쿨롱 |jt| ≤ μ jn ·
@@ -95,9 +95,14 @@ public sealed partial class Structure
             case CellKind.Wall:
                 return (Sub[c] >> ((sy >> 3) * SubN + (sx >> 3)) & 1) != 0;
             case CellKind.Door:
-                if (!F.DoorPassable(L.DoorAt[c])) return (Sub[c] >> ((sy >> 3) * SubN + (sx >> 3)) & 1) != 0;   // 닫힌 문은 벽
+            {
+                float open = F.DoorOpen[L.DoorAt[c]];
                 int axis = DoorAxis(c);
-                return axis == 1 ? sx < 4 || sx >= 28 : axis == 2 && (sy < 4 || sy >= 28);   // 열린 문: 양옆 기둥 12.5cm
+                if (open <= 0 || axis == 0 && !F.DoorPassable(L.DoorAt[c])) return (Sub[c] >> ((sy >> 3) * SubN + (sx >> 3)) & 1) != 0;   // 닫힌 문은 벽
+                if (axis == 0) return false;
+                int along = axis == 1 ? sx : sy;
+                return along < 4 || along >= 28 || along < 4 + (1 - open) * 24;   // 열린 문: 양옆 기둥 12.5cm · 닫혀 오는 문짝 판 (낮은 쪽 기둥에서 — 끝 = 4 + (1 − 열림) × 24도트)
+            }
             case CellKind.Floor:
             {
                 int fu = L.FurnitureAt[c];

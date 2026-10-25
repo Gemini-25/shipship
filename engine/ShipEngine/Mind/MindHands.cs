@@ -143,12 +143,12 @@ public sealed partial class Mind
         Add(GoalKind.Gather, pick.Id, book.CellOf(pick), assigned && pick.Id == c.AssignedTarget ? 1.2f : a.IsPerson ? 0.6f * c.Consc : 0.8f);
     }
 
-    /// <summary>바닥에 놓인 그 물체의 칸 (④ 물체 장부에서 쓸 때마다 읽는다 — 없거나 · 물건이 아니거나 · 구멍을 막았으면 −1).</summary>
+    /// <summary>바닥에 놓인 그 물체의 칸 (④ 물체 장부에서 쓸 때마다 읽는다 — 없거나 · 물건이 아니거나 · 구멍을 막았거나 · 문틀에 끼었으면 −1).</summary>
     private int LooseCell(int id)
     {
         var book = _st!;
         int i = book.IndexOf(id);
-        return i < 0 || book.Props[i].Kind != 0 || book.Props[i].PlugAt != 0 ? -1 : book.CellOf(book.Props[i]);
+        return i < 0 || book.Props[i].Kind != 0 || book.Props[i].PlugAt != 0 || book.Props[i].State == 7 ? -1 : book.CellOf(book.Props[i]);
     }
 
     /// <summary>

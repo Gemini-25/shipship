@@ -2,13 +2,13 @@ namespace ShipEngine;
 
 /// <summary>
 /// ④ 날아가는 물건 (docs/DEPTH.md · ENGINE.md 파편 사슬): 바닥에 놓인 물건은 감압 바람의 끌림힘 ½ρv²CdA가 마찰 μmg를 넘으면 바람 쪽으로 미끄러진다.
-/// 큰 물건(10kg 이상)은 열린 문틀에 걸려 문이 안 닫히고(끼인 문 — 주컴퓨터 · 로봇이 바로잡으며 치운다) · 사람 칸에 들어가면 부딪혀 다치고 · 구멍 밖으로 나가면 우주로 (장부 '우주로').
-/// 놓인 물건은 ④ 구조의 물체 장부에 있다 (PH3a) — 미끄러지는 셈은 아직 여기서 (다리 · PH4가 걷는다) 장(바람)을 읽고 칸 옮김 · 막음 · 문을 구조에 요청한다 — 아래 층은 위를 모른다.
+/// 문 칸에 든 물건은 닫히는 문짝이 붙든다 (④ 문 — 10kg 넘으면 끼인 문 · 주컴퓨터 · 로봇이 바로잡으며 치운다) · 사람 칸에 들어가면 맞음 장부에 적혀 ⑦이 다친다 · 구멍 밖으로 나가면 우주로 (장부 '우주로').
+/// 놓인 물건은 ④ 구조의 물체 장부에 있다 (PH3a) — 미끄러지는 셈은 아직 여기서 (다리 · PH4가 걷는다) 장(바람)을 읽고 칸 옮김 · 막음 · 맞음을 구조에 요청한다 — 아래 층은 위를 모른다.
 /// </summary>
 public sealed partial class Mind
 {
     public const double ItemCd = 1.2, ItemMu = 0.3, WetMu = 0.1, Gravity = 9.8, ItemDensity = 500;   // 젖은 바닥 마찰 0.1 // 상자 끌림 계수 · 금속 바닥 마찰 · 물건은 속이 찬 상자(500kg/m³)로 본다
-    public const double JamKg = 10;                                       // 이보다 무거운 것은 문틀에 걸린다
+    public const double JamKg = 10;                                       // 이보다 무거운 짐을 든 이는 잘 넘어진다
     public long Flung, Spaced, ItemHits;
 
     private void Fling(Sim sim, double dt)
@@ -24,7 +24,7 @@ public sealed partial class Mind
             if (it.Kind != 0) continue;
             int c = _st.CellOf(it), id = it.Id;
             byte item = (byte)it.What;
-            if (c < 0 || c >= L.N || L.Kind[c] == CellKind.Door && _st.DoorJam[L.DoorAt[c]] != 0) continue; // 문틀에 걸린 것은 거기 있다
+            if (c < 0 || c >= L.N || it.State == 7) continue; // 문틀에 낀 것은 거기 있다
             if (it.PlugAt != 0)
             {
                 // ③ 구멍에 빨려 붙은 물건: 구멍을 덧대거나 기압이 빠지면 (누르는 힘이 무게보다 작아지면) 떨어진다
@@ -92,59 +92,23 @@ public sealed partial class Mind
                 }
                 if (kind == CellKind.Wall || L.FurnitureAt[j] >= 0) break; // 벽 · 설비에 부딪혀 멈춘다
                 if (kind == CellKind.Door && F.DoorOpen[L.DoorAt[j]] < 0.5f) break; // 닫힌 문에 막힌다
-                cell = j; _st.MoveItemCell(id, j); Flung++;
-                // 사람에 부딪힌다: 운동 에너지 ½mv² — 200J에 가벼운 타박 0.25
+                cell = j; _st.MoveItemCell(id, j, cause); Flung++;
+                // 사람에 부딪힌다: 운동 에너지 ½mv² — ④ 맞음 장부에 적고 ⑦이 5틱마다 읽는다 (200J에 가벼운 타박 0.25)
                 if (_life != null)
                     for (int b = 0; b < _life.Bodies.Count; b++)
                         if (_life[b].Cell == j && _life[b].Alive != 0)
                         {
                             double e = 0.5 * kg * speed * speed;
-                            if (e < 20) continue;
+                            if (e < Life.HitHurtJ) continue;
                             int hc = sim.Causes.Add(ck, $"{by} {ItemNames[item]}에 맞았다", sim.Tick, j, cause);
-                            _life.Strike(sim, b, (float)Math.Min(1.5, e / 800), 0, hc); ItemHits++;
+                            _st.AddPropHit(sim.Tick, b, j, e, kg, speed, hc); ItemHits++;
                         }
-                // 큰 것은 열린 문틀에 걸린다 → 문이 안 닫힌다 (구조에 '끼였다'를 요청)
-                if (kind == CellKind.Door && kg >= JamKg)
-                {
-                    int d = L.DoorAt[j];
-                    int jc = sim.Causes.Add(ck, $"{by} {Ko.I(ItemNames[item])} 문틀에 끼었다", sim.Tick, j, cause);
-                    _st.JamDoor(sim, d, jc);
-                    break;
-                }
             }
         }
     }
 
     /// <summary>물건 무게 (kg — 데이터 표).</summary>
     public double ItemKg(int item) => P.Items.TryGetValue(ItemNames[item], out var d) ? d.Kg : 2;
-
-    /// <summary>문 칸에 걸린 물건이 있으면 문이 닫히지 않는다 (몸처럼).</summary>
-    private void HoldDoorsByItems()
-    {
-        if (_st == null) return;
-        foreach (var x in _st.Props)
-        {
-            if (x.Kind != 0) continue;
-            int xc = _st.CellOf(x);
-            if (xc < 0 || L.Kind[xc] != CellKind.Door) continue;
-            int d = L.DoorAt[xc];
-            if (_st.DoorTarget[d] < 0.5f && _st.DoorJam[d] == 0) _st.RequestDoor(d, 1);
-        }
-    }
-
-    /// <summary>문틀을 바로잡을 때 거기 걸린 물건을 옆 바닥으로 치운다.</summary>
-    internal void ClearDoorItems(int doorCell)
-    {
-        if (_st == null) return;
-        Span<int> nb = stackalloc int[4];
-        L.Neighbors(doorCell, nb);
-        int floor = -1;
-        foreach (int j in nb) if (j >= 0 && L.IsSpace(j) && L.Kind[j] == CellKind.Floor && F.Pressure(j) >= F.Pressure(doorCell) - 1) { floor = j; break; }
-        if (floor < 0) foreach (int j in nb) if (j >= 0 && L.IsSpace(j) && L.Kind[j] == CellKind.Floor) { floor = j; break; }
-        if (floor < 0) return;
-        var props = _st.Props;
-        for (int k = 0; k < props.Count; k++) if (props[k].Kind == 0 && _st.CellOf(props[k]) == doorCell) _st.MoveItemCell(props[k].Id, floor);
-    }
 
     /// <summary>그 칸 바람의 원인 (구역이 새는 틈을 낸 원인).</summary>
     private int WindCause(int c)

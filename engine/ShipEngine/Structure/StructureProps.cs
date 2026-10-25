@@ -58,6 +58,15 @@ public struct PropHit
     public long Tick;
 }
 
+/// <summary>물체가 맞힐 수 있는 이 (⑧이 틱마다 알린다 — 열어 보지 않는 꼬리표의 원판: 사람이면 ⑦ 몸 번호 · 로봇이면 −1−로봇 번호 · 칸 · 반지름 · 무게 · 키 · 누웠나).</summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct PropActor
+{
+    public int Tag, Cell;
+    public float R, Kg, H;
+    public byte Low;
+}
+
 /// <summary>
 /// ④ 물체 장부 (docs/PHYSICS.md PH3a): 바닥에 놓인 물건은 구조에 있다 (마음이 쥐던 목록을 옮겼다 — 차례는 놓은 차례 그대로).
 /// 놓기 · 집기 · 칸 옮김 · 막음은 위 엔진의 요청이다 — 바람 · 점화 · 덜컹임에 미끄러지는 셈은 아직 ⑧의 다리가 같은 자리에서 하고 칸 옮김만 여기에 요청한다 (PH4가 걷는다).
@@ -138,14 +147,15 @@ public sealed partial class Structure
         foreach (var p in Props) if (p.Kind == 0 && CellOf(p) == cell) yield return p.Id;
     }
 
-    /// <summary>요청 (⑧ 다리 — 미끄러짐 · 날림 · 문틀 치우기): 물건을 그 칸 가운데로 옮긴다 · 칸 −1이면 구멍 밖 우주로 (목록에서 뺀다).</summary>
-    public void MoveItemCell(int id, int cell)
+    /// <summary>요청 (⑧ 다리 — 미끄러짐 · 날림): 물건을 그 칸 가운데로 옮긴다 (민 원인 — 0이면 그대로) · 칸 −1이면 구멍 밖 우주로 (목록에서 뺀다).</summary>
+    public void MoveItemCell(int id, int cell, int cause = 0)
     {
         int i = IndexOf(id);
         if (i < 0) return;
         if (cell < 0) { Props.RemoveAt(i); return; }
         var p = Props[i];
         p.X = L.X(cell) + 0.5; p.Y = L.Y(cell) + 0.5;
+        if (cause != 0) p.Cause = cause;
         Props[i] = p;
     }
 
@@ -157,6 +167,149 @@ public sealed partial class Structure
         var p = Props[i];
         p.PlugAt = plugAt; p.State = (byte)(plugAt != 0 ? 6 : 0);
         Props[i] = p;
+    }
+
+    // ───────────────────────── 맞힐 수 있는 이 · 맞음 장부 (PH4b) ─────────────────────────
+
+    private PropActor[] _actors = new PropActor[16];   // 찍지 않는다 — ⑧이 틱마다 ④보다 먼저 쓴다
+    private int _nActors;
+    public const float ActorR = 0.25f;
+
+    /// <summary>요청 (⑧ Mind.Step 끝): 이번 틱 물체가 맞힐 수 있는 이들 (같은 틱에 ④가 읽는다 — 찍지 않는다 · ④는 꼬리표를 열어 보지 않는다).</summary>
+    public void SetActors(ReadOnlySpan<PropActor> actors)
+    {
+        if (_actors.Length < actors.Length) _actors = new PropActor[actors.Length * 2];
+        actors.CopyTo(_actors);
+        _nActors = actors.Length;
+    }
+
+    /// <summary>요청 (⑧ 다리 — 칸으로 옮기는 날림 · PH4d가 걷는다): 물체가 그 꼬리표를 맞혔다 (에너지 J · 빠르기 · 원인) — ⑦ · ⑥이 읽는다.</summary>
+    public void AddPropHit(long tick, int tag, int cell, double e, double kg, double speed, int cause) =>
+        PropHits.Add(new PropHit { Tag = tag, Cell = cell, E = (float)e, Kg = (float)kg, Speed = (float)speed, Cause = cause, Tick = tick });
+
+    /// <summary>물체의 이름 (물건 표 — 원인 글).</summary>
+    public string PropName(in Prop p)
+    {
+        _itemNames ??= T.People.Items.Keys.ToArray();
+        return p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
+    }
+
+    // ───────────────────────── 문짝 (PH4b — §3-6) ─────────────────────────
+
+    public const double DoorJamKg = 10, LeafForce = 150;   // 이보다 무거운 것이 물리면 문이 낀다 · 문짝 판이 미는 힘 (N)
+
+    /// <summary>
+    /// 문 칸의 문짝 줄: 미는 축 (true면 x — 좌우가 벽 · 남북으로 지난다) · 문짝이 들어오는 쪽 끝 (기둥 안쪽 · m) · 문틈 폭 · 문짝 띠 (칸 — 다른 축).
+    /// 문짝은 낮은 쪽 기둥에서 나와 높은 쪽 기둥까지 닫힌다 — 끝 = 낮은 끝 + (1 − 열림) × 폭.
+    /// </summary>
+    private (bool alongX, double lo, double w, double band) Leaf(int door)
+    {
+        int c = L.Doors[door].Cell, axis = DoorAxis(c);
+        bool alongX = axis == 1 || axis == 0 && L.Doors[door].Vertical;
+        return (alongX, (alongX ? L.X(c) : L.Y(c)) + 4 * DotForm.Dot, 24 * DotForm.Dot, alongX ? L.Y(c) : L.X(c));
+    }
+
+    /// <summary>
+    /// 문짝이 닫혀 갈 수 있는 끝 (0 닫힘 ~ 1 열림): 문 칸 띠에 몸이 든 물체마다 문짝 쪽 끝에서 멈춘다 — 가장 일찍 막는 것이 붙든 물체 (같으면 작은 Id).
+    /// 찍힌 상태로만 센다 (꼴 표본 — 껍질 꼭짓점 · 테두리).
+    /// </summary>
+    private float LeafFloor(int door, out int heldBy)
+    {
+        heldBy = -1;
+        if (Props.Count == 0) return 0;
+        var (alongX, lo, w, band) = Leaf(door);
+        int c = L.Doors[door].Cell;
+        double mx = L.X(c) + 0.5, my = L.Y(c) + 0.5;
+        float floor = 0;
+        foreach (var p in Props)
+        {
+            if (p.State == 5 || Math.Abs(p.X - mx) > 2 || Math.Abs(p.Y - my) > 2) continue;
+            var sm = SamplesOf(PropForm(p));
+            if (Math.Abs(p.X - mx) > 0.5 + sm.reach || Math.Abs(p.Y - my) > 0.5 + sm.reach) continue;
+            double cs = Math.Cos(p.Th), sn = Math.Sin(p.Th), a = double.MaxValue;
+            for (int k = 0; k < sm.x.Length; k++)
+            {
+                double x = p.X + cs * sm.x[k] - sn * sm.y[k], y = p.Y + sn * sm.x[k] + cs * sm.y[k];
+                double along = alongX ? x : y, across = alongX ? y : x;
+                if (across < band || across >= band + 1) continue;
+                a = Math.Min(a, along);
+            }
+            if (a == double.MaxValue) continue;
+            float need = (float)Math.Clamp(1 - (a - lo) / w, 0, 1);
+            if (need > floor) { floor = need; heldBy = p.Id; }
+        }
+        return floor;
+    }
+
+    /// <summary>그 문의 닫히는 문짝을 붙든 물체 (Id — 문 칸 띠에 든 것 가운데 가장 일찍 막는 것 · 없으면 −1). ⑧ · ⑩이 보이면 안다.</summary>
+    public int DoorHeldBy(int door)
+    {
+        float f = LeafFloor(door, out int id);
+        return f > 0 ? id : -1;
+    }
+
+    /// <summary>
+    /// 닫히는 문짝이 물체에 닿았다 (구조 걸음 — 문): 10kg 넘으면 문이 낀다 (물체는 문틀에 낌 · 원인 '문틀에 끼었다') ·
+    /// 가벼우면 문짝 판이 문 줄 밖으로 밀어낸다 (물체 가운데가 있는 쪽 — 그 몸이 띠를 벗어나 마찰로 설 만큼 · 150N × 틱 넘게는 못 민다).
+    /// </summary>
+    private void LeafHit(Sim sim, int door, int id, double dt)
+    {
+        int i = IndexOf(id);
+        if (i < 0) return;
+        var p = Props[i];
+        if (p.Kg <= 0) FillBody(ref p);
+        int c = L.Doors[door].Cell;
+        if (p.Kg > DoorJamKg)
+        {
+            p.State = 7; p.Vx = p.Vy = p.W = 0; p.Still = 0; p.Since = _now;
+            Props[i] = p;
+            int jc = sim.Causes.Add(CauseKind.Machine, $"{Ko.I(PropName(p))} 닫히는 문짝에 물려 문틀에 끼었다", sim.Tick, c, p.Cause);
+            JamDoor(sim, door, jc);
+            return;
+        }
+        var (alongX, _, _, band) = Leaf(door);
+        var sm = SamplesOf(PropForm(p));
+        double cs = Math.Cos(p.Th), sn = Math.Sin(p.Th), lo = double.MaxValue, hi = double.MinValue;
+        for (int k = 0; k < sm.x.Length; k++)
+        {
+            double across = alongX ? p.Y + sn * sm.x[k] + cs * sm.y[k] : p.X + cs * sm.x[k] - sn * sm.y[k];
+            lo = Math.Min(lo, across); hi = Math.Max(hi, across);
+        }
+        double mid = alongX ? p.Y : p.X;
+        int dir = mid >= band + 0.5 ? 1 : -1;
+        double d = (dir > 0 ? band + 1 - lo : hi - band) + DotForm.Dot;   // 띠를 벗어날 만큼
+        int cell = CellOf(p);
+        double g = cell >= 0 ? Gravity * F.Grav[cell] : 0;
+        double mu = T.Materials[Math.Min(p.Mat, T.Materials.Count - 1)].Def.Mu * (cell >= 0 && F.Stored(T.sWater, cell) > WetMol ? WetShare : 1);
+        double need = g * mu > 0 ? Math.Sqrt(2 * mu * g * d) : d / dt, now = (alongX ? p.Vy : p.Vx) * dir;
+        double j = Math.Min(LeafForce * dt, p.Kg * Math.Max(0, need - now));
+        Props[i] = p;
+        if (j > 0) Shove(id, alongX ? 0 : j * dir, alongX ? j * dir : 0);
+    }
+
+    /// <summary>요청 (끼인 문을 바로잡는 이): 문틀에 걸린 물체를 옆 바닥 칸 가운데로 치운다 (놓임 — 그 문 칸에 든 것은 기압이 낮지 않은 옆 바닥으로 · 걸친 것은 제 칸 가운데로).</summary>
+    public void ClearDoorProps(int door, long tick)
+    {
+        int dc = L.Doors[door].Cell;
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(dc, nb);
+        int floor = -1;
+        foreach (int j in nb) if (j >= 0 && L.IsSpace(j) && L.Kind[j] == CellKind.Floor && F.Pressure(j) >= F.Pressure(dc) - 1) { floor = j; break; }
+        if (floor < 0) foreach (int j in nb) if (j >= 0 && L.IsSpace(j) && L.Kind[j] == CellKind.Floor) { floor = j; break; }
+        var (alongX, _, _, band) = Leaf(door);
+        double mx = L.X(dc) + 0.5, my = L.Y(dc) + 0.5;
+        for (int k = 0; k < Props.Count; k++)
+        {
+            var p = Props[k];
+            if (p.State is 5 or 6 || Math.Abs(p.X - mx) > 1.5 || Math.Abs(p.Y - my) > 1.5) continue;
+            int pc = CellOf(p);
+            bool inDoor = pc == dc, held = p.State == 7;
+            if (!inDoor && !held) continue;
+            int to = inDoor ? floor : pc;
+            if (to < 0) continue;
+            p.X = L.X(to) + 0.5; p.Y = L.Y(to) + 0.5; p.Vx = p.Vy = p.W = 0; p.State = 0; p.Still = 0; p.Since = tick;
+            Props[k] = p;
+        }
     }
 
     private void SaveProps(StateWriter w)

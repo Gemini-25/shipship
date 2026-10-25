@@ -14,6 +14,7 @@ namespace ShipEngine;
 /// <para>
 /// <b>문</b>: 위층(사람 · 장치 · 주컴퓨터)은 목표만 정한다 (<see cref="RequestDoor"/>). 문은 초당 0.5만큼 움직이고,
 /// 압력 차를 거슬러 열지 못한다 (손으로 2kPa · 전동 30kPa) · 끼인 문은 움직이지 않는다. 문이 정격을 넘는 압력 차를 받으면 날아가거나 끼인다.
+/// 닫히는 문짝 판은 문 칸에 든 물체에서 멈춘다 (목표는 그대로 — 10kg 넘으면 끼고 · 가벼우면 밀어낸다 · <see cref="DoorHeldBy"/>).
 /// </para>
 /// 장(③)에는 구멍 · 문의 열림만 요청한다 (Field.SetHole · SetDoor).
 /// </summary>
@@ -444,8 +445,14 @@ public sealed partial class Structure : IEngine
                     continue;
                 }
             }
-            float step = (float)(0.5 * dt);
-            F.SetDoor(d, target > now ? Math.Min(target, now + step) : Math.Max(target, now - step));
+            float step = (float)(0.5 * dt), next = target > now ? Math.Min(target, now + step) : Math.Max(target, now - step);
+            // 닫히는 문짝 판은 물체에서 멈춘다 (PH4b — 목표는 그대로 · 무거우면 끼고 가벼우면 밀어낸다)
+            if (next < now && Props.Count > 0)
+            {
+                float floor = LeafFloor(d, out int held);
+                if (next < floor) { F.SetDoor(d, Math.Min(now, floor)); LeafHit(sim, d, held, dt); continue; }
+            }
+            F.SetDoor(d, next);
         }
     }
 

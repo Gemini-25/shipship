@@ -179,7 +179,7 @@ public sealed partial class ShipMind
     private int PropCell(int id)
     {
         int i = _st?.IndexOf(id) ?? -1;
-        return i < 0 || _st!.Props[i].Kind != 0 || _st.Props[i].PlugAt != 0 ? -1 : _st.CellOf(_st.Props[i]);
+        return i < 0 || _st!.Props[i].Kind != 0 || _st.Props[i].PlugAt != 0 || _st.Props[i].State == 7 ? -1 : _st.CellOf(_st.Props[i]);   // 문틀에 낀 것은 문을 바로잡아야 나온다
     }
 
     public List<JobFail> JobFails = new();
