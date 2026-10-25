@@ -46,6 +46,15 @@ public static partial class Program
 
     internal static HandOrder Order(HandKind k, int cell, byte size = 1, int obj = 0, float x = 0, float y = 0, byte part = 0) => new() { Kind = k, Cell = cell, Size = size, Obj = obj, X = x, Y = y, Part = part };
 
+    /// <summary>열여섯 갈래의 손 하나씩 (H2 갈래마다 · H4).</summary>
+    internal static HandOrder[] HandOrders(HandTarget aim) => new[]
+    {
+        Order(HandKind.Fire, aim.Bed), Order(HandKind.Hole, aim.Hull), Order(HandKind.PowerCut, aim.Power), Order(HandKind.DataCut, aim.Data),
+        Order(HandKind.Fault, aim.O2Gen, part: (byte)ShipEngine.Part.Seal), Order(HandKind.Gravity, -1), Order(HandKind.WaterLeak, aim.Water), Order(HandKind.CoolantLeak, aim.Coolant, 2),
+        Order(HandKind.DoorJam, aim.Door), Order(HandKind.O2Drift, -1), Order(HandKind.Blast, aim.Bed, 2), Order(HandKind.Shove, -1, obj: aim.Prop, x: 6, y: 0),
+        Order(HandKind.Rock, aim.Hull, 2), Order(HandKind.Cloud, aim.Hull), Order(HandKind.Flare, -1), Order(HandKind.Route, -1, obj: 8),
+    };
+
     /// <summary>디딤호 · 6명 · 로봇 2 (게임 띄우기와 같은 차림 — 항해에 나선다).</summary>
     internal static Sim HandShip(ulong seed)
     {
@@ -98,6 +107,22 @@ public static partial class Program
             bool same = a.Save().AsSpan().SequenceEqual(b.Save());
             Check("함장의 손 H2: 저장 왕복 — 기다리는 손 둘이 있는 채 찍고 되살려 둘 다 150틱: 찍기 바이트가 같다 · 그 틱에 같은 불붙음 사실 (기다리는 손 · 한 손 장부 · 차례를 찍는다)",
                 waiting && same && Lit(a) == t0 && Lit(b) == t0, $"되살린 기다리는 손 {waiting} · 바이트 같음 {same} · 불붙음 {Lit(a)}/{Lit(b)} (손 받은 다음 틱 {t0})");
+        }
+        // H2 (갈래마다): 기다리는 손 하나씩 — 한 틱 걸은 산 세계에 받아 두고 찍어 되살려 둘 다 60틱: 찍기 바이트가 같다
+        // (산 세계에만 있고 찍지 않는 값으로 손을 셈하는 갈래가 없다 — 고치기 전: 별 폭발이 ⑤의 '지난 틱'을 읽어 되살린 세계에서는 0부터 셌다)
+        {
+            var bad = new List<string>(); int applied = 0, n = 0;
+            foreach (var o in HandOrders(aim))
+            {
+                var a = base0.Clone(); a.Step();   // 엔진마다 제 틱 값이 찬 산 세계
+                a.Get<Hand>().Enqueue(o);
+                var b = a.Clone();
+                a.Run(60); b.Run(60); n++;
+                if (a.Get<Hand>().Done.Count == 1 && a.Get<Hand>().Done[0].Cause != 0) applied++; else bad.Add($"{o.Kind} 헛손");
+                if (!a.Save().AsSpan().SequenceEqual(b.Save())) bad.Add($"{o.Kind} 다름");
+            }
+            Check("함장의 손 H2 (갈래마다): 저장 왕복 — 열여섯 갈래를 하나씩 한 틱 걸은 산 세계에 받아 두고 찍어 되살려 둘 다 60틱: 찍기 바이트가 같다 (손은 찍은 값으로만 셈한다)",
+                bad.Count == 0 && applied == n, $"일어남 {applied}/{n} · 어긋남 {bad.Count} {string.Join(" | ", bad.Take(4))}");
         }
         // H3: 다시보기 = 산 세계 — 첫 손 앞에서 찍은 것을 되살려 그 틱에 손을 먹이면 같은 틱까지 바이트가 같다 (먹이지 않으면 다르다)
         {
@@ -155,13 +180,7 @@ public static partial class Program
         {
             byte[] Bytes(IState e) { var w = new StateWriter(1 << 16); e.Save(w); return w.ToArray(); }
             var bad = new List<string>(); int applied = 0;
-            var orders = new[]
-            {
-                Order(HandKind.Fire, aim.Bed), Order(HandKind.Hole, aim.Hull), Order(HandKind.PowerCut, aim.Power), Order(HandKind.DataCut, aim.Data),
-                Order(HandKind.Fault, aim.O2Gen, part: (byte)ShipEngine.Part.Seal), Order(HandKind.Gravity, -1), Order(HandKind.WaterLeak, aim.Water), Order(HandKind.CoolantLeak, aim.Coolant, 2),
-                Order(HandKind.DoorJam, aim.Door), Order(HandKind.O2Drift, -1), Order(HandKind.Blast, aim.Bed, 2), Order(HandKind.Shove, -1, obj: aim.Prop, x: 6, y: 0),
-                Order(HandKind.Rock, aim.Hull, 2), Order(HandKind.Cloud, aim.Hull), Order(HandKind.Flare, -1), Order(HandKind.Route, -1, obj: 8),
-            };
+            var orders = HandOrders(aim);
             foreach (var o in orders)
             {
                 var s = base0.Clone(); var twin = base0.Clone();

@@ -298,7 +298,7 @@ public sealed class Hand : IEngine
                 outside!.AddCloud("rubble", d.Speed * CloudMinutes * 60 + CloudRadius, CloudRadius, 2e-7 * CloudThick[size], dx, dy, cause);   // 14분 앞 — 센서 안 · 대피 문턱 안
                 break;
             }
-            case HandKind.Flare: outside!.ScheduleFlare(1, cause, FlareScale[size]); break;
+            case HandKind.Flare: outside!.ScheduleFlare(sim.Tick, 1, cause, FlareScale[size]); break;
             case HandKind.Route:
             {
                 long due = DepartDue(outside!);

@@ -143,7 +143,7 @@ public static partial class Program
             s.Run(5);
             double calm = o.CalmDose, near = 1 / Math.Max(0.05, o.Distance * o.Distance);
             double scale = 3 * (calm + 0.05) / Math.Max(1e-9, o.StarDef.FlareDose * near);   // 꼭대기가 문턱의 세 배 — 폭풍 한가운데쯤 문턱 밑으로
-            o.ScheduleFlare(1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick), scale);
+            o.ScheduleFlare(s.Tick, 1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick), scale);
             long low = -1, off = -1, end = -1; bool was = false, high = false;
             for (int k = 0; k < Time.Hours(12) && (off < 0 || end < 0); k++)
             {

@@ -149,12 +149,12 @@ public sealed partial class Outside : IEngine
         return a * (1 - e * Math.Cos(ecc));
     }
 
-    /// <summary>별 폭발을 놓는다 (시험): minutes 뒤 조짐 · scale은 세기 배율 (이 폭발이 끝나면 1로).</summary>
-    public void ScheduleFlare(double minutes, int cause, double scale = 1) { FlareWarnAt = -1; FlareStart = -1; FlareScale = scale; ScheduleAt(Time.Minutes(minutes + StarDef.WarnMin), cause); }
+    /// <summary>
+    /// 별 폭발을 놓는다 (시험 · 함장의 손): 지금 틱 now에서 minutes 뒤 조짐 · scale은 세기 배율 (이 폭발이 끝나면 1로).
+    /// 지금 틱은 부르는 쪽이 넘긴다 — 예전엔 ⑤가 지난 틱에 적어 둔 값(찍지 않는다)을 읽어, 되살린 세계의 첫 틱에 받은 손은 0부터 셌다 (U1·U2·U3 검토).
+    /// </summary>
+    public void ScheduleFlare(long now, double minutes, int cause, double scale = 1) { FlareWarnAt = -1; FlareStart = -1; FlareScale = scale; NextFlare = now + Time.Minutes(minutes + StarDef.WarnMin); FlareCause = cause; }
     public double FlareScale = 1;
-
-    private long _nowTick;
-    private void ScheduleAt(long ticksFromNow, int cause) { NextFlare = _nowTick + ticksFromNow; FlareCause = cause; }
 
     public void Land(string planet, long tick) { Planet = planet; PlanetSince = tick; }
     public void Launch() { Planet = null; }
@@ -163,7 +163,6 @@ public sealed partial class Outside : IEngine
 
     public void Step(Sim sim, double dt)
     {
-        _nowTick = sim.Tick;
         SunAngle += SunDrift;
         if (VoyageTicks > 0 && Planet == null)
         {

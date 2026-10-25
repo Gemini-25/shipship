@@ -22,7 +22,7 @@ public sealed partial class LiveShow
     private Overlay _showBeforeArm; private bool _armedLines;
     private double _hoverX = double.NaN, _hoverY;
     private readonly List<(int cell, double at)> _handRings = new();
-    private int _handSeen;   // 산 세계 한 손 장부에서 본 수 (헛손 알림)
+    private int _handSeenSeq;   // 산 세계 한 손 장부에서 본 마지막 차례 (헛손 알림 — 개수로 세면 장부가 가득 찬 뒤로는 늘지 않는다)
 
     public static readonly string[] HandSizeNames = { "작게", "보통", "크게" };
 
@@ -234,10 +234,13 @@ public sealed partial class LiveShow
     {
         var h = LiveHandEngine;
         if (h == null) return;
-        if (_handSeen > h.Done.Count) _handSeen = h.Done.Count;
-        for (int i = _handSeen; i < h.Done.Count; i++)
+        int last = h.Done.Count > 0 ? h.Done[^1].Seq : 0;
+        if (_handSeenSeq > last) _handSeenSeq = last;   // 다른 세계 (차례가 거꾸로 갔다)
+        int i = h.Done.Count;
+        while (i > 0 && h.Done[i - 1].Seq > _handSeenSeq) i--;   // 장부는 차례가 오르는 줄 — 본 것 다음부터
+        for (; i < h.Done.Count; i++)
             if (h.Done[i].Cause == 0) Notify($"그사이 대상이 바뀌어 일으키지 못했다 — {HandName(h.Done[i].Kind)}", 4, PanelKind.Hand);
-        _handSeen = h.Done.Count;
+        _handSeenSeq = last;
     }
 
     /// <summary>세계 위 손 표 (누른 칸 고리 0.5초 · 기다리는 손 점).</summary>

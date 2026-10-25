@@ -227,5 +227,19 @@ public static partial class Program
         Check("화면 R9 사고 판: 겨눔 이름표의 되고 안 됨이 손의 판정과 같다 ('외판 칸을 누른다' · '외판 구멍 · 보통 — …') · 안 되는 칸을 누르면 알림만 (겨눔 그대로) · 되는 칸을 한 번 누르면 받아 두고 겨눔이 풀린다 · 선 갈래는 겹쳐 보기 '선과 관' · 그만두면 예전 것 (열)으로",
             armed && preview && miss && hit && lines && still && back && chips,
             $"겨눔 {armed} · 미리 보기 {preview} ('{f1.Aim.Why}' / '{f2.Aim.Label}') · 안 되는 칸 {miss} · 한 번 {hit} · 선과 관 {lines}/{still} → 되돌림 {back} · 기다리는 손 {f3.HandWaiting}");
+        // 헛손 알림은 한 손 장부가 가득 (256) 찬 뒤에도 나온다 (고치기 전: 화면이 장부의 개수로 세어 가득 찬 뒤로는 다시 나오지 않았다)
+        {
+            var h = show.Sim.Get<Hand>();
+            void Settle() { for (int i = 0; i < 200 && h.Waiting.Count > 0; i++) show.Advance(1); show.Advance(1); }   // 받아 둔 손이 일어나고 화면이 장부를 본다
+            Settle();
+            for (int k = h.Done.Count; k < Hand.Keep; k++) h.Done.Add(new HandOrder { Kind = HandKind.O2Drift, Seq = ++h.Seq, Cause = 1 });   // 시험 차림: 장부가 가득 (일어난 손)
+            Settle();
+            h.Enqueue(Order(HandKind.Hole, aim.Bed));   // 외판이 아닌 칸 — 헛손 (화면을 거치지 않고 받아 둔다)
+            Settle();
+            bool full = h.Done.Count == Hand.Keep && h.Done[^1].Kind == HandKind.Hole && h.Done[^1].Cause == 0;
+            string note = show.Notice;
+            Check("화면 R9 헛손 알림: 한 손 장부가 가득 (256) 찬 뒤에도 받은 뒤 일으키지 못한 손은 알림으로 나온다 (화면이 장부를 차례로 본다)",
+                full && note.StartsWith("그사이 대상이 바뀌어"), $"장부 {h.Done.Count} · 마지막이 헛손 {full} · 알림 '{note}'");
+        }
     }
 }

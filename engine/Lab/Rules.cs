@@ -230,7 +230,7 @@ public static partial class Program
             var s4 = ShipWorld.Create("Salpim", 3);
             var o4 = s4.Get<Outside>(); var f4 = s4.Get<Field>();
             o4.Star = "redDwarf";
-            o4.ScheduleFlare(5, 0);
+            o4.ScheduleFlare(s4.Tick, 5, 0);
             s4.Run(Time.Minutes(25));
             var floor = Enumerable.Range(0, f4.Cells).Where(i => f4.L.Kind[i] == CellKind.Floor).ToList();
             double hi = floor.Max(i => o4.Dose[i]), lo = floor.Min(i => o4.Dose[i]);
@@ -425,7 +425,7 @@ public static partial class Program
             // 방사선: 폭발 때 바깥쪽 칸이 안쪽보다 많이 맞는다
             var s7 = ShipWorld.Create("Salpim", 2);
             var o7 = s7.Get<Outside>(); var f7 = s7.Get<Field>(); var l7 = s7.Get<Life>();
-            o7.Star = "blue"; o7.ScheduleFlare(1, 0);
+            o7.Star = "blue"; o7.ScheduleFlare(s7.Tick, 1, 0);
             var floor = Enumerable.Range(0, f7.Cells).Where(i => f7.L.Kind[i] == CellKind.Floor && f7.L.FurnitureAt[i] < 0).ToList();
             s7.Run(Time.Minutes(50));
             int outer = floor.OrderByDescending(i => o7.Dose[i]).First(), inner = floor.OrderBy(i => o7.Dose[i]).First();

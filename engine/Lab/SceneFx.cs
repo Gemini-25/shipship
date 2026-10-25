@@ -92,7 +92,7 @@ public static partial class Program
             var s = ShipWorld.Crewed("Didim", 3, 4, 2);
             s.Run(Time.Hours(9));
             var L = s.Layout; var o = s.Get<Outside>(); var p = new Painter(L);
-            o.ScheduleFlare(0, Cause(s, "별 폭발 (장면 차리기)"), 3);
+            o.ScheduleFlare(s.Tick, 0, Cause(s, "별 폭발 (장면 차리기)"), 3);
             long until = s.Tick + Time.Hours(3);
             while (s.Tick < until && o.Dose.Max() < 50) s.Run(25);
             int hot = Enumerable.Range(0, L.N).Where(c => L.IsSpace(c)).OrderByDescending(c => o.Dose[c]).First();

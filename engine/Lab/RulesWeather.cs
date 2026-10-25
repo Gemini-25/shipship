@@ -65,7 +65,7 @@ public static partial class Program
             foreach (int p in new[] { a, b }) { soc.TrustComputer[p] = 0.9f; m[p].C.Diligent = 0.8f; }
             int prop = s.Layout.DoorAt[At(19, 2)];
             f.SetDoor(prop, 1); s.Get<Structure>().RequestDoor(prop, 1);
-            o.ScheduleFlare(1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick));
+            o.ScheduleFlare(s.Tick, 1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick));
             for (int k = 0; k < Time.Minutes(8); k++) s.Step();
             int want = -1; double low = double.MaxValue;
             for (int r = 0; r < s.Layout.Rooms.Count; r++) { double mean = s.Layout.Rooms[r].Cells.Average(c => (double)o.Dose[c]); if (mean < low) { low = mean; want = r; } }

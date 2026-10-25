@@ -72,7 +72,7 @@ public static partial class Program
                 m.AddPerson(s, Worlds.At(lay, 3, 1));
                 s.Run(5);
                 if (broken) foreach (var d in net.Devices) if (d.Type == "SensorArray") net.Broken[d.Id * 4 + (int)Part.Electric] = 1;
-                o.ScheduleFlare(1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick));
+                o.ScheduleFlare(s.Tick, 1, s.Causes.Add(CauseKind.Setup, "별의 표면이 끓어오르기 시작했다", s.Tick));
                 long before = 0;
                 for (int k = 0; k < Time.Minutes(60); k++) { s.Step(); if (o.FlareStart < 0) before = sm.Shelters; }
                 return (before, sm.Shelters, o.FlareStart >= 0 || o.Flares > 0);
