@@ -92,5 +92,39 @@ public static partial class Program
                 jr != null && jr.Count == Mind.JudgedKeep && Mind.JudgedKeep == 32 && judged >= 32 && jr.Newest(0).Tick == w.Tick + 39, $"일지 {jr?.Count} · 탭 줄 {judged}");
         }
         show.DetailBack();
+
+        // ── D2 로봇: 다리가 상한 로봇 — 다리 막대 · 원인 사슬 · 맡은 사건 · 막힘 까닭 · 주컴퓨터 말 기록의 그 로봇 줄 ──
+        {
+            var net = w.Get<Network>(); var cm = w.Get<ShipMind>();
+            var r = mind.Agents.First(x => !x.IsPerson && x.C.Kind == AgentKind.Robot && x.C.Mech >= 0 && x.C.Mech < net.Robots.Count);
+            int root = w.Causes.Add(CauseKind.Captain, "함장이 일으킨 밀어 던지기 — 공구 상자", w.Tick);
+            int legCause = w.Causes.Add(CauseKind.Impact, "날아온 공구 상자에 로봇 다리가 꺾였다", w.Tick, r.C.Cell, root);
+            var rb = net.Robots[r.C.Mech]; rb.Legs = 1; rb.LegsCause = legCause; net.Robots[r.C.Mech] = rb;
+            var mess = L.Rooms.First(x => x.Type == "Mess");
+            cm.Incidents.Add(new Incident { Id = 9001, Kind = IncidentKind.Fire, Active = 1, Room = mess.Id, Cell = mess.Cells[0], Subject = -1, Since = w.Tick, RobotA = r.Id, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, Snag = SnagKind.NoLegs, SnagGoal = GoalKind.FightFire, SnagCell = r.C.Cell });
+            r.C.Snag = SnagKind.NoLegs; r.C.SnagTick = w.Tick; r.C.SnagCell = r.C.Cell;
+            (cm.Notes ??= new Ring<ComputerNote>(512)).Add(new ComputerNote { Tick = w.Tick, Kind = NoteKind.Assign, Robot = r.Id, Incident = 9001, Text = $"{mind.NameOf(r.Id)} → 식당 불 (가장 가까운 로봇)" });
+            show.OpenDetail(DetailKind.Robot, r.Id);
+            var bad = new List<string>();
+            bool Has(PanelRow[] rows, string t) => rows.Any(x => x.Main.Contains(t) || x.Sub.Contains(t));
+            var body = DetailOf(show, 0);
+            bool legBar = body.Any(x => x.Bars?.Any(b => b.Name == "다리" && b.Value < 0.01f && b.Level == 2) == true);
+            if (!legBar || !Has(body, "걷지 못한다") || !Has(body, "날아온 공구 상자에 로봇 다리가 꺾였다") || !Has(body, "처음: 함장이 일으킨 밀어 던지기") || !Has(body, "보는 거리")) bad.Add("몸: " + string.Join(" | ", body.Select(x => x.Main + "/" + x.Sub)));
+            var doing = DetailOf(show, 1);
+            if (!Has(doing, "맡은 사건 — 식당 " + ShipMind.KindName(IncidentKind.Fire)) || !Has(doing, Mind.SnagText(SnagKind.NoLegs)) || !Has(doing, "맡은 까닭")) bad.Add("하는 일: " + string.Join(" | ", doing.Select(x => x.Main + "/" + x.Sub)));
+            var knows = DetailOf(show, 2);
+            if (knows.Length == 0) bad.Add("아는 것 비었다");
+            var log = DetailOf(show, 3);
+            if (!Has(log, "식당 불 (가장 가까운 로봇)")) bad.Add("일지: " + string.Join(" | ", log.Select(x => x.Main)));
+            foreach (var (tab, rows) in new[] { ("몸", body), ("하는 일", doing), ("아는 것", knows), ("일지", log) })
+                foreach (var x in rows) foreach (var t in new[] { x.Main, x.Sub }.Where(t => t.Length > 0)) if (LookBad(t) is { } why) bad.Add($"{tab} '{t}' {why}");
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var (tab, rows) in new[] { ("몸", body), ("하는 일", doing), ("아는 것", knows), ("일지", log) }) Console.WriteLine($"    [{tab}]\n      " + string.Join("\n      ", rows.Select(x => x.Main + (x.Sub.Length > 0 ? " / " + x.Sub.Replace("\n", " ⏎ ") : "") + (x.Bars != null ? " [" + string.Join(" ", x.Bars.Select(b => $"{b.Name}{b.Value:0.0}")) + "]" : ""))));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int k = 0; k < 4; k++) { show.SetDetailSub(k); for (int q = 0; q < 25; q++) show.PanelRows(); }
+            double robotUs = sw.Elapsed.TotalMilliseconds * 1000 / 100;
+            cm.Incidents.RemoveAt(cm.Incidents.Count - 1);
+            Check("자세한 판 D2 로봇: 다리가 상한 로봇 — 다리 막대 (빨강) · '걷지 못한다' · 원인 사슬 (처음: 함장이 일으킨 …) · 보는 거리 · 맡은 사건 (방 · 갈래 · 막힘) · 막힘 까닭 · 맡은 까닭 · 일지에 주컴퓨터 말 기록의 그 로봇 줄 · 개발 말 0",
+                bad.Count == 0, bad.Count > 0 ? string.Join(" / ", bad.Take(3)) : $"줄 짓기 탭마다 {robotUs:0}µs");
+        }
     }
 }

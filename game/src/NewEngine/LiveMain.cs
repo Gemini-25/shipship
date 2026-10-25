@@ -407,6 +407,17 @@ void fragment() {
         {
             case "person": s.OpenDetail(DetailKind.Person, First(true)); s.SetDetailSub(sub); break;
             case "robot": s.OpenDetail(DetailKind.Robot, First(false)); s.SetDetailSub(sub); break;
+            case "robot-hurt":
+            {
+                // 다리가 상한 로봇 (U6): 첫 로봇 곁에 폭발을 일으킨다 (함장의 손 — 월드 길) · 그 로봇 자세히
+                int r = First(false);
+                if (r < 0 || mind == null) break;
+                var L = s.Sim.Layout; int c0 = mind.Agents[r].C.Cell;
+                int at = new[] { c0, c0 - 1, c0 + 1, c0 - L.W, c0 + L.W }.FirstOrDefault(c => c >= 0 && c < L.N && ShipEngine.Hand.Why(s.Sim, new HandOrder { Kind = HandKind.Blast, Cell = c, Size = 2 }).Length == 0, -1);
+                if (at >= 0) { s.ArmHand(HandKind.Blast, 2); s.HandAt(L.X(at) + 0.5, L.Y(at) + 0.5); }
+                s.OpenDetail(DetailKind.Robot, r); s.SetDetailSub(sub);
+                break;
+            }
             case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
             case "hand": if (s.Panel != PanelKind.Hand) s.TogglePanel(PanelKind.Hand); break;

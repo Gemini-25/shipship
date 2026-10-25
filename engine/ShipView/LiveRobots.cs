@@ -52,26 +52,8 @@ public sealed partial class LiveShow
         lines.Add("하는 일: " + doing + (dash > 0 ? " ▸ " + thought[(dash + 3)..] : ""));
         var cm = w.Find<ShipMind>();
         var jr = a.Judged;
-        // 맡은 까닭: 지금 목표를 주컴퓨터가 맡겼나 (일지의 '맡음') → 주컴퓨터 일지의 그 로봇 맡김 줄의 까닭
-        long assignedAt = long.MinValue;
-        for (int k = 0; k < (jr?.Count ?? 0); k++)
-        {
-            ref var j = ref jr!.Newest(k);
-            if (j.Out == JudgeOut.Assigned && j.Goal == a.C.Goal) { assignedAt = j.Tick; break; }
-            if (j.Out is JudgeOut.Set or JudgeOut.Dropped && j.Goal != a.C.Goal) break;
-        }
-        if (a.C.Goal != GoalKind.Idle)
-        {
-            string why = "";
-            if (assignedAt != long.MinValue && cm?.Notes is { } notes)
-                for (int k = 0; k < notes.Count; k++)
-                {
-                    ref var n = ref notes.Newest(k);
-                    if (n.Tick < assignedAt - 1) break;
-                    if (n.Robot == a.Id && n.Kind is NoteKind.Assign or NoteKind.Defer) { why = ShipMind.ReasonText(n.Reason); break; }
-                }
-            lines.Add("맡은 까닭: " + (assignedAt != long.MinValue ? "주컴퓨터가 맡겼다" + (why.Length > 0 ? " — " + why : "") : waiting ? "스스로 — 맡은 일이 없다" : a.C.Goal == GoalKind.Charge ? "스스로 — 전지가 줄었다" : "스스로 골랐다"));
-        }
+        string assigned = AssignedWhy(w, a);
+        if (assigned.Length > 0) lines.Add("맡은 까닭: " + assigned);
         var recent = new List<string>();
         for (int k = 0; k < (jr?.Count ?? 0) && recent.Count < 3; k++)
         {
@@ -86,6 +68,30 @@ public sealed partial class LiveShow
                 if (cm.Log[i].text.StartsWith(name + ":") || cm.Log[i].text.StartsWith(name + " →")) recent.Add($"{Hm(cm.Log[i].tick)} {TextLint.Clean(cm.Log[i].text[name.Length..].TrimStart(':', ' '))}");
         }
         if (recent.Count > 0) lines.Add("최근 판단: " + string.Join(" / ", recent));
+    }
+
+    /// <summary>맡은 까닭 (로봇 카드 · 자세한 판 '하는 일'이 같은 글): 지금 목표를 주컴퓨터가 맡겼나 (일지의 '맡음') → 주컴퓨터 일지의 그 로봇 맡김 줄의 까닭 · 아니면 스스로 (빈 목표면 빈 글).</summary>
+    private static string AssignedWhy(Sim w, Agent a)
+    {
+        if (a.C.Goal == GoalKind.Idle) return "";
+        var cm = w.Find<ShipMind>();
+        var jr = a.Judged;
+        long assignedAt = long.MinValue;
+        for (int k = 0; k < (jr?.Count ?? 0); k++)
+        {
+            ref var j = ref jr!.Newest(k);
+            if (j.Out == JudgeOut.Assigned && j.Goal == a.C.Goal) { assignedAt = j.Tick; break; }
+            if (j.Out is JudgeOut.Set or JudgeOut.Dropped && j.Goal != a.C.Goal) break;
+        }
+        string why = "";
+        if (assignedAt != long.MinValue && cm?.Notes is { } notes)
+            for (int k = 0; k < notes.Count; k++)
+            {
+                ref var n = ref notes.Newest(k);
+                if (n.Tick < assignedAt - 1) break;
+                if (n.Robot == a.Id && n.Kind is NoteKind.Assign or NoteKind.Defer) { why = ShipMind.ReasonText(n.Reason); break; }
+            }
+        return assignedAt != long.MinValue ? "주컴퓨터가 맡겼다" + (why.Length > 0 ? " — " + why : "") : Waiting(a, a.C.Battery) ? "스스로 — 맡은 일이 없다" : a.C.Goal == GoalKind.Charge ? "스스로 — 전지가 줄었다" : "스스로 골랐다";
     }
 
     private static string Hm(long t) { long m = t % Time.TicksPerDay * 60 / Time.TicksPerHour; return $"{m / 60:00}:{m % 60:00}"; }

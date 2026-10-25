@@ -111,8 +111,8 @@ public sealed partial class LiveShow
         {
             case 0: BodyRows(w, b, rows); break;
             case 1: MindRows(w, mind, so, a, b, rows); break;
-            case 2: DoingRows(w, mind, a, b, rows); break;
-            case 3: KnowsRows(w, mind, a, rows); break;
+            case 2: DoingRows(w, mind, a, b.Alive == 0, rows); break;
+            case 3: BeliefRows(w, mind, a, rows); KnowsRows(w, mind, a, rows); break;
             case 4: PeopleRows(w, mind, so, a, rows); break;
             case 5: JudgedRows(a, rows); NoteRowsFor(w, mind.NameOf(a.Id), rows); break;   // 일지 · 주컴퓨터가 이 사람에게 한 부탁
             default:   // 지나온 길 (자리 — 함장 결정 10-26: 구함 · 다침 · 외상과 회복 · 짝 · 꿈 · 숨짐을 항해 내내 적는다)
@@ -234,11 +234,11 @@ public sealed partial class LiveShow
     };
 
     /// <summary>하는 일: 지금 목표 · 몇 분째 · 목표의 원인 / 계획 걸음 (했다 · ▶ 하는 중 · 남았다) / 길 / 맡은 일 / 손 · 등 / 막힘 · 그만둔 까닭 / 제 궁리 · 피하는 곳 · 의심.</summary>
-    private void DoingRows(Sim w, Mind mind, Agent a, in Body b, List<PanelRow> rows)
+    private void DoingRows(Sim w, Mind mind, Agent a, bool dead, List<PanelRow> rows)
     {
         var c = a.C;
         double min = Math.Max(0, w.Tick - c.GoalSince) / (double)Time.Minutes(1);
-        rows.Add(new PanelRow("지금 — " + (b.Alive == 0 ? "숨을 거두었다" : Mind.GoalName(c.Goal)), b.Alive == 0 ? "" : $"{mind.Thought(a.Id).Replace(" — ", " ▸ ")} · {min:0}분째{(c.GoalCause > 0 ? "\n왜: " + WhyText(c.GoalCause) : "")}", false, Key: DK(0)));
+        rows.Add(new PanelRow("지금 — " + (dead ? a.IsPerson ? "숨을 거두었다" : "멈췄다" : Mind.GoalName(c.Goal)), dead ? "" : $"{mind.Thought(a.Id).Replace(" — ", " ▸ ")} · {min:0}분째{(c.GoalCause > 0 ? "\n왜: " + WhyText(c.GoalCause) : "")}", false, Key: DK(0)));
         for (int i = 0; i < a.Plan.Count && i < 12; i++)
         {
             string t = mind.StepText(a, a.Plan[i]);
@@ -310,10 +310,9 @@ public sealed partial class LiveShow
         ("파편 구름 · 별 폭발", "방송으로", "센서 배열 · 엑스선 감시 → 대피 방송", new[] { BeliefKind.Burn }),
     };
 
-    /// <summary>아는 것: 믿음마다 (무엇 · 어디 · 어떻게 · 확신 · 확인한 때 · 지금 실제) / 누가 어떻게 아나 / 분야 앎 · 솜씨 / 교훈 · 조심.</summary>
-    private void KnowsRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
+    /// <summary>아는 것 — 믿음마다 (무엇 · 어디 · 어떻게 · 확신 · 확인한 때 · 지금 실제 — 사람 · 로봇이 같은 줄).</summary>
+    private void BeliefRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
     {
-        var c = a.C;
         var beliefs = a.Beliefs.Select((bf, i) => (bf, i)).OrderByDescending(x => x.bf.Seen).ThenBy(x => x.i).Take(24).ToList();
         if (beliefs.Count == 0) rows.Add(new PanelRow("아는 일이 없다", "보거나 듣거나 냄새 맡거나 들은 말로만 안다", false, Key: DK(0)));
         foreach (var (bf, i) in beliefs)
@@ -326,6 +325,12 @@ public sealed partial class LiveShow
             rows.Add(new PanelRow($"{what}{subject} — {RoomNear(bf.Cell)}", $"{HowKnown(bf.Src)} · 확신 {bf.Conf * 100:0}% · {(ago < 1 ? "방금" : $"{ago:0}분 전")} 확인{(truth.Length > 0 ? " · 지금 실제: " + truth : "")}", truth == "이미 아니다",
                 Bars: new[] { Bar("확신", bf.Conf) }, Key: DK(100 + i)));
         }
+    }
+
+    /// <summary>아는 것 (사람) — 누가 어떻게 아나 / 분야 앎 · 솜씨 / 교훈 · 조심.</summary>
+    private void KnowsRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
+    {
+        var c = a.C;
         foreach (var (what, person, computer, kinds) in WhoKnows)
         {
             var known = a.Beliefs.Where(bf => kinds.Contains(bf.Kind)).OrderByDescending(bf => bf.Seen).ToList();
@@ -378,42 +383,83 @@ public sealed partial class LiveShow
         }
     }
 
-    /// <summary>로봇 · 드론 자세히: 몸 · 하는 일 · 아는 것 · 일지 (로봇 카드의 글을 나눠 싣는다).</summary>
+    /// <summary>로봇 · 드론 자세히 (docs/UI2.md §4.3 — U6): 몸 · 하는 일 · 아는 것 · 일지.</summary>
     private void RobotDetailRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
     {
         var net = w.Find<Network>();
+        bool hasBody = net != null && a.C.Mech >= 0 && a.C.Mech < net.Robots.Count;
         switch (DetailSub)
         {
-            case 0:   // 몸
+            case 0: RobotBodyRows(w, a, net, rows); break;
+            case 1:
             {
-                if (net == null || a.C.Mech < 0 || a.C.Mech >= net.Robots.Count) { rows.Add(new PanelRow($"전지 {a.C.Battery * 100:0}% · 손상 {a.C.Damage * 100:0}%", "", false, Bars: new[] { Bar("전지", a.C.Battery) }, Key: DK(0))); break; }
-                var rb = net.Robots[a.C.Mech];
-                rows.Add(new PanelRow($"전지 {rb.Battery * 100:0}%", rb.Battery < 0.15f ? "전지가 바닥이다" : rb.Battery < 0.35f ? "전지가 적다" : "", rb.Battery < 0.15f, Bars: new[] { Bar("전지", rb.Battery) }, Key: DK(0)));
-                var hurt = new List<string>();
-                if (rb.Legs > 0.05f) hurt.Add($"다리 {rb.Legs * 100:0}{(rb.Legs >= 1 ? " (못 걷는다)" : "")}");
-                if (rb.Arms > 0.05f) hurt.Add($"팔 {rb.Arms * 100:0}{(!Network.RobotHands(rb) ? " (손을 못 쓴다)" : "")}");
-                if (rb.Eyes > 0.05f) hurt.Add($"센서 {rb.Eyes * 100:0}");
-                if (rb.Core > 0.05f) hurt.Add($"속 {rb.Core * 100:0}{(rb.Core >= 1 ? " (멈췄다)" : "")}");
-                int why = rb.Core >= 1 ? rb.CoreCause : rb.Legs >= rb.Arms && rb.Legs > 0.05f ? rb.LegsCause : rb.Arms > 0.05f ? rb.ArmsCause : rb.Eyes > 0.05f ? rb.EyesCause : 0;
-                rows.Add(new PanelRow(hurt.Count > 0 ? "상함 — " + string.Join(" · ", hurt) : "몸 — 멀쩡하다", why != 0 ? "왜: " + w.Causes.Story(why) : "", hurt.Count > 0,
-                    Bars: new[] { Bar("다리", 1 - rb.Legs), Bar("팔", 1 - rb.Arms), Bar("눈", 1 - rb.Eyes), Bar("속", 1 - rb.Core) }, Key: DK(1)));
+                DoingRows(w, mind, a, hasBody && net!.Robots[a.C.Mech].Core >= 1, rows);
+                RobotJobRows(w, mind, a, rows);
                 break;
             }
-            case 1:   // 하는 일
+            case 2: BeliefRows(w, mind, a, rows); break;
+            default: JudgedRows(a, rows); RobotNoteRows(w, a, rows); break;   // 일지 · 주컴퓨터와 주고받은 것
+        }
+    }
+
+    /// <summary>로봇 몸: 전지 (충전 중 · 독) / 다리 · 팔 · 눈 · 속 막대와 원인 · 그 몸이 못 하는 것 / 보는 거리 / 부품 주머니 / 떠 있음.</summary>
+    private void RobotBodyRows(Sim w, Agent a, Network? net, List<PanelRow> rows)
+    {
+        if (net == null || a.C.Mech < 0 || a.C.Mech >= net.Robots.Count) { rows.Add(new PanelRow($"전지 {a.C.Battery * 100:0}% · 손상 {a.C.Damage * 100:0}%", "", false, Bars: new[] { Bar("전지", a.C.Battery) }, Key: DK(0))); return; }
+        var rb = net.Robots[a.C.Mech];
+        string dock = rb.Docked != 0 ? (rb.Battery < 0.99f ? "독에서 충전 중" : "독에서 다 찼다") : rb.Battery < 0.15f ? "전지가 바닥이다" : rb.Battery < 0.35f ? "전지가 적다" : "";
+        rows.Add(new PanelRow($"전지 {rb.Battery * 100:0}%", dock, rb.Battery < 0.15f, Bars: new[] { Bar("전지", rb.Battery) }, Key: DK(0)));
+        foreach (var (name, v, cause, cant, k) in new[]
+        {
+            ("다리", rb.Legs, rb.LegsCause, rb.Legs >= 1 ? "걷지 못한다" : rb.Legs > 0.5f ? "느리게 걷는다" : "", 1),
+            ("팔", rb.Arms, rb.ArmsCause, !Network.RobotHands(rb) ? "손을 못 쓴다" : "", 2),
+            ("눈", rb.Eyes, rb.EyesCause, rb.Eyes > 0.5f ? "흐리게 본다" : "", 3),
+            ("속", rb.Core, rb.CoreCause, rb.Core >= 1 ? "멈췄다" : "", 4),
+        })
+        {
+            var bits = new List<string>();
+            if (cant.Length > 0) bits.Add(cant);
+            if (cause > 0) bits.Add("왜: " + WhyText(cause));
+            rows.Add(new PanelRow(v > 0.05f ? $"{name} — 상함 {Math.Min(1, v) * 100:0}" : $"{name} — 멀쩡하다", string.Join("\n", bits), v > 0.5f, Bars: new[] { Bar(name, 1 - v) }, Key: DK(k)));
+        }
+        rows.Add(new PanelRow("보는 거리", $"{12 * (1 - 0.8 * Math.Clamp(rb.Eyes, 0, 1)):0}칸 (눈이 상할수록 줄어든다)", false, Key: DK(5)));
+        var spares = new List<string>();
+        foreach (var p in new[] { Part.Electric, Part.Mechanical, Part.Seal, Part.Filter }) if ((a.C.Spares & (1 << (int)p)) != 0) spares.Add(Device.PartName(p));
+        rows.Add(new PanelRow("부품 주머니", spares.Count > 0 ? string.Join(" · ", spares) : "비었다 — 고칠 때마다 그 갈래를 쓴다", false, Key: DK(6)));
+        if (a.C.Floated != 0) rows.Add(new PanelRow("떠 있다", "무중력 — 손잡이를 잡고 간다", true, Key: DK(7)));
+    }
+
+    /// <summary>로봇 하는 일의 덧붙임: 맡은 사건 (방 · 갈래 · 몇 분째 · 막힘) · 맡은 일감 · 맡은 까닭 (로봇 카드와 같은 글).</summary>
+    private void RobotJobRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
+    {
+        var cm = w.Find<ShipMind>();
+        if (cm != null)
+        {
+            int k = 0;
+            foreach (var x in cm.Incidents)
             {
-                var card = new List<string>();
-                RobotCard(w, mind, a, card);
-                for (int i = 0; i < card.Count; i++)
-                {
-                    int colon = card[i].IndexOf(": ", StringComparison.Ordinal);
-                    rows.Add(colon > 0 ? new PanelRow(card[i][..colon], card[i][(colon + 2)..].Replace(" / ", "\n"), false, Key: DK(i)) : new PanelRow(card[i], "", false, Key: DK(i)));
-                }
-                break;
+                if (x.Active == 0 || x.RobotA != a.Id && x.RobotB != a.Id) continue;
+                double min = Math.Max(0, w.Tick - x.Since) * Time.SecondsPerTick / 60;
+                rows.Add(new PanelRow($"맡은 사건 — {cm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)}", $"{min:0}분째{(x.Snag != SnagKind.None ? " · 막힘: " + Mind.SnagText(x.Snag) : "")}{(x.Sealed != 0 ? " · 봉쇄했다" : "")}", x.Snag != SnagKind.None, Key: DK(40 + k++)));
             }
-            case 2:   // 아는 것
-                rows.Add(new PanelRow("곧 — 믿음마다 무엇 · 어디 · 어떻게 · 확신 · 지금 실제", "", false, Key: -1));
-                break;
-            default: JudgedRows(a, rows); break;   // 일지
+            k = 0;
+            foreach (var j in cm.Jobs)
+                if (j.Agent == a.Id) rows.Add(new PanelRow("맡은 일감 — " + Mind.GoalName(j.Kind), j.Until > w.Tick ? $"{Math.Max(1, (j.Until - w.Tick) * Time.SecondsPerTick / 60):0}분 안에" : "", false, Key: DK(60 + k++)));
+        }
+        if (AssignedWhy(w, a) is { Length: > 0 } why) rows.Add(new PanelRow("맡은 까닭", why, false, Key: DK(70)));   // 로봇 카드와 같은 글 (LiveRobots.AssignedWhy)
+    }
+
+    /// <summary>주컴퓨터와 주고받은 것 (말 기록에서 그 로봇 줄 — 맡김 · 미룸 · 놓아줌 · 막힘).</summary>
+    private void RobotNoteRows(Sim w, Agent a, List<PanelRow> rows)
+    {
+        var notes = w.Find<ShipMind>()?.Notes;
+        if (notes == null) return;
+        for (int k = 0, n = 0; k < notes.Count && n < 12; k++)
+        {
+            var nt = notes.Newest(k);
+            if (nt.Robot != a.Id) continue;
+            string kind = nt.Kind switch { NoteKind.Assign => "맡김", NoteKind.Defer => "미룸", NoteKind.Release => "놓아줌", NoteKind.Block or NoteKind.Stuck => "막힘", _ => "말" };
+            rows.Add(new PanelRow($"주컴퓨터 {kind} — {HourMin(nt.Tick)}", TextLint.Clean(nt.Text) + (nt.Reason != 0 && ShipMind.ReasonText(nt.Reason) is { Length: > 0 } why ? " · " + why : ""), false, Key: DK((1L << 35) + n++)));
         }
     }
 
