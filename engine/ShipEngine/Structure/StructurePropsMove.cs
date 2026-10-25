@@ -126,8 +126,9 @@ public sealed partial class Structure
         while (rem > 1e-12)
         {
             int c = CellOf(p);
-            // 무게중심이 도면 밖 · 바깥 · 구멍 벽 칸에 들었다 (큰 구멍의 틈을 지났다) → 구멍 (우주로 · 막음)
-            if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c) || L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f) { HoleHit(sim, ref p, c >= 0 && L.Kind[c] == CellKind.Wall ? c : -1); break; }
+            // 무게중심이 도면 밖 · 바깥에 들었다 → 우주로 · 구멍 벽 칸에 들었다 (큰 구멍의 틈) → 빨아들이면 막거나 우주로 (아니면 틈을 지나 그대로 간다)
+            if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c)) { HoleHit(sim, ref p, -1); break; }
+            if (L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f && HoleHit(sim, ref p, c)) break;
             double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
             double muK = mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
             double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
@@ -195,14 +196,14 @@ public sealed partial class Structure
                 touching[k] = now;
             }
             rem -= h;
-            // 구멍 벽에 닿았다 (밀어 닿았거나 겹침) → 막거나 우주로
-            int holeAt = -1;
-            for (int k = 0; k < nc && holeAt < 0; k++)
+            // 구멍 벽에 닿았다 (밀어 닿았거나 겹침) → 빨아들이는 구멍이면 막거나 우주로 (아니면 보통 벽 — 이미 튀었다)
+            bool gone = false;
+            for (int k = 0; k < nc && !gone; k++)
             {
                 ref var ct = ref _propHits[k];
-                if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) holeAt = ct.Cell;
+                if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
             }
-            if (holeAt >= 0) { HoleHit(sim, ref p, holeAt); break; }
+            if (gone) break;
             bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0;
             p.Still = still ? p.Still + (float)h : 0;
             if (p.Still >= SleepSec) { p.Vx = p.Vy = p.W = 0; p.State = 0; p.Asleep = 1; p.Still = 0; p.Since = _now; break; }

@@ -4,8 +4,8 @@ namespace ShipEngine;
 /// ④ 물체가 받는 바람 · 구멍 (docs/PHYSICS.md §3-2 · §3-6 — PH4c): 감압 돌풍 (③ 장이 틱마다 쓰는 칸마다 동압 · 쪽 · 줄어드는 빠르기 · 처음 밀도) ·
 /// 구멍 입 (③ <see cref="Field.HoleMouthPa"/>)이 물체가 덮은 칸마다 따로 민다 — F_c = ½ρ|u − v|(u − v) Cd A(φ) × 그 칸 도트 몫 · 힘 점 = 그 칸 도트의 가운데 + 압력 중심.
 /// 그래서 고른 바람에 대칭 꼴은 돌지 않고 · 칸마다 바람이 다르면 (구멍 입 곁) 대칭 상자도 돌고 · 압력 중심이 어긋난 꼴은 고른 바람에도 돈다.
-/// 놓인 것은 정지 타원 (μs = 1.25 μk)을 넘을 때만 깬다. 구멍 벽에 닿으면 가장 작은 앞면이 구멍 × 1.2보다 크면 빨려 붙어 막고 (장의 PlugProp — 다음 틱 흐름부터) ·
-/// 아니면 구멍 밖 우주로 (장부 '우주로' — 비행은 PH11). 막은 것은 구멍을 덧대거나 누르는 힘이 무게 아래가 되면 떨어진다.
+/// 놓인 것은 정지 타원 (μs = 1.25 μk)을 넘을 때만 깬다. 무게보다 세게 빨아들이는 구멍 벽에 닿으면 가장 작은 앞면이 구멍 × 1.2보다 크면 빨려 붙어 막고 (장의 PlugProp — 다음 틱 흐름부터) ·
+/// 아니면 우주로 이어진 구멍일 때 구멍 밖 우주로 (장부 '우주로' — 비행은 PH11 · 빨아들이지 않는 구멍과 옆 방으로 이어진 구멍은 보통 벽). 막은 것은 구멍을 덧대거나 누르는 힘이 무게 아래가 되면 떨어진다.
 /// 모두 찍힌 상태 + 같은 틱 장 값으로만 정한다 (캐시는 틱마다 비운다 — 되살린 세계와 같다).
 /// </summary>
 public sealed partial class Structure
@@ -199,23 +199,66 @@ public sealed partial class Structure
     }
 
     /// <summary>
-    /// 구멍 벽 칸에 닿았다 (또는 무게중심이 구멍 칸 · 바깥에 들었다): 가장 작은 앞면이 구멍 × 1.2보다 크면 빨려 붙어 막고 (State 6) · 아니면 구멍 밖 우주로 (State 5 — 틱 끝에 장부 '우주로').
+    /// 구멍 벽 칸에 닿았다 (또는 무게중심이 구멍 칸 · 바깥에 들었다 — hole = −1이면 이미 배 밖이다): 그 구멍이 무게보다 세게 빨아들일 때만 (붙음 · 떨어짐과 같은 문턱) —
+    /// 가장 작은 앞면이 구멍 × 1.2보다 크면 빨려 붙어 막고 (State 6) · 아니면 구멍이 우주로 이어질 때만 구멍 밖 우주로 (State 5 — 틱 끝에 장부 '우주로').
+    /// 빨아들이지 않는 구멍 (기압이 같은 두 방 사이 · 공기가 다 빠진 방)과 옆 방으로 이어진 구멍은 보통 벽이다 (거짓 — 부른 쪽이 튀거나 틈을 지나게 둔다).
     /// </summary>
-    private void HoleHit(Sim sim, ref Prop p, int hole)
+    private bool HoleHit(Sim sim, ref Prop p, int hole)
     {
         var fm = PropForm(p);
         string name = PropName(p);
-        if (hole >= 0 && L.Kind[hole] == CellKind.Wall && F.Hole[hole] > 0.01f && F.Severed[hole] == 0 && MinFace(fm) > F.Hole[hole] * PlugMargin)
+        if (hole >= 0)
         {
-            p.State = 6; p.PlugAt = hole + 1; p.Vx = p.Vy = p.W = 0; p.Still = 0; p.Since = _now;
-            int pc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(name)} 구멍에 빨려 붙었다 — 새는 것을 거의 막았다", sim.Tick, hole, p.Cause);
-            sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, CellOf(p), p.Kg, pc, other: p.What);
-            PropPlugged++;
-            return;
+            double face = MinFace(fm);
+            if (!Sucked(p, hole, face)) return false;
+            if (face > F.Hole[hole] * PlugMargin)
+            {
+                p.State = 6; p.PlugAt = hole + 1; p.Vx = p.Vy = p.W = 0; p.Still = 0; p.Since = _now;
+                int pc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(name)} 구멍에 빨려 붙었다 — 새는 것을 거의 막았다", sim.Tick, hole, p.Cause);
+                sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, CellOf(p), p.Kg, pc, other: p.What);
+                PropPlugged++;
+                return true;
+            }
+            if (!HoleToSpace(hole)) return false;
         }
         p.State = 5;
         int sc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(name)} 구멍 밖 우주로 빨려 나갔다", sim.Tick, hole, p.Cause);
         sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, hole >= 0 ? hole : Math.Max(0, CellOf(p)), p.Kg, sc, other: p.What);
+        return true;
+    }
+
+    /// <summary>그 구멍이 우주로 이어지나 (③ 틈 가운데 그 칸을 지나 바깥으로 가는 것이 있다 — 안쪽 벽 구멍은 옆 방으로 이어질 뿐이다).</summary>
+    private bool HoleToSpace(int hole)
+    {
+        foreach (var k in F.Links) if (k.Via == hole && k.RB < 0) return true;
+        return false;
+    }
+
+    /// <summary>구멍이 그 물체를 무게보다 세게 빨아들이나 (누르는 힘 = 기압 차 × 덮은 넓이 > 무게 — 빨려 붙음 · 떨어짐 · 우주로의 같은 문턱).</summary>
+    private bool Sucked(in Prop p, int hole, double face)
+    {
+        if (hole < 0 || L.Kind[hole] != CellKind.Wall || F.Hole[hole] <= 0.01f || F.Severed[hole] != 0) return false;
+        int c = HoleSide(p, hole);
+        double weight = p.Kg * Gravity * (c >= 0 ? F.Grav[c] : 0);
+        return Suction(c, hole, face) > weight;
+    }
+
+    /// <summary>구멍 이쪽의 트인 칸: 물체 무게중심 칸 (트였으면) · 아니면 (무게중심이 구멍 칸에 들었다) 구멍 곁 트인 칸 가운데 무게중심에 가장 가까운 것.</summary>
+    private int HoleSide(in Prop p, int hole)
+    {
+        int c = CellOf(p);
+        if (c >= 0 && c != hole && F.Passable(c)) return c;
+        int best = -1;
+        double bd = double.MaxValue;
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(hole, nb);
+        foreach (int j in nb)
+        {
+            if (j < 0 || F.IsOut(j) || !F.Passable(j)) continue;
+            double dx = L.X(j) + 0.5 - p.X, dy = L.Y(j) + 0.5 - p.Y, d = dx * dx + dy * dy;
+            if (d < bd) { bd = d; best = j; }
+        }
+        return best;
     }
 
     /// <summary>우주로 간 것을 목록에서 뺀다 (장부 '우주로' · 가져간 운동량 · 각운동량 — Id 차례 그대로).</summary>
@@ -241,10 +284,9 @@ public sealed partial class Structure
         {
             ref var p = ref all[i];
             if (p.State != 6 || p.PlugAt == 0) continue;
-            int h = p.PlugAt - 1, c = CellOf(p);
+            int h = p.PlugAt - 1;
             if (p.Kg <= 0) FillBody(ref p);
-            double face = MinFace(PropForm(p)), weight = p.Kg * Gravity * (c >= 0 ? F.Grav[c] : 0);
-            if (F.Hole[h] > 0.01f && F.Severed[h] == 0 && Suction(c, h, face) > weight) continue;
+            if (Sucked(p, h, MinFace(PropForm(p)))) continue;
             p.PlugAt = 0; p.State = 1; p.Asleep = 0; p.Still = 0; p.Vx = p.Vy = p.W = 0;
             woke = true;
         }

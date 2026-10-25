@@ -109,7 +109,8 @@ public static partial class Program
 
     /// <summary>
     /// 감압 (PH4c — docs/PHYSICS.md §3-2 · §3-6 · §10 '감압'): 외판 0.075m² 구멍 입 곁 (두 칸에 걸친) 식량 상자가 구멍 입 바람에 돌며 미끄러져 벽에 닿아 선다 —
-    /// 선 자리는 칸 가운데가 아니고 벽 안이 아니다 · 구멍보다 큰 상자는 빨려 붙어 막는다 (샘 ≤ 0.1배) · 사람과 상자가 같은 구멍에 붙으면 막음 = 둘 가운데 큰 것 (10틱 흔들리지 않는다).
+    /// 선 자리는 칸 가운데가 아니고 벽 안이 아니다 · 구멍보다 큰 상자는 빨려 붙어 막는다 (샘 ≤ 0.1배) · 사람과 상자가 같은 구멍에 붙으면 막음 = 둘 가운데 큰 것 (10틱 흔들리지 않는다) ·
+    /// 빨아들이지 않는 구멍 (기압이 같은 두 방 사이 안쪽 벽)은 보통 벽이다 — 부딪은 것은 튀고 붙지도 · 우주로 가지도 않는다.
     /// </summary>
     private static void BreachRules()
     {
@@ -177,7 +178,36 @@ public static partial class Program
                 refused.Contains("저장 판 107") && back.Get<Field>().PlugOf(hole) == f.PlugOf(hole) && s.Save().AsSpan().SequenceEqual(back.Save()),
                 $"판 107: \"{(refused.Length > 0 ? refused : "읽었다")}\" · 막음 {f.PlugOf(hole):0.0000} / 되살린 세계 {back.Get<Field>().PlugOf(hole):0.0000}m²");
         }
+        // ── 기압이 같은 두 방 사이 안쪽 벽 0.06m² 구멍: 빨아들이지 않는 구멍은 보통 벽이다 — 9m/s로 던진 컵은 튀어 남고 · 4m/s로 민 식량 상자는 붙지 않는다 ──
+        {
+            var twin = Worlds.Ascii(TwinRooms, Worlds.Seats);
+            int inner = Worlds.At(twin, 6, 2);
+            var s0 = Worlds.Full(twin, 1);
+            s0.Get<Field>().SetHole(inner, 0.06f);
+            s0.Run(3);
+            var got = new List<string>(); bool ok = true;
+            foreach (var (item, v) in new[] { ("컵", 9.0), ("식량 상자", 4.0) })
+            {
+                var s = s0.Clone();
+                var st = s.Get<Structure>(); var f = s.Get<Field>();
+                int id = Worlds.PutItem(s, item, Worlds.At(twin, 3, 2));
+                var p = st.Props[st.IndexOf(id)];
+                int what = p.What;
+                st.Shove(id, st.PropForm(p).Mass * v, 0);
+                s.Run(20);
+                int i = st.IndexOf(id);
+                double spaced = s.Book.OfItem(what, Flow.Spaced);
+                int flung = s.Facts.Since(0).Count(x => x.Kind == FactKind.ObjectFlung);
+                ok &= i >= 0 && spaced == 0 && st.PropSpaced == 0 && st.PropPlugged == 0 && f.PlugProp[inner] == 0 && flung == 0 && st.Props[i].State != 6;
+                got.Add($"{item}: {(i >= 0 ? $"({st.Props[i].X:0.00}, {st.Props[i].Y:0.00}) 상태 {st.Props[i].State}" : "없다")} · 우주로 {spaced} · 막음 {st.PropPlugged} · 날림 사실 {flung}");
+            }
+            Check("감압: 기압이 같은 두 방 사이 안쪽 벽 0.06m² 구멍은 빨아들이지 않는다 — 9m/s로 던진 컵은 튀어 남고 (우주로 0) · 4m/s로 민 식량 상자는 붙지 않는다 (막음 0)",
+                ok, string.Join(" · ", got));
+        }
     }
+
+    // 기압이 같은 두 방 (가운데 벽 x = 6 — 문이 없다)
+    private const string TwinRooms = "\n#############\n#.....#.....#\n#.....#.....#\n#.....#.....#\n#############";
 
     /// <summary>
     /// 쌓아 그린 꼴 (PH2): 탁자 · 소화기 · 식량 상자 · 우주복을 각 단 0~63으로 (32 · 16도트 둘 다) — 불투명 도트 수가 단 0의 ±10% 안 · 단 0과 8 (45°)이 다르다 ·
