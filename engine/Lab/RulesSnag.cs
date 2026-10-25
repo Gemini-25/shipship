@@ -229,6 +229,53 @@ public static partial class Program
                     m.PondersAsked >= 1 && sm.Consults >= 1 && personBody && f.Hole[hole] <= 0 && thought.Contains("주컴퓨터") && b.Alive != 0 && b.Conscious != 0, state + $" · 몸이 된 이 {personBody} · 마침 {sm.PlansDone}");
         }
 
+        // ── 일감 하던 로봇 (⑧ · ⑩ · PH6b 사람의 궁리 (나)에서 찾은 결함 둘 — 내려놓은 우주복이 곁 칸에 놓이자 막을 로봇이 두 시간 오지 않았다):
+        //    가) 맡긴 줍기를 마치면 (제자리에 넣었다) 맡김이 끝난다 (예전엔 돌려놓기로 쳐 — 일감 기한 두 시간 동안 '맡은 일 있음')
+        //    나) 바닥의 우주복을 주우러 가는 사이 방3에 구멍이 나면 주컴퓨터는 그 로봇을 데려온다 (예전엔 줍기 · 채우기 · 나르기가 '놓고 오는 일상 일'에 없었다)
+        {
+            var lay9 = Worlds.Ascii(@"
+##########################
+#..........#..s..#...pb..#
+#..........D.....D.......#
+#..e.......#.....#..c.w..#
+##########################", new Dictionary<char, string>(legend) { ['s'] = "SuitLocker", ['w'] = "Workbench" });
+            int A9(int x, int y) => Worlds.At(lay9, x, y);
+            var s = Worlds.Full(lay9, 5);
+            var f = s.Get<Field>(); var m = s.Get<Mind>();
+            int robot = m.AddRobot(s, A9(22, 3), AgentKind.Robot, A9(22, 3));
+            s.Run(2);
+            var ra = m[robot];
+            bool OnFloor() => Worlds.Items(s).Any(x => x.Item == m.iSuit);
+            bool[] gather = new bool[2];
+            long freed = -1, t0 = 0, called = -1, back = -1;
+            for (int k = 0; k < 2; k++)
+            {
+                Worlds.PutItem(s, m.iSuit, A9(2, 3 - k), (float)Tables.Default.People.Items["우주복"].O2);   // 방1 끝 — 주워 방2 보관함까지 먼 길 (가득 찬 것 — 넣은 뒤 채우기 일감이 생기지 않게)
+                bool Gathering() => ra.C.AssignedGoal == GoalKind.Gather && ra.C.AssignedUntil > s.Tick;
+                for (long t = 0; t < Time.Minutes(15) && !Gathering(); t++) s.Step();
+                gather[k] = Gathering();
+                if (k == 0)
+                {
+                    for (long t = 0; t < Time.Minutes(10) && (OnFloor() || ra.C.Holding == m.iSuit); t++) s.Step();
+                    s.Step();
+                    freed = !OnFloor() && ra.C.Holding != m.iSuit ? ra.C.AssignedUntil - s.Tick : long.MaxValue;
+                    continue;
+                }
+                t0 = s.Tick;
+                f.SetHole(A9(20, 0), 0.002f);   // 방3 (로봇이 떠난 방) 외판
+                for (long t = 0; t < Time.Minutes(20) && (called < 0 || back < 0); t++)
+                {
+                    s.Step();
+                    if (called < 0 && ra.C.AssignedUntil > s.Tick && ra.C.AssignedGoal != GoalKind.Gather) called = s.Tick - t0;
+                    if (back < 0 && !OnFloor() && ra.C.Holding != m.iSuit) back = s.Tick - t0;
+                }
+            }
+            Check("일감 하던 로봇 (가): 맡긴 줍기를 마치면 (우주복을 보관함에 넣었다) 맡김이 끝난다 (예전엔 돌려놓기로 쳐 두 시간 동안 '맡은 일 있음')",
+                gather[0] && freed <= 0, $"줍기 맡음 {gather[0]} · 넣은 뒤 남은 맡김 {(freed == long.MaxValue ? "못 넣음" : $"{freed}초")}");
+            Check("일감 하던 로봇 (나): 바닥의 우주복을 주우러 간 사이 방3에 구멍이 나면 — 줍기를 마치기 전에 그 로봇을 보낸다 (예전엔 줍기 · 채우기 · 나르기는 놓고 오는 일상 일이 아니었다)",
+                gather[1] && called >= 0 && (back < 0 || called < back), $"줍기 맡음 {gather[1]} · 부름 {(called < 0 ? "없음" : $"{called}초")} · 주워 넣음 {(back < 0 ? "아직" : $"{back}초")} · 로봇 {ra.C.Goal} 맡음 {ra.C.AssignedGoal}");
+        }
+
         // ── 주컴퓨터 계획의 몸 (판단 엔진 · 위험도 시험 · 사람의 궁리 (나)에서 찾은 결함 셋):
         //    가) 하는 중인 걸음 앞에 걸음을 끼워도(공기를 빼는데 문틈이 다시 열렸다 → 틈 막기) 같은 걸음이 겹으로 생기지 않는다 (예전: 자리 번호로 되써 공기 빼기가 20번 겹치고 틈은 영영 안 막혔다)
         //    나) 몸이 풀이기가 셈한 자리에 없으면(그 사이 움직였다) 그 계획을 하지 않고 지금 자리로 다시 궁리한다 (예전: 방3에 간 로봇에게 '방2에서 방1로 가기'를 시켰다)

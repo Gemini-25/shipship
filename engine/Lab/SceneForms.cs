@@ -131,6 +131,67 @@ public static partial class Program
     }
 
     /// <summary>
+    /// kick 틀 (PH6b — docs/PHYSICS.md §7 · §10 '사람'): 1g 마른 바닥 — 걷는 이 (1.7m/s 남짓 — 틱에 두 칸)가 지나가다 식량 상자 · 컵을 차고 ·
+    /// 로봇 (틱에 한 칸)이 공구 상자를 밀고 · 선 이가 소화기를 내려놓는다 (원판 바깥 · 앞에 — 놓은 이는 그것을 차지 않는다). 원판 (R 0.25m)은 둥근 빛으로 덧그린다 (④만 있는 세계 — 사람 그림은 없다).
+    /// </summary>
+    private static void KickScene(string dir)
+    {
+        const string art = "\n##############\n#............#\n#............#\n#............#\n#............#\n#............#\n#............#\n##############";
+        var s = PropWorld(1, 6, art);
+        var st = s.Get<Structure>(); var L = s.Layout;
+        int C(int x, int y) => L.Index(x, y);
+        int food = Slide(s, "식량 상자", 6.5, 3.5, 0, 0), cup = Slide(s, "컵", 9.5, 3.55, 0, 0), tools = Slide(s, "공구 상자", 5.75, 6.5, 0, 0);
+        var start = new Dictionary<int, (double x, double y)>();
+        foreach (int id in new[] { food, cup, tools }) { var p = st.Props[st.IndexOf(id)]; start[id] = (p.X, p.Y); }
+        int Xa(int t) => Math.Min(13, 2 + 2 * Math.Max(0, t));   // 걷는 이: 틱에 두 칸
+        int Xr(int t) => Math.Min(13, 2 + Math.Max(0, t));       // 로봇: 틱에 한 칸
+        int[] Line(int x0, int x1, int y) => Enumerable.Range(x0, x1 - x0 + 1).Select(x => C(x, y)).ToArray();
+        (double x, double y, Rgba c)[] discs = Array.Empty<(double, double, Rgba)>();
+        int dropped = 0;
+        void Put(int t)
+        {
+            var pa = t > 0 && Xa(t) > Xa(t - 1) ? Line(Xa(t - 1), Xa(t), 3) : Array.Empty<int>();
+            var pr = t > 0 && Xr(t) > Xr(t - 1) ? Line(Xr(t - 1), Xr(t), 6) : Array.Empty<int>();
+            var acts = new[]
+            {
+                new PropActor { Tag = 0, Cell = C(Xa(t), 3), R = Structure.ActorR, Kg = 70, H = 1.7f, PathAt = 0, PathN = (byte)pa.Length },
+                new PropActor { Tag = -1, Cell = C(Xr(t), 6), R = Structure.ActorR, Kg = 120, H = 1.2f, PathAt = (short)pa.Length, PathN = (byte)pr.Length },
+                new PropActor { Tag = 2, Cell = C(12, 5), R = Structure.ActorR, Kg = 70, H = 1.7f },
+            };
+            st.SetActors(acts, pa.Concat(pr).ToArray());
+            discs = new[] { (Xa(t) + 0.5, 3.5, Rgba.Hex("#f2c14e")), (Xr(t) + 0.5, 6.5, Rgba.Hex("#5ec8e5")), (12.5, 5.5, Rgba.Hex("#f2c14e")) };
+        }
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 2;
+        int[] at = { 0, 2, 3, 4, 6, 10 };
+        int fw = 14 * Painter.T * zoom, fh = 8 * Painter.T * zoom, gap = 6;
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 0;
+        Put(0);
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k])
+            {
+                done++; Put(done);
+                if (done == 3) dropped = st.DropItem(s.Tables.People.Items.Keys.ToList().IndexOf("소화기"), 0, 12.5, 5.5, 0, 0, 0, s.Causes.Add(CauseKind.Setup, "선 이가 소화기를 내려놓았다", s.Tick), 2, -1, 0);
+                s.Step();
+            }
+            var img = painter.Frame(s, 1, 1, 14, 8, done).Scale(zoom);
+            foreach (var (x, y, c) in discs) img.Oval((float)((x - 1) * Painter.T * zoom), (float)((y - 1) * Painter.T * zoom), (float)(Structure.ActorR * Painter.T * zoom), (float)(Structure.ActorR * Painter.T * zoom), c, 0.45f, true);
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            string Moved(int id) { var p = st.Props[st.IndexOf(id)]; return $"{Math.Sqrt((p.X - start[id].x) * (p.X - start[id].x) + (p.Y - start[id].y) * (p.Y - start[id].y)):0.00}m"; }
+            string drop = dropped > 0 ? $" · 소화기 원판 가운데에서 {Math.Sqrt(Math.Pow(st.Props[st.IndexOf(dropped)].X - 12.5, 2) + Math.Pow(st.Props[st.IndexOf(dropped)].Y - 5.5, 2)):0.00}m" : "";
+            Console.WriteLine($"  kick {done}틱: 식량 상자 {Moved(food)} · 컵 {Moved(cup)} · 공구 상자 {Moved(tools)}{drop} · 깨어 있음 {st.Props.Count(p => Structure.Awake(p))}");
+        }
+        var fp = st.Props[st.IndexOf(food)];
+        Console.WriteLine($"  kick: 식량 상자의 까닭 \"{s.Causes.Story(fp.Cause)}\"");
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "kick.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  kick: {dir}/kick.png ({sheet.W}×{sheet.H}) — 걷는 이가 식량 상자 · 컵을 차고 · 로봇이 공구 상자를 밀고 · 선 이가 소화기를 원판 바깥에 놓는다");
+    }
+
+    /// <summary>
     /// props-breach 틀 (PH4c — 함장 장면 '부엌 감압'의 틀 · docs/PHYSICS.md §10): 부엌 외판에 0.5m² 구멍 — 바닥의 식량 상자 · 수리 꾸러미 · 공구 상자 · 컵 · 접시 · 책 · 소화기가
     /// 구멍 입 바람에 돌며 미끄러지고 · 구멍보다 큰 것은 빨려 붙어 막고 · 작은 것은 우주로 나간다. 감압 앞 한 장 + 첫 틱 · 둘째 · 넷째 틱 (틱 안 메움은 PH5).
     /// </summary>

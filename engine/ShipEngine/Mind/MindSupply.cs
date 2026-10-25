@@ -88,7 +88,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int fu = st.Target;
-        bool stash = st.Arg >= 1;   // 1: 돌려놓기 · 손 비우기 (맡긴 일의 끝이 아니다) · 2: 채운 것을 돌려놓기 (채우기 일감의 끝)
+        bool stash = st.Arg >= 1;   // 1: 돌려놓기 · 손 비우기 (맡긴 일의 끝이 아니다) · 2: 채운 것 · 주운 것을 돌려놓기 (채우기 · 줍기 일감의 끝)
         if (c.Holding == 255 || fu < 0 || fu >= L.Furniture.Count) { if (stash) Next(a, t); else JobDone(a, t); return; }
         if (Dist(c.Cell, L.Furniture[fu].Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         StoreHeld(fu, a);

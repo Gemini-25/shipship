@@ -31,7 +31,7 @@ public struct Prop
     public uint Dent0, Dent1;      // 찌그러짐 둘 (u · v · 반지름 도트 8비트씩)
     public int Cause;              // 마지막으로 크게 민 원인
     public float PushImp;          // 그 밂 (틱마다 반)
-    public int Dropper;            // 놓은 이 꼬리표 (놓은 뒤 1초 동안 그 원판과 닿지 않는다)
+    public int Dropper;            // 놓은 이 (꼬리표 + 1 · 로봇은 음수 그대로 · 0 없음 — 놓은 틱 · 다음 틱 동안 그 원판과 닿지 않는다)
     public float Still;            // 고요하게 지난 초
     public long Since;             // 놓인 · 마지막으로 선 틱
     public int Spare0, Spare1;     // 판을 이 단에서 한 번만 올리려고 남긴 칸
@@ -58,13 +58,20 @@ public struct PropHit
     public long Tick;
 }
 
-/// <summary>물체가 맞힐 수 있는 이 (⑧이 틱마다 알린다 — 열어 보지 않는 꼬리표의 원판: 사람이면 ⑦ 몸 번호 · 로봇이면 −1−로봇 번호 · 칸 · 반지름 · 무게 · 키 · 누웠나).</summary>
+/// <summary>
+/// 물체가 맞힐 수 있는 이 (⑧이 틱 끝마다 알린다 — 열어 보지 않는 꼬리표의 원판: 사람이면 ⑦ 몸 번호 · 로봇이면 −1−로봇 번호 · 칸 · 반지름 · 무게 · 키 · 누웠나 ·
+/// 그 틱에 지나간 칸 길 (처음 칸부터 지금 칸까지 ≤ 8 — 길 묶음의 PathAt부터 PathN개 · 1이면 서 있었다) · 하던 일의 원인 (찬 것의 원인이 잇는다) ·
+/// 집으려는 물체 Id (0 없음 — 그것은 차지 않는다: 곁에서 손을 뻗는다)).
+/// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PropActor
 {
     public int Tag, Cell;
     public float R, Kg, H;
     public byte Low;
+    public short PathAt;
+    public byte PathN;
+    public int Cause, Target;
 }
 
 /// <summary>
@@ -159,16 +166,24 @@ public sealed partial class Structure
 
     // ───────────────────────── 맞힐 수 있는 이 · 맞음 장부 (PH4b) ─────────────────────────
 
-    private PropActor[] _actors = new PropActor[16];   // 찍지 않는다 — ⑧이 틱마다 ④보다 먼저 쓴다
+    private PropActor[] _actors = new PropActor[16];   // 찍는다 — ⑧이 틱 끝마다 쓰고 ④가 다음 틱에 읽는다
     private int _nActors;
     public const float ActorR = 0.25f;
 
-    /// <summary>요청 (⑧ Mind.Step 끝): 이번 틱 물체가 맞힐 수 있는 이들 (같은 틱에 ④가 읽는다 — 찍지 않는다 · ④는 꼬리표를 열어 보지 않는다).</summary>
-    public void SetActors(ReadOnlySpan<PropActor> actors)
+    /// <summary>
+    /// 요청 (⑧ Mind.Step 끝): 물체가 맞힐 수 있는 이들 · 그 틱에 걸은 길 (paths — 원판마다 PathAt부터 PathN칸) — ④는 다음 틱 물체 걸음에 그 길을 같은 시간표로 따라간다
+    /// (④가 ⑧보다 먼저 돈다 · 화면도 걸음을 한 틱 늦게 메운다). 찍는다 (되살린 세계의 첫 틱도 같은 원판). ④는 꼬리표를 열어 보지 않는다.
+    /// </summary>
+    public void SetActors(ReadOnlySpan<PropActor> actors, ReadOnlySpan<int> paths = default)
     {
         if (_actors.Length < actors.Length) _actors = new PropActor[actors.Length * 2];
         actors.CopyTo(_actors);
         _nActors = actors.Length;
+        if (_actorPath.Length < paths.Length) _actorPath = new int[paths.Length * 2];
+        paths.CopyTo(_actorPath);
+        _nActorPath = paths.Length;
+        for (int a = 0; a < _nActors; a++)
+            if (_actors[a].PathN > 0 && _actors[a].PathAt + _actors[a].PathN > _nActorPath) _actors[a].PathN = 0;   // 길 묶음 밖이면 서 있었다로
     }
 
     /// <summary>요청 (⑧ 다리 — 칸으로 옮기는 날림 · PH4d가 걷는다): 물체가 그 꼬리표를 맞혔다 (에너지 J · 빠르기 · 원인) — ⑦ · ⑥이 읽는다.</summary>
@@ -306,6 +321,7 @@ public sealed partial class Structure
         w.Arr(Grit); w.Arr(GritMat); w.Arr(FurnPlaced); w.Arr(FurnAnchor); w.Arr(FurnProp); w.List(PropHits);
         w.F64(PropPxGone); w.F64(PropPyGone); w.F64(PropLGone); w.F64(FixL); w.F64(ToHostPx); w.F64(ToHostPy); w.F64(ToHostL); w.F64(BrokenKg); w.F64(GritKg);
         w.I32(NextPropId); w.I64(PropSteps); w.I64(Bounces); w.I64(Shattered); w.I64(Toppled); w.I64(TornLoose); w.I64(Rolled); w.I64(IslandMiss);
+        SaveActors(w);
     }
 
     private void LoadProps(StateReader r)
@@ -314,6 +330,7 @@ public sealed partial class Structure
         r.ArrInto(Grit); r.ArrInto(GritMat); r.ArrInto(FurnPlaced); r.ArrInto(FurnAnchor); r.ArrInto(FurnProp); PropHits.Clear(); PropHits.AddRange(r.List<PropHit>());
         PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64();
         NextPropId = r.I32(); PropSteps = r.I64(); Bounces = r.I64(); Shattered = r.I64(); Toppled = r.I64(); TornLoose = r.I64(); Rolled = r.I64(); IslandMiss = r.I64();
+        LoadActors(r);
         _plugStale = true;   // 물체 막음 칸은 장의 PlugProp에서 다시 세운다
         Array.Fill(_mouthTick, long.MinValue);   // 구멍 입 틱 안 캐시도 잊는다 (같은 틱 번호의 다른 세계)
     }

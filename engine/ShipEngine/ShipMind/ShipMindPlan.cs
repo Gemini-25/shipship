@@ -969,7 +969,7 @@ public sealed partial class ShipMind
         if (Imagining || _mind == null) return true;
         Rehearsals++;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var w = sim.Clone();
+        var w = Imagined(sim.Clone());
         var cm = w.Get<ShipMind>(); cm.Imagining = true;
         var wl = w.Get<Life>(); var wm = w.Get<Mind>(); var wf = w.Get<Field>(); var wn = w.Get<Network>();
         int Down() { int n = 0; foreach (var a in wm.Agents) if (a.IsPerson && (wl.Bodies[a.C.Body].Alive == 0 || wl.Bodies[a.C.Body].Conscious == 0)) n++; return n; }

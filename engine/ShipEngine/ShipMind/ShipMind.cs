@@ -1124,7 +1124,7 @@ public sealed partial class ShipMind : IEngine
             {
                 if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
                 int from = -1;
-                if (a.C.AssignedUntil > sim.Tick && !Root(x) && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten or GoalKind.ToiletCare)) // 일상 일(⑪)은 놓고 온다
+                if (a.C.AssignedUntil > sim.Tick && !Root(x) && !Chore(a.C.AssignedGoal)) // 일상 일(⑪)은 놓고 온다
                 {
                     // 이미 맡은 일이 있다 (불의 뿌리 — 눌어붙은 합선 — 는 하던 일을 놓고 간다) · 급한 일(쓰러진 사람 · 불 · 공기 빠짐 · 샘)에는 덜 급한 사건 일을 하던 로봇도 데려온다 (쉬는 로봇이 없을 때만)
                     from = Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;
@@ -1206,6 +1206,11 @@ public sealed partial class ShipMind : IEngine
 
     public long Released;
 
+    /// <summary>⑪ 일감판의 일상 일 (만들기 · 정비 · 청소 · 거두기 · 식량 채워 두기 · 나르기 · 조이기 · 변기 손질 · 쓴 것 채우기 · 줍기) — 사건이 나면 놓고 온다
+    /// (예전엔 나르기 · 채우기 · 줍기가 빠져 — 내려놓은 우주복을 주우러 간 로봇을 일감 기한 두 시간 동안 부르지 않았다).</summary>
+    private static bool Chore(GoalKind g) => g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten
+        or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.Gather;
+
     /// <summary>
     /// ⑩ 판단 엔진: 맡긴 로봇이 막혔나 — 로봇이 남긴 막힘(까닭 · 자리 · 대상)을 사건에 옮겨 적고 일지에 쓴다 (보낸 뒤의 문 · 길 · 물건 막힘만).
     /// 같은 까닭으로 막힌 채 다시 보내면 그 번을 센다 — 대안을 고르는 바탕 (docs/ENGINE.md 판단 엔진).
@@ -1238,7 +1243,7 @@ public sealed partial class ShipMind : IEngine
             if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone || !_mind.HandsOk(a) || !_mind.LegsOk(a)) continue;
             bool mine = a.Id == x.RobotA || a.Id == x.RobotB;
             int from = -1;
-            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Tighten or GoalKind.ToiletCare))
+            if (!mine && a.C.AssignedUntil > sim.Tick && !Chore(a.C.AssignedGoal))
             {
                 // 덜 급한 사건 일을 하던 로봇은 데려올 수 있다 (급한 차례 — 로봇을 맡기는 때와 같은 셈 · take일 때만)
                 from = take && Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;
@@ -1335,11 +1340,21 @@ public sealed partial class ShipMind : IEngine
 
     // ───────────────────────── 상상 (복제 세계) ─────────────────────────
 
+    /// <summary>
+    /// 상상 복제 (봉쇄 상상 · Rehearse · 일꾼 상상): 가벼운 물체 셈을 켠다 (docs/PHYSICS.md §4-2 — 복제를 만드는 코드가 늘 켠다 · 벽시계로 정하지 않는다:
+    /// 1코어 = 4코어 · 상상은 공기 · 사람을 보려는 것 — 물건끼리 부딪힘 · 발에 채임은 셈하지 않는다). 다시보기 · 연출 미리 보기 복제는 그대로 (진짜 세계를 따라간다).
+    /// </summary>
+    public static Sim Imagined(Sim w)
+    {
+        if (w.Find<Structure>() is { } st) st.PropDetail = 0;
+        return w;
+    }
+
     /// <summary>세계를 복제해 두 안(기다림 · 지금 봉쇄)을 각각 5분 돌려 본다 (그 틱에 바로 — 1코어 · 연출의 미리 보기 복제). 복제 안의 주컴퓨터는 상상하지 않고 규칙대로만 한다.</summary>
     private (Imagined wait, Imagined now) Imagine(Sim sim, int room)
     {
         var ws = sim.Clones(2);   // 복제는 차례로 (원래 세계를 동시에 읽지 않게)
-        return ImagineRuns(L, _roomDoors[room], room, sim.Tick, ws[0], ws[1], false);
+        return ImagineRuns(L, _roomDoors[room], room, sim.Tick, Imagined(ws[0]), Imagined(ws[1]), false);
     }
 
     /// <summary>두 복제를 돌려 두 미래를 잰다 — 주컴퓨터 상태를 읽지 않는다 (일꾼에서도 돈다). 두 복제는 서로 닿지 않아 함께 돌린다 · 결과는 순서와 상관없이 같다.</summary>

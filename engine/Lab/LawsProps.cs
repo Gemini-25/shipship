@@ -656,6 +656,25 @@ public static partial class Program
                 same && st.IslandMiss == 0 && worst <= dot && st.PairHits > 0 && awake == 10,
                 $"되살림 같음 {same} · 섬 놓침 {st.IslandMiss} · 마지막 10틱 가장 깊은 겹침 {worst / dot:0.00}도트 · 물체끼리 {st.PairHits} · 깨어 있음 {awake}");
         }
+        // 법칙 14 (섬 · PH6b): 정지 마찰에 붙들린 채 깨어 있는 것 (걷는 이가 깨운 것 — 몸이 없는 배가 1m/s²로 점화해도 정지 타원 안)은 그 힘 몫으로 쓸린 상자를 넓히지 않고 (1.5m 곁 잠든 상자 셋을 쉬는 짝으로 끌지 않는다) ·
+        // 바람 · 틀의 힘이 부는 틱에도 0.1초씩 끊지 않는다 (힘이 틱 안에서 붙든 채다 — 한 걸음에 선다) · 원판 · 벽은 섬을 잇지 않는다 (물체끼리 쓸린 상자 · 맞아 빨라질 몫만)
+        {
+            var s = PropWorld(1, 5);
+            var st = s.Get<Structure>();
+            int held = Slide(s, "식량 상자", 3.5, 4.5, 0, 0);
+            foreach (var (x, y) in new[] { (5.0, 4.5), (5.0, 6.0), (3.5, 6.0) }) Slide(s, "식량 상자", x, y, 0, 0);
+            s.Run(2);   // 모두 잠든다
+            int hi = st.IndexOf(held); var hp = st.Props[hi]; hp.State = 1; hp.Asleep = 0; hp.Still = 0; st.Props[hi] = hp;   // 걷는 이가 깨운 것처럼 (빠르기 0)
+            st.ShipAx = -1.0;
+            long steps0 = st.PropSteps, pairs0 = st.IslandPairs;
+            s.Step();
+            var after = st.Props[st.IndexOf(held)];
+            long steps = st.PropSteps - steps0, pairs = st.IslandPairs - pairs0;
+            int asleep = st.Props.Count(p => p.State == 0);
+            Check("물체끼리 — 섬 (법칙 14): 정지 마찰에 붙들린 채 깨어 있는 식량 상자 (몸이 없는 배가 1m/s²로 점화 — 정지 타원 안)는 1.5m 곁 잠든 상자 셋을 쉬는 짝으로 끌지 않고 · 0.1초씩 끊지 않고 한 걸음에 선다 (자리 그대로 · 넷 다 잠)",
+                pairs == 0 && steps == 1 && after.X == hp.X && after.Y == hp.Y && after.Th == hp.Th && asleep == 4,
+                $"짝 {pairs} · 잔걸음 {steps} · 움직임 {Math.Abs(after.X - hp.X) + Math.Abs(after.Y - hp.Y):0.0e0} · 잠 {asleep}/4");
+        }
     }
 
     /// <summary>바람을 시험이 쓰는 세계 (장은 걸음을 돌지 않는다 — 구조만 돈다 · 공기를 채운 장 · 바닥 중력 g): 바람 칸은 <see cref="Blow"/>로 쓴다.</summary>

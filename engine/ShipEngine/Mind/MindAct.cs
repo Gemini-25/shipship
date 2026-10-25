@@ -191,10 +191,11 @@ public sealed partial class Mind
         a.C.Holding = 255; a.C.HoldCharge = 0;
     }
 
-    private void DropHeld(Agent a)
+    /// <summary>든 것을 놓는다 (내려놓기 — 그 자리에 · thrown이면 쓰러지며 놓친 것 — 걷던 빠르기로 날아간다).</summary>
+    private void DropHeld(Agent a, bool thrown = false)
     {
         if (a.C.Holding == 255) return;
-        int id = _st!.PutItem(a.C.Holding, a.C.HoldCharge, a.C.Cell);   // 바닥에 내려놓는다 (④ 물체 장부에 요청)
+        int id = PutDown(a, a.C.Holding, a.C.HoldCharge, thrown);   // 바닥에 내려놓는다 (④ 물체 장부에 요청 — 제 원판 바깥 · 걷던 쪽 앞부터)
         if (a.C.Holding == iWaste) WasteDown.Add(id);   // 오물 통을 내려놓으면 그 통을 주컴퓨터에 알린다 (주워 비우게)
         a.C.Holding = 255; a.C.HoldCharge = 0;
     }
@@ -827,12 +828,13 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         c.Cell = cell;
+        Walked(a.Id, cell);
         if (a.IsPerson) _life!.Move(c.Body, cell);
         if (c.Carrying >= 0)
         {
             _life!.Move(c.Carrying, cell);
             int va = AgentOfBody(c.Carrying);
-            if (va >= 0) Agents[va].C.Cell = cell;
+            if (va >= 0) { Agents[va].C.Cell = cell; Walked(va, cell); }
         }
     }
 

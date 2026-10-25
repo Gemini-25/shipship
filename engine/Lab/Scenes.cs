@@ -199,6 +199,7 @@ public static partial class Program
             case "dotforms": DotFormsScene(dir); return;
             case "slide": SlideScene(dir); return;
             case "pile": PileScene(dir); return;
+            case "kick": KickScene(dir); return;
             case "props-breach": PropsBreachScene(dir); return;
             case "props-burn": PropsBurnScene(dir); return;
             case "props-track": PropsTrackScene(dir); return;

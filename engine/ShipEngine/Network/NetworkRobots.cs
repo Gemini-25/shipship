@@ -48,6 +48,29 @@ public sealed partial class Network
 
     public ref RobotBody Robot(int id) => ref CollectionsMarshal.AsSpan(Robots)[id];
 
+    /// <summary>
+    /// ④ 물체 맞음 장부의 로봇 꼬리표 (−1−로봇 몸 번호)를 읽는다 — 그 맞은 에너지만큼 충격과 같게 상한다 (다리 E/16kJ · 팔 E/24kJ · 속 E/48kJ · 원인은 그 맞음) · 읽은 것은 지운다
+    /// (사람 꼬리표는 ⑦ 몫으로 남긴다 — ⑥이 ⑦보다 먼저 돈다).
+    /// </summary>
+    private void TakeRobotHits(Sim sim)
+    {
+        var hits = _stc!.PropHits;
+        int n = 0;
+        var span = CollectionsMarshal.AsSpan(Robots);
+        for (int k = 0; k < hits.Count; k++)
+        {
+            var h = hits[k];
+            int i = -1 - h.Tag;
+            if (h.Tag >= 0 || i >= span.Length) { hits[n++] = h; continue; }
+            ref var b = ref span[i];
+            if (b.Core >= 1 || h.E <= 0) continue;
+            Harm(sim, i, ref b, RobotPart.Legs, h.E / 16000f, h.Cause, "날아든 것에 맞아 로봇의 다리가 상했다");
+            Harm(sim, i, ref b, RobotPart.Arms, h.E / 24000f, h.Cause, "날아든 것에 맞아 로봇의 팔이 상했다");
+            Harm(sim, i, ref b, RobotPart.Core, h.E / 48000f, h.Cause, "날아든 것에 맞아 로봇의 속이 상했다");
+        }
+        hits.RemoveRange(n, hits.Count - n);
+    }
+
     /// <summary>다리 — 걷는 빠르기의 몫 (1이면 못 걷는다).</summary>
     public static double RobotPace(in RobotBody b) => b.Legs >= 1 ? 0 : 1 - 0.7 * b.Legs;
     /// <summary>팔 — 손일을 할 수 있나.</summary>
@@ -60,6 +83,7 @@ public sealed partial class Network
     private void RobotStep(Sim sim, double dt)
     {
         if (Robots.Count == 0) return;
+        if (_stc != null && _stc.PropHits.Count > 0) TakeRobotHits(sim);
         var span = CollectionsMarshal.AsSpan(Robots);
         var chem = sim.Find<Chemistry>();
         double h = dt / 3600;

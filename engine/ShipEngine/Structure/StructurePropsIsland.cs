@@ -18,6 +18,18 @@ public sealed partial class Structure
     /// <summary>시험 스위치: 거짓이면 물체끼리 닿지 않는다 (섬은 늘 혼자 — PH4 걸음과 바이트까지 같은지 보는 데만).</summary>
     internal static bool PairsOn = true;
 
+    /// <summary>
+    /// 물체 셈의 자세함 (docs/PHYSICS.md §4-2): 1 온전 · 0 가벼움 (주컴퓨터 상상 복제 — 섬마다 잔걸음 4 · 물체끼리 · 원판 닿음 끔 · 깨짐 · 넘어짐은 PH7 · PH8이 따른다).
+    /// 찍지 않는다 — 복제를 만드는 코드가 늘 정한다 (<see cref="ShipMind.Imagined"/> · 벽시계로 정하지 않는다: 1코어 = 4코어 · 다시보기 · 되살린 세계는 온전 그대로).
+    /// </summary>
+    public int PropDetail = 1;
+
+    /// <summary>물체끼리 닿는가 (시험 스위치 · 가벼운 셈이면 끈다 — 섬은 늘 혼자).</summary>
+    private bool Pairs => PairsOn && PropDetail > 0;
+
+    /// <summary>섬을 지을 때 찾은 짝 수 (틱마다 더한다 · 찍지 않는다 — 보기용: 쓸린 상자가 넓을수록 는다).</summary>
+    public long IslandPairs;
+
     // 칸 통 · 섬 (찍지 않는다 — 깨어 있는 것이 있는 틱마다 다시 짓는다)
     private int[] _propHead = Array.Empty<int>(), _propNext = Array.Empty<int>(), _isl = Array.Empty<int>(), _islAt = Array.Empty<int>(), _mem = Array.Empty<int>();
     private byte[] _role = Array.Empty<byte>();          // 0 섬 밖 · 1 틱 처음에 깨어 있었다 · 2 쉬는 짝 (잠든 채 들어왔다)
@@ -30,13 +42,14 @@ public sealed partial class Structure
 
     private struct PropRun
     {
-        public int I, Host, Steps, Jp, S0, Ns;
+        public int I, Host, Steps, Jp, S0, Ns, Na;   // 정적 닿음 [S0, S0 + Ns) 뒤에 원판 닿음 Na
         public DotForm Fm;
-        public PropShape Sh;
+        public PropShape Sh, Hs;   // Hs · Reach: 섬에 든 때의 껍질 · 닿는 반지름 (쉬는 짝도 — 짝 셈이 잔걸음마다 꼴을 다시 찾지 않게)
+        public double Reach;
         public MaterialDef Mat;
         public (double[] x, double[] y, double reach) Sm;
         public double M, In, Rho, Jw, LastKey, NextJolt, H, FloorL, Ffx, Ffy, Ffw, Tvx, Tvy, Tw;   // 바닥 마찰: 이 잔걸음 한도 μk m g' h · 쌓인 충격량 (운동량 둘 · 돎) · 닿음 목표를 정하는 빠르기 (마찰 뒤)
-        public bool Active, Done, Velo, Paired;
+        public bool Active, Done, Velo, Paired, Kicked, Walked;   // Kicked: 이 틱 원판에 차였다 (원인 마디를 한 번만) · Walked: 곁을 걷는 원판이 있다 (이 틱엔 자지 않는다)
         // 잔걸음 셈값
         public double PreX, PreY, PreTh, PreVx, PreVy, PreW, Gp, MuK, Room, Speed, Fx, Fy, Tq, Wfx, Wfy, Wtq, Wb, Ax, Ay, Al, Acc, Px0, Py0, L0, Lw, StopAt;
         public bool Windy, Framed, Blown;
@@ -47,6 +60,7 @@ public sealed partial class Structure
     {
         public int A, B;   // 섬 안 차례 (B < 0: 바닥 · 벽 · 가구)
         public double Rx, Ry, Qx, Qy, Nx, Ny, Sep, Mu, E, Kn, Kt, Target, Jn, Jt;   // R: A 쪽 팔 · Q: B 쪽 팔 · 법선은 B에서 A 쪽
+        public double Ux, Uy, Cap;   // B < 0 쪽의 빠르기 (걷는 원판 — 벽 · 가구는 0) · 법선 충격량 한도 (원판: 150N × h — 벽 · 가구는 끝없음)
         public int Cell, Key;
         public bool Bounce;
     }
@@ -112,7 +126,7 @@ public sealed partial class Structure
             StepIsland(sim, all, start, end - start, p0, pp - p0, dt, world);
             start = end; roots--;
         }
-        if (PairsOn) CountMisses(all, world);
+        if (Pairs) CountMisses(all, world);
     }
 
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -154,7 +168,7 @@ public sealed partial class Structure
             _role[i] = 1;
             if (Collides(all[i])) { _queue.Add(i); SweptBox(all[i], world ? _hostOf[i] : -1, dt, i); }
         }
-        if (!PairsOn || _queue.Count == 0) return;
+        if (!Pairs || _queue.Count == 0) return;
         double pad = MaxReach() + 2 * DotForm.Dot;
         int actives = _queue.Count;
         for (int q = 0; q < actives; q++)
@@ -207,6 +221,7 @@ public sealed partial class Structure
         int w = 0;
         for (int k = 0; k < ps.Length; k++) if (w == 0 || ps[k] != ps[w - 1]) ps[w++] = ps[k];
         _pairs.RemoveRange(w, _pairs.Count - w);
+        IslandPairs += w;
     }
 
     /// <summary>셸 정렬 (Ciura 간격 — 짝은 수십 · 일반화 정렬을 처음 부를 때의 번역 없이).</summary>
@@ -278,11 +293,22 @@ public sealed partial class Structure
         var fm = PropForm(p);
         var (m, I) = MassOf(p);
         double reach = SamplesOf(fm).reach, a = 0;
-        if (_windy && WindForce(p, fm, 0, out double wx, out double wy, out double wt)) a += Math.Sqrt(wx * wx + wy * wy) / m + Math.Abs(wt) / I * reach;
+        double wx = 0, wy = 0, wt = 0;
+        if (_windy && WindForce(p, fm, 0, out wx, out wy, out wt)) a += Math.Sqrt(wx * wx + wy * wy) / m + Math.Abs(wt) / I * reach;
+        // 놓인 채 (빠르기 0) 정지 타원이 바람 · 틀의 힘을 틱 처음 · 끝에 다 붙든다 → 힘으로는 가지 않는다 (바람은 틱 안에서 줄기만 한다 — 잔걸음 처음의 붙듦과 같은 판정 ·
+        // 걷는 이에게 깨운 것이 섬 하나를 바람 몫만큼 넓혀 곁 물건을 다 쉬는 짝으로 끌지 않게 · 차이거나 맞아 움직이면 살핀 곳을 벗어날 때 새 짝을 찾는다)
+        int c0 = CellOf(p);
+        bool rest = p.Vx == 0 && p.Vy == 0 && p.W == 0 && c0 >= 0;
+        double muS = rest ? StaticShare * MaterialOf(p).Mu * (F.Stored(T.sWater, c0) > WetMol ? WetShare : 1) : 0, nf = rest ? m * Gravity * F.Grav[c0] : 0;
+        if (rest && a > 0 && !Holds(wx, wy, wt, muS, nf, fm.Rho)) rest = false;
         if (_framed)
             foreach (double tau in stackalloc[] { 0, dt })
                 if (FrameForce(p, host, tau, 0, m, I, out double fx, out double fy, out double tq, out double fw))
+                {
                     a = Math.Max(a, Math.Sqrt(fx * fx + fy * fy) / m + Math.Abs(tq) / I * reach + fw * fw * reach);
+                    if (rest && !(Holds(wx + fx, wy + fy, wt + tq, muS, nf, fm.Rho) && Holds(fx, fy, tq, muS, nf, fm.Rho))) rest = false;   // 바람이 줄어 틀 힘만 남아도
+                }
+        if (rest) a = 0;
         double ext = reach + 2 * DotForm.Dot + a * dt * dt;   // ½ · 2a · dt²
         if (host >= 0)
             foreach (var j in _jolts)
@@ -496,19 +522,21 @@ public sealed partial class Structure
         // 맞힐 수 있는 이 (⑧이 알린 원판 — 이번 틱에 닿을 만한 것 · 많아야 4): 이미 닿아 있던 이는 새로 맞힌 것이 아니다
         r.Ns = 0;
         int nNear = 0;
-        if (_nActors > 0)
+        if (_nActors > 0 && PropDetail > 0)   // 가벼운 셈 (상상 복제)은 원판과 닿지 않는다
         {
             double far = (Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy) + Math.Abs(p.W) * r.Sm.reach) * dt + r.Sm.reach + ActorR;
             for (int a = 0; a < _nActors && nNear < 4; a++)
             {
                 int ac = _actors[a].Cell;
                 if (ac < 0 || ac >= L.N) continue;
-                double ax = L.X(ac) + 0.5 - p.X, ay = L.Y(ac) + 0.5 - p.Y;
-                if (ax * ax + ay * ay > far * far) continue;
-                _runNear[4 * k + nNear] = a; _runTouch[4 * k + nNear] = TouchesActor(p, r.Sm, _actors[a]); nNear++;
+                if (PathDistance(_actors[a], p.X, p.Y) > far) continue;   // 이번 틱 길 (서 있으면 제 칸 가운데) 가운데 닿을 만한 것
+                ActorAt(_actors[a], tau, dt, out double ax, out double ay, out _, out _);
+                _runNear[4 * k + nNear] = a; _runTouch[4 * k + nNear] = TouchesActor(p, r.Sm, ax, ay, _actors[a].R); nNear++;
             }
         }
         _nearCount[k] = nNear;
+        r.Walked = false;
+        for (int q = 0; q < nNear; q++) r.Walked |= _actors[_runNear[4 * k + q]].PathN >= 2 && !DropperOf(p, _actors[_runNear[4 * k + q]]);
         if (tau > 0)
         {
             // 쉬다 깼다: 그 때까지 그 몸의 덜컹은 실려 갔다 (반작용이 맞춘다) — 지난 덜컹의 각속도만 잇는다
@@ -550,6 +578,7 @@ public sealed partial class Structure
             ref var r = ref _runs[k];
             r = default;
             r.I = i; r.Host = world ? _hostOf[i] : -1;
+            r.Hs = PropForm(all[i]).Shape; r.Reach = r.Hs.Hit.reach;
             _nearCount[k] = 0;
             for (int b = 0; b < 4; b++) _cb[4 * k + b] = _box[4 * i + b];
             if (_role[i] == 1) { if (world) _stepped[i] = true; JoinRun(ref r, ref all[i], k, 0, dt); }
@@ -582,7 +611,7 @@ public sealed partial class Structure
             }
             if (!anyActive) break;
             // 살핀 곳을 벗어날 것은 새 짝을 찾는다 (제 잔걸음 길이로 갈 만큼)
-            if (PairsOn)
+            if (Pairs)
                 for (int k = 0; k < _icount; k++)
                 {
                     if (!_runs[k].Active || _runs[k].Done) continue;
@@ -591,22 +620,25 @@ public sealed partial class Structure
                     if (p.X - e >= _cb[4 * k] && p.Y - e >= _cb[4 * k + 1] && p.X + e <= _cb[4 * k + 2] && p.Y + e <= _cb[4 * k + 3]) continue;
                     Discover(all, k, p.X - e, p.Y - e, p.X + e, p.Y + e, world);
                 }
-            // 짝: 서로 빠르기로 건너뛰지 않게 · 붙을 만하면 짧게
+            // 짝: 서로 빠르기로 건너뛰지 않게 · 붙을 만하면 짧게 (우주로 갔거나 구멍을 막은 것과의 짝은 내린다 — 차례 그대로)
             bool pile = false;
+            int keep = 0;
+            for (int q = 0; q < _ipairs.Count; q++) { var pq = _ipairs[q]; if (!_runs[pq.a].Done && !_runs[pq.b].Done) _ipairs[keep++] = pq; }
+            if (keep < _ipairs.Count) _ipairs.RemoveRange(keep, _ipairs.Count - keep);
             for (int q = 0; q < _ipairs.Count; q++)
             {
                 var (ka, kb) = _ipairs[q];
                 ref var ra = ref _runs[ka]; ref var rb = ref _runs[kb];
-                if (ra.Done || rb.Done || !ra.Active && !rb.Active) continue;
+                if (!ra.Active && !rb.Active) continue;
                 ref var a = ref all[ra.I]; ref var b = ref all[rb.I];
-                double reachA = SamplesOf(PropForm(a)).reach, reachB = SamplesOf(PropForm(b)).reach;
+                double reachA = ra.Reach, reachB = rb.Reach;
                 double dx = a.X - b.X, dy = a.Y - b.Y, gap = Math.Sqrt(dx * dx + dy * dy) - reachA - reachB;
                 double rvx = a.Vx - b.Vx, rvy = a.Vy - b.Vy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(a.W) * reachA + Math.Abs(b.W) * reachB;
                 if (rel > 0) h = Math.Min(h, Math.Max(2 * DotForm.Dot, gap) / rel);
                 if (gap <= 2 * DotForm.Dot + rel * h) pile = true;
             }
             if (pile) h = Math.Min(h, MaxPileH);
-            if (++steps >= MaxPropSteps) h = Math.Min(rem, Math.Max(1e-9, nextJolt - tau));
+            if (++steps >= (PropDetail > 0 ? MaxPropSteps : LightPropSteps)) h = Math.Min(rem, Math.Max(1e-9, nextJolt - tau));
             GrowContacts(4 * _icount + 2 * _ipairs.Count + 4);
             // ── 2. 닿음: 바닥 · 벽 · 가구 (깨어 있는 것마다 — 받은 힘만큼 빨라진 길로) · 물체끼리 (껍질) ──
             int nStage = 0;
@@ -614,7 +646,7 @@ public sealed partial class Structure
             {
                 ref var r = ref _runs[k];
                 r.Velo = false; r.Paired = false; r.FloorL = 0;
-                r.S0 = nStage; r.Ns = 0;   // 쉬는 것 · 끝난 것도 비운다 (잠들기 전 잔걸음의 닿음 자리가 차례에 다시 들지 않게)
+                r.S0 = nStage; r.Ns = 0; r.Na = 0;   // 쉬는 것 · 끝난 것도 비운다 (잠들기 전 잔걸음의 닿음 자리가 차례에 다시 들지 않게)
                 if (!r.Active || r.Done) continue;
                 ref var p = ref all[r.I];
                 r.Px0 = r.M * p.Vx; r.Py0 = r.M * p.Vy; r.L0 = r.M * (p.X * p.Vy - p.Y * p.Vx) + r.In * p.W;
@@ -633,9 +665,34 @@ public sealed partial class Structure
                         for (int c = 0; c < nc; c++)
                         {
                             ref var hc = ref _propHits[c];
-                            _icStage[nStage++] = new IslandContact { A = k, B = -1, Rx = hc.Rx, Ry = hc.Ry, Nx = hc.Nx, Ny = hc.Ny, Sep = hc.Sep, Mu = hc.Mu, E = hc.E, Kn = hc.Kn, Kt = hc.Kt, Cell = hc.Cell, Key = hc.Quad };
+                            _icStage[nStage++] = new IslandContact { A = k, B = -1, Rx = hc.Rx, Ry = hc.Ry, Nx = hc.Nx, Ny = hc.Ny, Sep = hc.Sep, Mu = hc.Mu, E = hc.E, Kn = hc.Kn, Kt = hc.Kt, Cell = hc.Cell, Key = hc.Quad, Cap = double.PositiveInfinity };
                         }
                     }
+                }
+                // 걷는 이 · 선 이 · 누운 이의 원판 (τ 때 자리 · 빠르기 — 다가오면 반발 0.2 · 미는 힘 150N 한도 · 놓은 이와는 닿지 않는다)
+                int nNear = _nearCount[k];
+                for (int q = 0; q < nNear; q++)
+                {
+                    int ai = _runNear[4 * k + q];
+                    ref var ac = ref _actors[ai];
+                    if (DropperOf(p, ac)) continue;
+                    ActorAt(ac, tau, dt, out double ax, out double ay, out double avx, out double avy);
+                    double sep = DiscSeparation(p, r.Sh, ax, ay, ac.R, out double nx, out double ny, out double cpX, out double cpY);
+                    double rvx = p.Vx - avx, rvy = p.Vy - avy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(p.W) * r.Sm.reach;
+                    if (sep > rel * h + Slop) continue;
+                    if (!r.Velo)
+                    {
+                        // 원판에만 닿는다: 받은 힘만큼 빨라진 빠르기 (정적 닿음의 pk와 같게)
+                        if (r.Blown) { p.Vx += r.Ax * h; p.Vy += r.Ay * h; p.W += r.Al * h; }
+                        if (r.Wb != 0) Coriolis(ref p, -2 * r.Wb * h);
+                        r.Velo = true;
+                    }
+                    double rx = cpX - p.X, ry = cpY - p.Y, rn = rx * ny - ry * nx, rt = rx * nx + ry * ny;
+                    // 한도: 원판이 미는 몫은 150N × h · 물체가 제 빠르기로 원판에 부딪는 몫은 그 빠르기를 되튀기는 데까지 (몸이 받아 낸다)
+                    double own = Math.Max(0, -((p.Vx - p.W * ry) * nx + (p.Vy + p.W * rx) * ny));
+                    _icStage[nStage++] = new IslandContact { A = k, B = -1, Rx = rx, Ry = ry, Nx = nx, Ny = ny, Sep = sep, Mu = Math.Sqrt(r.Mat.Mu * FootMu), E = ActorRest, Cell = -2 - ai,
+                        Kn = 1 / r.M + rn * rn / r.In, Kt = 1 / r.M + rt * rt / r.In, Ux = avx, Uy = avy, Cap = ActorPushN * h + (1 + ActorRest) * own / (1 / r.M + rn * rn / r.In), Key = 8 + ai };
+                    r.Na++;
                 }
             }
             // 물체끼리 (섬 짝 — 껍질이 margin 안 · 법선은 큰 Id → 작은 Id 쪽)
@@ -646,12 +703,11 @@ public sealed partial class Structure
                 ref var ra = ref _runs[ka]; ref var rb = ref _runs[kb];
                 if (ra.Done || rb.Done || !ra.Active && !rb.Active) continue;
                 ref var a = ref all[ra.I]; ref var b = ref all[rb.I];
-                var fa = PropForm(a); var fb = PropForm(b);
-                double reachA = fa.Shape.Hit.reach, reachB = fb.Shape.Hit.reach;
+                double reachA = ra.Reach, reachB = rb.Reach;
                 double rvx = a.Vx - b.Vx, rvy = a.Vy - b.Vy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(a.W) * reachA + Math.Abs(b.W) * reachB;
                 double margin = rel * h + Slop, dx = a.X - b.X, dy = a.Y - b.Y, far = reachA + reachB + margin;
                 if (dx * dx + dy * dy > far * far) continue;
-                int npt = PairPoints(a, fa.Shape, b, fb.Shape, margin, cpx, cpy, csep, ckey, out double nx, out double ny);
+                int npt = PairPoints(a, ra.Hs, b, rb.Hs, margin, cpx, cpy, csep, ckey, out double nx, out double ny);
                 if (npt == 0) continue;
                 if (!ra.Active) Rest(ref ra, ref a, h); if (!rb.Active) Rest(ref rb, ref b, h);
                 var ma = MaterialOf(a); var mb = MaterialOf(b);
@@ -660,7 +716,7 @@ public sealed partial class Structure
                 {
                     double rax = cpx[c] - a.X, ray = cpy[c] - a.Y, rbx = cpx[c] - b.X, rby = cpy[c] - b.Y;
                     double rna = rax * ny - ray * nx, rnb = rbx * ny - rby * nx, rta = rax * nx + ray * ny, rtb = rbx * nx + rby * ny;
-                    _icStage[nStage++] = new IslandContact { A = ka, B = kb, Rx = rax, Ry = ray, Qx = rbx, Qy = rby, Nx = nx, Ny = ny, Sep = csep[c], Mu = mu, E = e, Cell = -1,
+                    _icStage[nStage++] = new IslandContact { A = ka, B = kb, Rx = rax, Ry = ray, Qx = rbx, Qy = rby, Nx = nx, Ny = ny, Sep = csep[c], Mu = mu, E = e, Cell = -1, Cap = double.PositiveInfinity,
                         Kn = 1 / ra.M + 1 / rb.M + rna * rna / ra.In + rnb * rnb / rb.In, Kt = 1 / ra.M + 1 / rb.M + rta * rta / ra.In + rtb * rtb / rb.In,
                         Key = ckey[c] };
                     nPair++;
@@ -672,8 +728,9 @@ public sealed partial class Structure
             for (int o = 0; o < _icount; o++)
             {
                 int k = _iord[o];
-                for (int c = 0; c < _runs[k].Ns; c++) _ic[_nic++] = _icStage[_runs[k].S0 + c];
-                _runs[k].S0 = _nic - _runs[k].Ns;
+                for (int c = 0; c < _runs[k].Ns + _runs[k].Na; c++) _ic[_nic++] = _icStage[_runs[k].S0 + c];
+                _runs[k].S0 = _nic - _runs[k].Ns - _runs[k].Na;
+                if (nPair == 0 || !_runs[k].Paired) continue;   // 짝 닿음이 없는 것은 제 정적 닿음뿐
                 for (int o2 = o + 1; o2 < _icount; o2++)
                 {
                     int k2 = _iord[o2];
@@ -717,7 +774,7 @@ public sealed partial class Structure
             {
                 ref var ct = ref _ic[c];
                 ref var a = ref _runs[ct.A];
-                double vn0 = (a.Tvx - a.Tw * ct.Ry) * ct.Nx + (a.Tvy + a.Tw * ct.Rx) * ct.Ny;
+                double vn0 = (a.Tvx - a.Tw * ct.Ry - ct.Ux) * ct.Nx + (a.Tvy + a.Tw * ct.Rx - ct.Uy) * ct.Ny;
                 if (ct.B >= 0) { ref var b = ref _runs[ct.B]; vn0 -= (b.Tvx - b.Tw * ct.Qy) * ct.Nx + (b.Tvy + b.Tw * ct.Qx) * ct.Ny; }
                 ct.Bounce = -vn0 > BounceV && (ct.Sep <= 0 || -vn0 * h > ct.Sep);
                 ct.Target = ct.Bounce ? -ct.E * vn0 : -Math.Max(ct.Sep, 0) / h;
@@ -734,6 +791,23 @@ public sealed partial class Structure
                 {
                     ref var r = ref _runs[k];
                     for (int c = r.S0; c < r.S0 + r.Ns; c++) if (_ic[c].Bounce && _ic[c].Jn > 0) { Bounces++; break; }
+                }
+                for (int c = 0; c < _nic; c++)
+                {
+                    ref var ct = ref _ic[c];
+                    if (ct.Cell > -2 || ct.Jn <= 0) continue;
+                    ref var kr = ref _runs[ct.A];
+                    ref var kp = ref all[kr.I];
+                    int ai = -2 - ct.Cell;
+                    ref var ac = ref _actors[ai];
+                    // 원판에 새로 닿았다 → 맞음 장부 (부딪기 직전 서로 빠르기 — 원판이 되튀겨 몸에 들지 않아도)
+                    for (int q = 0; q < _nearCount[ct.A]; q++)
+                        if (_runNear[4 * ct.A + q] == ai && !_runTouch[4 * ct.A + q]) { ActorHit(sim, kp, ac, kr.Tvx - ct.Ux, kr.Tvy - ct.Uy); _runTouch[4 * ct.A + q] = true; }
+                    if (kr.Kicked) continue;
+                    // 원판이 밀었다 (걷던 이 · 선 이에게 부딪혀 튐): 원인은 그 이가 하던 일에 잇는다
+                    kp.Cause = sim.Causes.Add(CauseKind.Impact, ac.PathN >= 2 ? $"지나가던 발에 채인 {PropName(kp)}" : $"사람 · 로봇에게 부딪혀 튄 {PropName(kp)}", sim.Tick, ac.Cell, ac.Cause != 0 ? ac.Cause : kp.Cause);
+                    kp.PushImp = (float)ct.Jn;
+                    kr.Kicked = true;
                 }
                 int lastA = -1, lastB = -1, hitA = -1, hitB = -1;
                 for (int c = 0; c < _nic; c++)
@@ -768,7 +842,7 @@ public sealed partial class Structure
                     r.Speed = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy) + Math.Abs(p.W) * r.Sm.reach; r.H = h;
                 }
                 double e = _runs[k].Sm.reach + 2 * DotForm.Dot + _runs[k].Speed * h;
-                if (PairsOn) Discover(all, k, p.X - e, p.Y - e, p.X + e, p.Y + e, world);   // 붙어 있던 것을 다음 잔걸음부터 민다
+                if (Pairs) Discover(all, k, p.X - e, p.Y - e, p.X + e, p.Y + e, world);   // 붙어 있던 것을 다음 잔걸음부터 민다
                 ref var pw = ref all[_runs[k].I];
                 pw.X += pw.Vx * h; pw.Y += pw.Vy * h; pw.Th += pw.W * h;
             }
@@ -803,7 +877,7 @@ public sealed partial class Structure
             int ij = _imem[j];
             if (PairedIn(k, j)) continue;
             ref var q = ref all[ij];
-            double e = SamplesOf(PropForm(q)).reach + 2 * DotForm.Dot + (_runs[j].Active ? _runs[j].Speed * _runs[j].H : 0);
+            double e = _runs[j].Reach + 2 * DotForm.Dot + (_runs[j].Active ? _runs[j].Speed * _runs[j].H : 0);
             if (q.X + e < x0 || q.X - e > x1 || q.Y + e < y0 || q.Y - e > y1) continue;
             _ipairs.Add(i < ij ? (k, j) : (j, k));
         }
@@ -820,7 +894,8 @@ public sealed partial class Structure
             GrowMembers(_icount + 1);
             int kn = _icount++;
             _imem[kn] = j; _nearCount[kn] = 0;
-            _runs[kn] = new PropRun { I = j, Host = host };
+            var hs = PropForm(all[j]).Shape;
+            _runs[kn] = new PropRun { I = j, Host = host, Hs = hs, Reach = hs.Hit.reach };
             _cb[4 * kn] = all[j].X - e; _cb[4 * kn + 1] = all[j].Y - e; _cb[4 * kn + 2] = all[j].X + e; _cb[4 * kn + 3] = all[j].Y + e;
             int o = kn;   // Id 차례로 끼운다
             while (o > 0 && _imem[_iord[o - 1]] > j) { _iord[o] = _iord[o - 1]; o--; }
@@ -902,18 +977,31 @@ public sealed partial class Structure
         double ax = fx / m, ay = fy / m, al = tq / I, acc = blown ? Math.Sqrt(ax * ax + ay * ay) + Math.Abs(al) * sm.reach : 0;
         double room = ClearAt(c) - sm.reach, gap = room, h = rem;
         int nNear = _nearCount[k];
-        for (int q = 0; q < nNear; q++)   // 원판도 건너뛰지 않게 (닿을 만큼만 간다)
+        double hAct = double.PositiveInfinity;
+        for (int q = 0; q < nNear; q++)   // 원판도 건너뛰지 않게 (닿을 만큼만 간다 · 걷는 원판은 서로 다가오는 빠르기로)
         {
             ref var a = ref _actors[_runNear[4 * k + q]];
-            double dx = L.X(a.Cell) + 0.5 - p.X, dy = L.Y(a.Cell) + 0.5 - p.Y;
-            gap = Math.Min(gap, Math.Sqrt(dx * dx + dy * dy) - sm.reach - a.R);
+            if (a.PathN < 2)
+            {
+                double dx = L.X(a.Cell) + 0.5 - p.X, dy = L.Y(a.Cell) + 0.5 - p.Y;
+                gap = Math.Min(gap, Math.Sqrt(dx * dx + dy * dy) - sm.reach - a.R);
+                continue;
+            }
+            ActorAt(a, tau, dt, out double dxA, out double dyA, out double avx, out double avy);
+            double ex = dxA - p.X, ey = dyA - p.Y, close = speed + Math.Sqrt(avx * avx + avy * avy);
+            if (close > 0) hAct = Math.Min(hAct, Math.Max(2 * DotForm.Dot, Math.Sqrt(ex * ex + ey * ey) - sm.reach - a.R) / close);
         }
         double ell = Math.Max(2 * DotForm.Dot, gap);
+        if (hAct < h) h = hAct;
         if (speed > 0) h = Math.Min(h, ell / speed);
         if (w > 0) h = Math.Min(h, MaxPropTurn / w);
         if (acc > 0) h = Math.Min(h, 2 * ell / (speed + Math.Sqrt(speed * speed + 2 * acc * ell)));   // 힘을 받아 빨라져도 ℓ 넘게 가지 않는다 (아주 작은 힘에도 0이 되지 않는 꼴)
         if (blown && al != 0) h = Math.Min(h, 2 * MaxPropTurn / (w + Math.Sqrt(w * w + 2 * Math.Abs(al) * MaxPropTurn)));
-        if ((speed > 0 || blown) && gp > 0 && muK > 0 || _windy || framed) h = Math.Min(h, MaxPropH);   // 바람 · 틀의 힘은 틱 안에서 준다
+        // 놓인 채 붙들린 것 (빠르기 0 · 정지 타원이 지금 바람 · 틀의 힘과 틱 끝 틀의 힘을 다 붙든다 — 바람은 틱 안에서 줄기만 한다)은 0.1초씩 끊지 않는다 (걷는 이 곁에서 깨어 있는 것 —
+        // 걷는 원판 · 짝 · 덜컹이 다가오는 때까지만 간다)
+        bool held = speed == 0 && !blown && (!framed || !FrameForce(p, host, dt, r.Jw, m, I, out double efx, out double efy, out double etq, out _) ||
+            Holds(efx, efy, etq, StaticShare * muK, m * gp, rho) && Holds(wfx + efx, wfy + efy, wtq + etq, StaticShare * muK, m * gp, rho));
+        if ((speed > 0 || blown) && gp > 0 && muK > 0 || (_windy || framed) && !held) h = Math.Min(h, MaxPropH);   // 바람 · 틀의 힘은 틱 안에서 준다
         if (r.NextJolt - tau < h) h = Math.Max(1e-9, r.NextJolt - tau);   // 덜컹 때에 맞춰 끊는다
         r.Steps++;
         r.H = h; r.Gp = gp; r.MuK = muK; r.Room = room; r.Speed = speed;
@@ -938,9 +1026,11 @@ public sealed partial class Structure
         for (int q = 0; q < nNear; q++)
         {
             int a = _runNear[4 * k + q];
-            bool now = TouchesActor(p, sm, _actors[a]);
-            if (now && !_runTouch[4 * k + q]) ActorHit(sim, p, _actors[a]);
-            _runTouch[4 * k + q] = now;
+            ActorAt(_actors[a], dt - rem, dt, out double ax, out double ay, out double avx, out double avy);
+            bool skip = DropperOf(p, _actors[a]);
+            bool now = !skip && TouchesActor(p, sm, ax, ay, _actors[a].R);
+            if (now && !_runTouch[4 * k + q]) ActorHit(sim, p, _actors[a], p.Vx - avx, p.Vy - avy);
+            _runTouch[4 * k + q] = !skip && (now || _runTouch[4 * k + q] && DiscSeparation(p, r.Sh, ax, ay, _actors[a].R, out _, out _, out _, out _) <= 2 * DotForm.Dot);   // 맞은 뒤 붙어 있는 동안은 새로 맞은 것이 아니다
         }
         if (tr != null)
         {
@@ -966,7 +1056,7 @@ public sealed partial class Structure
             if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
         }
         if (gone) { TrackEnd(tr, p, dt - rem, ref r.LastKey); r.Done = true; return; }
-        bool still = r.Gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0 && double.IsPositiveInfinity(r.NextJolt);
+        bool still = r.Gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0 && double.IsPositiveInfinity(r.NextJolt) && !r.Walked;   // 걷는 원판이 아직 지나가는 틱이면 자지 않는다 (깨운 까닭)
         p.Still = still ? p.Still + (float)h : 0;
         if (p.Still >= SleepSec)
         {
@@ -1055,14 +1145,14 @@ public sealed partial class Structure
                 if (ct.B < 0)
                 {
                     double m = ra.M, I = ra.In;
-                    double vx = p.Vx - p.W * ct.Ry, vy = p.Vy + p.W * ct.Rx;
+                    double vx = p.Vx - p.W * ct.Ry - ct.Ux, vy = p.Vy + p.W * ct.Rx - ct.Uy;
                     double vt = vx * tx + vy * ty, lim = ct.Mu * ct.Jn;
                     double jt = Math.Clamp(ct.Jt - vt / ct.Kt, -lim, lim), djt = jt - ct.Jt;
                     ct.Jt = jt;
                     p.Vx += djt * tx / m; p.Vy += djt * ty / m; p.W += djt * (ct.Rx * ty - ct.Ry * tx) / I;
-                    vx = p.Vx - p.W * ct.Ry; vy = p.Vy + p.W * ct.Rx;
+                    vx = p.Vx - p.W * ct.Ry - ct.Ux; vy = p.Vy + p.W * ct.Rx - ct.Uy;
                     double vn = vx * ct.Nx + vy * ct.Ny;
-                    double jn = Math.Max(0, ct.Jn + (ct.Target - vn) / ct.Kn), dj = jn - ct.Jn;
+                    double jn = Math.Min(ct.Cap, Math.Max(0, ct.Jn + (ct.Target - vn) / ct.Kn)), dj = jn - ct.Jn;
                     ct.Jn = jn;
                     p.Vx += dj * ct.Nx / m; p.Vy += dj * ct.Ny / m; p.W += dj * (ct.Rx * ct.Ny - ct.Ry * ct.Nx) / I;
                 }
@@ -1097,7 +1187,7 @@ public sealed partial class Structure
         for (int c = 0; c < _nic; c++)
         {
             ref var ct = ref _ic[c];
-            if (ct.A != k && ct.B != k || ct.Sep >= -Slop) continue;
+            if (ct.A != k && ct.B != k || ct.Sep >= -Slop || ct.Cell <= -2) continue;   // 원판은 자리로 떼지 않는다 (발밑의 것)
             int g = ct.B < 0 ? -1 : ct.A == k ? ct.B : ct.A;
             if (g != group) { tx += sx; ty += sy; sx = sy = 0; group = g; }
             double d = FixShare * (-ct.Sep - Slop);

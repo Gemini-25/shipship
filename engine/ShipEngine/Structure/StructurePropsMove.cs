@@ -72,7 +72,7 @@ public sealed partial class Structure
     internal const System.Runtime.CompilerServices.MethodImplOptions Hot = System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization;
 
     public const double Gravity = 9.8, WetShare = 0.33, WetMol = 50, SleepV = 1e-3, SleepW = 0.01, SleepSec = 0.5, MaxPropH = 0.1, MaxPropTurn = 0.1;
-    public const int MaxPropSteps = 1024;
+    public const int MaxPropSteps = 1024, LightPropSteps = 4;   // 섬마다 한 틱 잔걸음 상한 (온전 · 가벼운 셈 — 상상 복제)
 
     /// <summary>물체의 질량 · 회전관성 (아직 깨지 않아 몸 값이 비었으면 꼴에서).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -128,6 +128,7 @@ public sealed partial class Structure
         if (_windy && all.Length > 0) any |= WakeByWind(all);   // 깨우기: 바람 · 구멍 입 (③ 이 틱 바람이 분 칸 곁)
         if (_jolts.Count > 0) any |= WakeByJolts(all);        // 덜컹 (몸 걸음 안의 밂)
         if (_framed) any |= WakeByFrame(all, world);           // 옆 가속 (점화 · 뿜는 틈 · 도는 몸)
+        if (_nActors > 0 && PropDetail > 0 && all.Length > 0) any |= WakeByActors(all);   // 걷는 이 (지난 틱 길에 닿을 잠든 것)
         if (any)
         {
             BuildClearance();
@@ -154,11 +155,11 @@ public sealed partial class Structure
         lastKey = double.PositiveInfinity;   // 이 틱은 끝 (한 번만)
     }
 
-    /// <summary>물체 몸이 그 원판에 닿았나 (가운데 · 껍질 꼭짓점 · 테두리 표본 가운데 하나가 원판 안).</summary>
+    /// <summary>물체 몸이 그 원판 (가운데 ax, ay · 반지름 r)에 닿았나 (가운데 · 껍질 꼭짓점 · 테두리 표본 가운데 하나가 원판 안).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private bool TouchesActor(in Prop p, (double[] x, double[] y, double reach) sm, in PropActor a)
+    private static bool TouchesActor(in Prop p, (double[] x, double[] y, double reach) sm, double ax, double ay, double r)
     {
-        double ax = L.X(a.Cell) + 0.5, ay = L.Y(a.Cell) + 0.5, r2 = a.R * a.R;
+        double r2 = r * r;
         if ((p.X - ax) * (p.X - ax) + (p.Y - ay) * (p.Y - ay) < r2) return true;
         double cs = Math.Cos(p.Th), sn = Math.Sin(p.Th);
         for (int k = 0; k < sm.x.Length; k++)
@@ -170,12 +171,13 @@ public sealed partial class Structure
     }
 
     /// <summary>
-    /// 물체가 원판에 새로 닿았다 → 맞음 장부 (꼬리표 · 그 칸 · ½mv² · 질량 · 빠르기 · 원인 — 0.5m/s 넘게 부딪으면 '날아든 …에 맞았다' 마디를 민 원인에 잇는다).
-    /// 원판은 아직 물체를 밀어내지 않는다 (원판 충격량은 PH6b) — 맞음만 적는다.
+    /// 물체가 원판에 새로 닿았다 (서로 빠르기 rvx, rvy) → 맞음 장부 (꼬리표 · 그 칸 · ½m v_rel² · 질량 · 서로 빠르기 · 원인 — 0.5m/s 넘게 부딪으면 '날아든 …에 맞았다' 마디를 민 원인에 잇는다).
+    /// 원판이 물체를 되튀기는 몫은 섬의 충격량이 셈한다 (PH6b) — 여기는 맞음만 적는다.
     /// </summary>
-    private void ActorHit(Sim sim, in Prop p, in PropActor a)
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
+    private void ActorHit(Sim sim, in Prop p, in PropActor a, double rvx, double rvy)
     {
-        double v2 = p.Vx * p.Vx + p.Vy * p.Vy, speed = Math.Sqrt(v2);
+        double v2 = rvx * rvx + rvy * rvy, speed = Math.Sqrt(v2);
         int cause = speed > BounceV ? sim.Causes.Add(CauseKind.Impact, $"날아든 {PropName(p)}에 맞았다", sim.Tick, a.Cell, p.Cause) : p.Cause;
         PropHits.Add(new PropHit { Tag = a.Tag, Cell = a.Cell, E = (float)(0.5 * p.Kg * v2), Kg = p.Kg, Speed = (float)speed, Cause = cause, Tick = sim.Tick });
     }

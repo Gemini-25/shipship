@@ -118,7 +118,7 @@ public sealed partial class ShipMind
                 if (WorkerDelayMs > 0) Thread.Sleep(WorkerDelayMs);
                 var w0 = new Sim(setup); w0.Load(snap!, len);
                 var w1 = new Sim(setup); w1.Load(snap!, len);
-                return ImagineRuns(layout, doors, room, tick, w0, w1, true);
+                return ImagineRuns(layout, doors, room, tick, Imagined(w0), Imagined(w1), true);
             }
             finally { thread.Priority = pri; Sim.InWorker = false; }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);

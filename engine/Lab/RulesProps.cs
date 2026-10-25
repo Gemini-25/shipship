@@ -14,6 +14,7 @@ public static partial class Program
             Console.WriteLine("\n[물체 — 문틀 · 사람 · 감압 · 덜컹 · 점화 · 폭풍]");
             DoorFrameRules();
             PropHitRules();
+            WalkerRules();
             BreachRules();
             FrameRules();
         }
@@ -28,6 +29,157 @@ public static partial class Program
             StackRules();
             TrackDrawRules();
             ShardTimeRule();
+        }
+    }
+
+    /// <summary>걷는 원판 하나 (시험 차림 — ⑧ 대신): 꼬리표 · 지난 걸음에 지나간 칸 (처음 칸부터 · 마지막이 지금 칸) · 누웠나.</summary>
+    private static void Walk(Structure st, Layout lay, int tag, int[] cells, byte low = 0)
+    {
+        var a = new PropActor { Tag = tag, Cell = cells[^1], R = Structure.ActorR, Kg = 70, H = low != 0 ? 0.4f : 1.7f, Low = low, PathAt = 0, PathN = (byte)(cells.Length > 1 ? cells.Length : 0) };
+        st.SetActors(new[] { a }, cells.Length > 1 ? cells : Array.Empty<int>());
+    }
+
+    /// <summary>
+    /// 사람 · 로봇과 바닥 물건 (PH6b — docs/PHYSICS.md §7 · §10 '사람'): 원판 (R 0.25m)이 지난 걸음 길을 같은 시간표로 따라간다 — 걷다 찬 상자가 밀린다 (원인 '지나가던 발에 채인') ·
+    /// 선 이 발밑의 것은 밟고 선다 · 날아든 상자는 누운 이에게도 맞고 튄다 · 놓은 것은 원판 바깥 (걷던 쪽 앞)에 · 놓은 이가 바로 걸어 지나가도 차지 않는다 (다른 이는 찬다) ·
+    /// 쓰러진 사람이 든 컵도 원판 바깥에 · 로봇이 바닥 구급 상자를 한 번에 줍는다 (가는 길에 차지 않는다) · 날아든 상자에 맞은 로봇은 다리 · 팔 · 속이 상한다 (⑥이 맞음 장부를 읽는다).
+    /// </summary>
+    private static void WalkerRules()
+    {
+        const double dot = DotForm.Dot;
+        // ── 걷다 찬 상자 · 발밑의 상자 (1g 마른 바닥 · 공기 없는 방 — ④만) ──
+        {
+            var s = PropWorld(1, 2);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            int box = Slide(s, "식량 상자", 6.5, 4.5, 0, 0), under = Slide(s, "식량 상자", 9.5, 6.5, 0, 0), aim = Slide(s, "식량 상자", 6.5, 2.5, 0, 0);
+            var b0 = st.Props[st.IndexOf(box)]; var u0 = st.Props[st.IndexOf(under)]; var t0 = st.Props[st.IndexOf(aim)];
+            int C(int x, int y) => L.Index(x, y);
+            var a = new[] { new PropActor { Tag = 0, Cell = C(8, 4), R = Structure.ActorR, Kg = 70, H = 1.7f, PathAt = 0, PathN = 5 }, new PropActor { Tag = 1, Cell = C(9, 6), R = Structure.ActorR, Kg = 70, H = 1.7f },
+                new PropActor { Tag = 2, Cell = C(8, 2), R = Structure.ActorR, Kg = 70, H = 1.7f, PathAt = 5, PathN = 5, Target = aim } };
+            st.SetActors(a, new[] { C(4, 4), C(5, 4), C(6, 4), C(7, 4), C(8, 4), C(4, 2), C(5, 2), C(6, 2), C(7, 2), C(8, 2) });   // 둘째는 상자 위에 서 있다 · 셋째는 줍으려는 상자 위로 걷는다
+            s.Step();
+            var b1 = st.Props[st.IndexOf(box)]; var u1 = st.Props[st.IndexOf(under)]; var t1 = st.Props[st.IndexOf(aim)];
+            string story = s.Causes.Story(b1.Cause);
+            Check("걷는 이: 1.7m/s로 걷던 이의 길에 놓인 식량 상자가 차여 걷던 쪽으로 밀린다 (원인 '지나가던 발에 채인') · 선 이 발밑의 상자는 그대로 (밟고 선다) · 줍으려는 이는 그 상자를 차지 않는다",
+                b1.X - b0.X > 0.2 && Math.Abs(b1.Y - b0.Y) < 0.2 && story.Contains("지나가던 발에 채인") && Math.Abs(u1.X - u0.X) + Math.Abs(u1.Y - u0.Y) < 1e-9 && u1.State == 0
+                && Math.Abs(t1.X - t0.X) + Math.Abs(t1.Y - t0.Y) < 1e-9,
+                $"찬 상자 Δx {b1.X - b0.X:0.000} · Δy {b1.Y - b0.Y:0.000} · 상태 {b1.State} · \"{story}\" · 발밑 상자 Δ {Math.Abs(u1.X - u0.X) + Math.Abs(u1.Y - u0.Y):0.0e0} · 상태 {u1.State} · 줍을 상자 Δ {Math.Abs(t1.X - t0.X) + Math.Abs(t1.Y - t0.Y):0.0e0}");
+        }
+        // ── 날아든 상자가 누운 이에게 맞고 튄다 ──
+        {
+            var s = PropWorld(1, 2);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            int box = Slide(s, "식량 상자", 4.5, 5.5, 5, 0);
+            Walk(st, L, 3, new[] { L.Index(7, 5) }, 1);
+            s.Step();
+            var b = st.Props[st.IndexOf(box)];
+            var hit = st.PropHits.FirstOrDefault(h => h.Tag == 3);
+            Check("누운 이: 5m/s로 날아든 식량 상자가 누운 이 원판에 맞고 (장부 20J 넘게) 튄다 — 지나가지 않는다 (원판 앞에 선다)",
+                hit.E >= 20 && b.X + st.PropForm(b).Shape.Hit.reach < 7.5 - Structure.ActorR + 2 * dot && b.X > 4.5,
+                $"맞음 {hit.E:0}J · 상자 x {b.X:0.000} (원판 가운데 7.5 · 반지름 {Structure.ActorR}) · vx {b.Vx:0.000}");
+        }
+        // ── 상상 복제는 가벼운 물체 셈 (§4-2): 주컴퓨터 복제 (ShipMind.Imagined)는 물체끼리 · 원판 닿음 끔 · 섬마다 잔걸음 4 — 원래 세계 · 되살린 세계는 그대로 ──
+        {
+            var s = PropWorld(1, 2);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            Slide(s, "식량 상자", 5.0, 3.5, 3, 0); Slide(s, "식량 상자", 6.5, 3.5, -3, 0);   // 마주 미끄러진다
+            Slide(s, "식량 상자", 4.5, 6.5, 4, 0);                                         // 선 이 원판으로
+            Walk(st, L, 3, new[] { L.Index(7, 6) });
+            var snap = s.Save();
+            var img = ShipMind.Imagined(s.Clone()); var ist = img.Get<Structure>();
+            var back = new Sim(s.Setup); back.Load(snap);
+            long st0 = ist.PropSteps;
+            s.Step(); img.Step(); back.Step();
+            bool same = back.Save().AsSpan().SequenceEqual(s.Save());
+            Check("상상 복제: 주컴퓨터 복제는 가벼운 물체 셈 (물체끼리 · 원판 닿음 끔 · 섬마다 잔걸음 4 — 마주 미끄러진 상자는 지나가고 · 선 이에게 맞지 않는다) · 원래 세계는 부딪히고 맞는다 · 되살린 세계는 비트까지 같다",
+                st.PropDetail == 1 && ist.PropDetail == 0 && back.Get<Structure>().PropDetail == 1 && st.PairHits > 0 && st.PropHits.Count > 0 && ist.PairHits == 0 && ist.PropHits.Count == 0 && ist.PropSteps - st0 <= 3 * 4 && same,
+                $"자세함 {st.PropDetail}/{ist.PropDetail}/{back.Get<Structure>().PropDetail} · 물체끼리 {st.PairHits}/{ist.PairHits} · 맞음 {st.PropHits.Count}/{ist.PropHits.Count} · 상상 잔걸음 {ist.PropSteps - st0} · 되살림 같음 {same}");
+        }
+        // ── 놓은 것은 원판 바깥 · 놓은 이가 바로 걸어 지나가도 차지 않는다 (다른 이는 찬다) ──
+        {
+            (double dist, double moved, bool hitDropper) Run(int walker)
+            {
+                var s = PropWorld(1, 2);
+                var st = s.Get<Structure>(); var L = s.Layout;
+                int item = s.Tables.People.Items.Keys.ToList().IndexOf("컵");
+                Walk(st, L, 0, new[] { L.Index(5, 4) });
+                int id = st.DropItem(item, 0, 5.5, 4.5, 0, 0, 0, 0, 0, 1, 0);   // 동쪽을 보고 선 이가 내려놓는다
+                var p0 = st.Props[st.IndexOf(id)];
+                Walk(st, L, walker, new[] { L.Index(5, 4), L.Index(6, 4), L.Index(7, 4) });   // 그 이 (또는 다른 이)가 곧장 동쪽으로 걸어간다
+                s.Step();
+                var p1 = st.Props[st.IndexOf(id)];
+                double dist = Math.Sqrt((p0.X - 5.5) * (p0.X - 5.5) + (p0.Y - 4.5) * (p0.Y - 4.5)) - st.PropForm(p0).Shape.Hit.reach;
+                return (dist, Math.Abs(p1.X - p0.X) + Math.Abs(p1.Y - p0.Y), st.PropHits.Any(h => h.Tag == walker));
+            }
+            var own = Run(0); var other = Run(1);
+            Check("놓기: 내려놓은 컵은 원판 바깥 (가운데에서 0.25m + 1도트 넘게 · 보던 쪽 앞) · 놓은 이가 곧장 그 위로 걸어가도 차지 않고 맞음도 없다 · 다른 이가 걸어가면 찬다",
+                own.dist >= Structure.ActorR && own.moved < 1e-9 && !own.hitDropper && other.moved > 0.05,
+                $"원판 겉에서 {own.dist:0.000}m · 놓은 이가 지나간 뒤 움직임 {own.moved:0.0e0} · 맞음 {own.hitDropper} · 다른 이가 지나간 뒤 {other.moved:0.000}m");
+        }
+        // ── 쓰러진 사람이 든 컵도 원판 바깥에 (⑧ — 내려놓기 · 떨굼은 ④에 요청) ──
+        {
+            var lay = Worlds.Ascii("\n############\n#..........#\n#..........#\n#..........#\n############");
+            var s = Worlds.Full(lay, 1);
+            var m = s.Get<Mind>(); var st = s.Get<Structure>(); var life = s.Get<Life>();
+            int who = m.AddPerson(s, Worlds.At(lay, 5, 1)), body = m[who].C.Body;
+            s.Run(2);
+            m[who].C.Holding = (byte)m.ItemNames.ToList().IndexOf("컵"); m[who].C.HoldCharge = 0;
+            life[body].Conscious = 0;
+            s.Step();
+            int cell = life[body].Cell;
+            var cup = st.Props.FirstOrDefault(p => p.Kind == 0 && m.ItemNames[p.What] == "컵");
+            double dist = Math.Sqrt((cup.X - (s.Layout.X(cell) + 0.5)) * (cup.X - (s.Layout.X(cell) + 0.5)) + (cup.Y - (s.Layout.Y(cell) + 0.5)) * (cup.Y - (s.Layout.Y(cell) + 0.5)));
+            Check("놓기 (⑧): 쓰러진 이가 든 컵은 그 이 원판 바깥 바닥에 놓인다 (제자리 칸 가운데가 아니다) · 손은 빈다",
+                cup.Id != 0 && dist >= Structure.ActorR + st.PropForm(cup).Shape.Hit.reach && m[who].C.Holding == 255 && cup.Dropper == body + 1,
+                $"컵 {(cup.Id != 0 ? $"({cup.X:0.00}, {cup.Y:0.00})" : "없음")} · 쓰러진 이 칸 가운데에서 {dist:0.000}m · 손 {m[who].C.Holding} · 놓은 이 {cup.Dropper}");
+        }
+        // ── 로봇이 바닥 구급 상자를 한 번에 줍는다 (가는 길에 차지 않는다 — 차며 도는 고리가 없다): 놓인 자리가 칸 가운데가 아니어도 (동 · 서 · 남 · 북 칸 끝 곁) ──
+        {
+            var res = new List<(bool taken, double moved, int woke, long ticks)>();
+            foreach (var (ox, oy) in new[] { (-0.38, 0.0), (0.38, 0.0), (0.0, -0.38), (0.0, 0.38) })
+            {
+                var s = ShipWorld.Crewed("Hwasal", 11, 0, 1, 0);
+                var m = s.Get<Mind>(); var lay = s.Layout; var st = s.Get<Structure>();
+                s.Run(Time.Minutes(3));
+                var r0 = m.Agents.First(a => a.C.Kind == AgentKind.Robot);
+                var room = lay.Rooms[lay.Room[r0.C.Cell]];
+                int cell = room.Cells.Where(c => lay.Kind[c] == CellKind.Floor && lay.FurnitureAt[c] < 0 && m.Dist(c, r0.C.Cell) >= 3).OrderBy(c => c).First();
+                int id = Worlds.PutItem(s, m.iMedkit, cell, 0);
+                { int i = st.IndexOf(id); var p = st.Props[i]; p.X += ox; p.Y += oy; st.Props[i] = p; }
+                var p0 = st.Props[st.IndexOf(id)];
+                double moved = 0; int woke = 0; long t = 0;
+                for (; t < Time.Hours(1) && st.IndexOf(id) >= 0; t++)
+                {
+                    s.Step();
+                    int i = st.IndexOf(id);
+                    if (i < 0) break;
+                    var p = st.Props[i];
+                    moved = Math.Max(moved, Math.Abs(p.X - p0.X) + Math.Abs(p.Y - p0.Y));
+                    if (Structure.Awake(p)) woke++;
+                }
+                res.Add((st.IndexOf(id) < 0, moved, woke, t));
+            }
+            Check("로봇이 줍기: 바닥 구급 상자 (칸 가운데에서 동 · 서 · 남 · 북으로 0.38m 비켜 놓은 넷)를 가는 길에 차지 않고 한 번에 줍는다 (움직인 적 · 깬 적 없다)",
+                res.All(x => x.taken && x.moved < 1e-9 && x.woke == 0),
+                string.Join(" · ", res.Select(x => $"주움 {x.taken} ({x.ticks}틱) 움직임 {x.moved:0.000}m 깸 {x.woke}")));
+        }
+        // ── 날아든 상자에 맞은 로봇 (⑥이 로봇 꼬리표 맞음을 읽는다) ──
+        {
+            var lay = Worlds.Ascii("\n############\n#..........#\n#..........#\n#..........#\n############");
+            var s = Worlds.Full(lay, 1);
+            var m = s.Get<Mind>(); var st = s.Get<Structure>(); var net = s.Get<Network>();
+            int rid = m.AddRobot(s, Worlds.At(lay, 8, 2));
+            s.Run(2);
+            int mech = m[rid].C.Mech, at = m[rid].C.Cell;
+            float legs0 = net.Robot(mech).Legs;
+            int id = Worlds.PutItem(s, "식량 상자", at - 4);
+            var p = st.Props[st.IndexOf(id)]; var fm = st.PropForm(p);
+            st.Shove(id, fm.Mass * 9, 0, 0, s.Causes.Add(CauseKind.Setup, "누가 식량 상자를 걷어찼다", s.Tick));
+            s.Run(3);
+            float legs = net.Robot(mech).Legs;
+            Check("로봇이 맞음: 9m/s로 날아든 식량 상자에 맞은 로봇은 다리가 상한다 (맞은 에너지 / 16kJ — ⑥이 로봇 꼬리표 맞음을 읽고 지운다) · 상자는 튄다",
+                legs - legs0 > 0.01 && !st.PropHits.Any(h => h.Tag < 0),
+                $"다리 {legs0:0.000} → {legs:0.000} · 남은 로봇 맞음 {st.PropHits.Count(h => h.Tag < 0)}");
         }
     }
 

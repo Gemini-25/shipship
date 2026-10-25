@@ -507,6 +507,7 @@ public sealed partial class Mind : IEngine
         ClearOldActs(sim.Tick);   // 오랜 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);
         if (Agents.Count == 0) { ApplyPlugs(); PutActors(); return; }
+        BeginWalks();
         F.RebuildNow();
         t = Lap("준비:장 다시", t);
         IndexBodies();
@@ -554,22 +555,106 @@ public sealed partial class Mind : IEngine
     }
 
     private PropActor[] _actorBuf = new PropActor[16];
+    private int[] _actorPathBuf = new int[64];
+    // 이번 걸음에 지나간 칸 (사람 · 로봇마다 처음 칸부터 ≤ 8 — 찍지 않는다: 걸음마다 처음 칸에서 다시 잰다)
+    public const int WalkMax = 8;
+    private int[] _walk = Array.Empty<int>();
+    private byte[] _walkN = Array.Empty<byte>();
 
-    /// <summary>④에 산 몸을 원판으로 알린다 (Mind.Step 끝 — 사람 몸 번호 · 칸 · 누웠나): 날아든 물체가 맞힐 수 있는 이 (같은 틱에 ④가 읽는다 · 걷는 길은 PH6b).</summary>
+    /// <summary>걸음 처음: 저마다 지금 칸에서 길을 다시 잰다.</summary>
+    private void BeginWalks()
+    {
+        if (_walkN.Length < Agents.Count) { _walk = new int[WalkMax * (Agents.Count + 8)]; _walkN = new byte[Agents.Count + 8]; }
+        for (int i = 0; i < Agents.Count; i++) { _walk[WalkMax * i] = Agents[i].C.Cell; _walkN[i] = 1; }
+    }
+
+    /// <summary>그 사람 · 로봇이 한 칸 옮겼다 (길에 더한다 — 넘치면 오래된 칸부터 덜어 마지막 여덟 칸).</summary>
+    private void Walked(int agent, int cell)
+    {
+        if ((uint)agent >= (uint)_walkN.Length || _walkN[agent] == 0) return;
+        int at = WalkMax * agent, n = _walkN[agent];
+        if (n == WalkMax) { Array.Copy(_walk, at + 1, _walk, at, WalkMax - 1); n--; }
+        _walk[at + n] = cell; _walkN[agent] = (byte)(n + 1);
+    }
+
+    /// <summary>이번 걸음 길 (그 사람 · 로봇이 지금 칸에서 끝나는 길만 — 업혀 가거나 끌려가 길 밖으로 옮겨졌으면 비었다).</summary>
+    private ReadOnlySpan<int> WalkOf(int agent, int cell)
+    {
+        if ((uint)agent >= (uint)_walkN.Length || _walkN[agent] < 2) return default;
+        int at = WalkMax * agent, n = _walkN[agent];
+        return _walk[at + n - 1] == cell ? _walk.AsSpan(at, n) : default;
+    }
+
+    /// <summary>걷던 빠르기 (m/s — 이번 걸음 길의 마지막 칸 쪽 · 칸 수만큼): 쓰러지며 떨군 것이 그 빠르기로 날아간다.</summary>
+    private (double vx, double vy) WalkVelocity(Agent a)
+    {
+        var w = WalkOf(a.Id, a.C.Cell);
+        if (w.Length < 2) return (0, 0);
+        int c0 = w[^2], c1 = w[^1];
+        double k = (w.Length - 1) / Time.SecondsPerTick;
+        return ((L.X(c1) - L.X(c0)) * k, (L.Y(c1) - L.Y(c0)) * k);
+    }
+
+    /// <summary>
+    /// ④에 산 몸 · 걷는 로봇을 원판으로 알린다 (Mind.Step 끝 — 사람은 몸 번호 · 로봇은 −1−로봇 몸 번호 · 칸 · 누웠나 · 이번 걸음에 지나간 칸 · 하던 일의 원인):
+    /// ④가 다음 틱 물체 걸음에 그 길을 같은 시간표로 따라가 날아든 물체가 맞히고 · 걷던 이가 바닥 상자를 찬다 (드론은 떠 있어 바닥 물건에 닿지 않는다).
+    /// </summary>
     private void PutActors()
     {
         if (_st == null) return;
-        int n = 0;
+        int n = 0, np = 0;
+        void Add(in PropActor actor, ReadOnlySpan<int> walk)
+        {
+            if (n == _actorBuf.Length) Array.Resize(ref _actorBuf, n * 2);
+            var x = actor;
+            if (walk.Length >= 2)
+            {
+                if (np + walk.Length > _actorPathBuf.Length) Array.Resize(ref _actorPathBuf, Math.Max(2 * _actorPathBuf.Length, np + walk.Length));
+                walk.CopyTo(_actorPathBuf.AsSpan(np));
+                x.PathAt = (short)np; x.PathN = (byte)walk.Length; np += walk.Length;
+            }
+            _actorBuf[n++] = x;
+        }
         if (_life != null)
             for (int b = 0; b < _life.Bodies.Count; b++)
             {
                 ref var body = ref _life[b];
                 if (body.Alive == 0 || body.Cell < 0) continue;
-                if (n == _actorBuf.Length) Array.Resize(ref _actorBuf, n * 2);
                 byte low = (byte)(body.Conscious == 0 || body.Asleep != 0 ? 1 : 0);
-                _actorBuf[n++] = new PropActor { Tag = b, Cell = body.Cell, R = Structure.ActorR, Kg = (float)PersonKg, H = low != 0 ? 0.4f : 1.7f, Low = low };
+                int ag = AgentOfBody(b);
+                Add(new PropActor { Tag = b, Cell = body.Cell, R = Structure.ActorR, Kg = (float)PersonKg, H = low != 0 ? 0.4f : 1.7f, Low = low, Cause = ag >= 0 ? Agents[ag].C.GoalCause : 0, Target = ag >= 0 ? GatherTarget(Agents[ag]) : 0 },
+                    ag >= 0 ? WalkOf(ag, body.Cell) : default);
             }
-        _st.SetActors(_actorBuf.AsSpan(0, n));
+        foreach (var a in Agents)
+        {
+            if (a.C.Kind != AgentKind.Robot || a.C.Mech < 0 || a.C.Damage >= 1 || a.C.Cell < 0 || a.C.Cell >= L.N) continue;
+            Add(new PropActor { Tag = -1 - a.C.Mech, Cell = a.C.Cell, R = Structure.ActorR, Kg = RobotKg, H = 1.2f, Cause = a.C.GoalCause, Target = GatherTarget(a) }, WalkOf(a.Id, a.C.Cell));
+        }
+        _st.SetActors(_actorBuf.AsSpan(0, n), _actorPathBuf.AsSpan(0, np));
+    }
+
+    /// <summary>지금 계획 걸음이 줍기면 그 물체 Id (④가 집으려는 이의 원판으로 그것을 차지 않는다 — 곁에서 손을 뻗는다 · 0 없음).</summary>
+    private static int GatherTarget(Agent a) => a.C.StepIndex >= 0 && a.C.StepIndex < a.Plan.Count && a.Plan[a.C.StepIndex].Kind == StepKind.Gather ? a.Plan[a.C.StepIndex].Target : 0;
+
+    /// <summary>바닥을 걷는 로봇 몸의 무게 (kg — 원판이 받는 몫은 ④가 셈하지 않는다: 맞음의 장부에만).</summary>
+    public const float RobotKg = 120;
+
+    /// <summary>그 사람 · 로봇의 원판 꼬리표 (④ — 사람은 몸 번호 · 로봇은 −1−로봇 몸 번호 · 드론은 없다 −1… 바닥에 닿지 않는다).</summary>
+    private int ActorTag(Agent a) => a.IsPerson ? a.C.Body : a.C.Kind == AgentKind.Robot && a.C.Mech >= 0 ? -1 - a.C.Mech : int.MinValue;
+
+    /// <summary>
+    /// 든 것을 바닥에 둔다 (④ 요청 — 원판 바깥 · 걷던 쪽 앞부터): 내려놓기는 그 자리에 (빠르기 0) · 쓰러지며 떨굼은 걷던 빠르기로 · 놓은 이와는 잠깐 닿지 않는다. 물체 Id.
+    /// </summary>
+    private int PutDown(Agent a, byte item, float charge, bool thrown)
+    {
+        int cell = a.C.Cell;
+        if (_st == null || cell < 0 || cell >= L.N) return -1;
+        var (vx, vy) = WalkVelocity(a);
+        double v = Math.Sqrt(vx * vx + vy * vy);
+        int tag = ActorTag(a);
+        if (tag == int.MinValue) return _st.PutItem(item, charge, cell);   // 드론은 떠서 든다 — 그 칸에
+        return _st.DropItem(item, charge, L.X(cell) + 0.5, L.Y(cell) + 0.5, thrown ? 1 : 0, thrown ? vx : 0, thrown ? vy : 0, a.C.GoalCause, tag,
+            v > 0 ? vx / v : 0, v > 0 ? vy / v : 1);
     }
 
     /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.
@@ -634,7 +719,7 @@ public sealed partial class Mind : IEngine
     private void Fall(Sim sim, Agent a)
     {
         if (a.C.Carrying >= 0) DropCarried(sim, a, false);
-        DropHeld(a);
+        DropHeld(a, true);   // 쓰러지며 놓친다 (걷던 쪽으로)
         a.Plan.Clear(); a.Path.Clear(); a.C.StepIndex = 0; a.C.Goal = GoalKind.Down; a.C.Mode = 0;
         if (a.C.OpenedDoor >= 0) a.C.OpenedDoor = -1;
     }

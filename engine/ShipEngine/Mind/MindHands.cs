@@ -206,7 +206,8 @@ public sealed partial class Mind
         int home = HomeFor(item, at);
         if (home < 0) return false;
         plan.Add(Go(L.Furniture[home].Cells[0], 1));
-        plan.Add(new PlanStep { Kind = StepKind.Put, Target = home, Arg = 1 });
+        bool job = a.C.AssignedGoal == GoalKind.Gather && a.C.AssignedUntil > _nowTick && a.C.AssignedTarget == o.Target;
+        plan.Add(new PlanStep { Kind = StepKind.Put, Target = home, Arg = (byte)(job ? 2 : 1) });   // 맡긴 줍기면 넣는 것이 일감의 끝 (맡김을 내려놓는다 — 예전엔 돌려놓기로 쳐 두 시간 동안 '맡은 일 있음')
         return true;
     }
 
@@ -339,7 +340,7 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (c.Holding == 255) { c.Holding = item; c.HoldCharge = charge; return; }
-        _st!.PutItem(item, charge, c.Cell);
+        PutDown(a, item, charge, false);   // 제 원판 바깥에
         Laid++;
     }
 
