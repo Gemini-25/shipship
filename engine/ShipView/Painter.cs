@@ -18,7 +18,7 @@ public enum Overlay : byte { None, Air, Heat, Smoke, Chain, Lines }
 //   (아직 남은 것: 1 바닥의 꾸밈 — ArtFloors.Details의 긁힘 · 흙 알갱이 · 이끼는 칸 자리 전체를 보는데 열쇠는 x & 7 · y & 7)
 //    1 바닥 (100 + 문턱) · 2 벽 윗면 · 3 벽 앞면 · 4 문짝 (PainterFar DoorTile)
 //    5 설비 몸 · 화장실 (9001 중력 발생기 · 9100~ 화장실 몸 · 9200~ 물줄기 · 커튼 · 김) · 6 물 · 7 연기
-//    8 로봇 (Id & 0xFFF) · 9 바닥 물건 아이콘 · 10 옛 설비 빛 (OldGlow — DotMachines.Life) · 11 외판 바깥 면
+//    8 로봇 (Id & 0xFFF) · 9 (비었다 — 바닥 물건은 PH4a부터 도트 꼴을 쌓아 그린다: 제 캐시 DotStackCache) · 10 옛 설비 빛 (OldGlow — DotMachines.Life) · 11 외판 바깥 면
 //   12 새 가구 몸 (직접 열쇠 — 설비 고리) · 13 새 가구 빛 (직접 열쇠 — PainterFar NewGlow) · 14 드론 (DrawBot)
 public sealed partial class Painter
 {
@@ -781,21 +781,21 @@ public sealed partial class Painter
         }
 
         lt = Lap("설비", lt);
-        // ── 바닥에 놓인 · 날아온 물건 (④ — 문틀에 걸린 것은 문 위에) ──
-        if (mind != null && !_bake)
+        // ── 바닥에 놓인 · 날아온 물건 (④ 물체 장부 — 보이는 도트가 곧 몸: 도트 꼴을 자리 X · Y · 자세 Th대로 쌓아 그린다 · 틱 사이 메움은 PH5) ──
+        if (st != null && !_bake)
         {
-            var count = new Dictionary<int, int>();
-            if (st != null)
-            foreach (var it in st.Props)   // ④ 물체 장부의 물건 몫
+            _stacks.BeginFrame();
+            _samePlace.Clear();
+            foreach (var it in st.Props)
             {
                 if (it.Kind != 0) continue;
                 int c = st.CellOf(it);
                 if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
-                int n = count.GetValueOrDefault(c); count[c] = n + 1;
-                var icon = Cached(Key(9, it.What), mind.ItemNames[it.What], static nm => LooseIcon(nm));
-                Put(img, icon, Px(x) + T / 2 - icon.W / 2 + (n % 3 - 1) * 7, Py(y) + T / 2 - icon.H / 2 + n / 3 * 6);
+                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(it.Th));
+                var (nx, ny) = SamePlace(it);
+                Put(img, d.Img, (int)Math.Round((it.X - x0) * T - d.Ax) + nx, (int)Math.Round((it.Y - y0) * T - d.Ay) + ny);
             }
         }
 
@@ -993,30 +993,27 @@ public sealed partial class Painter
         }
     }
 
-    /// <summary>바닥 물건 그림 (작은 도트 — 무게만큼 크게): 상자 · 꾸러미 · 소화기 · 우주복 · 원료 덩이. (관찰 장면 '도는 도트'가 나란히 보인다 — ShipView는 Lab에 속을 열지 않아 public)</summary>
-    public static Img LooseIcon(string name)
+    // ── 물체 그림 (PH4a — 옛 바닥 물건 아이콘 LooseIcon을 걷었다) ──
+    private readonly DotStackCache _stacks = new();
+    private readonly Dictionary<(double, double), int> _samePlace = new();
+    private string[]? _itemNames;
+
+    /// <summary>물체의 도트 꼴 (물건: 사람 표의 그 물건 · 누움 — 세계와 같은 꼴 · 표의 캐시는 스레드에 안전하다).</summary>
+    private DotForm PropLook(Tables t, in Prop p)
     {
-        var (w, h, body, edge) = name switch
-        {
-            "식량 상자" => (16, 11, "#9a7346", "#5d4428"),
-            "원료" => (13, 10, "#7d838c", "#4a4f57"),
-            "우주복" => (14, 14, "#e6e8ec", "#8f96a3"),
-            "소화기" => (7, 13, "#d13b2f", "#7a1d16"),
-            "수리 꾸러미" => (11, 8, "#5b6f8f", "#2f3b4f"),
-            "봉합 꾸러미" => (9, 6, "#e0b33a", "#8a6a17"),
-            "구급 상자" => (10, 8, "#f2f2f2", "#9aa0a8"),
-            "산소 마스크" => (9, 7, "#9ad0e8", "#4f7d91"),
-            "수확물" => (9, 7, "#6fae4b", "#3d6b26"),
-            _ => (9, 7, "#a0a6ae", "#5a6068"),
-        };
-        var o = new Img(w + 2, h + 2);
-        o.Fill(1, 2, w, h, Rgba.Hex("#000000"), 0.35f);                  // 그림자
-        o.Fill(0, 0, w, h, Rgba.Hex(edge));
-        o.Fill(1, 1, w - 2, h - 2, Rgba.Hex(body));
-        o.Fill(1, 1, w - 2, 1, Rgba.Hex("#ffffff"), 0.25f);              // 윗면 빛
-        if (name == "구급 상자") { o.Fill(w / 2 - 1, 2, 2, h - 4, Rgba.Hex("#d13b2f")); o.Fill(2, h / 2 - 1, w - 4, 2, Rgba.Hex("#d13b2f")); }
-        if (name == "식량 상자") o.Fill(1, h / 2, w - 2, 1, Rgba.Hex(edge));
-        return o;
+        _itemNames ??= t.People.Items.Keys.ToArray();
+        return DotForge.Make(t, p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default", lie: p.Pose);
+    }
+
+    /// <summary>자세 → 쌓아 그리기 각 단 (64단 · 감지 않은 각도 그대로).</summary>
+    private static int PropStep(double th) => (int)Math.Round(th / (2 * Math.PI) * DotStack.Steps) & (DotStack.Steps - 1);
+
+    /// <summary>꼭 같은 자리에 놓인 것 (같은 칸 가운데에 내려놓은 물건들)은 조금씩 비켜 그린다 (그림만 — 세계 자리는 그대로).</summary>
+    private (int x, int y) SamePlace(in Prop p)
+    {
+        int n = _samePlace.GetValueOrDefault((p.X, p.Y));
+        _samePlace[(p.X, p.Y)] = n + 1;
+        return n == 0 ? (0, 0) : ((n % 3 - 1) * 7, n / 3 * 6 + (n % 3 == 1 ? 3 : 0));
     }
 
     /// <summary>그을음 얼룩: 묻은 양(g/m²)만큼 검게 — 2×2 점마다 조금씩 달리 (고르게 칠한 판이 아니라 얼룩으로 · 0.5g/m²에 3할 · 2g/m²에 6할).</summary>

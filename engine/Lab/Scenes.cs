@@ -194,6 +194,7 @@ public static partial class Program
             case "washview": WashViewScene(dir); return;
             case "art": ArtScene(dir); return;
             case "dotforms": DotFormsScene(dir); return;
+            case "slide": SlideScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

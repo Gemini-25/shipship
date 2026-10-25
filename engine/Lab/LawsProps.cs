@@ -10,9 +10,10 @@ public static partial class Program
     private static void PropLaws()
     {
         if (!Do("물체")) return;
-        Console.WriteLine("\n[물체 — 보는 쪽 · 도트 꼴]");
+        Console.WriteLine("\n[물체 — 보는 쪽 · 도트 꼴 · 평면 움직임]");
         FacingLaw();
         FormLaw();
+        PlaneLaws();
     }
 
     /// <summary>
@@ -141,5 +142,160 @@ public static partial class Program
         Check("도트 꼴 — 일곱 척 가구의 발자국이 칸 상자 안", outBox.Count == 0 && placed.Count > 100, outBox.Count == 0 ? $"{placed.Count}가지 (종류 · 상자 · 보는 쪽)" : string.Join(" · ", outBox.Take(6)) + $" ({outBox.Count})");
         Check("도트 꼴 — 앞면 눈금: 표 높이 h × 16 = 그림 앞면 도트 = 꼴 층 수 (새 그림 가구)", scale.Count == 0 && nArt > 20, scale.Count == 0 ? $"{nArt}가지" : string.Join(" · ", scale.Distinct().Take(6)));
         Check("도트 꼴 — 위에서 본 발자국 = 그림의 불투명 윗면 ±2도트 (일곱 척 새 그림 가구)", foot.Count == 0 && nArt > 20, foot.Count == 0 ? $"{nArt}가지" : string.Join(" · ", foot.Take(12)) + $" ({foot.Count})");
+    }
+
+    // 공기 없는 10×6 방 (글자 그림 둘레 한 줄을 덧대어 안쪽은 도면 x 2~12 · y 2~8 m)
+    private const string PropRoom = "\n############\n#..........#\n#..........#\n#..........#\n#..........#\n#..........#\n#..........#\n############";
+
+    /// <summary>힘이 없는 작은 세계 (장 + 구조 · 공기 없음 · 마음 없음): 바닥 중력 g를 고르게.</summary>
+    private static Sim PropWorld(float g, ulong seed = 1, string art = PropRoom, Dictionary<char, string>? legend = null)
+    {
+        var lay = Worlds.Ascii(art, legend);
+        var s = new Sim(new SimSetup(lay, seed, sim => { var f = new Field(sim.Layout, sim.Tables); sim.Add(f); sim.Add(new Structure(f)); }));
+        Array.Fill(s.Get<Field>().Grav, g);
+        return s;
+    }
+
+    /// <summary>시험 차림: 물건을 놓고 (x, y)에 둔다 · 밀어 빠르기 (vx, vy) · 각속도 w를 준다 (충격량 = 질량 × 빠르기).</summary>
+    private static int Slide(Sim s, string name, double x, double y, double vx, double vy, double w = 0)
+    {
+        var st = s.Get<Structure>();
+        int item = s.Tables.People.Items.Keys.ToList().IndexOf(name);
+        int id = st.PutItem(item, 0, s.Layout.Index((int)x, (int)y));
+        int i = st.IndexOf(id); var p = st.Props[i]; p.X = x; p.Y = y; st.Props[i] = p;
+        var fm = st.PropForm(p);
+        if (vx != 0 || vy != 0 || w != 0) st.Shove(id, fm.Mass * vx, fm.Mass * vy, fm.I * w);
+        return id;
+    }
+
+    /// <summary>방 안쪽 (도면 x 2~12 · y 2~8 m) 밖으로 나간 껍질 꼭짓점의 가장 깊은 겹침 (m).</summary>
+    private static double WallOverlap(Structure st, in Prop p)
+    {
+        var fm = st.PropForm(p);
+        double c = Math.Cos(p.Th), sn = Math.Sin(p.Th), worst = 0;
+        foreach (var (hx, hy) in fm.Hull)
+        {
+            double rx = hx - fm.Cx, ry = hy - fm.Cy, x = p.X + c * rx - sn * ry, y = p.Y + sn * rx + c * ry;
+            worst = Math.Max(worst, Math.Max(Math.Max(2 - x, x - 12), Math.Max(2 - y, y - 8)));
+        }
+        return worst;
+    }
+
+    /// <summary>
+    /// 평면 움직임 (PH4a — docs/PHYSICS.md §10 법칙 2 · 3 · 14 · 12 · 벽): 힘이 없으면 그대로 · 마찰로 선다 (정확한 걸음) · 잠 · 미끄러지는 중 왕복 · 1코어 = 4코어 ·
+    /// 빠른 상자도 벽을 건너뛰지 않는다 (매 틱 끝 겹침 ≤ 0.5도트 · 반발 e).
+    /// </summary>
+    private static void PlaneLaws()
+    {
+        var t = Tables.Default;
+        const double g = 9.8, dot = DotForm.Dot;
+        var box = DotForge.Make(t, "식량 상자");
+        // 법칙 2: 힘이 없으면 그대로 — 무중력 · 공기 없음 · 50틱 뒤 x₀ + vt · θ = ωt · 운동 에너지 비트까지
+        {
+            var s = PropWorld(0);
+            var st = s.Get<Structure>();
+            int id = Slide(s, "식량 상자", 3.0, 2.8, 0.05, 0.02, 0.5);
+            var p0 = st.Props[st.IndexOf(id)];
+            double ke0 = 0.5 * p0.Kg * (p0.Vx * p0.Vx + p0.Vy * p0.Vy) + 0.5 * p0.Inertia * p0.W * p0.W;
+            s.Run(50);
+            var p = st.Props[st.IndexOf(id)];
+            double time = 50 * Time.SecondsPerTick, ke = 0.5 * p.Kg * (p.Vx * p.Vx + p.Vy * p.Vy) + 0.5 * p.Inertia * p.W * p.W;
+            double ex = Math.Abs(p.X - (p0.X + p0.Vx * time)), ey = Math.Abs(p.Y - (p0.Y + p0.Vy * time)), eth = Math.Abs(p.Th - (p0.Th + p0.W * time));
+            Check("평면 움직임 — 힘이 없으면 그대로: 무중력 · 공기 없는 방의 식량 상자 (0.05, 0.02)m/s · 0.5rad/s → 50틱 뒤 x₀ + vt · θ = ωt (1e-9) · 운동 에너지 비트까지",
+                ex <= 1e-9 && ey <= 1e-9 && eth <= 1e-9 && BitConverter.DoubleToInt64Bits(ke) == BitConverter.DoubleToInt64Bits(ke0) && p.State == 1,
+                $"x 어긋남 {ex:0.0e0} · y {ey:0.0e0} · θ {eth:0.0e0} ({p.Th:0.000}rad) · 운동 에너지 {ke0:R} → {ke:R} · 상태 {p.State}");
+        }
+        // 법칙 3: 마찰로 선다 — 1g 마른 강철 바닥 · 식량 상자 (고분자 μk 0.3): 3m/s → v²/2μg = 1.5306m · 돌기만 3rad/s → Δθ = Iω²/(2 μk m g ρ)
+        {
+            var s = PropWorld(1);
+            var st = s.Get<Structure>();
+            int a = Slide(s, "식량 상자", 3.0, 3.0, 3, 0), b = Slide(s, "식량 상자", 6.0, 6.0, 0, 0, 3);
+            var a0 = st.Props[st.IndexOf(a)]; var b0 = st.Props[st.IndexOf(b)];
+            s.Run(1);
+            var pa = st.Props[st.IndexOf(a)]; var pb = st.Props[st.IndexOf(b)];
+            double want = 9 / (2 * 0.3 * g), turn = b0.Inertia * 9 / (2 * 0.3 * b0.Kg * g * box.Rho);
+            double da = pa.X - a0.X, db = pb.Th - b0.Th;
+            Check("평면 움직임 — 마찰로 선다: 1g 마른 바닥 · 식량 상자 3m/s → 1.5306m (1e-6) 뒤 멈춤 · 돌기만 3rad/s → Δθ = Iω²/(2μk m g ρ) (1e-6) · 자리는 그대로",
+                Math.Abs(da - want) <= 1e-6 && pa.Vx == 0 && pa.Vy == 0 && Math.Abs(pa.Y - a0.Y) <= 1e-12 && Math.Abs(db - turn) <= 1e-6 && pb.W == 0 && Math.Abs(pb.X - b0.X) + Math.Abs(pb.Y - b0.Y) <= 1e-12,
+                $"미끄러짐 {da:0.0000000}/{want:0.0000000}m · v ({pa.Vx:0.###}, {pa.Vy:0.###}) · 돎 {db:0.0000000}/{turn:0.0000000}rad · ω {pb.W:0.###} (ρ {box.Rho:0.0000}m)");
+        }
+        // 법칙 14: 잠 — 깨어 있는 것 하나면 첫 틱 잔걸음 > 0 · 선 뒤 잠들면 100틱 동안 잔걸음이 늘지 않는다 · 섬 놓침 0
+        {
+            var s = PropWorld(1);
+            var st = s.Get<Structure>();
+            int id = Slide(s, "식량 상자", 4.0, 4.0, 1, 0.5, 1);
+            s.Run(1);
+            long steps1 = st.PropSteps;
+            var p = st.Props[st.IndexOf(id)];
+            s.Run(100);
+            Check("평면 움직임 — 잠: 깨어 있는 상자 하나면 첫 틱 잔걸음 > 0 · 선 뒤 0.5초면 잠든다 (빠르기 0 · 찍힌 잠) · 100틱 동안 잔걸음이 늘지 않는다 · 섬 놓침 0",
+                steps1 > 0 && p.Asleep == 1 && p.State == 0 && p.Vx == 0 && p.Vy == 0 && p.W == 0 && st.PropSteps == steps1 && st.IslandMiss == 0,
+                $"첫 틱 잔걸음 {steps1} · 잠 {p.Asleep} · 상태 {p.State} · 100틱 뒤 잔걸음 {st.PropSteps} · 섬 놓침 {st.IslandMiss}");
+        }
+        // 법칙 12: 결정론 — 미끄러지는 상자 20개 (0.1g · 벽에 튀며)를 찍고 되살려 60틱 바이트 같음 · 1코어 = 4코어
+        {
+            (ulong hash, bool same, int awake) Run(int threads)
+            {
+                int keep = Par.Threads; Par.Threads = threads;
+                var s = PropWorld(0.1f, 9);
+                var st = s.Get<Structure>();
+                var rng = new Random(5);
+                string[] names = { "식량 상자", "소화기", "공구 상자", "수리 꾸러미", "책" };
+                for (int k = 0; k < 20; k++)
+                {
+                    double a = rng.NextDouble() * 2 * Math.PI, v = 1 + 5 * rng.NextDouble();
+                    Slide(s, names[k % names.Length], 2.5 + k % 5 * 2, 2.5 + k / 5 * 1.5, v * Math.Cos(a), v * Math.Sin(a), 6 * rng.NextDouble() - 3);
+                }
+                s.Run(1);
+                var r = new Sim(s.Setup); r.Load(s.Save());
+                s.Run(60); r.Run(60);
+                bool same = s.Save().AsSpan().SequenceEqual(r.Save());
+                int awake = 0; foreach (var p in st.Props) if (Structure.Awake(p)) awake++;
+                Par.Threads = keep;
+                return (s.Hash(), same, awake);
+            }
+            var one = Run(1); var four = Run(4);
+            Check("평면 움직임 — 결정론: 미끄러지며 벽에 튀는 상자 20개를 1틱 뒤 찍고 되살려 60틱 — 바이트 같음 · 1코어 = 4코어",
+                one.same && four.same && one.hash == four.hash && one.hash != 0, $"되살림 같음 {one.same}/{four.same} · {one.hash:x16} / {four.hash:x16} · 61틱 뒤 깨어 있음 {one.awake}");
+        }
+        // 닫힌 문은 벽 · 제자리 가구는 기둥: 1g 상자 3 · 4m/s가 닫힌 문 · 탁자 앞에서 튀어 선다 (문 칸 · 탁자 발자국 안으로 들어가지 않는다)
+        {
+            const string art = "\n############\n#.......tt.#\n#.......tt.#\n#..........#\n#####D######\n#..........#\n############";
+            var s = PropWorld(1, 1, art, new Dictionary<char, string> { ['t'] = "Table" });
+            var st = s.Get<Structure>(); var L = s.Layout;
+            var table = L.Furniture.Single(fu => fu.Type == "Table");
+            var tf = DotForge.Make(t, "Table", L.Facing[table.Id], 2, 2);
+            int lx = int.MaxValue; for (int y = 0; y < tf.D; y++) for (int x = 0; x < tf.W; x++) if (tf.Solid(x, y)) lx = Math.Min(lx, x);
+            double tableLeft = (table.Cells.Min(L.X) * 32 + tf.Ox + lx) * dot;   // 탁자 발자국 왼쪽 끝 (m)
+            int a = Slide(s, "식량 상자", 6.5, 3.5, 0, 3), b = Slide(s, "식량 상자", 6.5, 2.9, 4, 0);
+            s.Run(2);
+            var pa = st.Props[st.IndexOf(a)]; var pb = st.Props[st.IndexOf(b)];
+            double south = pa.Y + box.Hull.Max(v => v.y) - box.Cy, east = pb.X + box.Hull.Max(v => v.x) - box.Cx;
+            Check("평면 움직임 — 닫힌 문은 벽 · 제자리 가구는 기둥: 3 · 4m/s 상자가 닫힌 문 앞 · 탁자 발자국 앞에서 튀어 선다 (안으로 0.5도트 넘게 들어가지 않는다 · 닿을 만큼 갔다)",
+                south <= 5 + 0.5 * dot && south > 4.85 && east <= tableLeft + 0.5 * dot && east > tableLeft - 0.15 && pa.Asleep == 1 && pb.Asleep == 1 && st.Bounces >= 2,
+                $"문 앞 상자 남쪽 끝 {south:0.000}/5 · 탁자 앞 상자 동쪽 끝 {east:0.000}/{tableLeft:0.000}m · 튐 {st.Bounces} · 잠 {pa.Asleep}{pb.Asleep}");
+        }
+        // 벽을 건너뛰지 않는다: 20m/s 상자 — 무중력 하나 (벽에 튀어 e = min(고분자 0.5, 강철 0.4)씩 줄어든다) · 1g 하나 (튀고 미끄러져 벽에 선다) — 매 틱 끝 겹침 ≤ 0.5도트
+        {
+            var s = PropWorld(0);
+            var st = s.Get<Structure>();
+            var f = s.Get<Field>();
+            for (int c = 0; c < s.Layout.N; c++) if (s.Layout.Y(c) >= 5) f.Grav[c] = 1;   // 아래 반은 1g
+            int a = Slide(s, "식량 상자", 10.5, 3.5, 20, 0), b = Slide(s, "식량 상자", 9.5, 6.5, 20, 0), cc = Slide(s, "식량 상자", 11.69, 7.2, 0.9, 0);   // 셋째: 0.46m/s로 닿아 (튀지 않고) 벽에 붙어 선다
+            double worst = 0; long bounces1 = 0; Prop pa1 = default;
+            for (int k = 0; k < 4; k++)
+            {
+                s.Step();
+                foreach (int id in new[] { a, b, cc }) worst = Math.Max(worst, WallOverlap(st, st.Props[st.IndexOf(id)]));
+                if (k == 0) { pa1 = st.Props[st.IndexOf(a)]; bounces1 = st.Bounces; }
+            }
+            var pb = st.Props[st.IndexOf(b)]; var pc = st.Props[st.IndexOf(cc)];
+            double gap = 12 - (pc.X + box.Hull.Max(v => v.x) - box.Cx);
+            double e = 0.4, want = 20 * Math.Pow(e, 2);
+            Check("평면 움직임 — 벽을 건너뛰지 않는다: 20m/s 상자 둘 (무중력 · 1g) — 매 틱 끝 벽 겹침 ≤ 0.5도트 · 무중력 상자는 두 번 튀어 20 × 0.4² = 3.2m/s (±2%) · 1g 상자는 방 안에 선다 · 느리게 닿은 상자는 벽에 붙어 잔다 (틈 ≤ 1도트)",
+                worst <= 0.5 * dot && Math.Abs(pa1.Vx - want) <= 0.02 * want && Math.Abs(pa1.Vy) < 1e-3 && Math.Abs(pa1.W) < 1e-3 && bounces1 >= 2 && pb.Vx == 0 && pb.X > 2 && pb.X < 12
+                && pc.Asleep == 1 && Math.Abs(gap) <= dot,
+                $"겹침 {worst / dot:0.00}도트 · 무중력 상자 1틱 뒤 vx {pa1.Vx:0.000}/{want:0.000} · vy {pa1.Vy:0.0e0} · ω {pa1.W:0.000} · 튐 {bounces1} · 1g 상자 x {pb.X:0.000} vx {pb.Vx:0.###} · 붙어 선 상자 틈 {gap / dot:0.00}도트 · 잠 {pc.Asleep}");
+        }
     }
 }

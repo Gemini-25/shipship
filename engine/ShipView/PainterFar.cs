@@ -263,11 +263,11 @@ public sealed partial class Painter
             Put(img, DownOf(tile, k), (x - x0) * D, (y - y0) * D);
             DoorStain(img, f, life, d.Cell, tile, x, y, x0, y0, D, frame);   // 그을음 · 곰팡이 · 쏟은 액체는 문짝 위에 (32도트와 같은 차례)
         }
-        // ── 바닥에 놓인 · 날아온 물건 ──
-        if (mind != null)
+        // ── 바닥에 놓인 · 날아온 물건 (도트 꼴을 16도트로 쌓아 그린다 — 8도트는 그것을 반으로) ──
+        if (st != null)
         {
-            var count = new Dictionary<int, int>();
-            if (st != null)
+            _stacks.BeginFrame();
+            _samePlace.Clear();
             foreach (var it in st.Props)   // ④ 물체 장부의 물건 몫
             {
                 if (it.Kind != 0) continue;
@@ -275,9 +275,10 @@ public sealed partial class Painter
                 if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
-                int n = count.GetValueOrDefault(c); count[c] = n + 1;
-                var icon = Cached(Key(9, it.What), mind.ItemNames[it.What], static nm => LooseIcon(nm));
-                Put(img, DownOf(icon, k), FloorDiv(Gx(x) + T / 2 - icon.W / 2 + (n % 3 - 1) * 7, k), FloorDiv(Gy(y) + T / 2 - icon.H / 2 + n / 3 * 6, k));
+                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(it.Th), 2);
+                var (nx, ny) = SamePlace(it);
+                int half = k / 2;   // 16도트 그림 한 도트가 이 그림의 몇 분의 1인가 (16도트 1 · 8도트 2)
+                Put(img, DownOf(d.Img, half), (int)Math.Round(((it.X - x0) * T + nx) / k - d.Ax / half), (int)Math.Round(((it.Y - y0) * T + ny) / k - d.Ay / half));
             }
         }
         // ── 화장실 설비의 장마다 덧그림 (32도트 설비 고리와 같은 것 — 굽지 않는다): 샤워 칸 · 세면대 물줄기 · 빛을 끈 그림의 '사용 금지' 불 (빛을 켜면 FarGlows) ──

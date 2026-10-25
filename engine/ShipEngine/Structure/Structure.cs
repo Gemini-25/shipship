@@ -243,7 +243,7 @@ public sealed partial class Structure : IEngine
         Lattice(sim);
         Array.Clear(_blow);   // 이번 구멍들의 기압은 다 썼다 (뒤에 부딪혀 난 구멍은 다음 틱에)
         t = Prof.Lap("구조:격자", t);
-        MoveBodies(sim, dt); Prof.Lap("구조:몸", t);
+        Motion(sim, dt, t);   // 몸 → 물체 (StructurePropsMove.cs)
     }
 
     /// <summary>압력이 빠진 쪽의 원인: 낮은 쪽 구역에 뚫린 틈(벽 구멍 · 날아간 문)이 있으면 그 원인.</summary>
