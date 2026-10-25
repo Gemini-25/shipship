@@ -370,6 +370,9 @@ public sealed partial class Structure : IEngine
         return sim.Causes.Add(CauseKind.Breach, text, sim.Tick, c, parent);
     }
 
+    /// <summary>바깥 입력 (함장의 손 — docs/UI2.md §2.4): 외판 칸을 그 넓이만큼 찢는다 — 새 법칙이 아니라 벽이 찢길 때의 길 그대로 (사실 '벽이 뚫렸다' · 쾅).</summary>
+    public void Tear(Sim sim, int c, float area, int cause) { if (c >= 0 && c < L.N && L.Kind[c] == CellKind.Wall) Open(sim, c, area, cause, FactKind.WallBreach); }
+
     /// <summary>벽에 구멍 (금 · 구멍 · 통째로) — 장에 알리고 사실 · 소리.</summary>
     private void Open(Sim sim, int c, float area, int cause, FactKind fact, float db = -1)
     {

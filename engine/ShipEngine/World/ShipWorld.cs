@@ -8,6 +8,7 @@ public static class ShipWorld
 {
     public static SimSetup Setup(Layout layout, ulong seed) => new(layout, seed, sim =>
     {
+        sim.Add(new Hand());   // 함장의 손 (바깥 입력 — docs/UI2.md §2.4): 맨 앞 — 같은 단계 '바깥'에서 ⑤보다 먼저 = 틱의 가장 처음
         var f = new Field(sim.Layout, sim.Tables);
         sim.Add(f);
         sim.Add(new Chemistry(f));

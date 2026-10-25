@@ -28,10 +28,10 @@ public sealed class CauseChain
 /// </summary>
 public sealed partial class Director
 {
-    public static readonly string[] EngineName = { "", "기반", "물질", "장", "구조", "바깥", "망", "생명", "마음", "사회", "주컴퓨터", "일·물자", "자연 사건", "연출" };
+    public static readonly string[] EngineName = { "", "기반", "물질", "장", "구조", "바깥", "망", "생명", "마음", "사회", "주컴퓨터", "일·물자", "자연 사건", "함장" };   // 13: 함장의 손 (바깥 입력 — 연출은 사슬에 들지 않는다)
 
     /// <summary>화면에 쓰는 갈래 이름 (개발 말 없이).</summary>
-    public static readonly string[] PlainName = { "", "", "불·화학", "공기·열", "선체", "우주", "전기·장치", "몸", "사람", "관계", "주컴퓨터", "물자", "", "" };
+    public static readonly string[] PlainName = { "", "", "불·화학", "공기·열", "선체", "우주", "전기·장치", "몸", "사람", "관계", "주컴퓨터", "물자", "", "함장" };
 
     /// <summary>이 뿌리의 사슬이 셋 넘는 갈래를 건넜으면 '우주 → 선체 → 사람 → 공기·열' (화면 아래 줄) — 아니면 빈 글.</summary>
     public string SpreadText(int root)
@@ -67,7 +67,7 @@ public sealed partial class Director
     {
         CauseKind.Corrosion or CauseKind.Fire or CauseKind.Reaction => 2, CauseKind.Pressure or CauseKind.Heat => 3,
         CauseKind.Breach => 4, CauseKind.Impact or CauseKind.Weather or CauseKind.Flare or CauseKind.Route or CauseKind.Contact => 5, CauseKind.Electric or CauseKind.Machine or CauseKind.Sensor => 6,
-        CauseKind.Biology => 7, CauseKind.Person or CauseKind.Robot => 8, CauseKind.Society => 9, CauseKind.Computer => 10, CauseKind.Supply => 11, _ => 0,
+        CauseKind.Biology => 7, CauseKind.Person or CauseKind.Robot => 8, CauseKind.Society => 9, CauseKind.Computer => 10, CauseKind.Supply => 11, CauseKind.Captain => 13, _ => 0,
     };
 
     public const float ChainFactAt = 5;          // 사슬에 세는 일의 무게

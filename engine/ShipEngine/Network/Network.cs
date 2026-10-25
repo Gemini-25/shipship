@@ -1262,6 +1262,9 @@ public sealed partial class Network : IEngine
     /// <summary>그 방의 센서가 주컴퓨터에 닿나 (센서 선이 없는 배는 늘 닿는다).</summary>
     public bool RoomLinked(int room) => room < 0 || room >= DataCutCell.Length || DataCutCell[room] < 0;
 
+    /// <summary>그 칸에 센서 선이 지나나 (상했어도).</summary>
+    public bool OnData(int cell) => cell >= 0 && cell < _onData.Length && _onData[cell];
+
     /// <summary>그 칸의 센서 선이 상했나.</summary>
     public bool DataCutAt(int cell) => cell >= 0 && cell < DataBroken.Length && DataBroken[cell] != 0;
 

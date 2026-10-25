@@ -51,6 +51,16 @@ public sealed partial class Structure
         return true;
     }
 
+    /// <summary>요청: 물체를 그 빠르기로 민다 (vx · vy m/s — 함장의 손 '밀어 던지기'): 꼴에서 질량을 채운 뒤 <see cref="Shove"/> (충격량 = 질량 × 빠르기). 없으면 거짓.</summary>
+    public bool ShoveTo(int id, double vx, double vy, int cause = 0)
+    {
+        int i = IndexOf(id);
+        if (i < 0 || Props[i].State is 5 or 6 or 7) return false;
+        var p = Props[i];
+        if (p.Kg <= 0) { FillBody(ref p); Props[i] = p; }
+        return Shove(id, p.Kg * vx, p.Kg * vy, 0, cause);
+    }
+
     /// <summary>꼴에서 몸 값을 채운다 (꼴 번호 · 질량 · 회전관성 · 겉 재질 — 바닥에 닿은 기둥이 가장 많은 재질).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void FillBody(ref Prop p)

@@ -564,6 +564,7 @@ public static partial class Program
         BodyLaws();
         WashLaws(); WaterLaws(); ScrubLaws(); WorkerLaws();
         PropLaws(); PropBookLaws();
+        HandLaws();   // 함장의 손 (LawsHand.cs — docs/UI2.md §8 H1~H5)
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>

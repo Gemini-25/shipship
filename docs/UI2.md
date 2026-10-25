@@ -65,7 +65,7 @@
 
 | # | 갈래 | 겨누는 곳 | 크기 (작게 · 보통 · 크게) | 월드 길 | 원인 글 (게임 글) |
 |---|---|---|---|---|---|
-| 1 | 불씨 | 배 안 빈 칸 (가구 · 물건 위면 잘 붙는다) | 0.1 · 1 · 3MJ | `Chemistry.Ignite(cell, J, cause)` | 함장이 일으킨 불씨 — {가구 · 방} |
+| 1 | 불씨 | 배 안 빈 칸 (가구 · 물건 위면 잘 붙는다) | 0.5 · 2 · 5MJ (U2: 침대 · 의자는 1~1.5MJ 사이에서 붙는다 — 1MJ '보통'이 붙지 않아 올렸다) | `Chemistry.Ignite(cell, J, cause)` | 함장이 일으킨 불씨 — {가구 · 방} |
 | 2 | 외판 구멍 | 외판 칸 (`L.Hull`) | 0.002 · 0.02 · 0.2㎡ | `Structure.Tear(sim, c, area, cause)` (새 문 — 비공개 `Open(…, WallBreach)` 그대로) | 함장이 일으킨 외판 구멍 — {방} |
 | 3 | 전선 끊기 (정전) | 전선이 지나는 칸 | 하나 | `Network.CutLines(sim, c, 전기 비트, cause)` → 다음 틱 합선 찾기 (`Faults` '상한 전선에 전기가 들어갔다') → 차단기 | 함장이 일으킨 전선 끊김 — {방} |
 | 4 | 센서 선 끊기 | 센서 선 칸 | 하나 | `Network.CutData(sim, c, cause)` | 함장이 일으킨 센서 선 끊김 — {방} |
@@ -77,7 +77,7 @@
 | 10 | 산소 조절 센서 어긋남 | 겨누지 않는다 | 6시간 · 2시간 · 30분에 걸쳐 0.7까지 | `Network.StartO2Drift(hours, cause)` | 함장이 일으킨 센서 어긋남 — 산소 발생기 조절 센서 |
 | 11 | 폭발 | 배 안 빈 칸 | 0.5 · 2 · 8MJ (화약 0.1 · 0.5 · 2kg만큼) | `Structure.Blast(sim, c, J, cause)` | 함장이 일으킨 폭발 — 화약 {kg}kg만큼 |
 | 12 | 물건 밀어 던지기 | 물체 (끌어서 쪽 · 세기) | 끈 길이 → 1 ~ 8m/s | `Structure.ShoveTo(id, vx, vy, cause)` (새 문 — 꼴에서 질량을 채운 뒤 `Shove(kg·vx, kg·vy)`) | 함장이 던진 {물건} |
-| 13 | 운석 | 외판 칸 (그 칸 바깥 쪽에서 온다) | 5g · 60g · 0.5kg (5km/s · 450km — 90초 뒤) | `Outside.AddRock(kg, 5000, dir, offset, 450e3, cause)` | 함장이 보낸 운석 — {g}g |
+| 13 | 운석 | 외판 칸 (그 칸 바깥 쪽에서 온다) | 5g · 60g · 0.5kg (5km/s · 약 456km — 91초 뒤: U2 — 맞기 전 마지막 레이더 거리가 한 틱 길이 바로 아래 11.9km가 되게 · 5g 못 잡음 · 60g 2.4초 · 0.5kg 4.8초 앞) | `Outside.AddRock(kg, 5000, dir, offset, 450e3, cause)` | 함장이 보낸 운석 — {g}g |
 | 14 | 파편 구름 | 배 바깥 어디든 (누른 쪽에서 온다) | 옅게 · 보통 · 짙게 (구간 표 값 × 0.5 · 1 · 3) | `Outside.AddCloud("rubble", 빠르기 × 14분, …, dir, cause)` | 함장이 보낸 작은 바위 구름 |
 | 15 | 별 폭발 | 겨누지 않는다 | 세기 1 · 2 · 4 | `Outside.ScheduleFlare(1, cause, scale)` | 함장이 일으킨 별 폭발 |
 
@@ -618,7 +618,7 @@ _Draw       DrawWorldMarks: 테두리 · 겨눔 고리 · 이름표 · 운석 �
 - 시험: M1 · M2 · M3 (바뀜 — 까닭을 시험 글에) · M4.
 - 지문: 같음. 화면: `docs/screens/ui/u1_tabs.png` (자세한 판 · 사람) · `u1_robots.png`. 비용: 자리표 +0.03ms · 그리기 0.
 
-### U2 — 함장의 손 엔진 (월드 · 판 올림) · 어림 3시간
+### U2 — 함장의 손 엔진 (월드 · 판 올림) · 어림 3시간 ✔
 - 무엇: `Hand` 엔진 · 열다섯 갈래의 월드 길 · 원인 갈래 '함장' · 저장 판 · 연출 갈래 이름.
 - 파일 · 함수: `engine/ShipEngine/Outside/Hand.cs` (새 — `HandKind` · `HandOrder` · `Enqueue` · `Why` · `Step` · `Apply` · `Text` · `Save/Load`) · `Base/Causes.cs` (`CauseKind.Captain`) · `World/ShipWorld.cs` (`Setup` 맨 앞) · `Sim.cs` (`SaveVersion` · `SaveShape` · 주석) · `Story/DirectorChains.cs` (`EngineOf` · `PlainName[13]`) · `Structure/Structure.cs` (`Tear`) · `Structure/StructurePropsMove.cs` (`ShoveTo`) · `Network/Network.cs` (`OnData`) · `engine/Lab/LawsHand.cs` · `RulesHand.cs` (새) · `Scenes.cs` (`hand`) · `docs/ENGINE.md` 새 절 '함장의 손 — 바깥 입력'.
 - 시험: H1 ~ H5 · R1 ~ R7.
