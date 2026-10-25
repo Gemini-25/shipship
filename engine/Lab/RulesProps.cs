@@ -21,6 +21,8 @@ public static partial class Program
         {
             Console.WriteLine("\n[물체 그림]");
             StackRules();
+            TrackDrawRules();
+            ShardTimeRule();
         }
     }
 
@@ -220,6 +222,111 @@ public static partial class Program
                 $"충격파 컵 x {p.X:0.00} · \"{why}\" / 수소 폭발 컵 {far:0.00}m · \"{gwhy}\"");
         }
     }
+
+    /// <summary>
+    /// 틱 사이를 메운다 (PH5 — docs/PHYSICS.md §6-1 · §10 '그림' · '소리'): 관전 화면은 한 틱 늦은 시계로 그린다 — 지난 틱의 틱 안 기록 (열쇠틀)을 그리는 때만큼 에르미트로 메워
+    /// 도는 상자가 틱 사이 장마다 나아가고 · 충돌 잔걸음에 난 것 (사실 · 소리 · 부스러기)은 그 때 (Sub)를 지녀 그 때를 지나는 장에 난다.
+    /// </summary>
+    private static void TrackDrawRules()
+    {
+        // 도는 상자: 0.3g 바닥에서 2.2m/s · 3rad/s로 민 식량 상자 — 틱 사이 f 0.25 · 0.5 · 0.75 세 장이 다르고 한쪽으로 나아가며 한쪽으로 돈다 (메우지 않으면 셋 다 틱 끝 자리)
+        {
+            var lay = Worlds.Ascii(PropRoom);
+            var s = Worlds.Full(lay, 2);
+            var show = new LiveShow(s, "시험호") { SpeedOverride = 1, Follow = false };
+            show.Ears.Enabled = false;
+            show.CamX = 7; show.CamY = 5; show.ViewW = 14;
+            Array.Fill(s.Get<Field>().Grav, 0.3f);   // 0.3g 바닥 (한 틱 내내 미끄러지며 돌게)
+            s.Run(2);
+            var st = s.Get<Structure>();
+            int id = Worlds.PutItem(s, "식량 상자", s.Layout.Index(4, 5));
+            var fm = st.PropForm(st.Props[st.IndexOf(id)]);
+            st.Shove(id, fm.Mass * 2.2, 0, fm.I * 3);
+            show.Advance(1.0);   // 그 틱을 돌린다 (그리는 때는 지난 틱 끝 — 화면은 한 틱 늦다)
+            var pos = new List<(double x, double y, double th)>();
+            var px = new List<uint[]>();
+            for (int k = 0; k < 3; k++)
+            {
+                show.Advance(0.25);
+                pos.Add(show.DrawnProp(id));
+                var lf = show.Render();
+                px.Add(PixelsOf(lf.Img)); show.Recycle(lf.Img);
+            }
+            int d01 = Differ(px[0], px[1]), d12 = Differ(px[1], px[2]);
+            var end = st.Props[st.IndexOf(id)];
+            Check("틱 사이 메움: 0.3g 바닥에서 2.2m/s · 3rad/s로 민 식량 상자 — 관전 화면의 틱 사이 f 0.25 · 0.5 · 0.75 세 장이 다르고 한쪽으로 나아가며 한쪽으로 돈다 (틱 끝 자리로 뛰지 않는다)",
+                d01 > 0 && d12 > 0 && pos[0].x < pos[1].x && pos[1].x < pos[2].x && pos[2].x < end.X + 1e-9 && pos[0].th < pos[1].th && pos[1].th < pos[2].th,
+                $"그린 자리 x {pos[0].x:0.000} → {pos[1].x:0.000} → {pos[2].x:0.000} (틱 끝 {end.X:0.000}) · 각 {pos[0].th:0.00} → {pos[1].th:0.00} → {pos[2].th:0.00} · 다른 도트 {d01} · {d12}");
+        }
+        // 충돌 잔걸음: 갈라진 몸 1을 배 쪽으로 1m/s 밀면 틱 가운데쯤 부딪힌다 — 그 사실 · 쾅 소리가 그 때 (Sub)를 지니고 · 귀는 그리는 때가 그 때를 지날 때 듣는다 (틱을 돌린 순간이 아니라 — 소리가 그림보다 앞서지 않는다)
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = Worlds.Full(lay, 5);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+            s.Run(3);
+            var show = new LiveShow(s, "시험호") { SpeedOverride = 1, Follow = false };
+            show.CamX = 7; show.CamY = 3; show.ViewW = 16;
+            var heard = new List<(double at, string line)>();
+            show.Ears.Log = line => { if (line.Contains("Bang")) heard.Add((show.DrawnTick, line)); };
+            int hit = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 배 쪽으로 밀었다", s.Tick);
+            var o = st.Bodies[1];
+            st.Push(1, o.X, o.Y, -o.Mass * 1.0, 0, hit);
+            long seen = s.Facts.Total;
+            Fact crash = default;
+            for (int k = 0; k < 8 * 6 && crash.Kind != FactKind.Crash; k++)
+            {
+                show.Advance(1 / 8.0);
+                foreach (var x in s.Facts.Since(seen)) if (x.Kind == FactKind.Crash) { crash = x; break; }
+                seen = s.Facts.Total;
+            }
+            for (int k = 0; k < 10; k++) show.Advance(1 / 8.0);
+            double at = crash.Kind == FactKind.Crash ? crash.Tick + crash.Sub / 255.0 : double.NaN;   // 그 걸음은 틱 crash.Tick에서 하나 더까지 (그리는 때 = 돌린 뒤 틱 − 1 + 틱 사이)
+            double first = heard.Count > 0 ? heard[0].at : double.NaN;
+            Check("충돌 잔걸음의 때: 갈라진 조각을 배 쪽으로 1m/s 밀면 틱 가운데에 부딪힌다 — 사실이 그 때 (Sub)를 지니고 · 귀는 그리는 때가 그 때를 지난 장에 쾅을 듣는다 (한 장 1/8틱 안 · 틱을 돌린 순간 소리가 그림보다 앞서지 않는다)",
+                crash.Kind == FactKind.Crash && crash.Sub > 32 && crash.Sub < 223 && first >= at - 1e-9 && first <= at + 1 / 8.0 + 1e-9,
+                crash.Kind != FactKind.Crash ? "부딪힘 없음" : $"부딪힌 때 틱 {crash.Tick} · 틱 안 {crash.Sub / 255.0:0.00} → 그리는 때 {at:0.000} · 귀가 들은 때 {first:0.000}");
+        }
+    }
+
+    /// <summary>충돌 잔걸음에 난 부스러기 (PH5): 몸 1을 멀리 보냈다가 40m/s로 되돌려 틱 가운데에 배를 들이받게 한다 — 찢긴 판의 부스러기가 그 때 (Sub)를 지니고 · 그 전 장에는 그리지 않는다.</summary>
+    private static void ShardTimeRule()
+    {
+        var lay = Worlds.Ascii(Sealed);
+        var s = Worlds.Full(lay, 5);
+        var st = s.Get<Structure>();
+        s.Run(3);
+        for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+        s.Run(3);
+        var show = new LiveShow(s, "시험호") { SpeedOverride = 1, Follow = false };
+        show.Ears.Enabled = false;
+        var o = st.Bodies[1];
+        st.Push(1, o.X, o.Y, o.Mass * 5, 0);
+        s.Run(3);
+        o = st.Bodies[1];
+        st.Push(1, o.X, o.Y, -o.Mass * 45, 0, s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 배 쪽으로 세게 밀었다", s.Tick));
+        long made = st.ShardsMade;
+        Shard first = default; bool got = false;
+        for (int k = 0; k < 6 && !got; k++)
+        {
+            show.Advance(1.0);
+            foreach (var sh in st.Shards) if (sh.Born == s.Tick - 1 && sh.Sub > 0) { first = sh; got = true; break; }
+        }
+        bool hidden = false, shown = false;
+        if (got)
+        {
+            var lf = show.Render(); show.Recycle(lf.Img);
+            double at = first.Sub / 255.0;
+            hidden = !show.Painter.ShardShown(first, Math.Max(0, at - 1 / 16.0));
+            shown = show.Painter.ShardShown(first, Math.Min(1, at + 1e-6));
+        }
+        Check("충돌 잔걸음의 부스러기: 배를 40m/s로 들이받아 찢긴 판의 부스러기는 난 때 (Sub — 틱 처음 것은 0)를 지니고 · 관전 화면은 그 때 전 장에는 그리지 않는다 (한 장 앞 1/16틱) · 그 때부터 그린다",
+            got && hidden && shown, got ? $"부스러기 {st.ShardsMade - made} · 처음 것 틱 안 {first.Sub / 255.0:0.00} · 앞 장 숨김 {hidden} · 그 때 보임 {shown}" : $"틱 안에 난 부스러기 없음 (부스러기 {st.ShardsMade - made} · 부딪힘 {st.Crashes})");
+    }
+
+    private static uint[] PixelsOf(Img img) { var a = new uint[img.W * img.H]; for (int y = 0; y < img.H; y++) for (int x = 0; x < img.W; x++) { var c = img.Get(x, y); a[y * img.W + x] = (uint)(c.R << 24 | c.G << 16 | c.B << 8 | c.A); } return a; }
+    private static int Differ(uint[] a, uint[] b) { int n = 0; for (int i = 0; i < Math.Min(a.Length, b.Length); i++) if (a[i] != b[i]) n++; return n + Math.Abs(a.Length - b.Length); }
 
     // 화물칸 (외판 x = 0에 구멍) · 닫힌 문 · 통로 — RulesFling과 같은 꼴
     private const string BreachRooms = "\n###############\n#.....#.......#\n#.....D.......#\n#.....#.......#\n###############";

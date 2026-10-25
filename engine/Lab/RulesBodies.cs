@@ -14,6 +14,9 @@ public static partial class Program
 #...............................P...P.......P...P.......#
 #...............................#####.......#####.......#
 #################################   #########   #########";
+    /// <summary>틱 처음 각속도 w0 · 끝 w1로 고르게 가속하는 몸이 t초에 돈 각 (W₀t + ½αt²).</summary>
+    private static double SpinAt(double w0, double w1, double t) => w0 * t + 0.5 * (w1 - w0) / Time.SecondsPerTick * t * t;
+
     private static void BodyRules()
     {
         if (!Do("칸 강체")) return;
@@ -398,6 +401,7 @@ public static partial class Program
                 {
                     var b = st.Bodies[1]; var (lx, ly) = st.LocalOf(0, b.X, b.Y);
                     if (!double.IsNaN(tx)) tickMove = Math.Max(tickMove, Math.Sqrt((lx - tx) * (lx - tx) + (ly - ty) * (ly - ty)));
+                    else tickMove = Math.Max(tickMove, Math.Sqrt((lx - x) * (lx - x) + (ly - y) * (ly - y)));   // 첫 틱: 그 틱 처음 그린 자리에서 (틱 안 기록은 그 틱의 참 길 — 가속해 틱 끝에 빠르다)
                     (tx, ty) = (lx, ly);
                 }
             }
@@ -461,14 +465,15 @@ public static partial class Program
             int one = st1.Bodies.Count;
             double vw = st1.Bodies[0].W;
             var vent = new List<double>();   // 뿜어 도는 배: 틱 사이 ¼ · ½ · ¾에 그린 별 각 − 지난 틱 끝 각
-            double v0 = st1.Bodies[0].Th;
+            double v0 = st1.Bodies[0].Th, vw0 = st1.Bodies[0].W;
             ran1 += show1.Advance(1.0);
-            double ventTurn = st1.Bodies[0].Th - v0;
+            double ventTurn = st1.Bodies[0].Th - v0, vw1 = st1.Bodies[0].W;
             for (int k = 0; k < 3; k++) { ran1 += show1.Advance(0.25); show1.Render(); vent.Add(show1.Painter.SkyTh - v0); }
-            double ventWorst = 0;
-            for (int k = 0; k < 3; k++) ventWorst = Math.Max(ventWorst, Math.Abs(vent[k] - ventTurn * 0.25 * (k + 1)));
+            double ventWorst = 0, dt1 = Time.SecondsPerTick;
+            // 몸은 틱 안에서 고르게 가속한다 (PH4d — 뿜는 돌림힘이 그 틱 동안 고르다): 그린 각 = W₀t + ½αt² (α = 틱 끝 · 처음 각속도 차 / dt)
+            for (int k = 0; k < 3; k++) { double t = dt1 * 0.25 * (k + 1); ventWorst = Math.Max(ventWorst, Math.Abs(vent[k] - (vw0 * t + 0.5 * (vw1 - vw0) / dt1 * t * t))); }
             ran1 += show1.Advance(0.25);   // 다음 틱이 돈다 (틱 사이 몫 1 → 0)
-            // 배를 2.0rad/s로: 한 틱 뒤 ¼에 별이 W · 2.4초 · ¼만큼 (W는 틱 처음 · 끝의 가운데 — 구멍으로 아직 뿜어 한 틱에 0.000005rad/s 는다)
+            // 배를 2.0rad/s로: 한 틱 뒤 ¼에 별이 W₀t + ½αt²만큼 (구멍으로 아직 뿜어 한 틱에 0.000005rad/s 는다 — 고른 가속)
             SpinTo(st1, 0, 2.0);
             double sw = st1.Bodies[0].W, s10 = st1.Bodies[0].Th;
             ran1 += show1.Advance(1.0);
@@ -477,10 +482,10 @@ public static partial class Program
             show1.Render();
             double sky1 = show1.Painter.SkyTh - s10;
             Check("도는 조각 그림 각 — 갈라지지 않은 배: 구멍만 난 배 (몸 0 하나)가 뿜어 돌거나 2rad/s로 돌면 별도 틱 사이 장마다 도는 쪽으로 고르게 (한 틱 서 있다가 틱마다 한 번에 뛰지 않는다)",
-                ran1 == 4 && one == 1 && st1.Bodies.Count == 1 && Math.Abs(vw) > 0.01 && Math.Abs(ventTurn) > 0.01 && ventWorst < 1e-9 &&
-                Math.Abs(sw - 2.0) < 1e-9 && Math.Abs(sky1 - (sw + sw1) / 2 * Time.SecondsPerTick * 0.25) < 1e-6,
+                ran1 == 4 && one == 1 && st1.Bodies.Count == 1 && Math.Abs(vw) > 0.01 && Math.Abs(ventTurn) > 0.01 && ventWorst < 1e-6 &&
+                Math.Abs(sw - 2.0) < 1e-9 && Math.Abs(sky1 - SpinAt(sw, sw1, Time.SecondsPerTick * 0.25)) < 1e-6,
                 $"몸 {one} → {st1.Bodies.Count} · 뿜어 {vw:0.000}rad/s · 한 틱에 {ventTurn:0.000}rad · ¼ · ½ · ¾에 별 {string.Join(" → ", vent.Select(v => v.ToString("0.000")))}rad (어긋남 {ventWorst:0.0e0}) · " +
-                $"배 {sw:0.000} → {sw1:0.000}rad/s · 한 틱에 {spinTurn:0.000}rad · 4분의 1에 별 {sky1:0.000000}rad (기대 {(sw + sw1) / 2 * Time.SecondsPerTick * 0.25:0.000000})");
+                $"배 {sw:0.000} → {sw1:0.000}rad/s · 한 틱에 {spinTurn:0.000}rad · 4분의 1에 별 {sky1:0.000000}rad (기대 {SpinAt(sw, sw1, Time.SecondsPerTick * 0.25):0.000000})");
 
             // 돌던 조각이 또 갈라지면: 새 몸은 이번 틱에 났다 (지난 틱 자세가 없다) — 붙어 있던 자리 · 지금 각에 가장 가까운 온 바퀴에서 메운다 (각을 감지 않아도 한 장에 몇 바퀴를 돌지 않는다)
             var lay3 = Worlds.Ascii(Triple, Worlds.MindLegend);

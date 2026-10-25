@@ -35,10 +35,11 @@ public sealed partial class Painter
     {
         _recent.Clear();
         foreach (var fc in s.Facts.Recent(512))
-            if (s.Tick - fc.Tick <= FxTicks && fc.Kind is FactKind.Short or FactKind.LoudSound) _recent.Add(fc);
+            if (s.Tick - fc.Tick <= FxTicks + 1 && fc.Kind is FactKind.Short or FactKind.LoudSound) _recent.Add(fc);
     }
 
-    private double Age(Sim s, in Fact f) => s.Tick - f.Tick + Sub;
+    /// <summary>사실의 나이 (틱 — 한 틱 늦은 시계: 그리는 때 = 지난 틱 끝 + 틱 사이 Sub · 사실의 때 = 그 틱 + 틱 안 Sub — 음수면 아직 나지 않았다).</summary>
+    private double Age(Sim s, in Fact f) => s.Tick - 1 - f.Tick + Sub - f.Sub / 255.0;
 
     // ── 빛 지도에 더하는 것 (곱하기 전) ──
     private void FxLight(Sim s, Network? net, int frame)
@@ -47,6 +48,7 @@ public sealed partial class Painter
         {
             if (fc.Cell < 0) continue;
             double age = Age(s, fc);
+            if (age < 0) continue;   // 아직 나지 않았다 (그리는 때가 그 사실의 틱 안 때 앞)
             if (fc.Kind == FactKind.Short && age < 2)
                 SparkLight(fc.Cell, frame, (float)(1 - age / 2));
             else if (IsBlast(fc) && age < 0.6)
@@ -145,6 +147,7 @@ public sealed partial class Painter
         {
             if (fc.Cell < 0 || !Mine(fc.Cell)) continue;
             double age = Age(s, fc);
+            if (age < 0) continue;   // 아직 나지 않았다 (그리는 때가 그 사실의 틱 안 때 앞)
             if (fc.Kind == FactKind.Short && age < 2) Sparks(img, fc.Cell, x0, y0, frame, (float)(1 - age / 2));
             else if (IsBlast(fc) && age < 1.2) Shockwave(img, fc, x0, y0, age);
         }

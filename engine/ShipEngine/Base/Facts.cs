@@ -200,7 +200,13 @@ public sealed class Facts : IState
     }
 
     public void Emit(long tick, FactKind kind, int cell = -1, float size = 0, int cause = 0, int actor = -1, int other = -1)
-        => Emit(new Fact { Tick = tick, Kind = kind, Cell = cell, Size = size, Cause = cause, Actor = actor, Other = other });
+        => Emit(new Fact { Tick = tick, Kind = kind, Cell = cell, Size = size, Cause = cause, Actor = actor, Other = other, Sub = SubNow });
+
+    /// <summary>
+    /// 지금 틱 안의 때 (0~255 — ④가 몸 · 물체 잔걸음 동안 그 때를 둔다 · 그 밖에는 0): 이때 난 사실 · 소리 (③ <see cref="Sound"/>) · 부스러기가 그 때를 지닌다 —
+    /// 그리는 쪽이 그 때를 지나는 장에 띄운다 (찍지 않는다 — ④ 움직임 밖에서는 늘 0).
+    /// </summary>
+    public byte SubNow;
 
     /// <summary>번호 from(누계 기준) 이후의 사실들 (고리에 남은 것만).</summary>
     public IEnumerable<Fact> Since(long from)

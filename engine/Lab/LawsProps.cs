@@ -16,6 +16,7 @@ public static partial class Program
         PlaneLaws();
         WindLaws();
         FrameLaws();
+        TrackLaws();
     }
 
     // 긴 방 (16m) 곁에 작은 방 — 가운데 겹을 끊으면 긴 방이 배 (몸 0 · 무거운 쪽) · 작은 방이 조각
@@ -47,6 +48,51 @@ public static partial class Program
     }
 
     /// <summary>
+    /// 틱 안 기록 (PH5 — docs/PHYSICS.md §6-1 · §10 법칙 13 · 법칙 3의 때): 기록을 켜도 세계는 같다 (바이트 · 사실 흐름 — 켬 = 끔) ·
+    /// 마찰로 서는 때를 사건 열쇠틀이 1e-6초로 안다 · 열쇠틀마다 운동 에너지가 줄기만 한다.
+    /// </summary>
+    private static void TrackLaws()
+    {
+        // 법칙 13: 기록이 세계를 바꾸지 않는다 — 부엌 외판 0.5m² 감압 (물건이 돌며 미끄러지고 · 막고 · 우주로) + 갈라진 두 방 (덜컹) 20틱 · 켬 = 끔 (찍은 바이트 · 사실 흐름 · 틱 안 때까지)
+        {
+            (byte[] bytes, string facts, int keys) Run(bool on)
+            {
+                var lay = Worlds.Ascii(BreachRooms, Worlds.Seats);
+                var s = Worlds.Full(lay, 4);
+                var st = s.Get<Structure>(); var f = s.Get<Field>();
+                if (on) st.Track = new MotionTrack();
+                foreach (var (name, x, y) in new[] { ("식량 상자", 1, 2), ("컵", 2, 1), ("공구 상자", 2, 3), ("수리 꾸러미", 1, 1) }) Worlds.PutItem(s, name, Worlds.At(lay, x, y));
+                s.Run(2);
+                st.DamageCause[Worlds.At(lay, 0, 2)] = s.Causes.Add(CauseKind.Setup, "외판에 파편이 박혔다", s.Tick); f.SetHole(Worlds.At(lay, 0, 2), 0.5f);
+                int keys = 0;
+                for (int k = 0; k < 20; k++) { s.Step(); keys += st.Track?.Keys.Count ?? 0; }
+                return (s.Save(), string.Join(";", s.Facts.Since(0).Select(x => $"{x.Tick}:{x.Kind}:{x.Cell}:{x.Cause}:{x.Sub}")), keys);
+            }
+            var off = Run(false); var on = Run(true);
+            Check("기록이 세계를 바꾸지 않는다 (법칙 13): 부엌 외판 0.5m² 감압 20틱 — 틱 안 기록을 켠 세계 = 끈 세계 (찍은 바이트 · 사실 흐름 · 틱 안 때까지) · 켠 세계는 열쇠틀을 남겼다",
+                off.bytes.AsSpan().SequenceEqual(on.bytes) && off.facts == on.facts && on.keys > 0,
+                $"바이트 같음 {off.bytes.AsSpan().SequenceEqual(on.bytes)} · 사실 같음 {off.facts == on.facts} · 열쇠틀 {on.keys}");
+        }
+        // 법칙 3의 때: 1g 마른 바닥 식량 상자 3m/s → 선 때 v/(μk g) = 1.0204082초 (기록의 사건 열쇠틀 1e-6) · 열쇠틀마다 운동 에너지가 줄기만 한다
+        {
+            var s = PropWorld(1);
+            var st = s.Get<Structure>();
+            st.Track = new MotionTrack();
+            int id = Slide(s, "식량 상자", 4.5, 4.5, 3, 0);
+            s.Step();
+            var keys = st.Track.Of(MotionTrack.WhoProp, id).ToArray();
+            var p = st.Props[st.IndexOf(id)];
+            double stop = keys.Where(k => k.Ev == MotionTrack.EvStop).Select(k => (double)k.T).DefaultIfEmpty(-1).First();
+            bool down = keys.Length > 2;
+            for (int k = 1; k < keys.Length; k++) down &= keys[k].Vx * keys[k].Vx + keys[k].Vy * keys[k].Vy <= keys[k - 1].Vx * keys[k - 1].Vx + keys[k - 1].Vy * keys[k - 1].Vy + 1e-12;
+            double want = 3 / (0.3 * 9.8);
+            Check("마찰로 선 때 (법칙 3): 1g 마른 바닥 식량 상자 3m/s → 선 때 v/(μk g) = 1.0204초 — 기록의 사건 열쇠틀 (1e-6초) · 열쇠틀마다 운동 에너지가 줄기만 한다 · 16장 넘게",
+                Math.Abs(stop - want) < 1e-6 && down && keys.Length >= 10 && keys[0].T == 0,
+                $"선 때 {stop:0.0000000}초 (식 {want:0.0000000}) · 열쇠틀 {keys.Length} · 줄기만 {down}");
+        }
+    }
+
+    /// <summary>
     /// 몸 위의 물체 (PH4d — docs/PHYSICS.md §3-2 '바닥 몸의 관성' · §10 법칙 6 · 7): 몸은 틱 안에서 고르게 가속하고 · 물체는 그 몸의 틀에서 −a · 원심 · 코리올리 · 오일러를 느낀다 —
     /// 마찰 없는 물체는 세상에 선다 (갈릴레이) · 덜컹은 바닥이 바뀐 것이라 세상 빠르기를 바꾸지 않는다 · 바닥 · 벽이 물체에 준 몫은 몸이 되받는다 (장부).
     /// </summary>
@@ -64,25 +110,29 @@ public static partial class Program
             var p0 = st.Props[st.IndexOf(id)];
             var (wx0, wy0, wvx, wvy, _) = st.PropWorld(p0);   // 세상에서 곧게 (몸이 갈라질 때 얻은 빠르기 그대로)
             var b0 = st.Bodies[0];
-            double worstMid = double.MaxValue, midT = 0, worstEnd = 0;
-            st.SubSeen = tau =>
-            {
-                if (Math.Abs(tau - Time.SecondsPerTick / 2) > Math.Abs(midT - Time.SecondsPerTick / 2)) return;
-                var o = st.Bodies[0];
-                double ax = a * Math.Cos(b0.Th), ay = a * Math.Sin(b0.Th);
-                midT = tau;
-                worstMid = Math.Max(Math.Abs(o.X - (b0.X + b0.Vx * tau + 0.5 * ax * tau * tau)), Math.Abs(o.Y - (b0.Y + b0.Vy * tau + 0.5 * ay * tau * tau)));
-            };
+            st.Track = new MotionTrack();
             s.Step();
-            st.SubSeen = null;
+            var tr = st.Track; st.Track = null;
+            // 틱 가운데: 물체 열쇠틀 가운데 1.2초에 가장 가까운 것 · 그 때 몸의 자세 (몸 열쇠틀 에르미트) → 세상 자리 / 몸도 그 때 x₀ + v₀t + ½at²
+            double midT = 0, worstMid = double.MaxValue, worstBody = double.MaxValue;
+            foreach (var k in tr.Of(MotionTrack.WhoProp, id)) if (Math.Abs(k.T - 1.2) < Math.Abs(midT - 1.2)) midT = k.T;
+            var keys = tr.Of(MotionTrack.WhoProp, id).ToArray();
+            if (keys.Length > 0 && tr.Pose(MotionTrack.WhoBody, 0, midT, out double bx, out double by, out double bth))
+            {
+                var km = keys.First(k => k.T == (float)midT);
+                double c = Math.Cos(bth), sn = Math.Sin(bth), dx = km.X - b0.Lx, dy = km.Y - b0.Ly;
+                worstMid = Math.Max(Math.Abs(bx + c * dx - sn * dy - (wx0 + wvx * midT)), Math.Abs(by + sn * dx + c * dy - (wy0 + wvy * midT)));
+                double ax = a * Math.Cos(b0.Th), ay = a * Math.Sin(b0.Th);
+                worstBody = Math.Max(Math.Abs(bx - (b0.X + b0.Vx * midT + 0.5 * ax * midT * midT)), Math.Abs(by - (b0.Y + b0.Vy * midT + 0.5 * ay * midT * midT)));
+            }
             var p1 = st.Props[st.IndexOf(id)];
             var (wx1, wy1, _, _, _) = st.PropWorld(p1);
             double dtk = Time.SecondsPerTick;
-            worstEnd = Math.Max(Math.Abs(wx1 - wx0 - wvx * dtk), Math.Abs(wy1 - wy0 - wvy * dtk));
+            double worstEnd = Math.Max(Math.Abs(wx1 - wx0 - wvx * dtk), Math.Abs(wy1 - wy0 - wvy * dtk));
             double slid = p1.X - p0.X;   // 배 안에서
-            Check("갈릴레이: 0.3g로 고르게 가속하는 배 (갈라진 몸 0) 안 무중력 바닥의 식량 상자는 세상에서 곧게 간다 — 틱 끝 세상 자리 = 처음 + 처음 세상 빠르기 × t (≤ 1e-6m) · 몸은 틱 가운데에도 x₀ + v₀t + ½at² (≤ 1e-6m · 반-차기면 ⅛a·dt² = 2.1m 어긋난다) · 상자는 배 안에서 ½a·dt² 뒤로",
-                worstEnd <= 1e-6 && worstMid <= 1e-6 && Math.Abs(midT - Time.SecondsPerTick / 2) < 0.1 && Math.Abs(slid - 0.5 * Math.Abs(a) * Time.SecondsPerTick * Time.SecondsPerTick) < 1e-6,
-                $"틱 끝 어긋남 {worstEnd:0.0e0}m · 몸 틱 가운데 ({midT:0.00}초) 어긋남 {(worstMid == double.MaxValue ? "표본 없음" : $"{worstMid:0.0e0}m")} · 배 안에서 {slid:0.000}m 뒤로");
+            Check("갈릴레이: 0.3g로 고르게 가속하는 배 (갈라진 몸 0) 안 무중력 바닥의 식량 상자는 세상에서 곧게 간다 — 틱 끝 · 틱 가운데 (기록의 열쇠틀 · 몸 자세 에르미트) 세상 자리 = 처음 + 처음 세상 빠르기 × t (≤ 1e-6m) · 몸은 틱 가운데에도 x₀ + v₀t + ½at² (반-차기면 ⅛a·dt² = 2.1m 어긋난다) · 상자는 배 안에서 ½a·dt² 뒤로",
+                worstEnd <= 1e-6 && worstMid <= 1e-6 && worstBody <= 1e-6 && Math.Abs(midT - 1.2) < 0.1 && Math.Abs(slid - 0.5 * Math.Abs(a) * dtk * dtk) < 1e-6,
+                $"틱 끝 어긋남 {worstEnd:0.0e0}m · 틱 가운데 ({midT:0.00}초) 상자 {(worstMid == double.MaxValue ? "기록 없음" : $"{worstMid:0.0e0}m")} · 몸 {(worstBody == double.MaxValue ? "기록 없음" : $"{worstBody:0.0e0}m")} · 배 안에서 {slid:0.000}m 뒤로");
         }
         // 법칙 12 점화 중 왕복: 몸이 없는 배가 0.4g로 점화하는 중 미끄러지는 식량 상자 — 찍고 되살려 10틱 바이트 같음 (⑤가 틱마다 먼저 가속을 알린다 — 찍지 않는 요청)
         {

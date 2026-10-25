@@ -188,7 +188,7 @@ public static partial class Program
             Console.WriteLine($"    다시보기 시작 틱 {rs.World.Tick} · 하이라이트 {hl!.StartTick}~{hl.Last} · 고리 {string.Join(",", rs.Dir.Ring.Select(r => r.tick))}");
             foreach (var c in rs.Shots) Console.WriteLine($"    컷 {c.Kind} {c.From}~{c.To} (At {c.At}) ×{c.Speed} {c.Caption}");
         }
-        long replayHits = 0; int replayHole = 0; bool liveStill = true; int replayFrames = 0;
+        long replayHits = 0; int replayHole = 0; bool liveStill = true, replayTrack = false; int replayFrames = 0;
         var seenShots = new List<string>(); bool shotSpeed = true, jumped = false; string peakStory = ""; double peakView = 99; int peakFrames = 0;
         for (int i = 0; i < 60 * 600 && rs.Replaying; i++)
         {
@@ -196,13 +196,16 @@ public static partial class Program
             if (cut != null) { if (seenShots.Count == 0 || seenShots[^1] != cut.Kind) seenShots.Add(cut.Kind); shotSpeed &= rs.Speed == cut.Speed; if (cut.Kind == "정점") { peakStory = rs.Story(); if (++peakFrames > 60) peakView = Math.Min(peakView, rs.ViewW); } }
             else if (rs.Replaying) jumped |= rs.Speed == LiveShow.JumpSpeed;
             rs.Advance(dt);
-            if (rs.Replaying) { replayHits = rs.World.Get<Outside>().RockHits; replayHole = Enumerable.Range(0, rs.World.Layout.N).Count(c => rs.World.Get<Field>().Hole[c] > 0); replayFrames++; }
+            if (rs.Replaying) { replayHits = rs.World.Get<Outside>().RockHits; replayHole = Enumerable.Range(0, rs.World.Layout.N).Count(c => rs.World.Get<Field>().Hole[c] > 0); replayFrames++; replayTrack |= rs.World.Get<Structure>().Track is { } rt && rt.Tick == rs.World.Tick - 1 && !ReferenceEquals(rs.World, rs.Sim); }
             if (i % 30 == 0) { var lf = rs.Render(); rs.Recycle(lf.Img); }
             liveStill &= rs.Sim.Tick == liveTick;
         }
         Check("관전 화면 다시보기: 하이라이트를 첫 조짐 직전부터 되살려 보여 준다 — 같은 운석이 부딪히고 · 그동안 산 세계는 멈추고 · 끝나면 산 세계로 돌아온다",
             started && replayHits == liveHits && liveHits > 0 && replayFrames > 60 && liveStill && !rs.Replaying && rs.World == rs.Sim,
             hl == null ? "하이라이트 없음" : $"'{hl.Title}' · 다시보기 {replayFrames}장 · 충돌 산 세계 {liveHits} / 다시보기 {replayHits} · 산 세계 멈춤 {liveStill} · 돌아옴 {!rs.Replaying}");
+
+        Check("다시보기 세계도 틱 안 기록을 켜 틱 사이를 메운다 (PH5 — 되살린 세계가 돈 틱마다 열쇠틀이 그 틱의 것이다 · 산 세계와 따로)",
+            started && replayTrack, $"다시보기 기록 {replayTrack}");
 
         Check("⑬ 다시보기는 컷 목록을 따른다 — 조짐부터 정점 · 뒤까지 컷마다 그 빠르기 · 자막 '[정점] …' · 컷 사이는 건너뛴다 · 정점 컷은 가까이 (그래픽 결정 13)",
             seenShots.Count >= 3 && seenShots[0] == "조짐" && seenShots.Contains("정점") && seenShots[^1] == "뒤" && shotSpeed && jumped && peakStory.StartsWith("[정점] ") && peakView <= LiveShow.CloseUp + 1,

@@ -36,6 +36,7 @@ public struct Emission
     public SoundKind Kind;
     public int Cell, Source, Actor, Cause;
     public float Db;           // 1m에서의 크기
+    public byte Sub;           // 틱 안의 때 (0~255 — 그 틱 사이 언제 났나: 귀는 그리는 때가 그 때를 지날 때 듣는다)
 }
 
 /// <summary>들린 소리 하나.</summary>
@@ -201,7 +202,7 @@ public sealed class Sound : IEngine
         int src = source >= 0 ? source : cell;
         int ev = ++_nextEvent;
         Emitted++;
-        _log[Logged % LogSize] = new Emission { Tick = sim.Tick, Kind = kind, Cell = cell, Source = src, Db = db, Actor = actor, Cause = cause };
+        _log[Logged % LogSize] = new Emission { Tick = sim.Tick, Kind = kind, Cell = cell, Source = src, Db = db, Actor = actor, Cause = cause, Sub = sim.Facts.SubNow };
         Logged++;
         if (Thin(cell) <= 0) return ev; // 진공: 아무도 못 듣는다
         // 다익스트라 (칸마다 가장 큰 크기 — 다시 쓰는 배열: 생활 소리로 낸 소리가 많아져 사전을 새로 만들지 않는다 · 결과는 같다)

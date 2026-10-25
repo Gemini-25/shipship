@@ -272,6 +272,7 @@ public sealed partial class Structure
             if (!world) { PropPxGone += p.Kg * p.Vx; PropPyGone += p.Kg * p.Vy; PropLGone += p.Kg * (p.X * p.Vy - p.Y * p.Vx) + p.Inertia * p.W; }
             if (p.Kind == 0) sim.Book.AddItem(p.What, Flow.Spaced, -1);
             PropSpaced++;
+            Track?.Gone.Add(p);   // 그리는 쪽이 나간 때까지 그린다
         }
         if (any) Props.RemoveAll(p => p.State == 5);
     }

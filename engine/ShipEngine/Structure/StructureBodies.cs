@@ -318,6 +318,8 @@ public sealed partial class Structure
         steps = Math.Clamp(steps, 1, MaxSubSteps);
         double h = dt / steps;
         _inBodies = true;
+        var tr = Track;
+        if (tr != null) { if (_trackPrev.Length < n) _trackPrev = new RigidBody[n]; for (int b = 0; b < n; b++) { _trackPrev[b] = Bodies[b]; if (Bodies[b].Mass > 0 && Bodies[b].Asleep == 0) BodyKey(tr, b, 0, MotionTrack.EvNone); } }
         for (int k = 0; k < steps; k++)
         {
             for (int b = 0; b < n; b++)
@@ -329,11 +331,14 @@ public sealed partial class Structure
                 Bodies[b] = o;
             }
             _subT = (k + 1) * h;
+            sim.Facts.SubNow = (byte)Math.Clamp((int)Math.Round(_subT / dt * 255), 0, 255);   // 이 잔걸음에 난 부딪힘 · 부스러기 · 소리의 때
+            int j0 = _jolts.Count;
             if (n > 1) Contacts(sim);   // (다) 부딪힘 — 잔걸음마다 (밂은 덜컹 — 그 때)
             MoveShards(sim, h);         // (마) 부스러기 알갱이
-            SubSeen?.Invoke(_subT);
+            if (tr != null) TrackBodies(tr, n, k * h, _subT, dt, j0);
         }
         _inBodies = false; _subT = 0;
+        sim.Facts.SubNow = 0;
         for (int b = 0; b < n; b++)
         {
             var o = Bodies[b];
@@ -363,6 +368,33 @@ public sealed partial class Structure
             var o = Bodies[b];
             var (sx, sy) = LocalOf(0, o.X, o.Y);
             span[i].Dist = (float)Math.Sqrt((sx - o.Lx) * (sx - o.Lx) + (sy - o.Ly) * (sy - o.Ly));
+        }
+    }
+
+    private RigidBody[] _trackPrev = Array.Empty<RigidBody>();
+
+    private void BodyKey(MotionTrack tr, int b, double t, byte ev) { var o = Bodies[b]; tr.Add(MotionTrack.WhoBody, b, t, o.X, o.Y, o.Th, o.Vx, o.Vy, o.W, ev); }
+
+    /// <summary>
+    /// 틱 안 기록 — 몸 (보기용): 잔걸음 끝이 k/16을 지나면 열쇠틀 · 틱 끝 · 그 잔걸음에 밀렸으면 (부딪힘 · 반동 — 빠르기가 순간 바뀌었다) 잔걸음 처음 (밀리기 전 자세)과 끝 (부딪힘 — 곧은 토막) 둘.
+    /// </summary>
+    private void TrackBodies(MotionTrack tr, int n, double t0, double t1, double dt, int j0)
+    {
+        bool cross = Math.Floor(t1 * 16 / dt + 1e-9) > Math.Floor(t0 * 16 / dt + 1e-9) || t1 >= dt - 1e-9;
+        for (int b = 0; b < n; b++)
+        {
+            var o = Bodies[b];
+            if (o.Mass <= 0 || o.Asleep != 0 && _trackPrev[b].Asleep != 0) { _trackPrev[b] = o; continue; }
+            bool pushed = false;
+            for (int j = j0; j < _jolts.Count; j++) if (_jolts[j].B == b) { pushed = true; break; }
+            if (pushed)
+            {
+                var q = _trackPrev[b];
+                tr.Add(MotionTrack.WhoBody, b, t0, q.X, q.Y, q.Th, q.Vx, q.Vy, q.W);
+                BodyKey(tr, b, t1, MotionTrack.EvHit);
+            }
+            else if (cross) BodyKey(tr, b, t1, MotionTrack.EvNone);
+            _trackPrev[b] = o;
         }
     }
 

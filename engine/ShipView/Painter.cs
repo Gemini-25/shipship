@@ -51,6 +51,31 @@ public sealed partial class Painter
 
     /// <summary>사람 · 로봇을 칸 자리에서 몇 픽셀 옮겨 그린다 (관전 화면이 틱 사이 걸음을 메운다 — 없으면 칸 그대로).</summary>
     public Func<Agent, (int dx, int dy)>? Nudge;
+    /// <summary>물체 Id를 그릴 자리 · 자세 (도면 m — 관전 화면이 틱 안 기록으로 메운다 · 거짓이면 그리지 않는다 · null이면 지금 자리).</summary>
+    public Func<int, (bool ok, double x, double y, double th)>? PropAt;
+
+    /// <summary>바닥 물건마다 그릴 자리 (이번 틱에 사라진 것도 — 틱 안 기록의 마지막 때까지).</summary>
+    private IEnumerable<(Prop p, double x, double y, double th)> DrawnProps(Structure st)
+    {
+        foreach (var it in st.Props)
+        {
+            if (it.Kind != 0) continue;
+            if (PropAt == null) { yield return (it, it.X, it.Y, it.Th); continue; }
+            var (ok, x, y, th) = PropAt(it.Id);
+            if (ok) yield return (it, x, y, th);
+        }
+        var tr = st.Track;
+        if (PropAt == null || tr == null || tr.Tick != _tick - 1) yield break;
+        foreach (var it in tr.Gone)
+        {
+            if (it.Kind != 0) continue;
+            var (ok, x, y, th) = PropAt(it.Id);
+            if (ok) yield return (it, x, y, th);
+        }
+    }
+
+    /// <summary>도면 자리의 칸 (도면 밖이면 −1).</summary>
+    private int CellAt(double x, double y) => x >= 0 && y >= 0 && x < L.W && y < L.H ? L.Index((int)x, (int)y) : -1;
 
     public Painter(Layout layout)
     {
@@ -298,7 +323,7 @@ public sealed partial class Painter
             }
             if (qx1 < x0 || qy1 < y0 || qx0 > x0 + w || qy0 > y0 + h) continue;   // 화면 밖
             _only = b;
-            var part = Draw(s, bx0, by0, bw, bh, frame, null, true);
+            var part = PartOf(s, b, bx0, by0, bw, bh, frame);
             Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1);
         }
         _only = -1; _stc = null;
@@ -390,6 +415,7 @@ public sealed partial class Painter
                 if (hit && f < sub) continue;
                 if (hit) sback = sub >= 0.999 ? 0 : (1 - (f - sub) / (1 - sub)) * Time.SecondsPerTick;
             }
+            if (!ShardShown(sh, f)) continue;   // 틱 안에서 났다 (충돌 잔걸음 — Sub): 그 때 전에는 아직 없다
             double wx = sh.X - sh.Vx * sback - ox, wy = sh.Y - sh.Vy * sback - oy;
             double sx = b0.Lx + cs * wx - sn * wy, sy = b0.Ly + sn * wx + cs * wy;
             int px = (int)Math.Round((sx - x0) * dots), py = (int)Math.Round((sy - y0) * dots);
@@ -409,6 +435,9 @@ public sealed partial class Painter
             foreach (var (dx, dy) in plate) img.Blend(px + dx, py + dy, body);
         }
     }
+
+    /// <summary>부스러기를 그리는 때 f (틱 사이 0~1)에 그리나: 지난 틱 안에서 난 것 (Sub &gt; 0 — 충돌 잔걸음 · 물체 걸음)은 그 때부터 (틱 처음에 난 것은 Sub 0 — 늘).</summary>
+    public bool ShardShown(in Shard sh, double f) => sh.Born != _tick - 1 || sh.Sub == 0 || f >= sh.Sub / 255.0 - 1e-9;
 
     // 돌린 판 꼴 (한 변 1~6도트 · 각 단 16 — 네모는 90°마다 같다 · 단 0 = 돌지 않은 네모): 그리는 자리 (px, py)에서의 도트 자리 — 처음 쓸 때 한 번 짓는다
     private static readonly (int dx, int dy)[]?[] _plates = new (int, int)[]?[7 * 16];
@@ -444,6 +473,23 @@ public sealed partial class Painter
         int c = L.Index(x, y);
         return st.BodyOf(c) == b && (L.Kind[c] == CellKind.Floor || L.FurnitureAt[c] >= 0);
     }
+
+    private readonly Dictionary<int, (long tick, int frame, double f, int bx0, int by0, int bw, int bh, Img img)> _parts = new();
+
+    /// <summary>
+    /// 떨어져 나간 조각 b의 제 칸 그림 (32도트 — 붙이기 전): 세계 · 틱 사이 몫 · 그림 장 · 상자가 그대로인 장 (멈춤 · 같은 때를 다시 그린 장 — Still)은 지난 그림을 다시 쓴다
+    /// (조각마다 칸 그림을 장마다 새로 짓지 않게 · 붙이는 자세만 그 장의 것).
+    /// </summary>
+    private Img PartOf(Sim s, int b, int bx0, int by0, int bw, int bh, int frame)
+    {
+        if (Still && _parts.TryGetValue(b, out var c) && c.tick == _tick && c.frame == frame && c.f == TickFrac && c.bx0 == bx0 && c.by0 == by0 && c.bw == bw && c.bh == bh) { PartsReused++; return c.img; }
+        var part = Draw(s, bx0, by0, bw, bh, frame, null, true);
+        _parts[b] = (_tick, frame, TickFrac, bx0, by0, bw, bh, part);
+        return part;
+    }
+
+    /// <summary>조각 그림을 다시 쓴 수 (보기용).</summary>
+    public long PartsReused;
 
     /// <summary>조각 그림을 배 틀에 붙인다: 화면 도트마다 거꾸로 돌려 조각 그림의 도트를 찾는다 (배 틀 q = R·p + t).</summary>
     private static void Place(Img img, Img part, int bx0, int by0, int x0, int y0, double cs, double sn, double tx, double ty, double qx0, double qy0, double qx1, double qy1, int dots = T)
@@ -781,21 +827,20 @@ public sealed partial class Painter
         }
 
         lt = Lap("설비", lt);
-        // ── 바닥에 놓인 · 날아온 물건 (④ 물체 장부 — 보이는 도트가 곧 몸: 도트 꼴을 자리 X · Y · 자세 Th대로 쌓아 그린다 · 틱 사이 메움은 PH5) ──
+        // ── 바닥에 놓인 · 날아온 물건 (④ 물체 장부 — 보이는 도트가 곧 몸: 도트 꼴을 자리 X · Y · 자세 Th대로 쌓아 그린다 · 틱 사이는 틱 안 기록으로 메운다) ──
         if (st != null && !_bake)
         {
             _stacks.BeginFrame();
             _samePlace.Clear();
-            foreach (var it in st.Props)
+            foreach (var (it, ix, iy, ith) in DrawnProps(st))   // 틱 사이는 관전 화면이 틱 안 기록으로 메운 자리 (PH5)
             {
-                if (it.Kind != 0) continue;
-                int c = st.CellOf(it);
+                int c = CellAt(ix, iy);
                 if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
-                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(it.Th));
+                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(ith));
                 var (nx, ny) = SamePlace(it);
-                Put(img, d.Img, (int)Math.Round((it.X - x0) * T - d.Ax) + nx, (int)Math.Round((it.Y - y0) * T - d.Ay) + ny);
+                Put(img, d.Img, (int)Math.Round((ix - x0) * T - d.Ax) + nx, (int)Math.Round((iy - y0) * T - d.Ay) + ny);
             }
         }
 

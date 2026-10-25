@@ -268,17 +268,16 @@ public sealed partial class Painter
         {
             _stacks.BeginFrame();
             _samePlace.Clear();
-            foreach (var it in st.Props)   // ④ 물체 장부의 물건 몫
+            foreach (var (it, ix, iy, ith) in DrawnProps(st))   // ④ 물체 장부의 물건 몫 (틱 사이는 틱 안 기록으로 메운 자리)
             {
-                if (it.Kind != 0) continue;
-                int c = st.CellOf(it);
+                int c = CellAt(ix, iy);
                 if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
-                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(it.Th), 2);
+                var d = _stacks.Get(PropLook(s.Tables, it), PropStep(ith), 2);
                 var (nx, ny) = SamePlace(it);
                 int half = k / 2;   // 16도트 그림 한 도트가 이 그림의 몇 분의 1인가 (16도트 1 · 8도트 2)
-                Put(img, DownOf(d.Img, half), (int)Math.Round(((it.X - x0) * T + nx) / k - d.Ax / half), (int)Math.Round(((it.Y - y0) * T + ny) / k - d.Ay / half));
+                Put(img, DownOf(d.Img, half), (int)Math.Round(((ix - x0) * T + nx) / k - d.Ax / half), (int)Math.Round(((iy - y0) * T + ny) / k - d.Ay / half));
             }
         }
         // ── 화장실 설비의 장마다 덧그림 (32도트 설비 고리와 같은 것 — 굽지 않는다): 샤워 칸 · 세면대 물줄기 · 빛을 끈 그림의 '사용 금지' 불 (빛을 켜면 FarGlows) ──
@@ -476,7 +475,7 @@ public sealed partial class Painter
                 }
                 if (qx1 < x0 || qy1 < y0 || qx0 > x0 + w || qy0 > y0 + h) continue;   // 화면 밖
                 _only = b;
-                var part = Draw(s, bx0, by0, bw, bh, frame, null, true);
+                var part = PartOf(s, b, bx0, by0, bw, bh, frame);
                 Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1, D);
             }
         _only = -1; _stc = null;

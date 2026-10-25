@@ -160,6 +160,8 @@ public sealed class Acoustics
     /// <summary>귀를 지금 자리에서 다시 잰다 (시험 — 문 · 공기가 바뀐 뒤 바로).</summary>
     public void Remap(int ear) { Map(ear); _ear = ear; _sinceMap = 0; }
 
+    private readonly List<Emission> _pending = new(), _ready = new();   // 그리는 때를 기다리는 소리 (틱 안 때 — Sub) · 이 장에 들을 것
+
     /// <summary>화면이 한 장 나아간 뒤: 귀를 옮기고 · 들은 것을 소리 목록으로 (작업 스레드).</summary>
     public void Update(LiveShow show, double realSec)
     {
@@ -175,7 +177,7 @@ public sealed class Acoustics
             _sExtra = new float[n]; _sSeen = new int[n];
             _doorWas = (float[])F.DoorOpen.Clone();
             _cursor = w.Find<Sound>()?.Logged ?? 0;
-            _stepPhase.Clear(); _sealHiss.Clear();
+            _stepPhase.Clear(); _sealHiss.Clear(); _pending.Clear();
             frame.Reset = true; _ear = -1;
         }
         // ── 귀 ──
@@ -220,7 +222,18 @@ public sealed class Acoustics
         if (snd != null)
         {
             if (_cursor > snd.Logged) _cursor = snd.Logged;
-            foreach (var e in snd.LogSince(_cursor))
+            // 한 틱 늦은 시계 (PH5): 틱 안에서 난 소리 (④ 부딪힘 · 물체 — Sub)는 그리는 때가 그 때를 지난 장에 듣는다 (틱을 돌린 순간이 아니라 — 소리가 그림보다 앞서지 않게)
+            foreach (var e in snd.LogSince(_cursor)) _pending.Add(e);
+            _ready.Clear();
+            double drawn = show.DrawnTick;
+            int keep = 0;
+            for (int i = 0; i < _pending.Count; i++)
+            {
+                var e = _pending[i];
+                if (e.Sub > 0 && e.Tick + e.Sub / 255.0 > drawn + 1e-9) _pending[keep++] = e; else _ready.Add(e);
+            }
+            _pending.RemoveRange(keep, _pending.Count - keep);
+            foreach (var e in _ready)
             {
                 if (e.Kind == SoundKind.Hiss) { if (e.Actor < 0 && e.Cause != 0 && L.Kind[e.Cell] != CellKind.Wall) _sealHiss[e.Cell] = e.Tick; continue; }
                 int structAt = e.Kind is SoundKind.Bang or SoundKind.Crack or SoundKind.Creak or SoundKind.Machine or SoundKind.Thud ? WallNear(e.Cell) : -1;

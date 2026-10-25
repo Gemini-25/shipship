@@ -32,6 +32,7 @@ public static partial class Program
             var show = new LiveShow(s, "디딤호");
             var calmShake = show.Shake();
             s.Get<Structure>().Blast(s, at, 8e6, Cause(s, "폭발"));
+            s.Step();   // 한 틱 늦은 시계: 그 틱을 돌린 뒤 그리는 때가 그 사실의 틱 처음이다
             var blastShake = show.Shake();
             var bl = s.Facts.Recent(64).LastOrDefault(x => Painter.IsBlast(x));
             bool soundNotBlast = s.Facts.Recent(64).Where(x => x.Kind == FactKind.LoudSound && x.Other >= 0).All(x => !Painter.IsBlast(x));

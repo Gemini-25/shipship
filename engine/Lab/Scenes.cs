@@ -6,6 +6,9 @@ namespace Lab;
 /// <summary>관찰 장면 — 작은 장면을 돌려 칸 지도 그림으로 남긴다 (build/scenes/이름/틱.png).</summary>
 public static partial class Program
 {
+    /// <summary>관찰 장면이 그린 틱마다 그리는 장 수 (틱 안 기록으로 메운다 — docs/PHYSICS.md PH5).</summary>
+    private const int SubFrames = 8;
+
     private static void Scene(string name, string outDir)
     {
         string dir = Path.Combine(outDir, name);
@@ -197,19 +200,33 @@ public static partial class Program
             case "slide": SlideScene(dir); return;
             case "props-breach": PropsBreachScene(dir); return;
             case "props-burn": PropsBurnScene(dir); return;
+            case "props-track": PropsTrackScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
         var tm = s.Find<Mind>();
         var painter = dots != null ? new Painter(s.Layout) : null;
+        if (painter != null && s.Find<Structure>() is { } tst) tst.Track ??= new MotionTrack();   // 틱 안 기록 — 그린 틱마다 8장 (한 틱 늦은 시계로 메운다 · 세계는 그대로)
         var page = new System.Text.StringBuilder();
         long seen = 0;
         for (int k = 0; k < count; k++)
         {
             if (painter != null && dots is var (dx, dy, dw, dh))
             {
-                var img = painter.Frame(s, dx, dy, dw, dh, k);
+                // 지난 틱을 8장으로 (f = 1/8 … 1 — 앞 일곱 장은 {k}-{j}.png · 틱 끝은 {k}.png) · 첫 장은 지금 그대로
+                var subs = new System.Text.StringBuilder();
+                if (k > 0 && TrackPlay.Of(s) != null)
+                    for (int j = 1; j < SubFrames; j++)
+                    {
+                        TrackPlay.Apply(painter, s, j / (double)SubFrames);
+                        var si = painter.Frame(s, dx, dy, dw, dh, k * SubFrames + j);
+                        Png.WriteRgba(Path.Combine(dir, $"{k:000}-{j}.png"), si.W, si.H, si.Px);
+                        subs.Append($"<img class=sub src=\"{k:000}-{j}.png\">");
+                    }
+                TrackPlay.Apply(painter, s, 1);
+                var img = painter.Frame(s, dx, dy, dw, dh, k * SubFrames + SubFrames);
                 Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
+                page.Append(subs);
                 // 그 틱의 일 (사실 — 소리 · 깸은 뺀다)
                 var lines = new List<string>();
                 bool fire = name is "foambed" or "robotfire", zg = name == "zerogmess", ar = name == "arrest";
@@ -246,7 +263,7 @@ public static partial class Program
             }
         }
         if (painter != null)
-            File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>{name}</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:420px}}img{{width:420px;image-rendering:pixelated}}</style>\n{page}");
+            File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>{name}</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:420px}}img{{width:420px;image-rendering:pixelated}}img.sub{{width:140px}}</style>\n{page}");
         Console.WriteLine($"  {name}: {count}장 → {dir}");
         if (Environment.GetEnvironmentVariable("FACTS") == "1")
         {

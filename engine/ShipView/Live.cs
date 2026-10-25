@@ -169,7 +169,8 @@ public sealed partial class LiveShow
         if (sim.Find<Mind>() is { } jm) jm.Journal = true;   // 판단 일지 · 주컴퓨터 일지를 켠다 (쓰기만 — 법칙 '판단 일지는 세계를 바꾸지 않는다') — 로봇 카드 · 말 창이 읽는다
         if (sim.Find<ShipMind>() is { } jc) jc.NoteOn = true;
         Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다) · 하루 목표는 띄우는 쪽이 고른다 (게임 · --live는 3분)
-        Painter = new Painter(sim.Layout) { Nudge = Nudge };
+        Painter = new Painter(sim.Layout) { Nudge = Nudge, PropAt = PropDrawn };
+        if (sim.Find<Structure>() is { } sst) sst.Track ??= new MotionTrack();   // 틱 안 기록 (보기용 — 세계를 바꾸지 않는다 · 연출의 미리 보기 세계는 켜지 않는다)
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
         for (int i = 0; i < L.N; i++)
@@ -483,6 +484,22 @@ public sealed partial class LiveShow
         return (cs, sn, qx - (cs * o.Lx - sn * o.Ly), qy - (sn * o.Lx + cs * o.Ly));
     }
 
+    /// <summary>물체 id가 지금 그려진 자리 · 자세 (도면 m · rad — 없으면 NaN).</summary>
+    public (double x, double y, double th) DrawnProp(int id)
+    {
+        var (ok, x, y, th) = PropDrawn(id);
+        return ok ? (x, y, th) : (double.NaN, 0, 0);
+    }
+
+    /// <summary>그리는 틱의 틱 안 기록 (지난 틱을 돌린 그 세계의 것 — 되살린 첫 틱 · 건너뛴 틱 · 기록이 없으면 null: 지금 자세로 그린다).</summary>
+    private MotionTrack? TrackNow() => TrackPlay.Of(World);
+
+    /// <summary>그리는 때 (그리는 틱 처음에서 초 — 한 틱 늦은 시계).</summary>
+    private double DrawSec => Math.Clamp(_carry, 0, 1) * Time.SecondsPerTick;
+
+    /// <summary>물체 id를 그릴 자리 · 자세 (도면 m): 틱 안 기록이 있으면 그리는 때만큼 에르미트로 (이번 틱에 사라진 것은 그 때까지만) · 없으면 지금 자리.</summary>
+    private (bool ok, double x, double y, double th) PropDrawn(int id) => TrackPlay.Prop(World, id, Math.Clamp(_carry, 0, 1));
+
     /// <summary>그리는 때 (틱 — 지난 틱 끝 + 틱 사이 비율: 화면은 한 틱 늦게 메운다).</summary>
     public double DrawnTick => World.Tick - 1 + Math.Clamp(_carry, 0, 1);
 
@@ -497,6 +514,9 @@ public sealed partial class LiveShow
     private (double qx, double qy, double th) PoseAt(Structure st, int b, double f)
     {
         var o = st.Bodies[b];
+        var tr = TrackNow();
+        if (tr != null && (tr.Of(MotionTrack.WhoBody, b).Length > 0 || tr.Of(MotionTrack.WhoBody, 0).Length > 0))
+            return TrackPlay.ShipFrame(st, tr, b, f);   // 틱 안 기록: 그 때 몸 b · 배 (몸 0)의 세상 자세 → 배 틀 (고르게 가속 · 부딪힘까지 그 길대로)
         var now = PoseNow(st, b);
         bool knew = World.Tick == _prevTick + 1 && _prevPose.Length > 0;   // 바로 지난 틱을 안다 (앞으로 감기 · 다시보기로 건너뛰었으면 지금 그대로)
         (double qx, double qy, double th) was = !knew ? now : b < _prevPose.Length ? _prevPose[b]
@@ -705,7 +725,13 @@ public sealed partial class LiveShow
             else Painter.Poses = null;
             // 배의 세상 자세도 지난 틱 끝 → 지금을 틱 사이 비율만큼 곧게 (반-차기 셈이라 틱 안 무게중심 길 · 각이 곧다 — 부스러기를 그 때 자리에 · 각은 감지 않는다: 빨리 도는 배의 별도 도는 쪽으로)
             var o0 = stb.Bodies[0];
-            if (World.Tick == _prevTick + 1)
+            var tr0 = TrackNow();
+            if (tr0 != null && tr0.Of(MotionTrack.WhoBody, 0).Length > 0)
+            {
+                var (sx, sy, sth) = TrackPlay.BodyWorld(stb, tr0, 0, DrawSec);   // 배의 세상 자세도 틱 안 기록대로 (고른 가속 — 반-차기의 곧은 메움이 아니다)
+                Painter.SkyTh = sth; Painter.ShipX = sx; Painter.ShipY = sy; Painter.TickFrac = Math.Clamp(_carry, 0, 1);
+            }
+            else if (World.Tick == _prevTick + 1)
             {
                 double fr = Math.Clamp(_carry, 0, 1), pc = Math.Cos(_prevShip.th), ps = Math.Sin(_prevShip.th);
                 double dx = o0.Lx - _prevShip.lx, dy = o0.Ly - _prevShip.ly;   // 지금 무게중심 (제 틀)이 지난 틱 끝에 있던 세상 자리 (그 사이 떨어져 나간 질량만큼 무게중심이 옮았어도)
@@ -767,8 +793,8 @@ public sealed partial class LiveShow
         double amp = 0, sub = Math.Clamp(_carry, 0, 1);
         foreach (var f in World.Facts.Recent(256))
         {
-            double age = World.Tick - f.Tick + sub;
-            if (age > 2) continue;
+            double age = World.Tick - 1 - f.Tick + sub - f.Sub / 255.0;   // 한 틱 늦은 시계 (그리는 때 − 사실의 때 · 틱 안 Sub까지)
+            if (age < 0 || age > 2) continue;
             double a = Painter.IsBlast(f) ? Math.Min(10, 3 + (f.Size - 120) / 4)
                 : f.Kind == FactKind.Impact && f.Size > 20 ? Math.Min(6, 2 * Math.Log10(f.Size))
                 : f.Kind == FactKind.WallBreach ? 3 : 0;
@@ -1333,6 +1359,7 @@ public sealed partial class LiveShow
         var w = Dir.Replay(Sim, h);
         if (w == null) return false;
         _replay = w; _replayOf = h;
+        if (w.Find<Structure>() is { } rst) rst.Track = new MotionTrack();   // 다시보기 세계도 틱 사이를 메운다
         _replayDir = new Director(w.Layout) { KeepRing = false, AheadInBackground = true };
         _shots = Dir.Shots(Sim, h);
         _replayEnd = Math.Min(Sim.Tick, Math.Max(h.Last + Time.Minutes(ReplayAfterMin), _shots.Count > 0 ? _shots[^1].To : 0));

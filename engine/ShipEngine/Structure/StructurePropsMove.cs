@@ -66,15 +66,18 @@ public sealed partial class Structure
     private void Motion(Sim sim, double dt, long t)
     {
         _tickDt = dt;
+        Track?.Begin(sim.Tick, dt);
         MoveBodies(sim, dt); t = Prof.Lap("구조:몸", t);
         MoveProps(sim, dt); Prof.Lap("구조:물체", t);
+        sim.Facts.SubNow = 0;
+        Track?.End();
     }
+
+    /// <summary>틱 안 기록 (보기용 — 찍지 않는다 · null이면 셈하지 않는다: 관전 화면이 제 세계 · 다시보기 세계에 켠다 · 법칙 13 켬 = 끔).</summary>
+    public MotionTrack? Track;
 
     public const double Gravity = 9.8, WetShare = 0.33, WetMol = 50, SleepV = 1e-3, SleepW = 0.01, SleepSec = 0.5, MaxPropH = 0.1, MaxPropTurn = 0.1;
     public const int MaxPropSteps = 1024;
-
-    /// <summary>시험 갈고리: 몸 잔걸음이 끝날 때마다 그 때 (틱 처음에서 초) — 찍지 않는다 · null이면 부르지 않는다 (PH5 Track이 이어받는다).</summary>
-    public Action<double>? SubSeen;
 
     /// <summary>물체의 질량 · 회전관성 (아직 깨지 않아 몸 값이 비었으면 꼴에서).</summary>
     private (double kg, double inertia) MassOf(in Prop p)
@@ -179,9 +182,14 @@ public sealed partial class Structure
         }
         int jp = 0;          // 몸 걸음 안의 덜컹 (때 차례) — 그 때가 지나면 바닥에 대한 빠르기를 고친다
         double jw = 0;       // 지난 덜컹이 바꾼 몸의 각속도
+        var tr = Track;      // 틱 안 기록 (보기용 — 켰을 때만)
+        double lastKey = 0;
+        tr?.Add(MotionTrack.WhoProp, p.Id, 0, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W);
         while (rem > 1e-12)
         {
             double tau = dt - rem;
+            sim.Facts.SubNow = (byte)Math.Clamp((int)Math.Round(tau / dt * 255), 0, 255);   // 이 잔걸음에 난 사실 · 소리의 때
+            double preX = p.X, preY = p.Y, preTh = p.Th, preVx = p.Vx, preVy = p.Vy, preW = p.W;   // 잔걸음 처음 (틱 안 기록 — 튀기 앞)
             for (; jp < _jolts.Count && _jolts[jp].T <= tau + 1e-12; jp++)
             {
                 var j = _jolts[jp];
@@ -195,8 +203,8 @@ public sealed partial class Structure
             for (int k = jp; k < _jolts.Count; k++) if (_jolts[k].B == host) { nextJolt = _jolts[k].T; break; }
             int c = CellOf(p);
             // 무게중심이 도면 밖 · 바깥에 들었다 → 우주로 · 구멍 벽 칸에 들었다 (큰 구멍의 틈) → 빨아들이면 막거나 우주로 (아니면 틈을 지나 그대로 간다)
-            if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c)) { HoleHit(sim, ref p, -1); break; }
-            if (L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f && HoleHit(sim, ref p, c)) break;
+            if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c)) { HoleHit(sim, ref p, -1); TrackEnd(tr, p, tau, ref lastKey); break; }
+            if (L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f && HoleHit(sim, ref p, c)) { TrackEnd(tr, p, tau, ref lastKey); break; }
             double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
             double muK = mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
             double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
@@ -226,7 +234,7 @@ public sealed partial class Structure
             if (++steps >= MaxPropSteps) h = Math.Min(rem, Math.Max(1e-9, nextJolt - tau));
             double px0 = m * p.Vx, py0 = m * p.Vy, l0 = m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W;
             double lw = blown ? (p.X * fy - p.Y * fx + tq) * h : 0;   // 바람이 준 각운동량 (원점 둘레)
-            double speedEnd = speed + acc * h;
+            double speedEnd = speed + acc * h, stopAt = -1;
             int nc = 0;
             if (speedEnd > 0 && room < speedEnd * h + 2 * DotForm.Dot)
             {
@@ -241,7 +249,7 @@ public sealed partial class Structure
                 // 힘 반 → 마찰의 정확한 걸음 → 힘 반 (마찰로 선 채 정지 타원 안이면 그대로)
                 if (blown) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
                 if (wb != 0) Coriolis(ref p, -wb * h);
-                Friction(ref p, h, gp * muK, m, I, rho, true);
+                Friction(ref p, h, gp * muK, m, I, rho, true, out stopAt);
                 if (wb != 0) Coriolis(ref p, -wb * h);
                 if (blown && !(p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho))) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
             }
@@ -273,6 +281,22 @@ public sealed partial class Structure
                 touching[k] = now;
             }
             rem -= h;
+            if (tr != null)
+            {
+                double t1 = dt - rem;
+                bool bounced = false;
+                for (int k = 0; k < nc; k++) if (_propHits[k].Bounce && _propHits[k].Jn > 0) { bounced = true; break; }
+                if (bounced)
+                {
+                    if (tau > lastKey + 1e-9) tr.Add(MotionTrack.WhoProp, p.Id, tau, preX, preY, preTh, preVx, preVy, preW);   // 튀기 앞 (그 잔걸음은 튄 빠르기로 곧게 갔다)
+                    tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvHit); lastKey = t1;
+                }
+                else
+                {
+                    if (stopAt >= 0) { tr.Add(MotionTrack.WhoProp, p.Id, tau + stopAt, p.X, p.Y, p.Th, 0, 0, p.W, MotionTrack.EvStop); lastKey = tau + stopAt; }
+                    if (Math.Floor(t1 * 16 / dt + 1e-9) > Math.Floor(tau * 16 / dt + 1e-9) && t1 > lastKey + 1e-9) { tr.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W); lastKey = t1; }
+                }
+            }
             // 구멍 벽에 닿았다 (밀어 닿았거나 겹침) → 빨아들이는 구멍이면 막거나 우주로 (아니면 보통 벽 — 이미 튀었다)
             bool gone = false;
             for (int k = 0; k < nc && !gone; k++)
@@ -280,12 +304,22 @@ public sealed partial class Structure
                 ref var ct = ref _propHits[k];
                 if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
             }
-            if (gone) break;
+            if (gone) { TrackEnd(tr, p, dt - rem, ref lastKey); break; }
             bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0 && double.IsPositiveInfinity(nextJolt);
             p.Still = still ? p.Still + (float)h : 0;
             if (p.Still >= SleepSec) { p.Vx = p.Vy = p.W = 0; p.State = 0; p.Asleep = 1; p.Still = 0; p.Since = _now; break; }
         }
+        TrackEnd(tr, p, dt - rem, ref lastKey);
         PropSteps += steps;
+    }
+
+    /// <summary>틱 안 기록의 끝 열쇠틀 (그 때에 아직 없으면 — 사라짐 · 막음은 그 사건으로).</summary>
+    private static void TrackEnd(MotionTrack? tr, in Prop p, double t, ref double lastKey)
+    {
+        if (tr == null || double.IsPositiveInfinity(lastKey)) return;
+        byte ev = p.State == 5 ? MotionTrack.EvGone : p.State == 6 ? MotionTrack.EvPlug : MotionTrack.EvNone;
+        if (t > lastKey + 1e-9 || ev != MotionTrack.EvNone) tr.Add(MotionTrack.WhoProp, p.Id, Math.Max(t, lastKey), p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, ev);
+        lastKey = double.PositiveInfinity;   // 이 틱은 끝 (한 번만)
     }
 
     /// <summary>물체 몸이 그 원판에 닿았나 (가운데 · 껍질 꼭짓점 · 테두리 표본 가운데 하나가 원판 안).</summary>
@@ -324,9 +358,13 @@ public sealed partial class Structure
     /// 바닥 마찰 (Goyal–Ruina · Howe–Cutkosky 타원 어림): s = √(|v|² + (ρω)²) · a = −μk g' v/s · α = −μk m g' ρ² ω/(s I) — 잔걸음 안에서는 비를 붙들고
     /// 빠르기 · 각속도가 0에 닿으면 그때 멈춘다 (넘어 뒤집히지 않는다). exact면 자리도 (x += v t + ½ a t²).
     /// </summary>
-    private static void Friction(ref Prop p, double h, double k, double m, double I, double rho, bool exact)
+    private static void Friction(ref Prop p, double h, double k, double m, double I, double rho, bool exact) => Friction(ref p, h, k, m, I, rho, exact, out _);
+
+    /// <summary>바닥 마찰 — 미끄러짐이 그친 때 (잔걸음 처음에서 초 · 그치지 않았으면 −1)도 (틱 안 기록의 '섰다').</summary>
+    private static void Friction(ref Prop p, double h, double k, double m, double I, double rho, bool exact, out double stopAt)
     {
         double rem = h;
+        stopAt = -1;
         for (int it = 0; it < 3 && rem > 0; it++)
         {
             double v2 = p.Vx * p.Vx + p.Vy * p.Vy, rw = rho * p.W, s = Math.Sqrt(v2 + rw * rw);
@@ -335,7 +373,7 @@ public sealed partial class Structure
             double tv = v2 > 0 ? s / k : double.PositiveInfinity, tw = p.W != 0 ? s * I / (k * m * rho * rho) : double.PositiveInfinity;
             double t = Math.Min(rem, Math.Min(tv, tw));
             if (exact) { p.X += p.Vx * t + 0.5 * ax * t * t; p.Y += p.Vy * t + 0.5 * ay * t * t; p.Th += p.W * t + 0.5 * al * t * t; }
-            if (t == tv) { p.Vx = 0; p.Vy = 0; } else { p.Vx += ax * t; p.Vy += ay * t; }
+            if (t == tv) { p.Vx = 0; p.Vy = 0; stopAt = h - rem + t; } else { p.Vx += ax * t; p.Vy += ay * t; }
             if (t == tw) p.W = 0; else p.W += al * t;
             rem -= t;
         }
