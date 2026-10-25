@@ -136,5 +136,32 @@ public static partial class Program
                 st.IndexOf(id) < 0 && pieces.Count == 2 && parts == 2 && fact.Kind == FactKind.Shattered && s.Causes.Story(fact.Cause).Contains("배터리가 터졌다"),
                 $"조각 {pieces.Count} · 부위 {parts} · \"{(fact.Kind == FactKind.Shattered ? s.Causes.Story(fact.Cause) : "-")}\"");
         }
+
+        // ── 칸 가루는 넓은 보기 (16 · 8도트)에도 보인다 (검토가 찾음 — 예전엔 32도트에만: 굽는 덩어리는 칸 덮개 앞에서 멈추고 · 장마다 덮개는 가루를 읽지 않았다) ──
+        {
+            var s = PropWorld(1, 1, BreakShip, new Dictionary<char, string> { ['e'] = "Bed", ['p'] = "PowerPanel", ['b'] = "Battery" });
+            var st = s.Get<Structure>(); var lay = s.Layout;
+            var p = new Painter(lay);
+            byte glass = (byte)t.Materials.FindIndex(m => m.Id == "glass");
+            var grit = Enumerable.Range(0, lay.N).Where(c => lay.Kind[c] == CellKind.Floor && lay.FurnitureAt[c] < 0).Take(18).ToList();
+            var sizes = new[] { 32, 16, 8 };
+            Img Draw(int D) => D == 32 ? p.Frame(s, 0, 0, lay.W, lay.H, 7) : p.FrameFar(s, 0, 0, lay.W, lay.H, 7, D);
+            var before = sizes.Select(Draw).ToArray();
+            foreach (int c in grit) { st.Grit[c] = 0.12f; st.GritMat[c] = glass; }
+            var after = sizes.Select(Draw).ToArray();
+            bool Changed(Img a, Img b, int D, int c)
+            {
+                for (int y = lay.Y(c) * D; y < lay.Y(c) * D + D; y++)
+                    for (int x = lay.X(c) * D; x < lay.X(c) * D + D; x++)
+                        for (int q = 0; q < 4; q++) if (a.Px[(y * a.W + x) * 4 + q] != b.Px[(y * b.W + x) * 4 + q]) return true;
+                return false;
+            }
+            if (Debug) { Directory.CreateDirectory("build/shots"); for (int i = 0; i < sizes.Length; i++) Png.WriteRgba($"build/shots/grit-{sizes[i]}.png", after[i].W, after[i].H, after[i].Px); }
+            var shown = sizes.Select((D, i) => grit.Count(c => Changed(before[i], after[i], D, c))).ToArray();
+            var still = sizes.Select((D, i) => Enumerable.Range(0, lay.N).Count(c => !grit.Contains(c) && Changed(before[i], after[i], D, c))).ToArray();
+            Check("깨짐: 칸 가루 (깨진 유리)는 넓은 보기 16 · 8도트에도 보인다 — 가루 칸마다 그림이 바뀌고 · 가루 없는 칸은 그대로 (32도트처럼)",
+                glass < 255 && grit.Count == 18 && shown.All(n => n == grit.Count) && still.All(n => n == 0),
+                $"가루 칸 {grit.Count} · 바뀐 칸 32 · 16 · 8도트 {string.Join(" · ", shown)} · 가루 없이 바뀐 칸 {string.Join(" · ", still)}");
+        }
     }
 }

@@ -297,7 +297,7 @@ public sealed partial class Painter
                 else if (wk == 1 && !Lighting && SignOn(mind, i)) SignLamp(img, (gx + SignX) / k, FloorDiv(gy + SignY, k), Math.Max(1, 2 / k), false);
             }
         }
-        // ── 칸 덮개: 물 · 진공 · 열 · 어둠 (그을음 · 액체는 구웠다) ──
+        // ── 칸 덮개: 가루 · 물 · 진공 · 열 · 어둠 (그을음 · 액체는 구웠다) ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
             {
@@ -305,6 +305,7 @@ public sealed partial class Painter
                 int c = L.Index(x, y);
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 int px = (x - x0) * D, py = (y - y0) * D;
+                if (st != null && c < st.Grit.Length && st.Grit[c] > 0) GritOn(img, st.Grit[c], st.GritMat[c], c, px, py, k);   // 깨진 유리 · 세라믹 가루 (PH8 — 굽지 않는다: 32도트처럼 문 · 물건 뒤 · 물 앞)
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2 && L.FurnitureAt[c] >= 0 && _washKind[L.FurnitureAt[c]] != 0)   // 화장실 설비 칸: 발치 웅덩이 · 많이 고이면 설비가 물에 선다 (32도트로 그려 줄인다)
                 {

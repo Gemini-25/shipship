@@ -39,6 +39,22 @@ public static partial class Program
                 $"젖은 칸 {wet.Count} · 지림 원인 {sameCause} · 닦은 뒤 원인 남은 칸 {left} · 불 끄기 물 {(f.WetCause[fire] == douse ? "원인 있음" : "모름")}");
         }
 
+        // ── C8 잇기는 마른 칸만 (검토가 찾음): 원인을 모르는 물이 이미 고인 칸은 원인 있는 이웃에서 조금 받아도 그 원인을 잇지 않는다 · 곁의 마른 칸은 잇는다 ──
+        {
+            var lay = Worlds.Ascii(WashShip, new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery" });
+            var s = Worlds.Full(lay, 7);
+            var f = s.Get<Field>();
+            int src = Worlds.At(lay, 11, 1), old = Worlds.At(lay, 12, 1), dry = Worlds.At(lay, 10, 1);
+            int leak = s.Causes.Add(CauseKind.Leak, "샌 물관 — 이음매가 헐거웠다", s.Tick, src);
+            f.AddStore(src, f.T.sWater, 400, leak);
+            f.AddStore(old, f.T.sWater, 120);   // 원인을 모르는 물 (원인 없이 고인)
+            s.Run(Field.SlowEvery * 3);
+            double got = f.Stored(f.T.sWater, old) - 120;
+            Check("고인 물 원인: 원인을 모르는 물이 고인 칸은 원인 있는 이웃에서 물을 받아도 원인을 잇지 않고 · 마른 이웃 칸은 잇는다 (마른 칸이 젖을 때만)",
+                got > 0 && f.WetCause[old] == 0 && f.Stored(f.T.sWater, dry) > Field.DryMol && f.WetCause[dry] == leak,
+                $"고인 칸 받은 물 {got:0.0}몰 · 원인 {(f.WetCause[old] == 0 ? "모름" : f.WetCause[old] == leak ? "샌 물관" : f.WetCause[old])} · 마른 칸 물 {f.Stored(f.T.sWater, dry):0.0}몰 · 원인 {(f.WetCause[dry] == leak ? "샌 물관" : f.WetCause[dry])}");
+        }
+
         // ── C8 샌 물관 → 합선: 샌 물관 물이 고인 칸의 전선이 합선되면 원인 사슬이 샌 물관까지 이어진다 ──
         {
             var s = ShipWorld.Create("Didim", 5);

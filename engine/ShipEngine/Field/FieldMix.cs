@@ -298,7 +298,7 @@ public sealed partial class Field
     /// <summary>
     /// 고인 액체는 바닥을 따라 낮은 쪽으로 퍼진다 (1mm ≈ 물 55몰보다 얇으면 멈춘다 — 표면 장력).
     /// 물 차례에는 고인 물의 원인도 따라간다 (5단 C8): 칸마다 제 자리에만 쓰고 이웃의 원인은 옛 배열에서만 읽는다 (띠 경계 경합이 없다 · 다 돌면 맞바꾼다) ·
-    /// 원인을 모르던 칸이 물을 받으면 가장 많이 준 이웃 (원인을 아는 — 같으면 작은 칸 번호)의 원인을 잇고 · <see cref="DryMol"/> 아래로 마르면 지운다.
+    /// 마른 칸 (<see cref="DryMol"/> 아래)이 물을 받아 젖으면 가장 많이 준 이웃 (원인을 아는 — 같으면 작은 칸 번호)의 원인을 잇고 · <see cref="DryMol"/> 아래로 마르면 지운다.
     /// </summary>
     private void SpreadLiquids(double dt)
     {
@@ -339,7 +339,7 @@ public sealed partial class Field
                             }
                         }
                         _st2[i] = Math.Max(0, v + d);
-                        if (water) _wc2[i] = _st2[i] < DryMol ? 0 : WetCause[i] != 0 ? WetCause[i] : from >= 0 ? WetCause[from] : 0;
+                        if (water) _wc2[i] = _st2[i] < DryMol ? 0 : WetCause[i] != 0 ? WetCause[i] : v < DryMol && from >= 0 ? WetCause[from] : 0;   // 잇기는 마른 칸이 젖을 때만 (원인 모를 물이 고인 칸은 조금 받아도 모름 그대로)
                     }
             });
             for (int i = 0; i < Cells; i++) Store[s * Cells + i] = _st2[i];

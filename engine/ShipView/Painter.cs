@@ -863,7 +863,7 @@ public sealed partial class Painter
                 if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, _bake ? SootStep(sootG) : sootG, c); // 바닥에 앉은 그을음
                 if (L.Kind[c] == CellKind.Door) MoldOn(img, life, c, Px(x), Py(y));   // 문 칸 곰팡이는 문짝 위에 (5단 A3 — 바닥 칸은 바닥 타일과 함께 · 굽는 덩어리는 문 칸을 건너뛴다)
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
-                if (_bake) continue;   // 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
+                if (_bake) continue;   // 가루 · 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
                 if (st != null && c < st.Grit.Length && st.Grit[c] > 0) GritOn(img, st.Grit[c], st.GritMat[c], c, Px(x), Py(y));   // 깨진 유리 · 세라믹 가루 (PH8)
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2)
@@ -1077,17 +1077,19 @@ public sealed partial class Painter
         return (PropLook(t, lay), x + dx * k, y + dy * k, z);
     }
 
-    /// <summary>칸 가루 (깨진 유리 · 세라믹 — 3도트 아래 조각): 칸 안 해시 자리에 1도트 반짝임 (10g마다 하나 · 많아야 12 · 재질 색).</summary>
-    private static void GritOn(Img img, float kg, byte mat, int c, int px, int py)
+    /// <summary>칸 가루 (깨진 유리 · 세라믹 — 3도트 아래 조각): 칸 안 해시 자리에 1도트 반짝임 (10g마다 하나 · 많아야 12 · 재질 색).
+    /// 넓은 보기는 장마다 줄인 눈금 s (16도트 2 · 8도트 4)로: 같은 자리를 s로 나누고 반짝임 수도 s로 나눈다 (적어도 하나 — 줄여 섞으면 거의 사라진다).</summary>
+    private static void GritOn(Img img, float kg, byte mat, int c, int px, int py, int s = 1)
     {
         string id = mat < Tables.Default.Materials.Count ? Tables.Default.Materials[mat].Id : "";
         var col = Rgba.Hex(id == "glass" ? "#cdeef6" : id == "ceramic" ? "#f4f4f0" : "#b8bcc2");
         int n = Math.Clamp((int)(kg * 100), 1, 12);
+        if (s > 1) n = (n + s - 1) / s;
         for (int k = 0; k < n; k++)
         {
             uint h = (uint)(c * 2654435761u) ^ (uint)(k * 40503u + 977u);
             h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
-            img.Blend(px + 2 + (int)(h % 28), py + 2 + (int)(h >> 8) % 28, col, 0.9f);
+            img.Blend(px + (2 + (int)(h % 28)) / s, py + (2 + (int)(h >> 8) % 28) / s, col, 0.9f);
         }
     }
 
