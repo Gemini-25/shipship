@@ -16,18 +16,20 @@ public sealed partial class Structure
     private bool[] _stepped = Array.Empty<bool>();     // 이번 틱 걸음을 셈한 물체
     private double[] _rJ = Array.Empty<double>();      // 몸마다 이번 틱 되받을 몫 (운동량 둘 · 원점에 대한 각운동량 — 바람이 준 몫은 뺀다)
     private bool _framed;                              // 이번 틱 물체가 느끼는 틀의 힘이 있다 (점화 · 뿜는 틈 · 도는 몸)
-    private readonly Dictionary<DotForm, byte> _baseMat = new();
 
     /// <summary>물체의 겉 재질 (아직 깨지 않았으면 꼴에서 — 몸 값을 채우지 않고).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private byte MatOf(in Prop p)
     {
         if (p.Kg > 0) return p.Mat;
-        var fm = PropForm(p);
-        if (!_baseMat.TryGetValue(fm, out byte m)) _baseMat[fm] = m = BaseMat(fm);
-        return m;
+        return BaseMatOf(PropForm(p));
     }
 
+    /// <summary>꼴의 겉 재질 (바닥에 닿은 기둥이 가장 많은 재질 — 꼴에 한 번 세어 둔다: 바람 · 옆 가속 깨우기가 잠든 것마다 틱마다 묻는다).</summary>
+    private static byte BaseMatOf(DotForm fm) => fm.Shape.BaseMat;
+
     /// <summary>잠든 물체를 깨운다 (몸 값을 채우고 · 원인) — 깼으면 참.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool Wake(ref Prop p, int cause)
     {
         if (p.Kg <= 0) FillBody(ref p);
@@ -40,6 +42,7 @@ public sealed partial class Structure
     }
 
     /// <summary>덜컹이 잠든 것을 깨우나: 바닥이 바뀐 몫 (Δv · 제 돎 ρΔω)으로 미끄러질 길 v²/2μg'가 1mm를 넘으면 (무중력이면 1mm/s 넘게) — 그보다 작으면 실려 간다.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool JoltWakes(in Prop p, int c, double ux, double uy, double dw)
     {
         double rho = PropForm(p).Rho, v2 = ux * ux + uy * uy + rho * rho * dw * dw;
@@ -84,10 +87,11 @@ public sealed partial class Structure
     /// 틱 처음 (몸 걸음 뒤 · 물체 걸음 앞): 물체마다 실린 몸 · 몸이 있으면 틱 처음 세상 운동량 (몸의 틱 처음 자세로) · 되받을 몫을 비운다 ·
     /// 이번 틱 틀의 힘이 있나 (몸이 없는 배는 점화 · 몸이 있으면 몸마다 고른 가속 · 각가속도 · 각속도 · 덜컹).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void BeginFrames(ReadOnlySpan<Prop> all, bool world)
     {
         int n = all.Length, nb = Bodies.Count;
-        if (_hostOf.Length < n) { _hostOf = new int[n + 16]; _stepped = new bool[n + 16]; _pw0 = new double[3 * (n + 16)]; }
+        if (_hostOf.Length < n) GrowFrames(n);
         Array.Clear(_stepped, 0, n);
         if (!world) { _framed = ShipAx != 0 || ShipAy != 0; Array.Fill(_hostOf, -1, 0, n); return; }
         _framed = _jolts.Count > 0;
@@ -104,7 +108,10 @@ public sealed partial class Structure
         }
     }
 
+    private void GrowFrames(int n) { _hostOf = new int[n + 16]; _stepped = new bool[n + 16]; _pw0 = new double[3 * (n + 16)]; }
+
     /// <summary>몸의 자세 · 움직임 (X · Y · θ · V · ω · 무게중심의 제 틀 자리)으로 본 물체의 세상 운동량 · 원점에 대한 각운동량.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private (double px, double py, double l) WorldMomentum(in Prop p, double X, double Y, double th, double vx, double vy, double w, double lx, double ly)
     {
         var (m, I) = MassOf(p);
@@ -117,6 +124,7 @@ public sealed partial class Structure
     /// 물체가 그 몸의 틀에서 느끼는 힘 (잔걸음 처음 때 τ · 코리올리는 빼고 — 부른 쪽이 빠르기를 돌린다): −m·a몸 · 원심 m ω² r · 오일러 m α (r_y, −r_x) · 제 돎 −I α ·
     /// 몸이 없는 배는 −m·ShipA. 그 몸의 각속도 w (τ 때 — 덜컹 몫 jw 포함). 힘이 없으면 거짓.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool FrameForce(in Prop p, int b, double tau, double jw, double m, double I, out double fx, out double fy, out double tq, out double w)
     {
         fx = fy = tq = w = 0;
@@ -139,6 +147,7 @@ public sealed partial class Structure
     /// 깨우기 — 옆 가속 (§4-1): 잠든 것마다 그 틀의 힘 (빠르기 0일 때) |a| > g' · min(μs 지금 칸, b/Hc)면 깬다 — μs는 지금 칸 값 (젖으면 0.33배) ·
     /// b는 힘이 미는 쪽 받침 끝까지 (넘어짐 여유 · 넘어짐 자체는 PH7) · 무중력이면 조금이라도. 캐시 없이 틱마다 하나씩 본다.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool WakeByFrame(Span<Prop> all, bool world)
     {
         bool woke = false;
@@ -167,6 +176,7 @@ public sealed partial class Structure
     }
 
     /// <summary>깨우기 — 덜컹 (몸 걸음 안의 밂 — 몸끼리 부딪힘 · 부스러기): 그 몸 위 잠든 것마다 바닥이 바뀐 몫으로 1mm 넘게 미끄러질 만큼이면 깬다 (빠르기는 그 때 물체 걸음이 준다 · 작으면 실려 간다 — 장부는 틱 끝 반작용이 맞춘다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool WakeByJolts(Span<Prop> all)
     {
         bool woke = false;
@@ -189,6 +199,7 @@ public sealed partial class Structure
     /// <summary>
     /// 물체가 받은 바람 몫을 세상 틀로 (몸이 있을 때 — 그 몸의 τ 때 자세로 어림): 기체가 그만큼 잃고 (장부 Gas) · 몸은 그 몫을 되받지 않는다.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void WindToWorld(in Prop p, int b, double tau, double fx, double fy, double tq, double h)
     {
         var f = _snap[b];
@@ -205,6 +216,7 @@ public sealed partial class Structure
     /// 틱 끝 반작용 (몸이 있을 때): 물체마다 세상 운동량이 바뀐 몫 (바람 몫은 뺐다)을 그 몸이 되받는다 — 걸음을 셈한 것 · 우주로 간 것 (가져간 몫은 장부 '우주로') ·
     /// 움직인 몸에 실려 간 잠든 것 · 막은 것 — 그 몸과 실려 가는 것을 한 덩어리로 (TakeBack).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void Reactions(Span<Prop> all)
     {
         int nb = Bodies.Count;
@@ -233,6 +245,7 @@ public sealed partial class Structure
     /// (M + S)ΔV + Δω × Q = −J · Q × ΔV + (I + R²)Δω = −K를 풀고 · 깨어 있는 것은 덜컹처럼 바닥에 대한 빠르기만 고친다 (세상 빠르기 그대로). 사람이 느끼는 덜컹에는 넣지 않는다.
     /// 실린 몸은 틱 끝이면 틱 처음 것 (tickEnd) · 틱 사이면 지금 칸의 몸.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void TakeBack(Span<Prop> all, int b, double jx, double jy, double k, bool tickEnd)
     {
         var o = Bodies[b];

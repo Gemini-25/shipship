@@ -315,6 +315,6 @@ public sealed partial class Structure
         PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64();
         NextPropId = r.I32(); PropSteps = r.I64(); Bounces = r.I64(); Shattered = r.I64(); Toppled = r.I64(); TornLoose = r.I64(); Rolled = r.I64(); IslandMiss = r.I64();
         _plugStale = true;   // 물체 막음 칸은 장의 PlugProp에서 다시 세운다
-        if (_mouthTick.Length > 0) Array.Fill(_mouthTick, long.MinValue);   // 구멍 입 틱 안 캐시도 잊는다 (같은 틱 번호의 다른 세계)
+        Array.Fill(_mouthTick, long.MinValue);   // 구멍 입 틱 안 캐시도 잊는다 (같은 틱 번호의 다른 세계)
     }
 }

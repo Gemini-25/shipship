@@ -21,35 +21,18 @@ public sealed partial class Structure
     }
 
     private readonly PropContact[] _propHits = new PropContact[MaxContacts];
-    private int[] _clear = Array.Empty<int>();       // 칸마다 막힌 칸까지 체비셰프 거리 (칸 — 막힌 칸 0 · 모르면 −1)
+    private const int ClearSlots = 256;
+    private readonly int[] _clearKey = NewKeys(ClearSlots), _clear = new int[ClearSlots];   // 칸 번호 아래 8비트 자리마다 그 칸 · 막힌 칸까지 체비셰프 거리 (칸 — 막힌 칸 0 · 빈 자리 −1 · 겹치면 다시 센다)
+    private static int[] NewKeys(int n) { var a = new int[n]; Array.Fill(a, -1); return a; }
     private byte[] _clearFurn = Array.Empty<byte>();  // 그 지도를 셀 때의 가구 제자리
     private (DotForm? form, int ox, int oy)[]? _furnForms;   // 가구마다 꼴 · 꼴 모서리의 도트 자리 (찍지 않는다 — 도면에서 늘 같게)
     private sbyte[]? _doorAxis;                       // 문 칸마다 지나는 쪽 (1: 좌우가 벽 — 남북으로 지난다 · 2: 위아래가 벽 · 0 모름)
-    private readonly Dictionary<DotForm, (double[] x, double[] y, double reach)> _samples = new();
     private int _steel = -1;
 
-    /// <summary>꼴의 닿음 표본 (무게중심에서 — 껍질 꼭짓점 · 테두리 기둥 가운데) · 가장 먼 꼭짓점까지 (m).</summary>
-    private (double[] x, double[] y, double reach) SamplesOf(DotForm fm)
-    {
-        if (_samples.TryGetValue(fm, out var sm)) return sm;
-        int n = fm.Hull.Length + fm.Edge.Length;
-        var xs = new double[n]; var ys = new double[n];
-        double reach = 0;
-        for (int i = 0; i < fm.Hull.Length; i++)
-        {
-            xs[i] = fm.Hull[i].x - fm.Cx; ys[i] = fm.Hull[i].y - fm.Cy;
-            reach = Math.Max(reach, Math.Sqrt(xs[i] * xs[i] + ys[i] * ys[i]));
-        }
-        for (int i = 0; i < fm.Edge.Length; i++)
-        {
-            int k = fm.Hull.Length + i;
-            xs[k] = (fm.Edge[i].x + 0.5) * DotForm.Dot - fm.Cx; ys[k] = (fm.Edge[i].y + 0.5) * DotForm.Dot - fm.Cy;
-            reach = Math.Max(reach, Math.Sqrt(xs[k] * xs[k] + ys[k] * ys[k]));
-        }
-        _samples[fm] = sm = (xs, ys, reach);
-        return sm;
-    }
+    /// <summary>꼴의 닿음 표본 (무게중심에서 — 껍질 꼭짓점 · 테두리 기둥 가운데) · 가장 먼 꼭짓점까지 (m) — 꼴에 한 번 세어 둔다 (<see cref="PropShape"/>).</summary>
+    private static (double[] x, double[] y, double reach) SamplesOf(DotForm fm) => fm.Shape.Hit;
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private (DotForm? form, int ox, int oy) FurnForm(int fu)
     {
         if (_furnForms == null)
@@ -67,6 +50,7 @@ public sealed partial class Structure
         return _furnForms[fu];
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int DoorAxis(int c)
     {
         if (_doorAxis == null)
@@ -84,6 +68,7 @@ public sealed partial class Structure
     }
 
     /// <summary>그 도트가 막혔나 (도면 밖 · 벽 잔칸 · 닫힌 문 잔칸 · 열린 문 기둥 · 제자리 가구 기둥) — 재질 · 가구 기둥인가.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool SolidDot(int dx, int dy, out byte mat, out bool furn)
     {
         if (_steel < 0) _steel = Math.Max(0, T.Materials.FindIndex(m => m.Id == "steel"));
@@ -124,19 +109,21 @@ public sealed partial class Structure
 
     /// <summary>
     /// 틈새 지도: 칸마다 막힌 칸 (벽 · 문 · 제자리 가구 · 도면 끝 밖)까지 체비셰프 거리 — 그 칸 안 어느 점이든 막힌 것에서 (거리 − 1)m 넘게 떨어져 있다.
-    /// 물을 때 그 칸만 고리를 넓혀 가며 센다 (모르는 칸 −1 — 깨어 있는 물체가 지나는 칸만 · 온 배를 훑지 않는다). 제자리 가구가 바뀌면 다 잊는다 (도면 · 문 칸은 그대로다).
+    /// 물을 때 그 칸만 고리를 넓혀 가며 센다 (깨어 있는 물체가 지나는 칸만 · 온 배를 훑지 않는다 · 작은 자리표 — 온 배 크기 배열을 첫 깨움에 만들지 않는다). 제자리 가구가 바뀌면 다 잊는다 (도면 · 문 칸은 그대로다).
     /// 찍지 않는다 — 찍힌 상태의 순수 함수라 되살린 세계와 같다.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void BuildClearance()
     {
-        if (_clear.Length != L.N || _clearFurn.Length != FurnPlaced.Length || !_clearFurn.AsSpan().SequenceEqual(FurnPlaced))
+        if (_clearFurn.Length != FurnPlaced.Length || !_clearFurn.AsSpan().SequenceEqual(FurnPlaced))
         {
-            if (_clear.Length != L.N) _clear = new int[L.N];
-            Array.Fill(_clear, -1);
-            _clearFurn = (byte[])FurnPlaced.Clone();
+            Array.Fill(_clearKey, -1);
+            if (_clearFurn.Length != FurnPlaced.Length) _clearFurn = new byte[FurnPlaced.Length];
+            FurnPlaced.AsSpan().CopyTo(_clearFurn);
         }
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool Blocked(int x, int y)
     {
         if (!L.In(x, y)) return true;
@@ -146,10 +133,12 @@ public sealed partial class Structure
     }
 
     /// <summary>그 칸 안 어느 점이든 막힌 것까지 적어도 이만큼 (m).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private double ClearAt(int c)
     {
         if (c < 0) return 0;
-        if (_clear[c] < 0)
+        int k = c & (ClearSlots - 1);
+        if (_clearKey[k] != c)
         {
             int x = L.X(c), y = L.Y(c), d = 0;
             if (!Blocked(x, y))
@@ -159,14 +148,15 @@ public sealed partial class Structure
                     for (int i = -d; i <= d && !hit; i++) hit = Blocked(x + i, y - d) || Blocked(x + i, y + d) || Blocked(x - d, y + i) || Blocked(x + d, y + i);
                     if (hit) break;
                 }
-            _clear[c] = d;
+            _clearKey[k] = c; _clear[k] = d;
         }
-        return Math.Max(0, _clear[c] - 1);
+        return Math.Max(0, _clear[k] - 1);
     }
 
     /// <summary>
     /// 한 점이 이번 잔걸음에 (d만큼) 갈 길에서 처음 막힌 도트: 떨어진 거리 (법선 쪽 m — 이미 들어가 있으면 −깊이) · 법선 (막힌 것에서 밖으로) · 재질.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool Sweep(double px, double py, double ddx, double ddy, out double sep, out double nx, out double ny, out byte mat, out int cell)
     {
         const double S = 32;
@@ -212,6 +202,7 @@ public sealed partial class Structure
     }
 
     /// <summary>막힌 도트의 빈 이웃 쪽 (8이웃 합 — 단위 벡터 · 다 막혔으면 0).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private (double x, double y) EmptySide(int ix, int iy)
     {
         double gx = 0, gy = 0;
@@ -223,6 +214,7 @@ public sealed partial class Structure
     }
 
     /// <summary>이번 잔걸음 h에 닿을 곳 (사분면마다 가장 가까운 표본 — 많아야 4 · 지금 빠르기로 갈 길을 따라간다): 개수.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int FindContacts(in Prop p, (double[] x, double[] y, double reach) sm, double h, double muObj, double restObj)
     {
         double c = Math.Cos(p.Th), s = Math.Sin(p.Th);
@@ -257,6 +249,7 @@ public sealed partial class Structure
     }
 
     /// <summary>순차 충격량 (Catto — 되풀이마다 마찰 먼저 (지난 되풀이의 jn으로 한계) → 법선 누적 jn ≥ 0) — 되풀이 iters번.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void SolveContacts(ref Prop p, int n, int iters)
     {
         double m = p.Kg, I = p.Inertia;
@@ -279,6 +272,7 @@ public sealed partial class Structure
     }
 
     /// <summary>자리 바로잡음: 겹침이 0.5도트 넘는 몫의 20%를 법선 쪽으로 (빠르기는 그대로 — 밀어 떼지 않는다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void FixOverlap(ref Prop p, int n)
     {
         double sx = 0, sy = 0;

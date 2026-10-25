@@ -11,6 +11,7 @@ public sealed partial class Structure
     private string[]? _itemNames;
 
     /// <summary>물체의 도트 꼴 (물건: 사람 표의 그 물건 · 누움 Pose).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     public DotForm PropForm(in Prop p)
     {
         int key = p.What * 8 + p.Pose;
@@ -42,24 +43,12 @@ public sealed partial class Structure
     }
 
     /// <summary>꼴에서 몸 값을 채운다 (꼴 번호 · 질량 · 회전관성 · 겉 재질 — 바닥에 닿은 기둥이 가장 많은 재질).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void FillBody(ref Prop p)
     {
         var fm = PropForm(p);
-        p.Form = fm.Id; p.Kg = (float)fm.Mass; p.Inertia = (float)fm.I; p.Mat = BaseMat(fm);
+        p.Form = fm.Id; p.Kg = (float)fm.Mass; p.Inertia = (float)fm.I; p.Mat = BaseMatOf(fm);
         if (fm.Round) p.Flags |= 2;
-    }
-
-    private static byte BaseMat(DotForm fm)
-    {
-        Span<int> n = stackalloc int[256];
-        int low = int.MaxValue, best = -1;
-        for (int i = 0; i < fm.Columns; i++) if (fm.Top[i] > fm.Bot[i]) low = Math.Min(low, fm.Bot[i]);
-        for (int i = 0; i < fm.Columns; i++)
-        {
-            if (fm.Top[i] <= fm.Bot[i] || fm.Bot[i] != low) continue;
-            if (++n[fm.Mat[i]] > (best < 0 ? 0 : n[best])) best = fm.Mat[i];
-        }
-        return (byte)Math.Max(0, best);
     }
 
     /// <summary>한 틱 움직임: 몸 (조각 · 배) → 물체 (깨어 있는 것만).</summary>
@@ -76,10 +65,17 @@ public sealed partial class Structure
     /// <summary>틱 안 기록 (보기용 — 찍지 않는다 · null이면 셈하지 않는다: 관전 화면이 제 세계 · 다시보기 세계에 켠다 · 법칙 13 켬 = 끔).</summary>
     public MotionTrack? Track;
 
+    /// <summary>
+    /// 물체 길은 처음부터 다 옮긴 기계어로 (물체 예산 고침): 감압 · 점화 · 덜컹 같은 드문 일에만 도는 길이라 단계 번역이 그 일의 첫 몇십 틱을 덜 옮긴 코드로 돌렸다
+    /// (감압 첫 틱 '구조:물체' 0.23 ~ 0.46ms · 단계 번역을 끄면 0.13ms). 셈 · 차례는 그대로다 (결과가 같다).
+    /// </summary>
+    internal const System.Runtime.CompilerServices.MethodImplOptions Hot = System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization;
+
     public const double Gravity = 9.8, WetShare = 0.33, WetMol = 50, SleepV = 1e-3, SleepW = 0.01, SleepSec = 0.5, MaxPropH = 0.1, MaxPropTurn = 0.1;
     public const int MaxPropSteps = 1024;
 
     /// <summary>물체의 질량 · 회전관성 (아직 깨지 않아 몸 값이 비었으면 꼴에서).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private (double kg, double inertia) MassOf(in Prop p)
     {
         if (p.Kg > 0) return (p.Kg, p.Inertia);
@@ -117,9 +113,11 @@ public sealed partial class Structure
     /// 깨어 있는 물체마다 (Id 차례 — 지금은 물체끼리 닿지 않아 하나가 한 섬) 한 틱을 잔걸음으로 — 깨우기 (막음 풀림 · 바람 · 덜컹 · 옆 가속 · 폭풍) 뒤 ·
     /// 몸이 있으면 바닥 · 벽이 준 몫을 틱 끝에 그 몸이 되받는다.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void MoveProps(Sim sim, double dt)
     {
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 잠든 것은 베끼지 않고 상태만 본다 (조용한 틱의 거의 전부)
+        if (_hostOf.Length < all.Length) GrowFrames(all.Length);   // 물체를 더할 때 (조용한 틱) 미리 — 감압 · 점화 첫 틱에 만들지 않는다
         bool any = false, plugged = false, world = Bodies.Count > 0;
         for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; }
         _windy = F.WindCells.Count > 0; _tickDt = dt;
@@ -156,6 +154,7 @@ public sealed partial class Structure
     /// 닿을 것이 없으면 마찰의 정확한 걸음 (x += v h + ½ a h² · 서는 걸음은 v²/2a에서 멈춘다) · 있으면 마찰 빠르기 → 충격량 → 자리 → 바로잡음.
     /// 빠르기 1mm/s · 각속도 0.01rad/s 아래가 0.5초 이어지면 잔다 (빠르기 0 · 놓임).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void StepProp(Sim sim, ref Prop p, double dt, int host)
     {
         if (p.Kg <= 0) FillBody(ref p);
@@ -314,6 +313,7 @@ public sealed partial class Structure
     }
 
     /// <summary>틱 안 기록의 끝 열쇠틀 (그 때에 아직 없으면 — 사라짐 · 막음은 그 사건으로).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private static void TrackEnd(MotionTrack? tr, in Prop p, double t, ref double lastKey)
     {
         if (tr == null || double.IsPositiveInfinity(lastKey)) return;
@@ -323,6 +323,7 @@ public sealed partial class Structure
     }
 
     /// <summary>물체 몸이 그 원판에 닿았나 (가운데 · 껍질 꼭짓점 · 테두리 표본 가운데 하나가 원판 안).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool TouchesActor(in Prop p, (double[] x, double[] y, double reach) sm, in PropActor a)
     {
         double ax = L.X(a.Cell) + 0.5, ay = L.Y(a.Cell) + 0.5, r2 = a.R * a.R;
@@ -348,6 +349,7 @@ public sealed partial class Structure
     }
 
     /// <summary>코리올리 (−2ω × v — 도는 몸의 틀): 바닥에 대한 빠르기를 phi만큼 돌린다 (크기는 그대로 — 에너지를 꾸며내지 않는다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private static void Coriolis(ref Prop p, double phi)
     {
         double c = Math.Cos(phi), s = Math.Sin(phi), vx = p.Vx;
@@ -361,6 +363,7 @@ public sealed partial class Structure
     private static void Friction(ref Prop p, double h, double k, double m, double I, double rho, bool exact) => Friction(ref p, h, k, m, I, rho, exact, out _);
 
     /// <summary>바닥 마찰 — 미끄러짐이 그친 때 (잔걸음 처음에서 초 · 그치지 않았으면 −1)도 (틱 안 기록의 '섰다').</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private static void Friction(ref Prop p, double h, double k, double m, double I, double rho, bool exact, out double stopAt)
     {
         double rem = h;

@@ -428,14 +428,23 @@ public sealed partial class Field
     /// 드는 흐름 Q = 0.6 × (구멍 − 막음) × 그 빠르기가 반구로 모인다 → 25cm에서 v = min(구멍의 빠르기, Q / 2πr²) · ½ρv². 가장 센 구멍과 그 칸 (④ 물체 · ⑧ 끌림이 함께 읽는다).
     /// grow: 그 칸 기압을 이만큼 곱해 본다 (④는 장이 흐른 뒤에 부르니 틱 처음 쪽으로 되짚는다 — 그 구역은 지수로 비었다 · ⑧은 흐르기 전이라 1).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]   // ④ 감압 첫 틱에 물체 둘레 칸마다 (물체 예산 고침 — Structure.Hot)
     public double HoleMouthPa(int cell, out int mouth, double grow = 1)
     {
         mouth = -1;
         if (cell < 0 || cell >= L.N || !Passable(cell)) return 0;
+        int x = L.X(cell), y = L.Y(cell);
+        bool near = false;   // 이웃에 구멍 벽 · 바깥이 없으면 기압을 세지 않는다 (물체 예산 고침 — 물체 둘레 칸 거의 모두)
+        foreach (var (ox, oy) in Dirs4)
+        {
+            if (!L.In(x + ox, y + oy)) continue;
+            int j = L.Index(x + ox, y + oy);
+            if (IsOut(j) || L.Kind[j] == CellKind.Wall && Hole[j] > 0.01f) { near = true; break; }
+        }
+        if (!near) return 0;
         double p = Pressure(cell) * grow;
         if (p < 1) return 0;
         double best = 0;
-        int x = L.X(cell), y = L.Y(cell);
         foreach (var (ox, oy) in Dirs4)
         {
             if (!L.In(x + ox, y + oy)) continue;

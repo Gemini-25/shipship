@@ -27,7 +27,20 @@ public sealed class DotForm
     public double[] Area16 { get { if (Volatile.Read(ref _area16) == null) DotForge.Wind(this); return _area16!; } }
     public double[] Cop16 { get { if (Volatile.Read(ref _area16) == null) DotForge.Wind(this); return _cop16!; } }
     private double[]? _area16, _cop16;
-    internal void SetWind(double[] area, double[] cop) { _cop16 = cop; Volatile.Write(ref _area16, area); }
+    /// <summary>가장 넓은 앞면 · 가장 작은 앞면 (m² — 16갈래 가운데 · 0보다 큰 것: 바람 깨우기를 넉넉히 거를 때 · 구멍을 막을지 지날지). 바람 갈래와 함께 센다.</summary>
+    public double AreaMax { get { if (Volatile.Read(ref _area16) == null) DotForge.Wind(this); return _areaMax; } }
+    public double AreaMin { get { if (Volatile.Read(ref _area16) == null) DotForge.Wind(this); return _areaMin; } }
+    private double _areaMax, _areaMin;
+    internal void SetWind(double[] area, double[] cop)
+    {
+        double a = double.MaxValue;
+        foreach (double x in area) if (x > 0) a = Math.Min(a, x);
+        _areaMax = area.Max(); _areaMin = a == double.MaxValue ? 0 : a;
+        _cop16 = cop; Volatile.Write(ref _area16, area);
+    }
+    /// <summary>물체 셈의 꼴 표본 (<see cref="PropShape"/>): 처음 읽을 때 센다 — 꼴은 온 세계가 나눠 쓰니 새 세계 · 복제가 다시 세지 않는다 (물체 예산 고침).</summary>
+    public PropShape Shape { get { var sh = Volatile.Read(ref _shape); if (sh == null) Volatile.Write(ref _shape, sh = new PropShape(this)); return sh; } }
+    private PropShape? _shape;
     /// <summary>볼록 껍질 (꼴 틀 m · 많아야 8 꼭짓점) · 테두리 표본 (두 도트마다 · 많아야 64).</summary>
     public (double x, double y)[] Hull = Array.Empty<(double, double)>();
     public (byte x, byte y)[] Edge = Array.Empty<(byte, byte)>();
@@ -39,6 +52,55 @@ public sealed class DotForm
 
     public int Columns => W * D;
     public bool Solid(int x, int y) => (uint)x < (uint)W && (uint)y < (uint)D && Top[y * W + x] > Bot[y * W + x];
+}
+
+/// <summary>
+/// 물체 셈이 꼴마다 쓰는 표본 (<see cref="DotForm.Shape"/> — 꼴의 순수 함수 · 한 번 세면 바꾸지 않는다: 여러 스레드가 함께 읽는다):
+/// 닿음 표본 (무게중심에서 — 껍질 꼭짓점 · 테두리 기둥 가운데) · 가장 먼 꼭짓점까지 (m) ·
+/// 바람 발자국 표본 (무게중심에서 — 기둥 가운데 · 꼴 가운데에서 대칭으로 2도트 걸러: 대칭 꼴은 표본도 대칭이다) · 겉 재질 (바닥에 닿은 기둥이 가장 많은 재질).
+/// </summary>
+public sealed class PropShape
+{
+    public readonly (double[] x, double[] y, double reach) Hit;
+    public readonly double[] FootX, FootY;
+    public readonly byte BaseMat;
+
+    internal PropShape(DotForm fm)
+    {
+        int n = fm.Hull.Length + fm.Edge.Length;
+        var xs = new double[n]; var ys = new double[n];
+        double reach = 0;
+        for (int i = 0; i < fm.Hull.Length; i++)
+        {
+            xs[i] = fm.Hull[i].x - fm.Cx; ys[i] = fm.Hull[i].y - fm.Cy;
+            reach = Math.Max(reach, Math.Sqrt(xs[i] * xs[i] + ys[i] * ys[i]));
+        }
+        for (int i = 0; i < fm.Edge.Length; i++)
+        {
+            int k = fm.Hull.Length + i;
+            xs[k] = (fm.Edge[i].x + 0.5) * DotForm.Dot - fm.Cx; ys[k] = (fm.Edge[i].y + 0.5) * DotForm.Dot - fm.Cy;
+            reach = Math.Max(reach, Math.Sqrt(xs[k] * xs[k] + ys[k] * ys[k]));
+        }
+        Hit = (xs, ys, reach);
+
+        static bool Take(int i, int n) => Math.Abs(2 * i - (n - 1)) % 4 == ((n & 1) == 1 ? 0 : 1);
+        var fx = new List<double>(); var fy = new List<double>();
+        for (int y = 0; y < fm.D; y++)
+            for (int x = 0; x < fm.W; x++)
+                if (fm.Solid(x, y) && Take(x, fm.W) && Take(y, fm.D)) { fx.Add((x + 0.5) * DotForm.Dot - fm.Cx); fy.Add((y + 0.5) * DotForm.Dot - fm.Cy); }
+        if (fx.Count == 0) { fx.Add(0); fy.Add(0); }
+        FootX = fx.ToArray(); FootY = fy.ToArray();
+
+        Span<int> cnt = stackalloc int[256];
+        int low = int.MaxValue, best = -1;
+        for (int i = 0; i < fm.Columns; i++) if (fm.Top[i] > fm.Bot[i]) low = Math.Min(low, fm.Bot[i]);
+        for (int i = 0; i < fm.Columns; i++)
+        {
+            if (fm.Top[i] <= fm.Bot[i] || fm.Bot[i] != low) continue;
+            if (++cnt[fm.Mat[i]] > (best < 0 ? 0 : cnt[best])) best = fm.Mat[i];
+        }
+        BaseMat = (byte)Math.Max(0, best);
+    }
 }
 
 /// <summary>도트 꼴을 표에서 짓는다 (늘 같게 — 같은 열쇠면 같은 꼴 하나를 함께 쓴다).</summary>

@@ -11,39 +11,31 @@ namespace ShipEngine;
 public sealed partial class Structure
 {
     public const double PlugMargin = 1.2, PlugSeal = 0.9, StaticShare = 1.25, ShareTurn = 0.098;   // 막는 앞면 여유 · 막은 넓이 몫 · 정지 마찰 = 1.25 μk · 칸 몫을 다시 세는 돎 (5.6°)
-    private const int MaxWindCells = 9;
+    private const int MaxWindCells = 9, MouthSlots = 256;
 
     private bool _windy;                                   // 이번 틱 바람이 분 칸이 있다 (③ WindCells)
     private double _tickDt = Time.SecondsPerTick;
-    private float[] _mouthQ = Array.Empty<float>();        // 칸마다 구멍 입 동압 · 그 구멍 · 센 틱 (틱 안 캐시 — 찍지 않는다)
-    private int[] _mouthAt = Array.Empty<int>();
-    private long[] _mouthTick = Array.Empty<long>();
+    // 구멍 입 틱 안 캐시 (찍지 않는다): 칸 번호 아래 8비트 자리마다 그 칸 · 동압 · 그 구멍 · 센 틱 — 온 배 크기 배열을 감압 첫 틱에 만들지 않는다 (물체 예산 고침 — 새뜰호 150KB) ·
+    // 두 칸이 한 자리에 겹치면 다시 센다 (틱 안에서는 장이 바뀌지 않으니 — 물체 막음은 틱 끝에 쓴다 — 값이 같다)
+    private readonly int[] _mouthKey = new int[MouthSlots];
+    private readonly float[] _mouthQ = new float[MouthSlots];
+    private readonly int[] _mouthAt = new int[MouthSlots];
+    private readonly long[] _mouthTick = NewTicks(MouthSlots);
+    private static long[] NewTicks(int n) { var a = new long[n]; Array.Fill(a, long.MinValue); return a; }
     private readonly List<int> _plugCells = new();         // PlugProp > 0인 칸 (되살리면 장의 배열에서 다시 세운다)
     private bool _plugStale = true;
-    private readonly Dictionary<DotForm, (double[] x, double[] y)> _foot = new();
     private readonly int[] _wc = new int[MaxWindCells];
     private readonly int[] _wn = new int[MaxWindCells];
     private readonly double[] _wsx = new double[MaxWindCells], _wsy = new double[MaxWindCells], _wrho = new double[MaxWindCells], _wux = new double[MaxWindCells], _wuy = new double[MaxWindCells];
     /// <summary>셈 (찍지 않는다 — 보기용): 바람에 깬 것 · 우주로 · 막음.</summary>
     public long PropWoken, PropSpaced, PropPlugged;
 
-    /// <summary>꼴 발자국 표본 (무게중심에서 — 기둥 가운데 · 꼴 가운데에서 대칭으로 2도트 걸러: 대칭 꼴은 표본도 대칭이다).</summary>
-    private (double[] x, double[] y) FootOf(DotForm fm)
-    {
-        if (_foot.TryGetValue(fm, out var ft)) return ft;
-        static bool Take(int i, int n) => Math.Abs(2 * i - (n - 1)) % 4 == ((n & 1) == 1 ? 0 : 1);
-        var xs = new List<double>(); var ys = new List<double>();
-        for (int y = 0; y < fm.D; y++)
-            for (int x = 0; x < fm.W; x++)
-                if (fm.Solid(x, y) && Take(x, fm.W) && Take(y, fm.D)) { xs.Add((x + 0.5) * DotForm.Dot - fm.Cx); ys.Add((y + 0.5) * DotForm.Dot - fm.Cy); }
-        if (xs.Count == 0) { xs.Add(0); ys.Add(0); }
-        _foot[fm] = ft = (xs.ToArray(), ys.ToArray());
-        return ft;
-    }
+    /// <summary>꼴 발자국 표본 (무게중심에서 — 기둥 가운데 · 꼴 가운데에서 대칭으로 2도트 걸러) — 꼴에 한 번 세어 둔다 (<see cref="PropShape"/>).</summary>
+    private static (double[] x, double[] y) FootOf(DotForm fm) => (fm.Shape.FootX, fm.Shape.FootY);
 
-    private readonly Dictionary<DotForm, double> _maxArea = new();
     private double _minMu = -1;
     /// <summary>재질 표에서 가장 미끄러운 마찰 (μ > 0 가운데 가장 작은 것 — 깨우기를 넉넉히 거를 때).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private double MinMu()
     {
         if (_minMu < 0) { _minMu = double.MaxValue; foreach (var m in T.Materials) if (m.Def.Mu > 0) _minMu = Math.Min(_minMu, m.Def.Mu); if (_minMu == double.MaxValue) _minMu = 0; }
@@ -51,28 +43,24 @@ public sealed partial class Structure
     }
 
     /// <summary>가장 작은 앞면 (m² — 16갈래 바람 그림자 가운데 가장 작은 것: 구멍을 막을지 지날지).</summary>
-    private static double MinFace(DotForm fm)
-    {
-        double a = double.MaxValue;
-        foreach (double x in fm.Area16) if (x > 0) a = Math.Min(a, x);
-        return a == double.MaxValue ? 0 : a;
-    }
+    private static double MinFace(DotForm fm) => fm.AreaMin;
 
     /// <summary>
     /// 그 칸의 구멍 입 동압 · 그 구멍 칸 — 틱 처음에서 tau초 (장은 이미 흘렀으니 그 구역이 지수로 빈 빠르기 WindK로 기압을 되짚는다: p(τ) = p끝 · e^(k(Δt − τ))).
     /// 틱 처음 값은 칸마다 한 번만 센다 (틱 안 캐시 — 틱 안에서는 장이 바뀌지 않는다).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private double MouthAt(int c, double tau, out int mouth)
     {
-        double grow = Math.Exp(F.WindK[c] * (_tickDt - tau));
-        if (tau > 0) return F.HoleMouthPa(c, out mouth, grow);
-        if (_mouthQ.Length != L.N) { _mouthQ = new float[L.N]; _mouthAt = new int[L.N]; _mouthTick = new long[L.N]; Array.Fill(_mouthTick, long.MinValue); }
-        if (_mouthTick[c] != _now) { _mouthQ[c] = (float)F.HoleMouthPa(c, out _mouthAt[c], grow); _mouthTick[c] = _now; }
-        mouth = _mouthAt[c];
-        return _mouthQ[c];
+        if (tau > 0) return F.HoleMouthPa(c, out mouth, Math.Exp(F.WindK[c] * (_tickDt - tau)));
+        int k = c & (MouthSlots - 1);
+        if (_mouthTick[k] != _now || _mouthKey[k] != c) { _mouthQ[k] = (float)F.HoleMouthPa(c, out _mouthAt[k], Math.Exp(F.WindK[c] * _tickDt)); _mouthKey[k] = c; _mouthTick[k] = _now; }
+        mouth = _mouthAt[k];
+        return _mouthQ[k];
     }
 
     /// <summary>그 칸 바람의 원인 (그 구역이 우주로 새는 틈을 낸 원인).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int WindCauseAt(int c)
     {
         int r = c >= 0 && c < F.RegionOf.Length ? F.RegionOf[c] : -1;
@@ -85,6 +73,7 @@ public sealed partial class Structure
     /// 물체가 받는 바람 (틱 처음에서 tau초 — 동압이 e^(−k tau)로 준다): 덮은 칸마다 발자국 표본 몫 · 그 칸 가운데 (돌풍 · 구멍 입 가운데 센 것) · 상대 빠르기.
     /// 힘 (N) · 무게중심 둘레 돌림힘 (N·m) — 바람이 없으면 거짓.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool WindForce(in Prop p, DotForm fm, double tau, out double fx, out double fy, out double tq)
     {
         fx = fy = tq = 0;
@@ -152,6 +141,7 @@ public sealed partial class Structure
     }
 
     /// <summary>힘 · 돌림힘이 정지 타원 안인가 ((|F|/μsN)² + (|τ|/(μsNρ))² ≤ 1 — 무중력이면 어떤 힘이든 밖).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private static bool Holds(double fx, double fy, double tq, double muS, double nForce, double rho)
     {
         double lim = muS * nForce;
@@ -161,6 +151,7 @@ public sealed partial class Structure
     }
 
     /// <summary>깨우기의 바람 · 구멍 입 갈래: 놓인 것마다 둘레 칸에 바람이 있으면 그 힘이 정지 타원을 넘는지 본다 (넘으면 깨어 미끄러진다 — 원인은 그 구역이 새는 틈).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool WakeByWind(Span<Prop> all)
     {
         bool woke = false;
@@ -182,7 +173,7 @@ public sealed partial class Structure
             if (qMax <= 0) continue;
             var fm = PropForm(p);
             // 넉넉한 어림으로 먼저 거른다: 가장 센 칸 바람 × 가장 넓은 앞면 (돌림힘 몫까지)이 가장 미끄러운 바닥의 정지 마찰도 못 넘으면 그대로
-            if (!_maxArea.TryGetValue(fm, out double aMax)) _maxArea[fm] = aMax = fm.Area16.Max();
+            double aMax = fm.AreaMax;
             double rg = 3 * SamplesOf(fm).reach / Math.Max(1e-3, fm.Rho);   // 힘 점은 무게중심에서 많아야 (몫의 가운데 차 2 + 압력 중심 1) × 닿는 반지름
             if (qMax * fm.Cd * aMax * Math.Sqrt(1 + rg * rg) <= StaticShare * MinMu() * WetShare * fm.Mass * Gravity * F.Grav[c]) continue;
             var q = p;
@@ -203,6 +194,7 @@ public sealed partial class Structure
     /// 가장 작은 앞면이 구멍 × 1.2보다 크면 빨려 붙어 막고 (State 6) · 아니면 구멍이 우주로 이어질 때만 구멍 밖 우주로 (State 5 — 틱 끝에 장부 '우주로').
     /// 빨아들이지 않는 구멍 (기압이 같은 두 방 사이 · 공기가 다 빠진 방)과 옆 방으로 이어진 구멍은 보통 벽이다 (거짓 — 부른 쪽이 튀거나 틈을 지나게 둔다).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool HoleHit(Sim sim, ref Prop p, int hole)
     {
         var fm = PropForm(p);
@@ -228,6 +220,7 @@ public sealed partial class Structure
     }
 
     /// <summary>그 구멍이 우주로 이어지나 (③ 틈 가운데 그 칸을 지나 바깥으로 가는 것이 있다 — 안쪽 벽 구멍은 옆 방으로 이어질 뿐이다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool HoleToSpace(int hole)
     {
         foreach (var k in F.Links) if (k.Via == hole && k.RB < 0) return true;
@@ -235,6 +228,7 @@ public sealed partial class Structure
     }
 
     /// <summary>구멍이 그 물체를 무게보다 세게 빨아들이나 (누르는 힘 = 기압 차 × 덮은 넓이 > 무게 — 빨려 붙음 · 떨어짐 · 우주로의 같은 문턱).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool Sucked(in Prop p, int hole, double face)
     {
         if (hole < 0 || L.Kind[hole] != CellKind.Wall || F.Hole[hole] <= 0.01f || F.Severed[hole] != 0) return false;
@@ -244,6 +238,7 @@ public sealed partial class Structure
     }
 
     /// <summary>구멍 이쪽의 트인 칸: 물체 무게중심 칸 (트였으면) · 아니면 (무게중심이 구멍 칸에 들었다) 구멍 곁 트인 칸 가운데 무게중심에 가장 가까운 것.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int HoleSide(in Prop p, int hole)
     {
         int c = CellOf(p);
@@ -262,6 +257,7 @@ public sealed partial class Structure
     }
 
     /// <summary>우주로 간 것을 목록에서 뺀다 (장부 '우주로' · 가져간 운동량 · 각운동량 — Id 차례 그대로 · 몸이 있으면 세상 틀 몫은 반작용에서 이미 셌다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void RemoveSpaced(Sim sim, bool world)
     {
         bool any = false;
@@ -278,6 +274,7 @@ public sealed partial class Structure
     }
 
     /// <summary>구멍에 빨려 붙은 것: 구멍을 덧대거나 (끊겼거나) 누르는 힘 (기압 차 × 덮은 넓이)이 무게 아래가 되면 떨어진다 (깨어 — 남은 바람에 다시 밀릴 수 있다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool Unplug(Span<Prop> all)
     {
         bool woke = false;
@@ -295,6 +292,7 @@ public sealed partial class Structure
     }
 
     /// <summary>구멍에 붙은 것을 누르는 힘 (N): 그 칸과 구멍 너머의 기압 차 × 덮은 넓이.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private double Suction(int cell, int hole, double face)
     {
         if (cell < 0 || hole < 0) return 0;
@@ -307,6 +305,7 @@ public sealed partial class Structure
     /// 물체 막음을 장에 쓴다 (틱 끝 — 장은 다음 틱 흐름부터 줄인다): 지난번에 쓴 칸을 0으로 돌리고 막은 것마다 min(구멍, 가장 작은 앞면) × 0.9 (칸마다 가장 큰 것).
     /// 쓴 칸 목록은 찍지 않는다 — 되살리면 장의 PlugProp > 0인 칸에서 다시 세운다 (풀린 막음이 남지 않게).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void WritePlugs(ReadOnlySpan<Prop> all, bool plugged)
     {
         if (_plugStale)

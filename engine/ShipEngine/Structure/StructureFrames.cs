@@ -489,6 +489,7 @@ public sealed partial class Structure
     }
 
     /// <summary>폭풍 — 기체 폭발 (② 이 틱 한꺼번에 탄 칸마다): TNT 당량 W = 열 × 0.1 / 4.184MJ로 바꿔 그 칸에서 <see cref="Blast"/>와 같은 셈으로 둘레 물체만 민다 (벽 · 설비는 장의 압력이 맡는다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool GasBlasts(Sim sim)
     {
         if (_chem == null || _chem.GasBurstJ.Count == 0 || Props.Count == 0) return false;
