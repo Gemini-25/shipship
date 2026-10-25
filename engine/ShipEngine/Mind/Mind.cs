@@ -784,6 +784,7 @@ public sealed partial class Mind : IEngine
     public void Load(StateReader r)
     {
         Agents.Clear();
+        _plugsStale = true;   // 몸 막음 칸은 장의 PlugBody에서 다시 세운다
         int n = r.I32();
         for (int i = 0; i < n; i++)
         {

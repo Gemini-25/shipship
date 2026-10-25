@@ -40,6 +40,13 @@ public sealed partial class Field
         PlugBody[cell] = Math.Max(0f, sealedArea);
     }
 
+    /// <summary>물체 막음을 요청한다 (④ — 빨려 붙은 물체가 덮은 넓이 · 다음 틱 흐름부터 든다).</summary>
+    public void SetPlugProp(int cell, float sealedArea)
+    {
+        if (PlugProp.Length != Cells) PlugProp = new float[Cells];
+        PlugProp[cell] = Math.Max(0f, sealedArea);
+    }
+
     /// <summary>틱마다 흐르기 전에: 구멍 틈의 넓이를 막은 만큼 줄인다 (막음이 풀리면 처음 넓이로).</summary>
     private void PlugLinks()
     {

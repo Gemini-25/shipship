@@ -11,9 +11,10 @@ public static partial class Program
     {
         if (Do("물체"))
         {
-            Console.WriteLine("\n[물체 — 문틀 · 사람]");
+            Console.WriteLine("\n[물체 — 문틀 · 사람 · 감압]");
             DoorFrameRules();
             PropHitRules();
+            BreachRules();
         }
         if (Do("물체 그림"))
         {
@@ -101,6 +102,81 @@ public static partial class Program
         Check("사람: 7m/s로 날아든 식량 상자(13kg)에 맞으면 ④ 장부에 한 번 (20J 넘게) → ⑦이 5틱 안에 읽어 타박 (E/800) · 원인은 걷어찬 것까지 · 장부는 빈다",
             hits.Count == 1 && e >= 20 && Math.Abs(got - Math.Min(1.5, e / 800)) < 1e-4 && hurt.Contains("식량 상자") && hurt.Contains("걷어찼다") && !st.PropHits.Any(h => h.Tag == body),
             $"맞음 {hits.Count} · {e:0}J · 타박 {got:0.000}/{Math.Min(1.5, e / 800):0.000} · \"{hurt}\" · 남은 장부 {st.PropHits.Count}");
+    }
+
+    // 화물칸 (외판 x = 0에 구멍) · 닫힌 문 · 통로 — RulesFling과 같은 꼴
+    private const string BreachRooms = "\n###############\n#.....#.......#\n#.....D.......#\n#.....#.......#\n###############";
+
+    /// <summary>
+    /// 감압 (PH4c — docs/PHYSICS.md §3-2 · §3-6 · §10 '감압'): 외판 0.075m² 구멍 입 곁 (두 칸에 걸친) 식량 상자가 구멍 입 바람에 돌며 미끄러져 벽에 닿아 선다 —
+    /// 선 자리는 칸 가운데가 아니고 벽 안이 아니다 · 구멍보다 큰 상자는 빨려 붙어 막는다 (샘 ≤ 0.1배) · 사람과 상자가 같은 구멍에 붙으면 막음 = 둘 가운데 큰 것 (10틱 흔들리지 않는다).
+    /// </summary>
+    private static void BreachRules()
+    {
+        var lay = Worlds.Ascii(BreachRooms, Worlds.Seats);
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        int hole = At(0, 2);
+        const double dot = DotForm.Dot;
+        // ── 구멍 입 곁 상자: 가운데가 칸 경계 가까이 (위 칸에 0.1m 넘게 걸침) ──
+        {
+            var s = Worlds.Full(lay, 1);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            st.RequestDoor(lay.DoorAt[At(6, 2)], 0);
+            int id = Worlds.PutItem(s, "식량 상자", At(1, 2));
+            { int i = st.IndexOf(id); var p = st.Props[i]; p.Y -= 0.42; st.Props[i] = p; }
+            s.Run(5);
+            int cause = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 작은 파편이 박혔다", s.Tick);
+            st.DamageCause[hole] = cause; f.SetHole(hole, 0.075f);
+            for (int k = 0; k < 30; k++)
+            {
+                s.Step();
+                if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1" && k < 4) { var d = st.Props[st.IndexOf(id)]; Console.WriteLine($"    {k}틱 바람 칸 {f.WindCells.Count} · 상자 칸 바람 {f.WindPa[st.CellOf(d)]:0}Pa · 입 {f.HoleMouthPa(st.CellOf(d), out _):0}Pa · 기압 {f.Pressure(st.CellOf(d)):0.0} · 상자 ({d.X:0.000}, {d.Y:0.000}) 상태 {d.State} θ {d.Th:0.000}"); }
+            }
+            var q = st.Props[st.IndexOf(id)];
+            var fm = st.PropForm(q);
+            double cs = Math.Cos(q.Th), sn = Math.Sin(q.Th), west = double.MaxValue;
+            foreach (var (hx, hy) in fm.Hull) west = Math.Min(west, q.X + cs * (hx - fm.Cx) - sn * (hy - fm.Cy));
+            double wallFace = lay.X(hole) + 1;   // 구멍 벽 칸의 안쪽 면 (m)
+            var link = f.Links.FirstOrDefault(k => k.Via == hole);
+            double leak = link != null && link.Area0 > 0 ? link.Area / link.Area0 : 1;
+            double fx = q.X - Math.Floor(q.X), fy = q.Y - Math.Floor(q.Y);
+            string story = s.Facts.Since(0).Where(x => x.Kind == FactKind.ObjectFlung).Select(x => s.Causes.Story(x.Cause)).LastOrDefault() ?? "";
+            Check("감압: 외판 0.075m² 구멍 입 곁 (두 칸에 걸친) 식량 상자가 구멍 입 바람에 돌며 미끄러져 벽에 닿아 선다 — 칸 가운데가 아니다 · 벽 안이 아니다 (0.5도트) · 돌았다",
+                Math.Abs(fx - 0.5) + Math.Abs(fy - 0.5) > 0.05 && west >= wallFace - 0.5 * dot && west <= wallFace + 2 * dot && Math.Abs(q.Th) > 0.02,
+                $"자리 ({q.X:0.000}, {q.Y:0.000}) · 서쪽 끝 {west:0.000}/{wallFace:0.000}m · θ {q.Th:0.000}rad · 상태 {q.State}");
+            Check("감압: 구멍보다 큰 식량 상자는 빨려 붙어 막는다 — 물체 막음 (장의 PlugProp) · 샘 ≤ 0.1배 · 원인 사슬은 파편까지",
+                q.State == 6 && q.PlugAt == hole + 1 && f.PlugProp[hole] > 0 && leak <= 0.1 + 1e-6 && story.Contains("빨려 붙었다") && story.Contains("파편"),
+                $"상태 {q.State} · 막음 {q.PlugAt - 1}/{hole} · PlugProp {f.PlugProp[hole]:0.000}m² · 샘 {leak:0.000}배 · \"{story}\"");
+        }
+        // ── 사람과 상자가 같은 구멍에 빨려 붙었다: 막음 = 둘 가운데 큰 것 · 10틱 동안 흔들리지 않는다 (몸은 PlugBody · 상자는 PlugProp) ──
+        {
+            var s = Worlds.Full(lay, 1);
+            var st = s.Get<Structure>(); var f = s.Get<Field>(); var m = s.Get<Mind>();
+            st.RequestDoor(lay.DoorAt[At(6, 2)], 0);
+            int who = m.AddPerson(s, At(1, 2));
+            int id = Worlds.PutItem(s, "식량 상자", At(1, 2));
+            s.Run(3);
+            st.DamageCause[hole] = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 작은 파편이 박혔다", s.Tick); f.SetHole(hole, 0.06f);
+            m[who].C.PinAt = hole + 1; st.SetItemPlug(id, hole + 1);
+            s.Run(2);
+            var seen = new List<float>(); float body = 0, prop = 0;
+            for (int k = 0; k < 10; k++) { s.Step(); seen.Add(f.PlugOf(hole)); body = f.PlugBody[hole]; prop = f.PlugProp[hole]; }
+            bool steady = seen.All(x => x == seen[0]);
+            Check("감압: 사람과 상자가 같은 0.06m² 구멍에 빨려 붙었다 — 몸 막음 · 물체 막음이 따로 들고 막음 = 둘 가운데 큰 것 · 10틱 동안 흔들리지 않는다",
+                body > 0 && prop > 0 && steady && seen[0] == Math.Max(body, prop),
+                $"몸 {body:0.0000} · 물체 {prop:0.0000} · 막음 {string.Join(",", seen.Distinct().Select(x => x.ToString("0.0000")))}m²");
+            // 저장 판: 물건 막음이 몸 막음 (PlugBody)에 함께 있던 판 107 저장은 거절한다 · 지금 판은 되살린 첫 틱부터 같은 막음
+            var save = s.Save();
+            var old = (byte[])save.Clone();
+            BitConverter.GetBytes(107).CopyTo(old, 8);   // 이름표(8바이트) 다음이 판 번호 — PH3b 검토가 밖에 낸 판 (물건 막음도 PlugBody에)
+            string refused = "";
+            try { new Sim(s.Setup).Load(old); } catch (InvalidDataException e) { refused = e.Message; }
+            var back = new Sim(s.Setup); back.Load(save);
+            s.Step(); back.Step();
+            Check("감압: 저장 판 — 물건 막음이 몸 막음 칸에 함께 있던 판 107 저장은 거절한다 · 지금 판의 저장에서 되살린 세계는 첫 틱부터 같은 막음 (바이트 같음)",
+                refused.Contains("저장 판 107") && back.Get<Field>().PlugOf(hole) == f.PlugOf(hole) && s.Save().AsSpan().SequenceEqual(back.Save()),
+                $"판 107: \"{(refused.Length > 0 ? refused : "읽었다")}\" · 막음 {f.PlugOf(hole):0.0000} / 되살린 세계 {back.Get<Field>().PlugOf(hole):0.0000}m²");
+        }
     }
 
     /// <summary>

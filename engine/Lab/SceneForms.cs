@@ -94,4 +94,50 @@ public static partial class Program
         Png.WriteRgba(Path.Combine(dir, "slide.png"), sheet.W, sheet.H, sheet.Px);
         Console.WriteLine($"  slide: {dir}/slide.png ({sheet.W}×{sheet.H}) — 틱마다 한 장 (0.1g · 공기 없음 · 밀린 물건 다섯)");
     }
+
+    /// <summary>
+    /// props-breach 틀 (PH4c — 함장 장면 '부엌 감압'의 틀 · docs/PHYSICS.md §10): 부엌 외판에 0.5m² 구멍 — 바닥의 식량 상자 · 수리 꾸러미 · 공구 상자 · 컵 · 접시 · 책 · 소화기가
+    /// 구멍 입 바람에 돌며 미끄러지고 · 구멍보다 큰 것은 빨려 붙어 막고 · 작은 것은 우주로 나간다. 감압 앞 한 장 + 첫 틱 · 둘째 · 넷째 틱 (틱 안 메움은 PH5).
+    /// </summary>
+    private static void PropsBreachScene(string dir)
+    {
+        const string art = "\n##############\n#....ss......#\n#..........tt#\n#..........tt#\n#............#\n#.....f......#\n######D#######\n#............#\n##############";
+        var lay = Worlds.Ascii(art, new Dictionary<char, string> { ['t'] = "Table", ['s'] = "Stove", ['f'] = "Fridge" });
+        var s = Worlds.Full(lay, 5);
+        var st = s.Get<Structure>(); var f = s.Get<Field>();
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        st.RequestDoor(lay.DoorAt[At(6, 6)], 0);
+        (string name, double x, double y, double th)[] put =
+        {
+            ("식량 상자", 1.55, 3.05, 0.3), ("수리 꾸러미", 1.6, 3.75, 1.0), ("공구 상자", 1.5, 4.45, 0.5), ("컵", 2.45, 3.5, 0), ("책", 2.5, 2.55, 0.8),
+            ("접시", 3.4, 3.4, 0), ("물병", 2.6, 4.5, 0), ("식량 상자", 4.2, 5.0, -0.2), ("소화기", 9.0, 4.4, 0), ("컵", 8.2, 3.2, 0),
+        };
+        foreach (var (name, x, y, th) in put)
+        {
+            int id = Worlds.PutItem(s, name, lay.Index((int)x + 1, (int)y + 1));
+            int i = st.IndexOf(id); var p = st.Props[i]; p.X = x + 1; p.Y = y + 1; p.Th = th; st.Props[i] = p;
+        }
+        s.Run(3);
+        int hole = At(0, 3);
+        st.DamageCause[hole] = s.Causes.Add(CauseKind.Setup, "부엌 외판에 파편이 박혔다", s.Tick); f.SetHole(hole, 0.5f);
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 2;
+        int[] at = { 0, 1, 2, 4 };
+        int fw = 14 * Painter.T * zoom, fh = 7 * Painter.T * zoom, gap = 6;   // 부엌 (벽 포함 14 × 7칸)만 두 배로
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 0;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k]) { s.Step(); done++; }
+            var img = painter.Frame(s, 1, 1, 14, 7, done).Scale(zoom);
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            int awake = st.Props.Count(p => Structure.Awake(p)), plugged = st.Props.Count(p => p.State == 6);
+            if (k == 1) Console.WriteLine($"  구멍 입 {f.HoleMouthPa(At(1, 3), out _):0}Pa · 돌풍 (1,3) {f.WindPa[At(1, 3)]:0} · (2,3) {f.WindPa[At(2, 3)]:0} · (1,2) {f.WindPa[At(1, 2)]:0} · (3,3) {f.WindPa[At(3, 3)]:0}Pa");
+            Console.WriteLine($"  props-breach {done}틱: 부엌 {f.Pressure(At(3, 3)):0}kPa · 바닥 물체 {st.Props.Count} · 깨어 있음 {awake} · 막음 {plugged} · 우주로 {st.PropSpaced} · 튐 {st.Bounces}");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-breach.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-breach: {dir}/props-breach.png ({sheet.W}×{sheet.H}) — 감압 앞 · 첫 틱 · 둘째 · 넷째 틱 (외판 0.5m² 구멍 · 물건 열)");
+    }
 }

@@ -157,6 +157,41 @@ public static partial class Program
         }
         var (th, _) = Measure("Hannuri", 100, 30, 150);
         Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");
+        // 물체 예산 (docs/PHYSICS.md §4-2 · PH4c): 새뜰호 조용한 틱 '구조:물체' ≤ 0.02ms · 외판 0.5m² 감압에 곁 물건 20개 — 가장 긴 틱 ≤ 0.3ms · 감압 순간을 찍어 주컴퓨터 Rehearse처럼 125틱 복제 — 물체 몫 ≤ 3ms (넘으면 상상 복제에 가벼운 물체 셈)
+        {
+            (double quiet, double breach, double rehearse, int woke) PropsBudget()
+            {
+                var s = ShipWorld.Crewed("Saetteul", 7, 40, 10);
+                s.Run(100);
+                var st = s.Get<Structure>(); var f = s.Get<Field>(); var L = s.Layout;
+                Prof.D = new(); s.Run(300);
+                double quiet = Prof.D.GetValueOrDefault("구조:물체") / 300;
+                bool Inside(int x, int y) => L.In(x, y) && L.Kind[L.Index(x, y)] == CellKind.Floor && L.Room[L.Index(x, y)] >= 0 && L.FurnitureAt[L.Index(x, y)] < 0;
+                int hull = Enumerable.Range(0, L.N).First(i => L.Hull[i] && L.Kind[i] == CellKind.Wall && (Inside(L.X(i) + 1, L.Y(i)) || Inside(L.X(i) - 1, L.Y(i)) || Inside(L.X(i), L.Y(i) + 1) || Inside(L.X(i), L.Y(i) - 1)));
+                var near = Enumerable.Range(0, L.N).Where(i => Inside(L.X(i), L.Y(i))).OrderBy(i => Math.Abs(L.X(i) - L.X(hull)) + Math.Abs(L.Y(i) - L.Y(hull))).ThenBy(i => i).Take(10).ToArray();
+                string[] names = { "식량 상자", "수리 꾸러미", "컵", "공구 상자", "책", "접시", "물병", "소화기", "유리병", "봉합 꾸러미" };
+                for (int k = 0; k < 20; k++)
+                {
+                    int id = Worlds.PutItem(s, names[k % names.Length], near[k % near.Length]);
+                    int i = st.IndexOf(id); var p = st.Props[i]; p.X += k < 10 ? -0.2 : 0.2; p.Y += (k % 3 - 1) * 0.2; st.Props[i] = p;
+                }
+                s.Run(2);
+                st.DamageCause[hull] = s.Causes.Add(CauseKind.Setup, "시험 파편", s.Tick); f.SetHole(hull, 0.5f);
+                var snap = s.Save();
+                double breach = 0; long woke0 = st.PropWoken;
+                for (int k = 0; k < 4; k++) { Prof.D = new(); s.Step(); breach = Math.Max(breach, Prof.D.GetValueOrDefault("구조:물체")); }
+                var r = new Sim(s.Setup); r.Load(snap);
+                Prof.D = new(); r.Run(125);
+                double rehearse = Prof.D.GetValueOrDefault("구조:물체");
+                Prof.D = null;
+                return (quiet, breach, rehearse, (int)(st.PropWoken - woke0));
+            }
+            PropsBudget();   // 데우기 (물체 길 첫 번역)
+            var (pq, pb, pr, pw) = PropsBudget();
+            Check("물체 예산: 새뜰호 조용한 틱 — '구조:물체' ≤ 0.02ms", pq <= 0.02, $"{pq * 1000:0.0}µs/틱");
+            Check("물체 예산: 외판 0.5m² 감압 · 곁 물건 20개 — 가장 긴 틱의 '구조:물체' ≤ 0.3ms", pb <= 0.3 && pw > 0, $"{pb:0.000}ms · 바람에 깬 것 {pw}");
+            Check("물체 예산: 감압 순간을 찍어 125틱 (주컴퓨터 Rehearse 복제처럼) — 물체 몫 ≤ 3ms (넘으면 상상 복제에 가벼운 물체 셈을 켠다)", pr <= 3, $"{pr:0.000}ms / 125틱");
+        }
         // 그리기 예산 (6단 60프레임 · docs/GRAPHICS.md §3): 세계 스레드가 나아가기 + 그리기를 1/60초 안에 — 넓은 보기는 칸당 16 · 8도트 (굽은 덩어리)
         // 줄마다 세 번 재어 가장 작은 가운데 값으로 판정한다 (예산 고침 — 한가한 기계 · 같은 판에서도 한 번 잰 값이 4.2 ~ 7.1ms로 흔들렸다: 다른 일 · VM 빼앗김은 시간을 더할 뿐 빼지 않는다).
         // 기준 숫자는 그대로 (느슨하게 하는 것이 아니라 잡음을 뺀다) · 줄에는 고른 값 (세 가운데 값)을 함께 적는다 · DRAW_PROF=1이면 넓은 보기 단계마다 (조사용)

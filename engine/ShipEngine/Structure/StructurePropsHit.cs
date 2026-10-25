@@ -6,7 +6,7 @@ namespace ShipEngine;
 /// 닿음은 물체 껍질 꼭짓점 · 테두리 표본이 이번 잔걸음에 갈 길을 도트마다 따라가 본다 (투기적 닿음 — 빠른 것도 잔칸을 건너뛰지 않는다) ·
 /// 법선은 잔칸 면 · 가구 기둥은 8이웃의 빈 쪽 기울기 · 사분면마다 가장 가까운 점 (많아야 4). 풀이는 순차 충격량 (법선 jn ≥ 0 · 쿨롱 |jt| ≤ μ jn ·
 /// 다가오는 빠르기 0.5m/s 넘으면 반발 e = 둘 가운데 작은 것) · 겹침이 0.5도트 넘는 몫의 20%만 자리를 옮긴다 (빠르기는 그대로).
-/// 틈새 지도 (칸마다 막힌 칸까지의 거리)는 깨어 있는 물체가 있는 틱에만 짓는다 — 먼 것은 큰 잔걸음으로 · 가까우면 2도트씩.
+/// 틈새 지도 (칸마다 막힌 칸까지의 거리)는 깨어 있는 물체가 지나는 칸만 물을 때 센다 — 먼 것은 큰 잔걸음으로 · 가까우면 2도트씩.
 /// </summary>
 public sealed partial class Structure
 {
@@ -16,12 +16,13 @@ public sealed partial class Structure
     private struct PropContact
     {
         public double Rx, Ry, Nx, Ny, Sep, Mu, E, Kn, Kt, Target, Jn, Jt;
+        public int Cell;   // 닿은 도트의 칸 (구멍 벽인가 — PH4c)
         public bool Bounce;
     }
 
     private readonly PropContact[] _propHits = new PropContact[MaxContacts];
-    private int[] _clear = Array.Empty<int>();       // 칸마다 막힌 칸까지 체비셰프 거리 (칸 — 막힌 칸 0)
-    private int[] _clearQ = Array.Empty<int>();
+    private int[] _clear = Array.Empty<int>();       // 칸마다 막힌 칸까지 체비셰프 거리 (칸 — 막힌 칸 0 · 모르면 −1)
+    private byte[] _clearFurn = Array.Empty<byte>();  // 그 지도를 셀 때의 가구 제자리
     private (DotForm? form, int ox, int oy)[]? _furnForms;   // 가구마다 꼴 · 꼴 모서리의 도트 자리 (찍지 않는다 — 도면에서 늘 같게)
     private sbyte[]? _doorAxis;                       // 문 칸마다 지나는 쪽 (1: 좌우가 벽 — 남북으로 지난다 · 2: 위아래가 벽 · 0 모름)
     private readonly Dictionary<DotForm, (double[] x, double[] y, double reach)> _samples = new();
@@ -121,48 +122,60 @@ public sealed partial class Structure
 
     private bool Solid(int dx, int dy) => SolidDot(dx, dy, out _, out _);
 
-    /// <summary>틈새 지도: 칸마다 막힌 칸 (벽 · 문 · 제자리 가구 · 도면 끝 밖)까지 체비셰프 거리 — 그 칸 안 어느 점이든 막힌 것에서 (거리 − 1)m 넘게 떨어져 있다.</summary>
+    /// <summary>
+    /// 틈새 지도: 칸마다 막힌 칸 (벽 · 문 · 제자리 가구 · 도면 끝 밖)까지 체비셰프 거리 — 그 칸 안 어느 점이든 막힌 것에서 (거리 − 1)m 넘게 떨어져 있다.
+    /// 물을 때 그 칸만 고리를 넓혀 가며 센다 (모르는 칸 −1 — 깨어 있는 물체가 지나는 칸만 · 온 배를 훑지 않는다). 제자리 가구가 바뀌면 다 잊는다 (도면 · 문 칸은 그대로다).
+    /// 찍지 않는다 — 찍힌 상태의 순수 함수라 되살린 세계와 같다.
+    /// </summary>
     private void BuildClearance()
     {
-        if (_clear.Length != L.N) { _clear = new int[L.N]; _clearQ = new int[L.N]; }
-        int head = 0, tail = 0;
-        for (int c = 0; c < L.N; c++)
+        if (_clear.Length != L.N || _clearFurn.Length != FurnPlaced.Length || !_clearFurn.AsSpan().SequenceEqual(FurnPlaced))
         {
-            var k = L.Kind[c];
-            int fu = L.FurnitureAt[c];
-            bool block = k is CellKind.Wall or CellKind.Door || k == CellKind.Floor && fu >= 0 && fu < FurnPlaced.Length && FurnPlaced[fu] != 0;
-            int x = L.X(c), y = L.Y(c), edge = Math.Min(Math.Min(x + 1, y + 1), Math.Min(L.W - x, L.H - y));
-            _clear[c] = block ? 0 : edge;
-            if (block) _clearQ[tail++] = c;
-        }
-        while (head < tail)
-        {
-            int c = _clearQ[head++], x = L.X(c), y = L.Y(c), d = _clear[c] + 1;
-            for (int yy = y - 1; yy <= y + 1; yy++)
-                for (int xx = x - 1; xx <= x + 1; xx++)
-                {
-                    if (!L.In(xx, yy)) continue;
-                    int j = L.Index(xx, yy);
-                    if (_clear[j] <= d) continue;
-                    _clear[j] = d; _clearQ[tail++] = j;
-                }
+            if (_clear.Length != L.N) _clear = new int[L.N];
+            Array.Fill(_clear, -1);
+            _clearFurn = (byte[])FurnPlaced.Clone();
         }
     }
 
+    private bool Blocked(int x, int y)
+    {
+        if (!L.In(x, y)) return true;
+        int c = L.Index(x, y), fu = L.FurnitureAt[c];
+        var k = L.Kind[c];
+        return k is CellKind.Wall or CellKind.Door || k == CellKind.Floor && fu >= 0 && fu < FurnPlaced.Length && FurnPlaced[fu] != 0;
+    }
+
     /// <summary>그 칸 안 어느 점이든 막힌 것까지 적어도 이만큼 (m).</summary>
-    private double ClearAt(int c) => c < 0 ? 0 : Math.Max(0, _clear[c] - 1);
+    private double ClearAt(int c)
+    {
+        if (c < 0) return 0;
+        if (_clear[c] < 0)
+        {
+            int x = L.X(c), y = L.Y(c), d = 0;
+            if (!Blocked(x, y))
+                for (d = 1; ; d++)
+                {
+                    bool hit = false;
+                    for (int i = -d; i <= d && !hit; i++) hit = Blocked(x + i, y - d) || Blocked(x + i, y + d) || Blocked(x - d, y + i) || Blocked(x + d, y + i);
+                    if (hit) break;
+                }
+            _clear[c] = d;
+        }
+        return Math.Max(0, _clear[c] - 1);
+    }
 
     /// <summary>
     /// 한 점이 이번 잔걸음에 (d만큼) 갈 길에서 처음 막힌 도트: 떨어진 거리 (법선 쪽 m — 이미 들어가 있으면 −깊이) · 법선 (막힌 것에서 밖으로) · 재질.
     /// </summary>
-    private bool Sweep(double px, double py, double ddx, double ddy, out double sep, out double nx, out double ny, out byte mat)
+    private bool Sweep(double px, double py, double ddx, double ddy, out double sep, out double nx, out double ny, out byte mat, out int cell)
     {
         const double S = 32;
         double Px = px * S, Py = py * S, Dx = ddx * S, Dy = ddy * S;
         int ix = (int)Math.Floor(Px), iy = (int)Math.Floor(Py);
-        sep = 0; nx = 0; ny = -1;
+        sep = 0; nx = 0; ny = -1; cell = -1;
         if (SolidDot(ix, iy, out mat, out _))
         {
+            cell = L.In(ix >> 5, iy >> 5) ? L.Index(ix >> 5, iy >> 5) : -1;
             // 이미 들어가 있다: 법선은 빈 이웃 쪽 기울기 (없으면 온 쪽) · 깊이는 그 쪽으로 빠져나갈 때까지
             (nx, ny) = EmptySide(ix, iy);
             if (nx == 0 && ny == 0) { double l = Math.Sqrt(Dx * Dx + Dy * Dy); if (l > 0) { nx = -Dx / l; ny = -Dy / l; } else ny = -1; }
@@ -183,6 +196,7 @@ public sealed partial class Structure
             if (tMaxX < tMaxY) { if (tMaxX > 1) break; ix += sx; tt = tMaxX; tMaxX += tdx; xAxis = true; }
             else { if (tMaxY > 1) break; iy += sy; tt = tMaxY; tMaxY += tdy; xAxis = false; }
             if (!SolidDot(ix, iy, out mat, out bool furn)) continue;
+            cell = L.In(ix >> 5, iy >> 5) ? L.Index(ix >> 5, iy >> 5) : -1;
             double fx = xAxis ? -sx : 0, fy = xAxis ? 0 : -sy;   // 들어간 면
             nx = fx; ny = fy;
             if (furn)
@@ -216,15 +230,16 @@ public sealed partial class Structure
         Span<double> bestSep = stackalloc double[MaxContacts];
         Span<double> bnx = stackalloc double[MaxContacts], bny = stackalloc double[MaxContacts];
         Span<byte> bmat = stackalloc byte[MaxContacts];
+        Span<int> bcell = stackalloc int[MaxContacts];
         best.Fill(-1);
         for (int i = 0; i < sm.x.Length; i++)
         {
             double rx = c * sm.x[i] - s * sm.y[i], ry = s * sm.x[i] + c * sm.y[i];
             double vx = p.Vx - p.W * ry, vy = p.Vy + p.W * rx;
-            if (!Sweep(p.X + rx, p.Y + ry, vx * h, vy * h, out double sep, out double nx, out double ny, out byte mat)) continue;
+            if (!Sweep(p.X + rx, p.Y + ry, vx * h, vy * h, out double sep, out double nx, out double ny, out byte mat, out int cell)) continue;
             int q = (sm.x[i] >= 0 ? 1 : 0) | (sm.y[i] >= 0 ? 2 : 0);
             if (best[q] >= 0 && sep >= bestSep[q]) continue;
-            best[q] = i; bestSep[q] = sep; bnx[q] = nx; bny[q] = ny; bmat[q] = mat;
+            best[q] = i; bestSep[q] = sep; bnx[q] = nx; bny[q] = ny; bmat[q] = mat; bcell[q] = cell;
         }
         int n = 0;
         double m = p.Kg, I = p.Inertia;
@@ -235,7 +250,7 @@ public sealed partial class Structure
             double rx = c * sm.x[i] - s * sm.y[i], ry = s * sm.x[i] + c * sm.y[i], nx = bnx[q], ny = bny[q];
             var wall = T.Materials[bmat[q]].Def;
             double rn = rx * ny - ry * nx, rt = rx * nx + ry * ny;   // r × n · r × t (t = (−ny, nx))
-            _propHits[n++] = new PropContact { Rx = rx, Ry = ry, Nx = nx, Ny = ny, Sep = bestSep[q], Mu = Math.Sqrt(muObj * wall.Mu), E = Math.Min(restObj, wall.Rest),
+            _propHits[n++] = new PropContact { Rx = rx, Ry = ry, Nx = nx, Ny = ny, Sep = bestSep[q], Mu = Math.Sqrt(muObj * wall.Mu), E = Math.Min(restObj, wall.Rest), Cell = bcell[q],
                 Kn = 1 / m + rn * rn / I, Kt = 1 / m + rt * rt / I };   // 목표 (반발 · 다가옴)는 마찰 뒤 빠르기로 부르는 이가 정한다
         }
         return n;

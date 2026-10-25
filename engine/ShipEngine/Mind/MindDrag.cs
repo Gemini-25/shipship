@@ -4,17 +4,16 @@ namespace ShipEngine;
 /// ③ 국소 현상 (나) 구멍으로 끌려감 · (다) 물건이 구멍을 막는다 (깊이 바퀴 3 · docs/ENGINE.md ③ '국소 현상').
 /// 감압 돌풍의 끌림힘 ½ρv²·Cd·A (서 있으면 0.7m² · 낮으면 0.3m²)가 발바닥 마찰 μmg를 넘으면 사람이 바람 쪽으로 미끄러진다 —
 /// 깨어 있는 이는 곁의 설비 · 문틀을 붙잡아 손힘 500N을 더 버틴다 (본능). 몸보다 큰 구멍(0.25m²)이면 우주로 빨려 나가 떠내려가고 ·
-/// 작으면 몸이 구멍에 빨려 붙어 막는다 (기압 차 × 구멍 넓이가 300N 아래로 내려가야 뗀다). 사람 · 물건의 자리는 마음 층에 있으니
-/// 여기서 장(바람 · 기압)을 읽고 장에 '막은 넓이'를 요청한다 — 아래 층은 위를 모른다.
+/// 작으면 몸이 구멍에 빨려 붙어 막는다 (기압 차 × 구멍 넓이가 300N 아래로 내려가야 뗀다). 사람의 자리는 마음 층에 있으니
+/// 여기서 장(바람 · 기압 · 구멍 입 — <see cref="Field.HoleMouthPa"/>)을 읽고 장에 '몸이 막은 넓이'를 요청한다 — 아래 층은 위를 모른다 (물건은 ④가 PH4c).
 /// </summary>
 public sealed partial class Mind
 {
     public const double PersonKg = 70, PersonCd = 1.0, StandArea = 0.7, LowArea = 0.3, FootMu = 0.6, HandGrip = 500;
-    public const double BodyPass = 0.25, BodyFace = 0.5, BodySeal = 0.97, ItemSeal = 0.9, PinFreeN = 300;
-    /// <summary>구멍 곁 칸의 것이 구멍 입에서 떨어진 거리 (m) — 구멍으로 드는 흐름은 반구로 모인다: v = Q / (2πr²) · Q = 0.6 × 구멍 × 구멍의 빠르기.</summary>
-    public const double MouthR = 0.25;
+    public const double BodyPass = 0.25, BodyFace = 0.5, BodySeal = 0.97, PinFreeN = 300;
     public long PeoplePulled, PeopleSpaced, PeoplePinned, HoldsHeld, HolesPlugged;
-    private readonly SortedDictionary<int, float> _plugs = new();   // 지난 틱에 장에 요청한 막음 (칸 → 넓이) — 막은 이 · 물건의 상태에서 다시 센다
+    private readonly SortedDictionary<int, float> _plugs = new();   // 지난 틱에 장에 요청한 몸 막음 (칸 → 넓이) — 찍지 않는다: 되살리면 장의 PlugBody에서 다시 세운다
+    private bool _plugsStale = true;
 
     private void Drag(Sim sim, double dt)
     {
@@ -32,7 +31,7 @@ public sealed partial class Mind
             if (c.CarriedBy >= 0) continue;   // 업힌 이는 업은 이가 붙든다
             double wx = F.WindX[cell], wy = F.WindY[cell], v = Math.Sqrt(wx * wx + wy * wy), pa = v >= 0.5 ? F.WindPa[cell] : 0;
             // 구멍 곁: 구멍 입으로 모이는 흐름 (방 바람보다 세면 그쪽으로 — 구멍이 나는 그 순간에도 · 장이 흐르기 전에)
-            double qMouth = MouthPull(cell, out int mouth);
+            double qMouth = F.HoleMouthPa(cell, out int mouth);
             if (qMouth > pa) { pa = qMouth; wx = L.X(mouth) - L.X(cell); wy = L.Y(mouth) - L.Y(cell); v = 1; }
             if (pa < 1) continue;
             double drag = pa * PersonCd * (b.Low != 0 ? LowArea : StandArea);
@@ -61,7 +60,7 @@ public sealed partial class Mind
             a.Path.Clear(); a.PathIdx = 0;
             for (int s = 0; s < steps; s++)
             {
-                if (s > 0 && MouthPull(cell, out int m2) > 0) { dx = L.X(m2) - L.X(cell); dy = L.Y(m2) - L.Y(cell); }   // 구멍 곁에 닿으면 구멍 쪽으로
+                if (s > 0 && F.HoleMouthPa(cell, out int m2) > 0) { dx = L.X(m2) - L.X(cell); dy = L.Y(m2) - L.Y(cell); }   // 구멍 곁에 닿으면 구멍 쪽으로
                 else if (s > 0 && (F.WindX[cell] != 0 || F.WindY[cell] != 0)) { double ax = F.WindX[cell], ay = F.WindY[cell]; dx = Math.Abs(ax) >= Math.Abs(ay) ? Math.Sign(ax) : 0; dy = dx == 0 ? Math.Sign(ay) : 0; }
                 int x = L.X(cell) + dx, y = L.Y(cell) + dy;
                 if (!L.In(x, y)) break;
@@ -104,39 +103,6 @@ public sealed partial class Mind
         }
         ApplyPlugs();
     }
-
-    /// <summary>
-    /// 구멍 곁 칸(네 이웃이 구멍 · 트인 바깥)의 것이 받는 구멍 입의 동압 (Pa): 구멍의 빠르기 = min(소리 빠르기, √(2ΔP/ρ)) ·
-    /// 드는 흐름 Q = 0.6 × 구멍 넓이 × 그 빠르기가 반구로 모인다 → 25cm에서 v = min(구멍의 빠르기, Q / 2πr²) · ½ρv². 가장 센 구멍과 그 칸.
-    /// </summary>
-    public double MouthPull(int cell, out int mouth)
-    {
-        mouth = -1;
-        if (cell < 0 || cell >= L.N || !F.Passable(cell)) return 0;
-        double p = F.Pressure(cell);
-        if (p < 1) return 0;
-        double best = 0;
-        int x = L.X(cell), y = L.Y(cell);
-        foreach (var (ox, oy) in Dirs4)
-        {
-            if (!L.In(x + ox, y + oy)) continue;
-            int j = L.Index(x + ox, y + oy);
-            bool open = F.IsOut(j) || L.Kind[j] == CellKind.Wall && F.Hole[j] >= 2f;
-            if (!open && !(L.Kind[j] == CellKind.Wall && F.Hole[j] > 0.01f)) continue;
-            double area = open ? Field.WallFace : Math.Max(0, F.Hole[j] - F.PlugOf(j));
-            int bx = x + 2 * ox, by = y + 2 * oy;
-            double pOut = !open && L.In(bx, by) && !F.IsOut(L.Index(bx, by)) && F.Passable(L.Index(bx, by)) ? F.Pressure(L.Index(bx, by)) : F.Outside.KPa;
-            double dp = (p - pOut) * 1000;
-            if (dp <= 0 || area <= 0) continue;
-            double temp = F.Temp(cell), rho = p * 1000 * Field.AirMolar / (Field.R * temp);
-            double vHole = Math.Min(343 * Math.Sqrt(temp / 293.15), Math.Sqrt(2 * dp / rho));
-            double v = Math.Min(vHole, 0.6 * area * vHole / (2 * Math.PI * MouthR * MouthR));
-            double q = 0.5 * rho * v * v;
-            if (q > best) { best = q; mouth = j; }
-        }
-        return best;
-    }
-    private static readonly (int, int)[] Dirs4 = { (1, 0), (-1, 0), (0, 1), (0, -1) };
 
     /// <summary>곁(제 칸 · 여덟 이웃)에 붙잡을 것이 있나: 설비 · 문틀.</summary>
     private bool HandholdNear(int cell)
@@ -190,23 +156,24 @@ public sealed partial class Mind
         return Math.Max(0, F.Pressure(cell) - pOut) * 1000 * Math.Min(F.Hole[hole], face);
     }
 
-    /// <summary>막은 넓이를 장에 요청한다: 빨려 붙은 몸(덮은 넓이의 90%) · 물건(80%) — 칸마다 가장 큰 것.</summary>
+    /// <summary>
+    /// 몸 막음을 장에 요청한다 (빨려 붙은 몸 — 덮은 넓이의 97% · 칸마다 가장 큰 것): 장의 PlugBody를 통째로 다시 쓴다 — 지난번에 쓴 칸은 되살린 뒤 PlugBody > 0인 칸에서 다시 세운다
+    /// (찾아 고친 결함: 지운 칸 목록을 찍지 않아 되살린 세계에서는 풀린 막음이 장에 남았다 · PHYSICS.md §14-2 C). 바닥 물건의 막음은 ④가 PlugProp에 쓴다 (PH4c).
+    /// </summary>
     private void ApplyPlugs()
     {
+        if (_plugsStale)
+        {
+            _plugs.Clear();
+            for (int c = 0; c < F.PlugBody.Length; c++) if (F.PlugBody[c] > 0) _plugs[c] = F.PlugBody[c];
+            _plugsStale = false;
+        }
         Dictionary<int, float>? now = null;
         foreach (var a in Agents)
             if (a.C.PinAt != 0)
             {
                 int j = a.C.PinAt - 1;
                 (now ??= new())[j] = Math.Max(now.GetValueOrDefault(j), (float)(Math.Min(F.Hole[j], BodyFace) * BodySeal));
-            }
-        if (_st != null)
-            foreach (var it in _st.Props)
-            if (it.Kind == 0 && it.PlugAt != 0)
-            {
-                int j = it.PlugAt - 1;
-                double face = Math.Pow(ItemKg(it.What) / ItemDensity, 2.0 / 3);
-                (now ??= new())[j] = Math.Max(now.GetValueOrDefault(j), (float)(Math.Min(F.Hole[j], face) * ItemSeal));
             }
         if (now == null && _plugs.Count == 0) return;
         foreach (var kv in _plugs) if (now == null || !now.ContainsKey(kv.Key)) F.SetPlug(kv.Key, 0);

@@ -195,6 +195,7 @@ public static partial class Program
             case "art": ArtScene(dir); return;
             case "dotforms": DotFormsScene(dir); return;
             case "slide": SlideScene(dir); return;
+            case "props-breach": PropsBreachScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

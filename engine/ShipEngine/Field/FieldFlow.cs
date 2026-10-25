@@ -389,7 +389,13 @@ public sealed partial class Field
                 double v = q * beyond[d] / (double)total / (ring[d] * nCell * gMid);
                 v = Math.Clamp(v, -340, 340);
                 double rho0 = nCell * gStart * 0.029 / CellVolume, v0 = Math.Min(340, Math.Abs(v) * gMid / gStart * peak); // 처음 밀도 · 처음 빠르기
-                WindPa[c] = (float)Math.Max(WindPa[c], 0.5 * rho0 * v0 * v0);
+                float q0 = (float)(0.5 * rho0 * v0 * v0);
+                if (q0 > WindPa[c])
+                {
+                    // 가장 센 틈의 돌풍: 그 줄어드는 빠르기 (잃는 쪽 — 몰 수가 지수로 준 만큼) · 처음 밀도 (④가 같은 틱에 읽는다)
+                    if (WindPa[c] == 0) WindCells.Add(c);
+                    WindPa[c] = q0; WindK[c] = gStart > 1 ? (float)(Math.Log(gStart) / dt) : 0; WindRho[c] = (float)rho0;
+                }
                 double dx = 0, dy = 0;
                 if (d == 0) { dx = L.X(k.Via) - L.X(c); dy = L.Y(k.Via) - L.Y(c); if (dx == 0 && dy == 0) ExteriorDir(c, out dx, out dy); }
                 else
@@ -411,6 +417,43 @@ public sealed partial class Field
         // A 쪽에서 빠져나감(+) / 들어옴(−) — 구역 안 거리는 틈마다 한 번만 잰다 (구역이 바뀔 때까지)
         One(k.A, k.RA, ref k.DistA, k.Flow);
         if (k.B >= 0) One(k.B, k.RB, ref k.DistB, -k.Flow);
+    }
+
+    /// <summary>구멍 곁 칸의 것이 구멍 입에서 떨어진 거리 (m) — 구멍으로 드는 흐름은 반구로 모인다: v = Q / (2πr²) · Q = 0.6 × 구멍 × 구멍의 빠르기.</summary>
+    public const double MouthR = 0.25;
+    private static readonly (int, int)[] Dirs4 = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+
+    /// <summary>
+    /// 구멍 입의 동압 (Pa — 순수 함수: 지금 기압 · 구멍 · 막음에서): 구멍 곁 칸(네 이웃이 구멍 · 트인 바깥)의 것이 받는다. 구멍의 빠르기 = min(소리 빠르기, √(2ΔP/ρ)) ·
+    /// 드는 흐름 Q = 0.6 × (구멍 − 막음) × 그 빠르기가 반구로 모인다 → 25cm에서 v = min(구멍의 빠르기, Q / 2πr²) · ½ρv². 가장 센 구멍과 그 칸 (④ 물체 · ⑧ 끌림이 함께 읽는다).
+    /// grow: 그 칸 기압을 이만큼 곱해 본다 (④는 장이 흐른 뒤에 부르니 틱 처음 쪽으로 되짚는다 — 그 구역은 지수로 비었다 · ⑧은 흐르기 전이라 1).
+    /// </summary>
+    public double HoleMouthPa(int cell, out int mouth, double grow = 1)
+    {
+        mouth = -1;
+        if (cell < 0 || cell >= L.N || !Passable(cell)) return 0;
+        double p = Pressure(cell) * grow;
+        if (p < 1) return 0;
+        double best = 0;
+        int x = L.X(cell), y = L.Y(cell);
+        foreach (var (ox, oy) in Dirs4)
+        {
+            if (!L.In(x + ox, y + oy)) continue;
+            int j = L.Index(x + ox, y + oy);
+            bool open = IsOut(j) || L.Kind[j] == CellKind.Wall && Hole[j] >= 2f;
+            if (!open && !(L.Kind[j] == CellKind.Wall && Hole[j] > 0.01f)) continue;
+            double area = open ? WallFace : Math.Max(0, Hole[j] - PlugOf(j));
+            int bx = x + 2 * ox, by = y + 2 * oy;
+            double pOut = !open && L.In(bx, by) && !IsOut(L.Index(bx, by)) && Passable(L.Index(bx, by)) ? Pressure(L.Index(bx, by)) : Outside.KPa;
+            double dp = (p - pOut) * 1000;
+            if (dp <= 0 || area <= 0) continue;
+            double temp = Temp(cell), rho = p * 1000 * AirMolar / (R * temp);
+            double vHole = Math.Min(343 * Math.Sqrt(temp / 293.15), Math.Sqrt(2 * dp / rho));
+            double v = Math.Min(vHole, 0.6 * area * vHole / (2 * Math.PI * MouthR * MouthR));
+            double q = 0.5 * rho * v * v;
+            if (q > best) { best = q; mouth = j; }
+        }
+        return best;
     }
 
     private void ExteriorDir(int c, out double dx, out double dy)

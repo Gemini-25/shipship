@@ -81,6 +81,12 @@ public sealed partial class Field : IEngine
     /// 구역 몰 수가 지수로 줄었다고 보고(틈 흐름이 그 식이다) 처음 흐름 = n₀·ln(n₀/n₁)/Δt · 처음 밀도 = 끝 밀도 × n₀/n₁.
     /// </summary>
     public float[] WindPa;
+    /// <summary>
+    /// 그 칸 돌풍이 틱 안에서 줄어드는 빠르기 k = ln(n₀/n₁)/Δt (1/s — 잃는 쪽만 · 얻는 쪽은 0) · 처음 밀도 ρ₀ (kg/m³) · 이 틱 바람이 분 칸 (흐른 차례) —
+    /// 장이 틱마다 다시 쓴다 (찍지 않는다 — ④가 같은 틱에 읽는다: 동압 q(t) = WindPa · e^(−k t) · 바람 빠르기 √(2 WindPa/ρ₀)).
+    /// </summary>
+    public float[] WindK, WindRho;
+    public readonly List<int> WindCells = new();
     /// <summary>칸마다 고인 물의 원인 마디 (0 모름 — 5단: 지림 · 넘침 · 샌 물관 · 쏟음 · 불 끄기 물이 적고 퍼지면 이웃이 잇는다 · 마르면 지운다).</summary>
     public int[] WetCause;
     /// <summary>틱마다 바깥으로 빠진 몰 수 누계 (시험 · 연출).</summary>
@@ -104,7 +110,7 @@ public sealed partial class Field : IEngine
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
         DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; Grav = new float[Cells]; Array.Fill(Grav, 1f); SeveredStore = new double[t.StoreCount]; Drops = new double[S * Cells]; Airflow = new float[Cells];
-        WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells]; WetCause = new int[Cells];
+        WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells]; WindK = new float[Cells]; WindRho = new float[Cells]; WetCause = new int[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
         Cs = new double[Cells]; _kRight = new double[Cells]; _kDown = new double[Cells]; _exposed = new byte[Cells];
@@ -409,6 +415,8 @@ public sealed partial class Field : IEngine
         if (_dirty) Rebuild();
         t = Lap("구역", t);
         Array.Clear(WindX); Array.Clear(WindY); Array.Clear(WindPa);
+        foreach (int c in WindCells) { WindK[c] = 0; WindRho[c] = 0; }
+        WindCells.Clear();
         PlugLinks();   // ③ 구멍에 빨려 붙은 몸 · 물건이 막은 만큼
         FlowLinks(dt);
         t = Lap("틈 흐름", t);

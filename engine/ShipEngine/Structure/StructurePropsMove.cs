@@ -76,12 +76,22 @@ public sealed partial class Structure
     private void MoveProps(Sim sim, double dt)
     {
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 잠든 것은 베끼지 않고 상태만 본다 (조용한 틱의 거의 전부)
-        bool any = false;
-        for (int i = 0; i < all.Length && !any; i++) any = Awake(all[i]);
-        if (!any) return;
-        BuildClearance();
-        for (int i = 0; i < all.Length; i++)
-            if (Awake(all[i])) StepProp(sim, ref all[i], dt);   // 잔걸음 동안 목록은 그대로다 (더하고 빼는 요청은 틱 밖 · 맞음은 장부에만 더한다)
+        bool any = false, plugged = false;
+        for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; }
+        _windy = F.WindCells.Count > 0; _tickDt = dt;
+        if (plugged) any |= Unplug(all);                     // 구멍을 덧댔거나 누르는 힘이 빠졌으면 떨어진다
+        if (_windy && all.Length > 0) any |= WakeByWind(all);   // 깨우기: 바람 · 구멍 입 (③ 이 틱 바람이 분 칸 곁)
+        if (any)
+        {
+            BuildClearance();
+            for (int i = 0; i < all.Length; i++)
+                if (Awake(all[i])) StepProp(sim, ref all[i], dt);   // 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
+            plugged = false;
+            foreach (var p in all) plugged |= p.State == 6;
+            RemoveSpaced(sim);
+            all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
+        }
+        WritePlugs(all, plugged);   // 물체 막음 → 장 (다음 틱 흐름부터)
     }
 
     /// <summary>
@@ -116,24 +126,48 @@ public sealed partial class Structure
         while (rem > 1e-12)
         {
             int c = CellOf(p);
-            double gp = c >= 0 ? Gravity * F.Grav[c] : 0;   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
-            double muK = c >= 0 ? mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1) : 0;   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
+            // 무게중심이 도면 밖 · 바깥 · 구멍 벽 칸에 들었다 (큰 구멍의 틈을 지났다) → 구멍 (우주로 · 막음)
+            if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c) || L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f) { HoleHit(sim, ref p, c >= 0 && L.Kind[c] == CellKind.Wall ? c : -1); break; }
+            double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
+            double muK = mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
             double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
+            // 바람 · 구멍 입 (잔걸음 처음 때 — 놓인 채 정지 타원 안이면 그대로)
+            double fx = 0, fy = 0, tq = 0;
+            bool blown = _windy && WindForce(p, fm, dt - rem, out fx, out fy, out tq);
+            if (blown && p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho)) { blown = false; fx = fy = tq = 0; }
+            double ax = fx / m, ay = fy / m, al = tq / I, acc = blown ? Math.Sqrt(ax * ax + ay * ay) + Math.Abs(al) * sm.reach : 0;
             double room = ClearAt(c) - sm.reach, gap = room, h = rem;
             for (int k = 0; k < nNear; k++)   // 원판도 건너뛰지 않게 (닿을 만큼만 간다)
             {
                 int ac = _actors[near[k]].Cell;
-                double ax = L.X(ac) + 0.5 - p.X, ay = L.Y(ac) + 0.5 - p.Y;
-                gap = Math.Min(gap, Math.Sqrt(ax * ax + ay * ay) - sm.reach - _actors[near[k]].R);
+                double dx = L.X(ac) + 0.5 - p.X, dy = L.Y(ac) + 0.5 - p.Y;
+                gap = Math.Min(gap, Math.Sqrt(dx * dx + dy * dy) - sm.reach - _actors[near[k]].R);
             }
             double ell = Math.Max(2 * DotForm.Dot, gap);
             if (speed > 0) h = Math.Min(h, ell / speed);
             if (w > 0) h = Math.Min(h, MaxPropTurn / w);
-            if (speed > 0 && gp > 0 && muK > 0) h = Math.Min(h, MaxPropH);
+            if (acc > 0) h = Math.Min(h, (-speed + Math.Sqrt(speed * speed + 2 * acc * ell)) / acc);   // 힘을 받아 빨라져도 ℓ 넘게 가지 않는다
+            if (blown && al != 0) h = Math.Min(h, (-w + Math.Sqrt(w * w + 2 * Math.Abs(al) * MaxPropTurn)) / Math.Abs(al));
+            if ((speed > 0 || blown) && gp > 0 && muK > 0 || _windy) h = Math.Min(h, MaxPropH);   // 바람은 틱 안에서 준다
             if (++steps >= MaxPropSteps) h = rem;
             double px0 = m * p.Vx, py0 = m * p.Vy, l0 = m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W;
-            int nc = speed > 0 && room < speed * h + 2 * DotForm.Dot ? FindContacts(p, sm, h, mat.Mu, mat.Rest) : 0;
-            if (nc == 0) Friction(ref p, h, gp * muK, m, I, rho, true);
+            double lw = blown ? (p.X * fy - p.Y * fx + tq) * h : 0;   // 바람이 준 각운동량 (원점 둘레)
+            double speedEnd = speed + acc * h;
+            int nc = 0;
+            if (speedEnd > 0 && room < speedEnd * h + 2 * DotForm.Dot)
+            {
+                var pk = p;   // 받은 힘만큼 빨라진 길로 닿을 곳을 찾는다
+                if (blown) { pk.Vx += ax * h; pk.Vy += ay * h; pk.W += al * h; }
+                nc = FindContacts(pk, sm, h, mat.Mu, mat.Rest);
+                if (nc > 0) p = pk;
+            }
+            if (nc == 0)
+            {
+                // 힘 반 → 마찰의 정확한 걸음 → 힘 반 (마찰로 선 채 정지 타원 안이면 그대로)
+                if (blown) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
+                Friction(ref p, h, gp * muK, m, I, rho, true);
+                if (blown && !(p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho))) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
+            }
             else
             {
                 Friction(ref p, h, gp * muK, m, I, rho, false);
@@ -151,8 +185,8 @@ public sealed partial class Structure
                 for (int k = 0; k < nc; k++) if (_propHits[k].Bounce && _propHits[k].Jn > 0) { Bounces++; break; }
                 p.X += p.Vx * h; p.Y += p.Vy * h; p.Th += p.W * h;
             }
-            // 장부: 바닥 · 벽 · 가구가 받은 몫 (몸이 없는 배에 준 몫 — 몸 고른 가속은 PH4d)
-            ToHostPx -= m * p.Vx - px0; ToHostPy -= m * p.Vy - py0; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - l0;
+            // 장부: 바닥 · 벽 · 가구가 받은 몫 (몸이 없는 배에 준 몫 — 바람이 준 몫은 뺀다 · 몸 고른 가속은 PH4d)
+            ToHostPx -= m * p.Vx - px0 - fx * h; ToHostPy -= m * p.Vy - py0 - fy * h; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - l0 - lw;
             if (nc > 0) FixOverlap(ref p, nc);
             for (int k = 0; k < nNear; k++)
             {
@@ -161,6 +195,14 @@ public sealed partial class Structure
                 touching[k] = now;
             }
             rem -= h;
+            // 구멍 벽에 닿았다 (밀어 닿았거나 겹침) → 막거나 우주로
+            int holeAt = -1;
+            for (int k = 0; k < nc && holeAt < 0; k++)
+            {
+                ref var ct = ref _propHits[k];
+                if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) holeAt = ct.Cell;
+            }
+            if (holeAt >= 0) { HoleHit(sim, ref p, holeAt); break; }
             bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0;
             p.Still = still ? p.Still + (float)h : 0;
             if (p.Still >= SleepSec) { p.Vx = p.Vy = p.W = 0; p.State = 0; p.Asleep = 1; p.Still = 0; p.Since = _now; break; }

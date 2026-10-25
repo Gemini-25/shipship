@@ -14,6 +14,7 @@ public static partial class Program
         FacingLaw();
         FormLaw();
         PlaneLaws();
+        WindLaws();
     }
 
     /// <summary>
@@ -296,6 +297,119 @@ public static partial class Program
                 worst <= 0.5 * dot && Math.Abs(pa1.Vx - want) <= 0.02 * want && Math.Abs(pa1.Vy) < 1e-3 && Math.Abs(pa1.W) < 1e-3 && bounces1 >= 2 && pb.Vx == 0 && pb.X > 2 && pb.X < 12
                 && pc.Asleep == 1 && Math.Abs(gap) <= dot,
                 $"겹침 {worst / dot:0.00}도트 · 무중력 상자 1틱 뒤 vx {pa1.Vx:0.000}/{want:0.000} · vy {pa1.Vy:0.0e0} · ω {pa1.W:0.000} · 튐 {bounces1} · 1g 상자 x {pb.X:0.000} vx {pb.Vx:0.###} · 붙어 선 상자 틈 {gap / dot:0.00}도트 · 잠 {pc.Asleep}");
+        }
+    }
+
+    /// <summary>바람을 시험이 쓰는 세계 (장은 걸음을 돌지 않는다 — 구조만 돈다 · 공기를 채운 장 · 바닥 중력 g): 바람 칸은 <see cref="Blow"/>로 쓴다.</summary>
+    private static (Sim s, Field f) WindWorld(float g, string art = PropRoom)
+    {
+        var lay = Worlds.Ascii(art);
+        Field? fld = null;
+        var s = new Sim(new SimSetup(lay, 1, sim => { fld = new Field(sim.Layout, sim.Tables); sim.Add(new Structure(fld)); }));
+        fld!.FillAir(); Array.Fill(fld.Grav, g);
+        return (s, fld);
+    }
+
+    /// <summary>칸 c에 바람: 동압 q (Pa) · 쪽 (dx, dy) · 처음 밀도 1.2kg/m³ · 줄지 않는다 (장이 쓰는 꼴 그대로 — 바람 빠르기 √(2q/ρ)).</summary>
+    private static void Blow(Field f, int c, double q, double dx, double dy)
+    {
+        double len = Math.Sqrt(dx * dx + dy * dy), u = Math.Sqrt(2 * q / 1.2);
+        f.WindPa[c] = (float)q; f.WindX[c] = (float)(u * dx / len); f.WindY[c] = (float)(u * dy / len); f.WindK[c] = 0; f.WindRho[c] = 1.2f;
+        if (!f.WindCells.Contains(c)) f.WindCells.Add(c);
+    }
+
+    /// <summary>
+    /// 바람 (PH4c — docs/PHYSICS.md §3-2 · §10 법칙 9): 물체가 덮은 칸마다 나눠 ½ρ|u − v|(u − v) Cd A(φ) × 그 칸 몫 · 힘 점 = 그 칸 도트의 가운데 + 압력 중심 —
+    /// 고른 바람에 대칭 상자는 돌지 않고 (ω 비트 0) 바람 쪽으로만 미끄러진다 · 압력 중심이 어긋난 꼴은 그 쪽으로 돈다 · 칸마다 다른 바람(기울기)에는 대칭 상자도 돈다 ·
+    /// 거울 바람 · 거울 상자 둘은 거울 자리에 있다 (1e-12) · 막음이 풀리는 틱 바로 전에 찍고 되살려도 같다.
+    /// </summary>
+    private static void WindLaws()
+    {
+        var t = Tables.Default;
+        const double g = 9.8;
+        // 고른 바람: 1g · 방 안 모든 칸에 같은 바람 — 칸 가운데 식량 상자 (한 칸 안 · 600Pa) · 압력 중심이 가장 많이 어긋난 물건 (물건 표에서 고른다 · 그 어긋남이 큰 쪽 바람 · 넉넉히 미끄러질 만큼)
+        {
+            string odd = ""; int dir = 0; double cop = 0, qOdd = 0;
+            foreach (var name in t.People.Items.Keys)
+            {
+                var fm = DotForge.Make(t, name);
+                if (fm.Columns == 0 || fm.W > 24 || fm.D > 24) continue;   // 한 칸 안에 드는 것
+                for (int a16 = 0; a16 <= 4; a16 += 4)
+                    if (fm.Area16[a16] > 0 && Math.Abs(fm.Cop16[a16]) > Math.Abs(cop) + 1e-12) { cop = fm.Cop16[a16]; odd = name; dir = a16; qOdd = 3 * 1.25 * 0.65 * fm.Mass * g / (fm.Cd * fm.Area16[a16]); }   // 가장 미끄럽지 않은 재질의 정지 마찰 세 배
+            }
+            double wx = dir == 0 ? 1 : 0, wy = dir == 0 ? 0 : 1;
+            Prop Run(string name, double q)
+            {
+                var (s, f) = WindWorld(1);
+                var st = s.Get<Structure>(); var L = s.Layout;
+                for (int c = 0; c < L.N; c++) if (L.Kind[c] == CellKind.Floor) Blow(f, c, q, wx, wy);
+                int id = Slide(s, name, 4.5, 3.5, 0, 0);
+                s.Step();
+                return st.Props[st.IndexOf(id)];
+            }
+            var pa = Run("식량 상자", 600); var pb = Run(odd, qOdd);
+            bool along = dir == 0 ? pa.X > 4.6 && pa.Y == 3.5 && pa.Vy == 0 : pa.Y > 3.6 && pa.X == 4.5 && pa.Vx == 0;
+            // 압력 중심이 무게중심에서 바람에 수직인 몸 축 u 쪽으로 cop 어긋났다 → 돌림힘 = −cop × F (u = (−sin a, cos a))
+            Check($"바람 — 고른 바람 (1g · {(dir == 0 ? "+x" : "+y")}): 칸 가운데 식량 상자 (600Pa)는 바람 쪽으로만 미끄러진다 (돎 · 옆 빠르기 비트 0) · 압력 중심이 어긋난 {Ko.Eun(odd)} ({qOdd:0}Pa) 그 쪽으로 돈다",
+                along && pa.W == 0 && pa.Th == 0 && Math.Abs(cop) > 1e-3 && Math.Abs(pb.Th) > 1e-3 && Math.Sign(pb.Th) == -Math.Sign(cop),
+                $"상자 ({pa.X:0.000}, {pa.Y:0.000}) · ω {pa.W:R} · θ {pa.Th:R} / {odd} 압력 중심 {cop * 1000:0.0}mm · θ {pb.Th:0.0000}rad");
+        }
+        // 기울기 바람: 1g · 4행 칸만 +x 1500Pa (5행은 고요) — 두 행에 반씩 걸친 대칭 상자가 돈다 (위 반만 밀린다 → 돌림힘 +)
+        {
+            var (s, f) = WindWorld(1);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            for (int c = 0; c < L.N; c++) if (L.Kind[c] == CellKind.Floor && L.Y(c) == 4) Blow(f, c, 1500, 1, 0);
+            int a = Slide(s, "식량 상자", 4.5, 5.0, 0, 0);
+            s.Step();
+            var p = st.Props[st.IndexOf(a)];
+            Check("바람 — 기울기 바람: 4행만 +x 1500Pa · 두 행에 반씩 걸친 식량 상자 (대칭)가 돈다 (밀린 위 반 쪽 — θ > 0) · 바람 쪽으로 간다",
+                p.Th > 1e-3 && p.X > 4.5, $"θ {p.Th:0.0000}rad · x {p.X:0.000}");
+        }
+        // 거울: 가운데 (x = 7)로 모이는 거울 바람 (멀수록 세다) · 거울 상자 둘 (자리 · 자세 · 빠르기 · 돎이 거울) → 20틱 내내 거울 자리 (1e-12)
+        {
+            var (s, f) = WindWorld(1);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            for (int c = 0; c < L.N; c++)
+            {
+                if (L.Kind[c] != CellKind.Floor) continue;
+                double cx = L.X(c) + 0.5 - 7;
+                Blow(f, c, 450 + 100 * Math.Abs(cx) + 100 * (L.Y(c) % 2), -Math.Sign(cx), 0);
+            }
+            int a = Slide(s, "식량 상자", 3.3, 4.6, 0.4, 0.2, 0.7), b = Slide(s, "식량 상자", 10.7, 4.6, -0.4, 0.2, -0.7);
+            { int i = st.IndexOf(a); var p = st.Props[i]; p.Th = 0.3; st.Props[i] = p; i = st.IndexOf(b); p = st.Props[i]; p.Th = -0.3; st.Props[i] = p; }
+            double worst = 0; bool moved = false;
+            for (int k = 0; k < 20; k++)
+            {
+                s.Step();
+                var pa = st.Props[st.IndexOf(a)]; var pb = st.Props[st.IndexOf(b)];
+                worst = Math.Max(worst, Math.Max(Math.Abs(pa.X + pb.X - 14), Math.Max(Math.Abs(pa.Y - pb.Y), Math.Abs(pa.Th + pb.Th))));
+                moved |= Math.Abs(pa.X - 3.3) > 0.2;
+            }
+            Check("바람 — 거울: 가운데로 모이는 거울 바람 · 거울 상자 둘 → 20틱 내내 거울 자리 · 자세 (1e-12) · 바람에 움직였다",
+                worst <= 1e-12 && moved, $"가장 큰 어긋남 {worst:0.0e0} · 움직임 {moved}");
+        }
+        // 법칙 12: 막음이 풀리는 틱 바로 전 왕복 — 식량 상자 · 사람이 0.06m² 구멍을 막은 채 구멍을 덧대고 찍는다 → 되살린 세계와 10틱 바이트 같음 (풀린 막음이 장에 남지 않는다)
+        {
+            var lay = Worlds.Ascii(BreachRooms, Worlds.Seats);
+            int hole = Worlds.At(lay, 0, 2);
+            var s = Worlds.Full(lay, 1);
+            var st = s.Get<Structure>(); var f = s.Get<Field>(); var m = s.Get<Mind>();
+            st.RequestDoor(lay.DoorAt[Worlds.At(lay, 6, 2)], 0);
+            int who = m.AddPerson(s, Worlds.At(lay, 1, 2));
+            int id = Worlds.PutItem(s, "식량 상자", Worlds.At(lay, 1, 2));
+            s.Run(3);
+            f.SetHole(hole, 0.06f);
+            m[who].C.PinAt = hole + 1; st.SetItemPlug(id, hole + 1);   // 둘 다 빨려 붙었다 (몸이 먼저 막아 구멍 입 바람이 약하다 — 차림으로)
+            s.Run(20);
+            int ip = st.IndexOf(id);
+            bool plugged = ip >= 0 && st.Props[ip].PlugAt == hole + 1 && f.PlugOf(hole) > 0;
+            st.Patch(hole, 0);
+            var r = new Sim(s.Setup); r.Load(s.Save());
+            s.Run(10); r.Run(10);
+            bool same = s.Save().AsSpan().SequenceEqual(r.Save());
+            Check("막음 왕복: 상자 · 사람이 구멍을 막은 채 덧대고 찍는다 (막음이 풀리는 틱 바로 전) → 되살린 세계와 10틱 바이트 같음 · 둘 다 풀렸다",
+                plugged && same && f.PlugOf(hole) == 0 && r.Get<Field>().PlugOf(hole) == 0,
+                $"막음 {plugged} · 바이트 같음 {same} · 막은 넓이 {f.PlugOf(hole):0.0000} / 되살린 세계 {r.Get<Field>().PlugOf(hole):0.0000}m²");
         }
     }
 }
