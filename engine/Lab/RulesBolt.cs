@@ -104,6 +104,24 @@ public static partial class Program
                 before.Contains(mid) && after.Count > 0 && !after.Contains(mid) && after[^1] == to, $"앞 {before.Count}칸 (선반 칸 지남 {before.Contains(mid)}) → 뒤 {after.Count}칸 (지남 {after.Contains(mid)}) · 길 값 {st.ClutterAt(mid)}");
         }
 
+        // ── 길 값은 미끄러지는 가구를 따라간다: 선반을 3m/s로 밀어 뜯은 그 틱에 길을 물어도 — 잠든 선반 칸에 길 값이 서고 · 찍고 되살린 세계와 같다 ──
+        {
+            var s = PropWorld(1, 5, FurnRoom, new Dictionary<char, string> { ['s'] = "Shelf", ['t'] = "Table" });
+            var st = s.Get<Structure>(); var L = s.Layout;
+            int shelf = L.Furniture.FindIndex(x => x.Type == "Shelf");
+            st.EnsureBody();
+            s.Step();
+            int id = st.TearLoose(s, shelf, 3, 0, 0, s.Causes.Add(CauseKind.Setup, "시험 — 선반을 밀어 뜯었다", s.Tick), "볼트가 풀린");
+            st.ClutterAt(0);   // 뜯은 그 틱에 길찾기가 묻는다
+            for (int k = 0; k < 200 && Structure.Awake(st.Props[st.IndexOf(id)]); k++) s.Step();
+            var r = new Sim(s.Setup); r.Load(s.Save());
+            List<int> Cl(Structure x) => Enumerable.Range(0, L.N).Where(c => x.ClutterAt(c) > 0).ToList();
+            var a = Cl(st); var b = Cl(r.Get<Structure>());
+            int at = st.CellOf(st.Props[st.IndexOf(id)]);
+            Check("볼트: 길 값은 미끄러지는 가구를 따라간다 — 밀어 뜯은 그 틱에 길을 물어도 잠든 선반 칸에 길 값이 서고 · 찍고 되살린 세계와 같다 (예전엔 빈 제자리에 굳었다)",
+                !L.Furniture[shelf].Cells.Contains(at) && a.Contains(at) && a.SequenceEqual(b), $"선반 칸 {at} · 길 값 칸 [{string.Join(",", a)}] / 되살린 [{string.Join(",", b)}]");
+        }
+
         // ── 날아간 문짝: 한쪽이 진공인 닫힌 문이 압력에 날아가면 문짝이 물체 (Kind 3)가 되어 진공 쪽으로 날아간다 ──
         {
             const string art = "\n##########\n#...#....#\n#...D....#\n#...#....#\n##########";
@@ -126,6 +144,13 @@ public static partial class Program
             var lp = leaf > 0 && st.IndexOf(leaf) >= 0 ? st.Props[st.IndexOf(leaf)] : default;
             Check("볼트: 압력에 날아간 문짝이 물체 (문짝 꼴)가 되어 진공 쪽으로 날아간다 — 문은 열린 채 (예전엔 열린 채 끼일 뿐이었다)",
                 leaf > 0 && vx > 5 && lp.Kind == 3 && Math.Abs(lp.Kg - st.LeafKg) < 1e-3 && st.DoorsBlown > 0 && f.DoorOpen[door] > 0.9f, $"문짝 {leaf} ({lp.Kg:0}kg) · 처음 빠르기 {vx:0.0}m/s (진공 쪽 +) · 지금 x {lp.X:0.00} · 날아간 문 {st.DoorsBlown} · 열림 {f.DoorOpen[door]:0.00}");
+            // 문짝이 없는 문: 끼임을 풀고 (바로잡기) 닫으라 해도 열린 채 · 바로잡을 끼인 문으로 읽히지 않는다
+            bool jamRead = st.JammedAt(dc);
+            st.FreeDoor(door); st.RequestDoor(door, 0);
+            s.Run(10);
+            Check("볼트: 문짝이 날아간 문은 바로잡고 닫으라 해도 열린 채 — 바로잡을 끼인 문으로 읽히지 않는다 (예전엔 문짝 없는 문이 닫혀 진공 쪽을 막았다)",
+                leaf > 0 && !jamRead && f.DoorOpen[door] > 0.9f && st.WhyShut(door) == DoorShut.None && !st.JammedAt(dc),
+                $"끼인 문으로 읽힘 {jamRead} → {st.JammedAt(dc)} · 열림 {f.DoorOpen[door]:0.00} · 낌 {st.DoorJam[door]} · 안 열리는 까닭 {st.WhyShut(door)}");
         }
 
         // ── 폭풍에 날아간 문짝: 양쪽 기압이 같아도 (1기압) 문 바로 앞에서 터진 폭풍 (문 칸 첨두 95kPa — 되튀어 1.6배)에 문짝은 폭풍의 반대쪽으로 난다 ──

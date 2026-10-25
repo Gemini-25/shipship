@@ -433,7 +433,8 @@ public sealed partial class Mind
         int wall = st.Cell;
         int door = L.Kind[wall] == CellKind.Door ? L.DoorAt[wall] : -1;
         bool jam = door >= 0 && _st != null && _st.DoorJam[door] != 0;
-        if (_st == null || _st.Braced[wall] != 0 && !jam) { Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1); Next(a, t); return; }
+        // 받친 벽 · 문 · 문짝이 날아간 빈 문틀 (와서 보니 받칠 문이 없다 — 바로잡을 것도 없다)은 할 일이 없다
+        if (_st == null || _st.Braced[wall] != 0 && !jam || door >= 0 && _st.LeafGone(door)) { Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1); Next(a, t); return; }
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
         Activity(a, "hard");

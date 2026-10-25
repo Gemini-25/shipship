@@ -18,8 +18,10 @@ public sealed partial class Structure
 
     /// <summary>가구의 연료 · 열용량이 든 곳 (−1: 도면의 제자리 칸들 · −2: 배를 떠났다 · 그 밖은 그 칸 하나) — 찍는다.</summary>
     public int[] FurnAt = Array.Empty<int>();
-    /// <summary>문마다 문짝이 날아갔다 (1 — 몸 질량에서 문짝 몫을 뺐다) — 찍는다.</summary>
+    /// <summary>문마다 문짝이 날아갔다 (1 — 몸 질량에서 문짝 몫을 뺐다 · 열린 채 끼어 닫히지 않는다) — 찍는다.</summary>
     public byte[] DoorLeafOut = Array.Empty<byte>();
+    /// <summary>문짝이 날아간 문인가 (빈 문틀 — 바로잡을 수도 닫을 수도 없다 · 문 센서 · 곁에서 보는 이가 안다).</summary>
+    public bool LeafGone(int d) => d >= 0 && d < DoorLeafOut.Length && DoorLeafOut[d] != 0;
 
     /// <summary>시험 설정 (찍지 않는다 — Debris · Breakage처럼): false면 받는 힘으로 가구가 뜯기지 않는다 (PH10 앞처럼 — 다른 것을 재는 시험이 몸을 순간에 돌리거나 밀 때 · 요청 TearLoose는 그대로).</summary>
     public bool Tearing = true;
@@ -27,7 +29,7 @@ public sealed partial class Structure
     private byte[] _clutter = Array.Empty<byte>();
     private bool _clutterDirty = true;
     private readonly Dictionary<int, DotForm> _furnForms2 = new();   // (가구 · 누움)마다 물체 꼴 (찍지 않는다 — 도면 · 표에서 늘 같게)
-    private Sim? _sim;   // 틱 사이 요청 (덜컹)이 사실 · 원인을 남길 세계 (찍지 않는다 — 틱마다 다시 잡는다)
+    private Sim? _sim;   // 틱 사이 요청 (덜컹)이 사실 · 원인을 남길 세계 (찍지 않는다 — Sim에 붙을 때 · 틱마다 잡는다)
 
     // ───────────────────────── 요청 · 읽기 ─────────────────────────
 
@@ -364,9 +366,9 @@ public sealed partial class Structure
     }
 
     /// <summary>폭풍 (첨두 kPa · 칸 차례): 그 칸에 든 제자리 가구마다 그 쪽 앞면 × 첨두 압력이 견디는 힘을 넘으면 뜯고 · 폭풍의 충격량 (P A × 양압 길이)만큼 바깥쪽으로 민다.</summary>
-    private bool BlastFurniture(Sim? sim, int cell, List<(int c, double kpa)> hit, int cause)
+    private bool BlastFurniture(Sim sim, int cell, List<(int c, double kpa)> hit, int cause)
     {
-        if (sim == null || !Tearing) return false;
+        if (!Tearing) return false;
         bool any = false;
         double sx = L.X(cell) + 0.5, sy = L.Y(cell) + 0.5;
         for (int f = 0; f < L.Furniture.Count && f < FurnPlaced.Length; f++)

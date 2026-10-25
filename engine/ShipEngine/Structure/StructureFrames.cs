@@ -395,7 +395,7 @@ public sealed partial class Structure
         double w3 = Math.Cbrt(w);
         var hit = BlastReach(cell, w3);
         int bc = sim.Causes.Add(CauseKind.Impact, "충격파가 배 안을 휩쓸었다", sim.Tick, cell, cause);
-        BlastProps(cell, hit, bc);   // 둘레 물체를 바깥쪽으로 민다 (벽이 찢기기 전 첨두로)
+        BlastProps(sim, cell, hit, bc);   // 둘레 물체를 바깥쪽으로 민다 (벽이 찢기기 전 첨두로)
         foreach (var (c, kpa) in hit)
         {
             if (L.Kind[c] is CellKind.Wall or CellKind.Door)
@@ -463,10 +463,10 @@ public sealed partial class Structure
     /// 폭풍이 물체를 민다 (§3-2 '폭풍'): 닿은 바닥 칸에 무게중심이 든 물체마다 폭원 칸 가운데에서 바깥쪽으로 J = P첨두 × 앞면 A⊥(그 쪽) × t₊ (요청 Shove — 깨운다 · 원인).
     /// 35kPa × 0.01m² → 1N·s (0.25kg 컵이 4m/s). 폭원 칸에 든 것은 그 칸 가운데에서 바깥쪽 (가운데면 민 쪽 없이 그대로).
     /// </summary>
-    private bool BlastProps(int cell, List<(int c, double kpa)> hit, int cause)
+    private bool BlastProps(Sim sim, int cell, List<(int c, double kpa)> hit, int cause)
     {
         if (hit.Count == 0) return false;
-        if (Props.Count == 0) return L.Furniture.Count > 0 && BlastFurniture(_sim, cell, hit, cause);
+        if (Props.Count == 0) return L.Furniture.Count > 0 && BlastFurniture(sim, cell, hit, cause);
         double sx = L.X(cell) + 0.5, sy = L.Y(cell) + 0.5;
         bool any = false;
         for (int i = 0; i < Props.Count; i++)
@@ -486,7 +486,7 @@ public sealed partial class Structure
             if (j <= 0) continue;
             any |= Shove(p.Id, j * dx / dl, j * dy / dl, 0, cause);
         }
-        if (L.Furniture.Count > 0) any |= BlastFurniture(_sim, cell, hit, cause);   // 제자리 가구 (PH10 — 물체가 된 것은 다음 폭풍부터 물체로 밀린다)
+        if (L.Furniture.Count > 0) any |= BlastFurniture(sim, cell, hit, cause);   // 제자리 가구 (PH10 — 물체가 된 것은 다음 폭풍부터 물체로 밀린다)
         return any;
     }
 
@@ -502,7 +502,7 @@ public sealed partial class Structure
             if (w <= 0) continue;
             double w3 = Math.Cbrt(w);
             if (BlastKPa(0.5 / w3) < BlastFloorKPa) continue;
-            any |= BlastProps(cell, BlastReach(cell, w3), cause);
+            any |= BlastProps(sim, cell, BlastReach(cell, w3), cause);
         }
         return any;
     }
@@ -522,7 +522,7 @@ public sealed partial class Structure
             double grow = m.Alpha * 1.0 * (F.Ts[c] - 293.15);
             if (ThermalJam[d] != 0)
             {
-                if (grow < DoorGapM * 0.5) { ThermalJam[d] = 0; DoorJam[d] = 0; DoorTarget[d] = F.DoorOpen[d]; }
+                if (grow < DoorGapM * 0.5) { ThermalJam[d] = 0; if (!LeafGone(d)) { DoorJam[d] = 0; DoorTarget[d] = F.DoorOpen[d]; } }   // 식어도 문짝이 날아간 문은 열린 채
                 continue;
             }
             if (grow < DoorGapM || DoorJam[d] != 0) continue;

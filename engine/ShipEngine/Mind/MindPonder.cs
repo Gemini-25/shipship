@@ -280,8 +280,9 @@ public sealed partial class Mind
                 if (ra < 0 || rb < 0 || !placeOf.TryGetValue(ra, out int pa) || !placeOf.TryGetValue(rb, out int pb)) continue;
                 bool open = F.DoorOpen[d] > 0.02f;
                 bool normal = L.Doors[d].Kind == "normal";
-                bool jam = a.Beliefs.Any(b => b.Kind == BeliefKind.StuckDoor && b.Subject == d && b.Conf > 0.3f) || k == SnagKind.DoorJammed && snagDoor == d;
-                pic.AddDoor(pa, pb, d, powered: _st == null || _st.DoorPowered[d] != 0, open: open, jam: jam, leaky: normal && !open && F.DoorTaped[d] == 0, normal: normal);
+                bool gone = _st != null && _st.LeafGone(d) && (ra == here || rb == here);   // 제 방의 문짝이 날아간 빈 문틀 (눈에 보인다 — 닫을 수도 바로잡을 수도 없다)
+                bool jam = gone || a.Beliefs.Any(b => b.Kind == BeliefKind.StuckDoor && b.Subject == d && b.Conf > 0.3f) || k == SnagKind.DoorJammed && snagDoor == d;
+                pic.AddDoor(pa, pb, d, powered: _st == null || _st.DoorPowered[d] != 0, open: open, jam: jam, leaky: normal && !open && F.DoorTaped[d] == 0, normal: normal, gone: gone);
             }
         pic.Body = placeOf[here];
         pic.BodyBreathes = _life != null && _life[c.Body].Suit == 0;

@@ -398,6 +398,7 @@ public sealed partial class Structure
         if (Track != null) CutTrack(p0.Id, hit, made);
         Props.RemoveAt(i);
         Props.AddRange(made);
+        if (p0.Kind is 1 or 3) _clutterDirty = true;   // 깨진 가구 · 문짝이 차지한 칸 (길 값)
         if (body >= 0)
         {
             var o = Bodies[body];

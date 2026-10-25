@@ -385,14 +385,14 @@ public sealed partial class ShipMind
         Say(sim, $"생각: {RoomName(x.Room)} {KindName(x.Kind)} — {chain} · 약 {res.Minutes:0}분 · 잃을 공기 약 {res.AirLost:0}몰 · 되돌릴 공기 {res.AirBack:0}몰");
     }
 
-    /// <summary>그림의 굵은 지문 — 문(열림 · 끼임 · 틈) · 구멍 · 사람 있음 · 통풍구 · 몸의 자리 (기압은 30kPa 단위로).</summary>
+    /// <summary>그림의 굵은 지문 — 문(열림 · 끼임 · 틈 · 빈 문틀) · 구멍 · 사람 있음 · 통풍구 · 몸의 자리 (기압은 30kPa 단위로).</summary>
     private static int PictureSig(Picture pic)
     {
         unchecked
         {
             int h = 17;
             for (int p = 0; p < pic.P; p++) h = h * 31 + pic.Room[p] * 7 + (pic.Hole[p] ? 1 : 0) + (pic.People[p] > 0 ? 2 : 0) + (pic.Vent[p] ? 4 : 0) + (int)(pic.KPa[p] / 30) * 8;
-            for (int d = 0; d < pic.D; d++) h = h * 31 + (pic.Open[d] ? 1 : 0) + (pic.Jam[d] ? 2 : 0) + (pic.Leaky[d] ? 4 : 0) + pic.Door[d] * 8;
+            for (int d = 0; d < pic.D; d++) h = h * 31 + (pic.Open[d] ? 1 : 0) + (pic.Jam[d] ? 2 : 0) + (pic.Leaky[d] ? 4 : 0) + pic.Door[d] * 8 + (pic.Gone[d] ? 1 << 20 : 0);
             return h * 31 + pic.Body;
         }
     }
@@ -454,7 +454,7 @@ public sealed partial class ShipMind
                 if (a < 0 || b < 0) continue;
                 bool normal = L.Doors[d].Kind == "normal";
                 bool ajar = F.DoorOpen[d] > 0.02f;   // 조금이라도 열려 있으면 공기가 지난다 (끼인 채 반쯤 열린 바깥문 — 에어락이 우주로 트였다)
-                pic.AddDoor(a, b, d, powered: _st!.DoorPowered[d] != 0, open: ajar, jam: _st.DoorJam[d] != 0, leaky: normal && !ajar && F.DoorTaped[d] == 0, normal: normal);
+                pic.AddDoor(a, b, d, powered: _st!.DoorPowered[d] != 0, open: ajar, jam: _st.DoorJam[d] != 0, leaky: normal && !ajar && F.DoorTaped[d] == 0, normal: normal, gone: _st.LeafGone(d));
             }
         if (_computer >= 0 && _net.Devices[_computer].Room is int cr && cr >= 0 && placeOf.TryGetValue(cr, out int cp)) pic.Brain[cp] = true;   // 제 몸이 있는 방
         pic.Body = robotOut ? pic.Out : robotRoom >= 0 && placeOf.TryGetValue(robotRoom, out int bp) ? bp : -1;

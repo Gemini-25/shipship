@@ -29,6 +29,7 @@ public sealed class Picture
     public bool[] Open = Array.Empty<bool>(), Jam = Array.Empty<bool>();
     public bool[] Leaky = Array.Empty<bool>();    // 닫혀도 틈으로 새는 보통 문 (틈을 막지 않았다)
     public bool[] Normal = Array.Empty<bool>();   // 보통 문 (압력 문 · 에어락 문이 아니다 — 열면 막은 틈이 떨어진다)
+    public bool[] Gone = Array.Empty<bool>();     // 문짝이 날아간 빈 문틀 (열린 채 끼였다 — 바로잡을 문짝이 없다 · 문 센서가 안다)
     public int Body = -1;                 // 일할 몸이 있는 자리 (-1: 없다)
     public bool BodyBreathes;             // 그 몸이 우주복 없는 사람이다 (보관함에서 입을 수 있다)
     public bool[] Lockers = Array.Empty<bool>();  // 우주복 보관함이 있고 우주복이 남았다
@@ -53,7 +54,7 @@ public sealed class Picture
     public int AddOut() { Out = AddPlace(-1, "선체 바깥", 0, 0); return Out; }
 
     /// <summary>문 하나 (두 자리 · 구조 문 번호 · 전기 · 바깥문 · 열림 · 끼임).</summary>
-    public int AddDoor(int a, int b, int door = -1, bool powered = true, bool open = false, bool jam = false, bool leaky = false, bool normal = false)
+    public int AddDoor(int a, int b, int door = -1, bool powered = true, bool open = false, bool jam = false, bool leaky = false, bool normal = false, bool gone = false)
     {
         normal |= leaky;
         int k = D++;
@@ -61,7 +62,7 @@ public sealed class Picture
         DA = DA.Append(a).ToArray(); DB = DB.Append(b).ToArray(); Door = Door.Append(door).ToArray();
         Ext = Ext.Append(ext).ToArray(); Powered = Powered.Append(powered).ToArray();
         Limit = Limit.Append(powered ? (ext ? 5f : 30f) : 2f).ToArray();
-        Open = Open.Append(open).ToArray(); Jam = Jam.Append(jam).ToArray(); Leaky = Leaky.Append(leaky).ToArray(); Normal = Normal.Append(normal).ToArray();
+        Open = Open.Append(open).ToArray(); Jam = Jam.Append(jam).ToArray(); Leaky = Leaky.Append(leaky).ToArray(); Normal = Normal.Append(normal).ToArray(); Gone = Gone.Append(gone).ToArray();
         return k;
     }
 
@@ -249,7 +250,7 @@ public static class Solver
             ActKind.Open => !n.Open[o] && path,
             ActKind.Close => n.Open[o] && touch && (near || VacuumSide(pic, n, o)),   // 닫기는 몸 곁의 문(에어락 돌리기) · 진공과 공기 사이의 문만 — 되돌릴 방의 문은 되돌리기가 닫는다 (묶음)
             ActKind.Go => n.Open[o] && near && path,
-            ActKind.Unjam => n.Jam[o] && near && path,
+            ActKind.Unjam => n.Jam[o] && !pic.Gone[o] && near && path,
             ActKind.Tape => false,                                                     // 문 하나씩은 '봉하기'로 묶어 찾는다 (가짓수)
             ActKind.Seal => n.Body == o && PumpWants(pic, n, o, on) && NeedsSeal(pic, n, o),
             ActKind.Pump => computer && on[o] && o != pic.Out && pic.Vent[o],
@@ -521,7 +522,7 @@ public static class Solver
             }
             case ActKind.Unjam:
             {
-                if (!byBody || !n.Jam[o] || n.Body != pic.DA[o] && n.Body != pic.DB[o]) return false;
+                if (!byBody || !n.Jam[o] || pic.Gone[o] || n.Body != pic.DA[o] && n.Body != pic.DB[o]) return false;   // 빈 문틀은 바로잡을 것이 없다
                 n.Jam[o] = false;
                 n.Min += (float)def.Minutes;
                 return true;

@@ -33,4 +33,6 @@ public interface IEngine : IState
     /// <summary>다른 엔진을 잇는다 — Sim이 첫 틱 전에 · 되살린 뒤에 한 번 부른다.
     /// Step 안에서 늦게 이으면, 되살린 세계에서 이 엔진이 아직 돌지 않았을 때 다른 엔진이 먼저 읽어 빈 값을 받는다 (검토 ⑤-2 · 법칙 '긴 왕복').</summary>
     void Bind(Sim sim) { }
+    /// <summary>Sim에 붙을 때 한 번 (그 세계를 안다 — 첫 틱 전 · 되살린 직후의 틱 사이 요청이 사실 · 원인을 남길 곳). 다른 엔진은 아직 없을 수 있다 — 잇기는 Bind에서.</summary>
+    void Attach(Sim sim) { }
 }

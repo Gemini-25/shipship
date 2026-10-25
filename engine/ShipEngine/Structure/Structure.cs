@@ -116,8 +116,8 @@ public sealed partial class Structure : IEngine
 
     /// <summary>버티는 문 · 벽에 덧대 받친다 (수리 꾸러미) — 정격 ×1.6 · 피로가 더 쌓이는 것을 늦춘다.</summary>
     public void Brace(int cell) { if (L.Kind[cell] is CellKind.Wall or CellKind.Door) Braced[cell] = 1; }
-    /// <summary>끼인 문을 바로잡는다 (다시 여닫힌다).</summary>
-    public void FreeDoor(int door) { DoorJam[door] = 0; DoorTarget[door] = F.DoorOpen[door]; }
+    /// <summary>끼인 문을 바로잡는다 (다시 여닫힌다) — 문짝이 날아간 문은 바로잡을 것이 없다 (열린 채 · PH10).</summary>
+    public void FreeDoor(int door) { if (LeafGone(door)) return; DoorJam[door] = 0; DoorTarget[door] = F.DoorOpen[door]; }
 
     /// <summary>문틀에 무엇이 끼었다 (위층의 요청 — 바람에 날린 상자 등): 그 자리에서 멈춰 닫히지 않는다 · 끼인 문으로 바로잡아야 한다.</summary>
     public void JamDoor(Sim sim, int door, int cause)
@@ -140,8 +140,8 @@ public sealed partial class Structure : IEngine
         int a = dr.Vertical ? Side(x, y - 1) : Side(x - 1, y), b = dr.Vertical ? Side(x, y + 1) : Side(x + 1, y);
         return Math.Abs(SideKPa(a) - SideKPa(b));
     }
-    /// <summary>그 칸이 끼인 문인가.</summary>
-    public bool JammedAt(int cell) => L.DoorAt[cell] >= 0 && DoorJam[L.DoorAt[cell]] != 0;
+    /// <summary>그 칸이 끼인 문인가 (바로잡을 수 있는 — 문짝이 날아간 문은 끼인 것이 아니라 빈 문틀이다).</summary>
+    public bool JammedAt(int cell) => L.DoorAt[cell] >= 0 && DoorJam[L.DoorAt[cell]] != 0 && !LeafGone(L.DoorAt[cell]);
 
     /// <summary>관통 값(재질 표)을 잰 파편의 크기 (2cm — 운석 · 작은 파편).</summary>
     public const double ImpactSizeM = 0.02;
@@ -223,6 +223,7 @@ public sealed partial class Structure : IEngine
     // ───────────────────────── 한 틱 ─────────────────────────
 
     public void Bind(Sim sim) { _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>(); }
+    public void Attach(Sim sim) => _sim = sim;   // 틱 사이 덜컹이 사실 · 원인을 남길 세계 — 붙을 때 잡는다 (되살린 세계가 첫 틱 전에도 같게 · PH10 검토)
 
     public void Step(Sim sim, double dt)
     {

@@ -65,6 +65,33 @@ public static partial class Program
             Check("가구 떼기: 뜯긴 가구가 있는 배를 찍고 되살려 20틱 — 바이트 같음 (칸 질량을 다시 세운다)", s.Save().AsSpan().SequenceEqual(r.Save()), $"{s.Hash():x16} / {r.Hash():x16}");
         }
 
+        // ── 찍고 되살린 직후 (첫 틱 전) 틱 사이 요청: 같은 덜컹 · 같은 폭풍에 두 세계가 같게 뜯는다 — 바이트 같음 (사실 · 원인을 남길 세계를 되살릴 때도 잇는다) ──
+        {
+            const string Wall = "\n#############\n#.....ss....#\n#...........#\n#...........#\n#.........t.#\n#############";
+            var s = PropWorld(1, 9, Wall, new Dictionary<char, string> { ['s'] = "Shelf", ['t'] = "Table" });
+            var st = s.Get<Structure>(); var L = s.Layout;
+            int shelf = L.Furniture.FindIndex(x => x.Type == "Shelf"), table = L.Furniture.FindIndex(x => x.Type == "Table");
+            st.EnsureBody();
+            s.Step();
+            // 덜컹 2m/s (2g — 놓인 탁자는 밀리고 선반 9g는 그대로)
+            var r = new Sim(s.Setup); r.Load(s.Save());
+            foreach (var x in new[] { s, r }) { var t = x.Get<Structure>(); var o = t.Bodies[0]; t.Push(0, o.X, o.Y, o.Mass * 2, 0, x.Causes.Add(CauseKind.Setup, "다른 배와 부딪혔다", x.Tick)); }
+            int jolt0 = st.FurnPlaced[table], jolt1 = r.Get<Structure>().FurnPlaced[table];
+            s.Run(2); r.Run(2);
+            bool same0 = s.Save().AsSpan().SequenceEqual(r.Save());
+            // 폭풍: 선반에서 세 칸 떨어진 곳에 첨두 35kPa (규칙 '볼트'와 같다 — 선반이 뜯긴다)
+            double w3 = 1;
+            { double lo = 0.01, hi = 5; for (int k = 0; k < 60; k++) { double mid = (lo + hi) / 2; if (Structure.BlastKPa(3 / mid) < 35) lo = mid; else hi = mid; } w3 = (lo + hi) / 2; }
+            int near = L.Furniture[shelf].Cells.Min(), boom = L.Index(L.X(near) - 3, L.Y(near));
+            var r2 = new Sim(s.Setup); r2.Load(s.Save());
+            foreach (var x in new[] { s, r2 }) x.Get<Structure>().Blast(x, boom, w3 * w3 * w3 * Structure.TntJ, x.Causes.Add(CauseKind.Setup, "배터리가 터졌다", x.Tick));
+            int blown0 = st.FurnPlaced[shelf], blown1 = r2.Get<Structure>().FurnPlaced[shelf];
+            s.Run(2); r2.Run(2);
+            Check("가구 떼기: 찍고 되살린 직후 (첫 틱 전) 같은 덜컹 (2m/s) · 같은 폭풍 (35kPa)에 두 세계가 같게 뜯는다 — 2틱 뒤 바이트 같음 (예전엔 되살린 세계의 탁자 · 선반이 붙어 있었다)",
+                jolt0 == 0 && jolt1 == 0 && same0 && blown0 == 0 && blown1 == 0 && s.Save().AsSpan().SequenceEqual(r2.Save()),
+                $"덜컹 — 탁자 붙음 {jolt0} / {jolt1} · 같음 {same0} / 폭풍 — 선반 붙음 {blown0} / {blown1} · {s.Hash():x16} / {r2.Hash():x16}");
+        }
+
         // ── 2톤 아래 덩어리의 설비 (PH10 — §5-4): 냉각 펌프 한 칸을 둘레에서 떼어 내면 그 설비는 그 꼴의 물체가 되어 우주로 (질량 = 설비 · 점 알갱이가 아니다) ──
         {
             const string art = "\n###########\n#.........#\n#.........#\n#....p....#\n#.........#\n#.........#\n###########";

@@ -39,6 +39,7 @@ public sealed class Sim
     {
         _engines.Add(e);
         _byType[e.GetType()] = e;
+        e.Attach(this);
         _order = _engines.Select((x, i) => (x, i)).OrderBy(p => p.x.Phase).ThenBy(p => p.i).Select(p => p.x).ToArray();
     }
 

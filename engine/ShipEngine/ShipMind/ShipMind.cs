@@ -633,7 +633,7 @@ public sealed partial class ShipMind : IEngine
         if (_st != null)
             for (int d = 0; d < L.Doors.Count; d++)
             {
-                if (_st.DoorJam[d] == 0) continue;
+                if (_st.DoorJam[d] == 0 || _st.LeafGone(d)) continue;   // 문짝이 날아간 빈 문틀은 바로잡을 것이 없다 (문 센서가 문짝이 없다고 읽는다)
                 int dc = L.Doors[d].Cell;
                 int r = HighSideRoom(dc);
                 if (r < 0 || RoomSeen[r] == 0) continue;

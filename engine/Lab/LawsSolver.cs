@@ -113,6 +113,15 @@ public static partial class Program
         Check("끼인 문은 먼저 바로잡는다", rj.Found && rj.Steps.Count > 0 && rj.Steps[0].Act == ActKind.Unjam && Solver.Replay(j, rj.Steps, all, true),
             rj.Found ? Solver.Describe(j, rj.Steps) : "못 찾음");
 
+        // 문짝이 날아간 빈 문틀 (열린 채 끼였다 — PH10): 바로잡을 문짝이 없다 — 그림에서 바로잡기가 되지 않고 계획에 넣지 않는다 (예전엔 바로잡아 닫을 수 있는 문으로 셌다)
+        Picture GonePicture(bool gone) { var p = new Picture(); int l = p.AddPlace(0, "방1", 30, 0, vent: true, hole: true), r = p.AddPlace(1, "방2", 24, 101.3f, vent: true); p.AddDoor(l, r, 0, open: true, jam: true, gone: gone); p.Body = r; p.Goal = l; return p; }
+        var g = GonePicture(true); var rg = Solver.Solve(g, all, true);
+        var unjam = new List<SolveStep> { new SolveStep { Act = ActKind.Unjam, Obj = 0 } }; unjam.AddRange(rg.Steps);   // 바로잡고 나서 같은 길
+        bool fixGone = Solver.Replay(g, unjam, all, true), fixJam = Solver.Replay(GonePicture(false), unjam, all, true);
+        Check("문짝이 날아간 빈 문틀은 바로잡지 않는다 (끼인 문이 아니다 — 문짝이 있는 끼인 문은 바로잡힌다) · 열린 채 지나가 막는다",
+            !fixGone && fixJam && rg.Found && !rg.Steps.Any(s => s.Act == ActKind.Unjam) && Solver.Replay(g, rg.Steps, all, true),
+            $"빈 문틀 바로잡기 {fixGone} · 문짝 있는 끼인 문 {fixJam} · 계획: {(rg.Found ? Solver.Describe(g, rg.Steps) : "못 찾음")}");
+
         // 모르는 원리의 행동은 계획에 없다 — 원리마다 빼 보고 세 그림을 다시 푼다
         var kt = KnowledgeTable.Load();
         var bad = new List<string>();

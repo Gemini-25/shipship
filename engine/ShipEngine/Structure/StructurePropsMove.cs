@@ -149,6 +149,7 @@ public sealed partial class Structure
         if (any)
         {
             BuildClearance();
+            if (!_clutterDirty) foreach (var p in all) if (p.Kind is 1 or 3 && Awake(p)) { _clutterDirty = true; break; }   // 깨어 있는 가구 · 문짝이 움직인다 — 길 값은 다음에 물을 때 지금 자리에서 다시 짓는다 (찍지 않으니 되살린 세계와 같게)
             StepIslands(sim, all, dt, world);   // 섬마다 함께 걷는다 — 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
         }
         if (world && all.Length > 0) Reactions(all);
