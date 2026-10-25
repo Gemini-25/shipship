@@ -612,7 +612,7 @@ _Draw       DrawWorldMarks: 테두리 · 겨눔 고리 · 이름표 · 운석 �
 층마다: 이 문서에 설계 → 시험 먼저 → 구현 → 관찰 → 확인 (`dotnet build engine/Lab -c Release -o build/lab` · `--law` · `tools/rules.sh` · `dotnet build game/ShipSim.csproj` · 지문) → 커밋 · 푸시. 각 커밋은 늘 빌드되고 돈다.
 화면 찍기: `--ui=장면 --shot=이름 --shots=docs/screens/ui --for=6` (§7 결함 6 · 3초에 차리고 5초에 찍는다).
 
-### U1 — 틀: 탭 일곱 · 넓은 판 · 카드 갈래 · 뒤로 (화면 · 같음) · 어림 2.5시간
+### U1 — 틀: 탭 일곱 · 넓은 판 · 카드 갈래 · 뒤로 (화면 · 같음) · 어림 2.5시간 ✔
 - 무엇: 탭 사람 · 로봇 · 사고 (사고 판은 빈 목록 '곧'), 로봇 판 (로봇 줄을 사람 판에서 옮김), 자세한 판의 틀 (머리 · 작은 탭 · 줄 — 내용은 지금 P 판 줄 · `RobotCard` · J 판 줄을 그대로), 사람 줄 누르면 자세히 + 따라가기, 카드 [자세히 보기 ›], 뒤로 차례, `Gauge.Short`, `--ui=` · `--shot=`.
 - 파일 · 함수: `Hud.cs` (`TabNames/TabKinds/TabKeys` · `UiAct` · `BackStep` · `HudState.Back` · `LayoutPanel` 넓은 폭 · 작은 탭 · 카드 단추) · `Live.cs` (`PanelKind.Robots/Hand` · `DetailKind` · `LiveFrame` 필드 · `TogglePanel` · `PanelRows` 로봇 판 · `PanelSide`) · `LiveHud.cs` (`OpenDetail` · `SetDetailSub` · `DetailBack` · `DetailFollow` · `PanelClick` 사람 · 로봇) · `LiveMain.cs` (`DrawTabs` · `DrawPanel` 머리 · `DrawCard` · `Do` · `OnKey` G · X · `Check` `--ui` · `--shot`) · `RulesHud.cs` (`FakeFrame`).
 - 시험: M1 · M2 · M3 (바뀜 — 까닭을 시험 글에) · M4.

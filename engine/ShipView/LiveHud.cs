@@ -74,6 +74,50 @@ public sealed partial class LiveShow
     public static long KeyHighlight(int index) => (3L << 40) + index;
     public static long KeyJournal(long tick) => (1L << 40) + tick;
     public static long KeyPerson(int id) => (2L << 40) + id;
+    /// <summary>자세한 판 줄 (docs/UI2.md §4.6): 작은 탭 · 줄 (때가 있는 줄은 틱 · 믿음은 차례).</summary>
+    public static long KeyDetail(int sub, long n) => (4L << 40) | ((long)sub << 36) | n;
+
+
+    /// <summary>
+    /// 자세히 열기 (docs/UI2.md §6.2): 사람 · 로봇은 그 이를 고르고 따라간다 · 판은 그 이의 목록 판이 넓어진 것 (갈래는 그 이를 보고 고친다 — 카드의 [자세히 보기]가 사람인지 로봇인지 몰라도) ·
+    /// 같은 갈래끼리 옮기면 작은 탭은 그대로 · 주컴퓨터는 주컴퓨터 판.
+    /// </summary>
+    public void OpenDetail(DetailKind k, int id)
+    {
+        if (k == DetailKind.None) { DetailBack(); return; }
+        if (k == DetailKind.Computer) { if (Panel != PanelKind.Journal) TogglePanel(PanelKind.Journal); return; }
+        var mind = World.Find<Mind>();
+        if (mind == null || id < 0 || id >= mind.Agents.Count) return;
+        var kind = mind.Agents[id].IsPerson ? DetailKind.Person : DetailKind.Robot;
+        if (kind != Detail) DetailSub = 0;
+        Panel = kind == DetailKind.Person ? PanelKind.People : PanelKind.Robots;
+        Detail = kind; DetailId = id;
+        DetailSub = Math.Clamp(DetailSub, 0, DetailTabsOf(kind).Length - 1);
+        SelectAgent(id);
+        PanelPick = 0; PanelPickKey = 0;
+    }
+
+    /// <summary>작은 탭을 고른다 (첫 줄로).</summary>
+    public void SetDetailSub(int i)
+    {
+        if (Detail == DetailKind.None) return;
+        DetailSub = Math.Clamp(i, 0, DetailTabsOf(Detail).Length - 1);
+        PanelPick = 0; PanelPickKey = 0;
+    }
+
+    /// <summary>자세히 → 목록 (그 이의 줄을 고른 채) · 주컴퓨터는 목록이 없어 판을 닫는다.</summary>
+    public void DetailBack()
+    {
+        if (Detail == DetailKind.Computer) { ClosePanel(); return; }
+        if (Detail == DetailKind.None) return;
+        int id = DetailId;
+        Detail = DetailKind.None; DetailId = -1; DetailSub = 0;
+        PanelPickKey = KeyPerson(id);
+        SyncPick(PanelRows());
+    }
+
+    /// <summary>자세히 연 이를 다시 따라간다.</summary>
+    public void DetailFollow() { if (Detail is DetailKind.Person or DetailKind.Robot && DetailId >= 0) SelectAgent(DetailId); }
 
     /// <summary>고른 줄을 열쇠로 다시 찾는다 (줄 순서가 바뀌어도 같은 줄 · 열쇠가 사라지면 가까운 줄).</summary>
     private void SyncPick(PanelRow[] rows)
@@ -85,7 +129,8 @@ public sealed partial class LiveShow
         PanelPickKey = rows[PanelPick].Key;
     }
 
-    /// <summary>판의 줄을 눌렀다 (열쇠로): 장면 — 고르기만 · 항로 — 출항 전이면 그 항로로 (판은 열어 둔다) · 주컴퓨터 — 펼침 · 사슬 — 그 자리로 · 사람 — 따라가기 (판을 닫는다). 못 하면 false (까닭은 알림).</summary>
+    /// <summary>판의 줄을 눌렀다 (열쇠로): 장면 — 고르기만 · 항로 — 출항 전이면 그 항로로 (판은 열어 둔다) · 주컴퓨터 — 펼침 · 사슬 — 그 자리로 ·
+    /// 사람 · 로봇 — 자세히 + 따라가기 (판은 열린 채 넓어진다 — 예전엔 판을 닫아 자세히 볼 길이 없었다 · docs/UI2.md §7 결함 3) · 자세히의 줄 — 펼침. 못 하면 false (까닭은 알림).</summary>
     public bool PanelClick(long key)
     {
         var rows = PanelRows();
@@ -93,6 +138,7 @@ public sealed partial class LiveShow
         if (at < 0) return false;
         PanelPick = at; PanelPickKey = key;
         var row = rows[at];
+        if (Detail != DetailKind.None) return true;   // 자세히의 줄: 고르기 · 펼치기
         switch (Panel)
         {
             case PanelKind.Route:
@@ -107,11 +153,10 @@ public sealed partial class LiveShow
                 LookAt(cell);
                 return true;
             }
-            case PanelKind.People:
+            case PanelKind.People or PanelKind.Robots:
             {
-                if (key < KeyPerson(0)) return false;
-                SelectAgent((int)(key - KeyPerson(0)));
-                Panel = PanelKind.None;
+                if (key < KeyPerson(0) || key >= KeyHighlight(0)) return false;
+                OpenDetail(Panel == PanelKind.People ? DetailKind.Person : DetailKind.Robot, (int)(key - KeyPerson(0)));
                 return true;
             }
             default: return true;   // 장면 · 주컴퓨터: 고르기 · 펼치기
@@ -126,7 +171,7 @@ public sealed partial class LiveShow
         if (i < 0 || i >= Dir.Highlights.Count) return false;
         PanelPickKey = key;
         if (!StartReplay(Dir.Highlights[i])) { Notify("그 장면은 너무 오래돼 다시 볼 수 없다 (한 시간 안의 것만)"); return false; }
-        Panel = PanelKind.None;
+        ClosePanel();
         return true;
     }
 

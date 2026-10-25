@@ -97,6 +97,8 @@ void fragment() {
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
     private int _shotN, _picsTotal, _pick = -1;
     private double _view = -1;   // --view=칸 수 (0 = 배 전체) — 관찰 장면용 확대
+    private string? _ui;          // --ui=장면[:작은 탭] (docs/UI2.md §7 결함 6 — 화면 사진용: person · robot · robots · computer · hand) — 3초에 차린다
+    private string? _shotName;    // --shot=이름: 5초에 한 장 (이름.png) 찍고 몇 초마다 찍기는 하지 않는다
     private PanelKind _openPanel;
     private bool _ignite;                                      // --ignite: 감은 뒤 침대 하나에 불씨 (화면 사진용 — 사건 띠 · 불 연출)
     private double _skipHours;                                 // --skip=시간: 띄우기 전에 그만큼 앞으로 감는다 (화면 사진용)
@@ -130,16 +132,19 @@ void fragment() {
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
             else if (a.StartsWith("--view=")) _view = a[7..] == "all" ? 0 : double.TryParse(a[7..], out var vw) ? vw : -1;
+            else if (a.StartsWith("--ui=")) _ui = a[5..];
+            else if (a.StartsWith("--shot=")) { _shotName = a[7..]; _nextShot = 5; _shotEvery = 1e9; }
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a == "--ignite") _ignite = true;
             else if (a == "--help") _helpOnce = true;
             else if (a == "--hold") _noHold = false;
-            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
+            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, "G" => PanelKind.Robots, "X" => PanelKind.Hand, _ => PanelKind.None };
             else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
             else if (a.StartsWith("--thoughts=") && int.TryParse(a[11..], out var th)) _thoughts = Math.Clamp(th, 0, 2);
         }
         var args = OS.GetCmdlineUserArgs();
-        _noHold = !args.Contains("--hold") && args.Any(a => a.StartsWith("--for") || a.StartsWith("--shots") || a.StartsWith("--skip") || a == "--ignite" || a.StartsWith("--panel") || a.StartsWith("--pick"));
+        _noHold = !args.Contains("--hold") && args.Any(a => a.StartsWith("--for") || a.StartsWith("--shots") || a.StartsWith("--skip") || a == "--ignite" || a.StartsWith("--panel") || a.StartsWith("--pick") || a.StartsWith("--ui"));
+        if (_shotName != null) _shotDir ??= "docs/screens/ui";
         if (_shotDir != null) System.IO.Directory.CreateDirectory(_shotDir);
         _shipAt = Math.Max(0, Array.IndexOf(_ships, ship));
         Launch(ship, _seed);
@@ -357,12 +362,13 @@ void fragment() {
         if (_overlay != Overlay.None && _runT > 2) { var o = _overlay; _overlay = Overlay.None; _cmds.Enqueue(s => s.Show = o); }
         if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
+        if (_ui != null && _runT > 3) { string ui = _ui; _ui = null; _cmds.Enqueue(s => SetUpUi(s, ui)); }
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shotDir != null && _shown != null && _runT >= _nextShot)
         {
             _nextShot = _runT + _shotEvery;
             var img = GetViewport().GetTexture().GetImage();
-            string path = System.IO.Path.Combine(_shotDir, $"{_shotN++:00}-{_runT:000}s.png");
+            string path = System.IO.Path.Combine(_shotDir, _shotName != null ? _shotName + ".png" : $"{_shotN++:00}-{_runT:000}s.png");
             img.SavePng(path);
             GD.Print($"{path} · {_shown.Status} · {_shown.Story}");
         }
@@ -373,6 +379,23 @@ void fragment() {
             GD.Print($"화면 {_runT:0}초 · 그림 {_picsTotal}장 · 게임 {Time.Clock(_shown?.Tick ?? 0)} · 프레임 {o.Count} · 보통 {P(0.5):0.0}ms · 99% {P(0.99):0.0}ms · 가장 김 {(o.Count > 0 ? o[^1] : 0):0.0}ms · 17ms 넘은 프레임 {o.Count(x => x > 17.5)} · 메인: 자리표 {_hudMs / Math.Max(1, _fpsTotal):0.00}ms · 그리기 명령 {_drawMs / Math.Max(1, _fpsTotal):0.00}ms ({string.Join(" · ", _laps.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / Math.Max(1, _fpsTotal):0.00}"))})");
             _runFor = 0;
             GetTree().Quit();
+        }
+    }
+
+    /// <summary>화면 사진용 차림 (--ui=장면[:작은 탭] — 작업 스레드): 사람 · 로봇 자세히 (첫 사람 · 첫 로봇) · 로봇 판 · 주컴퓨터 · 사고 판.</summary>
+    private static void SetUpUi(LiveShow s, string ui)
+    {
+        var parts = ui.Split(':');
+        int sub = parts.Length > 1 && int.TryParse(parts[1], out var n) ? n : 0;
+        var mind = s.World.Find<ShipEngine.Mind>();
+        int First(bool person) { if (mind != null) foreach (var a in mind.Agents) if (a.IsPerson == person) return a.Id; return -1; }
+        switch (parts[0])
+        {
+            case "person": s.OpenDetail(DetailKind.Person, First(true)); s.SetDetailSub(sub); break;
+            case "robot": s.OpenDetail(DetailKind.Robot, First(false)); s.SetDetailSub(sub); break;
+            case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
+            case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
+            case "hand": if (s.Panel != PanelKind.Hand) s.TogglePanel(PanelKind.Hand); break;
         }
     }
 
@@ -621,6 +644,7 @@ void fragment() {
             if (h.Act != UiAct.Tab) continue;
             string label = HudLayout.TabNames[h.Key] + (h.Key == 0 && f.Highlights > 0 ? $" {f.Highlights}" : "");
             DrawButton(h, label);
+            if (HudLayout.TabKinds[h.Key] == PanelKind.Hand && !h.On) DrawRect(R(h.R), new Color(1f, 0.72f, 0.3f, 0.85f), false, 1.5f);   // 사고 탭: 호박색 (세계를 바꾸는 손)
             if (h.Key == 2 && f.JournalNew) DrawCircle(R(h.R).Position + new Vector2(R(h.R).Size.X - 7 * U, 7 * U), 4 * U, new Color(1f, 0.72f, 0.3f));
         }
     }
@@ -643,7 +667,7 @@ void fragment() {
             float nw = MeasureW(g.Name, Fs(14), true);
             float base0 = r.Position.Y + r.Size.Y / 2 + Fs(14) * 0.36f;
             DrawString(_bold, new Vector2(r.Position.X + 30 * U, base0), g.Name, HorizontalAlignment.Left, -1, Fs(14), InkDim);
-            DrawString(_font, new Vector2(r.Position.X + 30 * U + nw + 8 * U, base0), g.Value, HorizontalAlignment.Left, Math.Max(10, r.Size.X - 30 * U - nw - 14 * U), Fs(14), g.Level == 0 ? Ink : col);
+            DrawString(_font, new Vector2(r.Position.X + 30 * U + nw + 8 * U, base0), _hud.VitalsShort && g.Short.Length > 0 ? g.Short : g.Value, HorizontalAlignment.Left, Math.Max(10, r.Size.X - 30 * U - nw - 14 * U), Fs(14), g.Level == 0 ? Ink : col);
         }
     }
 
@@ -703,15 +727,17 @@ void fragment() {
         {
             if (h.Act == UiAct.CardFollow) DrawButton(h, "따라가기", 14);
             else if (h.Act == UiAct.CardClose) { DrawButton(h, ""); DrawCross(R(h.R).GetCenter(), 6 * U, Ink); }
+            else if (h.Act == UiAct.DetailOpen) { DrawButton(h, "자세히 보기", 14); DrawChevron(R(h.R).GetCenter() + new Vector2(MeasureW("자세히 보기", Fs(14), false) / 2 + 12 * U, 0), 4 * U, +1, InkDim); }
             else if (h.Act == UiAct.CardName && Hovered(h)) DrawLine(new Vector2(box.Position.X + 16 * U, cy + 4 * U), new Vector2(box.Position.X + 16 * U + _bold.GetStringSize(f.Card[0], HorizontalAlignment.Left, -1, Fs(19)).X, cy + 4 * U), new Color(1f, 0.92f, 0.65f), 1);
         }
+        float cardEnd = box.End.Y - (_hud.Hits.Any(x => x.Act == UiAct.DetailOpen) ? 36 * U : 0);
         for (int i = 0; i < f.Card.Length; i++)
         {
             bool head = i == 0;
             float avail = head ? w - 28 * U - 130 * U : w - 28 * U;
             int size = Fs(head ? 19 : 16);
             float lh = Math.Max(26 * U, (head ? MeasureHB(f.Card[i], size, avail, 1) : MeasureH(f.Card[i], size, avail, 2)) + 6 * U);
-            if (cy + lh - 20 * U > box.End.Y) break;
+            if (cy + lh - 20 * U > cardEnd) break;
             DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16 * U, cy), f.Card[i], HorizontalAlignment.Left, avail, size, head ? 1 : 2,
                 head ? new Color(1f, 0.92f, 0.65f) : new Color(0.86f, 0.89f, 0.95f));
             cy += lh;
@@ -719,6 +745,13 @@ void fragment() {
     }
 
     private static string HoursMin(double minutes) { int h = (int)(minutes / 60), m = (int)(minutes % 60); return h > 0 ? $"{h}시간 {m}분" : $"{m}분"; }
+
+    /// <summary>꺾쇠 (도형 — 글꼴에 기대지 않는다): dir +1 오른쪽 › · −1 왼쪽 ‹.</summary>
+    private void DrawChevron(Vector2 c, float s, int dir, Color col)
+    {
+        DrawLine(c + new Vector2(-s * dir * 0.6f, -s), c + new Vector2(s * dir * 0.6f, 0), col, 2 * U);
+        DrawLine(c + new Vector2(s * dir * 0.6f, 0), c + new Vector2(-s * dir * 0.6f, s), col, 2 * U);
+    }
 
     private void DrawCross(Vector2 c, float s, Color col)
     {
@@ -941,11 +974,15 @@ void fragment() {
         DrawRect(box, new Color(0.03f, 0.04f, 0.07f, 0.92f));
         DrawRect(box, new Color(0.55f, 0.7f, 0.95f, 0.8f), false, 1.5f);
         float inner = box.Size.X - 54 * U;
-        DrawString(_bold, new Vector2(box.Position.X + 18 * U, box.Position.Y + 32 * U), f.PanelTitle, HorizontalAlignment.Left, inner - 180 * U, Fs(20), new Color(0.9f, 0.94f, 1f));
+        if (f.Detail != DetailKind.None) DrawDetailHead(f, box);
+        else DrawString(_bold, new Vector2(box.Position.X + 18 * U, box.Position.Y + 32 * U), f.PanelTitle, HorizontalAlignment.Left, inner - 180 * U, Fs(20), new Color(0.9f, 0.94f, 1f));
         foreach (var h in _hud.Hits)
         {
             if (h.Act == UiAct.PanelClose) { DrawButton(h, ""); DrawCross(R(h.R).GetCenter(), 7 * U, Ink); }
             else if (h.Act == UiAct.ChainLines) DrawButton(h, "사슬 선 보기", 14);
+            else if (h.Act == UiAct.DetailBack) { DrawButton(h, "목록", 14); DrawChevron(R(h.R).Position + new Vector2(14 * U, R(h.R).Size.Y / 2), 4 * U, -1, InkDim); }
+            else if (h.Act == UiAct.DetailFollow) DrawButton(h, f.DetailFollow ? "따라가는 중" : "따라가기", 14);
+            else if (h.Act == UiAct.DetailTab && h.Key < f.DetailTabs.Length) DrawButton(h, f.DetailTabs[h.Key], 15);
         }
         if (_hud.Areas.TryGetValue("출항 줄", out var ho))
         {
@@ -1010,6 +1047,26 @@ void fragment() {
             DrawRect(new Rect2(bar.Position.X + bar.Size.X / 2 - 3 * U, bar.Position.Y + at, 6 * U, Math.Min(len, track - at)), new Color(0.55f, 0.68f, 0.9f, 0.95f));
         }
         DrawString(_font, new Vector2(box.Position.X + 18 * U, box.End.Y - 12 * U), f.PanelFoot, HorizontalAlignment.Left, box.Size.X - 36 * U, Fs(15), new Color(0.6f, 0.68f, 0.8f));
+    }
+
+    /// <summary>자세한 판 머리 (docs/UI2.md §5.2): 얼굴 (사람 · 정수 배율) · 이름 굵게 · 둘째 줄 옅게 — 단추 · 작은 탭은 손잡이로 그린다.</summary>
+    private void DrawDetailHead(LiveFrame f, Rect2 box)
+    {
+        float x = box.Position.X + 18 * U, y = box.Position.Y;
+        if (f.DetailFace >= 0 && _facesTex != null)
+        {
+            int fs = Math.Max(1, (int)Math.Floor(2 * U));
+            var src = new Rect2(f.DetailFace % f.FacesPerRow * Painter.FaceW, f.DetailFace / f.FacesPerRow * Painter.FaceH, Painter.FaceW, Painter.FaceH);
+            var dst = new Rect2(box.Position.X + 12 * U, y + 8 * U, Painter.FaceW * fs, Painter.FaceH * fs);
+            DrawRect(dst.Grow(2), new Color(0.06f, 0.08f, 0.12f, 1f));
+            DrawTextureRectRegion(_facesTex, dst, src, Colors.White);
+            DrawRect(dst.Grow(2), new Color(0.4f, 0.52f, 0.7f, 0.7f), false, 1);
+            x = box.Position.X + 72 * U;
+        }
+        float right = box.End.X - 40 * U;
+        foreach (var h in _hud.Hits) if (h.Act is UiAct.DetailFollow or UiAct.DetailBack && h.R.Y < _hud.Area("판").Y + 56) right = Math.Min(right, R(h.R).Position.X);
+        DrawString(_bold, new Vector2(x, y + 28 * U), f.PanelTitle, HorizontalAlignment.Left, Math.Max(10, right - x - 8 * U), Fs(20), new Color(0.9f, 0.94f, 1f));
+        DrawString(_font, new Vector2(x, y + 49 * U), f.DetailLine, HorizontalAlignment.Left, Math.Max(10, box.End.X - x - 16 * U), Fs(15), InkDim);
     }
 
     /// <summary>펼친 목록 (고정 빠르기 · 겹쳐 보기 · 메뉴 · 배 바꾸기).</summary>
@@ -1159,7 +1216,11 @@ void fragment() {
             case UiAct.AskYes: AskYes(); break;
             case UiAct.Tab: { var kind = HudLayout.TabKinds[k]; _cmds.Enqueue(s => s.TogglePanel(kind)); break; }
             case UiAct.RouteTab: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Route) s.TogglePanel(PanelKind.Route); }); break;
-            case UiAct.PanelClose: _cmds.Enqueue(s => s.Panel = PanelKind.None); break;
+            case UiAct.PanelClose: _cmds.Enqueue(s => s.ClosePanel()); break;
+            case UiAct.DetailTab: { int i = (int)k; _cmds.Enqueue(s => s.SetDetailSub(i)); break; }
+            case UiAct.DetailBack: _cmds.Enqueue(s => s.DetailBack()); break;
+            case UiAct.DetailFollow: _cmds.Enqueue(s => s.DetailFollow()); break;
+            case UiAct.DetailOpen: { int id = f?.Selected ?? -1; _cmds.Enqueue(s => s.OpenDetail(DetailKind.Person, id)); break; }   // 로봇이면 OpenDetail이 로봇 자세히로 고친다
             case UiAct.PanelRow: _cmds.Enqueue(s => s.PanelClick(k)); break;
             case UiAct.PanelRowAct: _cmds.Enqueue(s => s.PanelAct(k)); break;
             case UiAct.ChainLines: { bool on = f?.Show != Overlay.Chain; _cmds.Enqueue(s => s.SetChainLines(on)); break; }
@@ -1168,7 +1229,8 @@ void fragment() {
             case UiAct.CardClose: _cmds.Enqueue(s => s.Release()); break;
             case UiAct.CardName: { int id = f?.Selected ?? -1; _cmds.Enqueue(s => s.CenterOn(id)); break; }
             case UiAct.Crew: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
-            case UiAct.CrewMore or UiAct.RobotMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.People) s.TogglePanel(PanelKind.People); }); break;
+            case UiAct.CrewMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.People || s.Detail != DetailKind.None) { s.ClosePanel(); s.TogglePanel(PanelKind.People); } }); break;
+            case UiAct.RobotMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Robots || s.Detail != DetailKind.None) { s.ClosePanel(); s.TogglePanel(PanelKind.Robots); } }); break;
             case UiAct.Robot: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
             case UiAct.Talk: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Journal) s.TogglePanel(PanelKind.Journal); }); break;
             case UiAct.Feed: if (f != null && k < f.Feed.Length) { int cell = f.Feed[k].Cell; _cmds.Enqueue(s => s.LookAt(cell)); } break;
@@ -1202,13 +1264,14 @@ void fragment() {
         }
     }
 
-    /// <summary>뒤로 (오른쪽 누르기 · 뒤로 단추 · Esc): 확인 창 → 펼친 목록 → 도움말 → 판 → 고른 이. 한 일이 있으면 true.</summary>
+    /// <summary>뒤로 (오른쪽 누르기 · 뒤로 단추 · Esc): 확인 창 → 펼친 목록 → 도움말 → 자세히 (목록으로) → 판 → 고른 이. 한 일이 있으면 true.</summary>
     private bool Back()
     {
         if (_shown == null) return false;
         switch (_hs.Back(_shown))
         {
-            case BackStep.ClosePanel: _cmds.Enqueue(s => s.Panel = PanelKind.None); return true;
+            case BackStep.CloseDetail: _cmds.Enqueue(s => s.DetailBack()); return true;
+            case BackStep.ClosePanel: _cmds.Enqueue(s => s.ClosePanel()); return true;
             case BackStep.Release: _cmds.Enqueue(s => s.Release()); return true;
             case BackStep.None: return false;
             default: return true;
@@ -1347,7 +1410,7 @@ void fragment() {
                 case Godot.Key.Left when !k.Echo: _cmds.Enqueue(s => s.PanelSide(-1)); return;
                 case Godot.Key.Right when !k.Echo: _cmds.Enqueue(s => s.PanelSide(+1)); return;
                 case Godot.Key.Enter or Godot.Key.KpEnter when !k.Echo: _cmds.Enqueue(s => s.PanelEnter()); return;
-                case Godot.Key.Escape when !k.Echo: _cmds.Enqueue(s => s.Panel = PanelKind.None); return;
+                case Godot.Key.Escape when !k.Echo: Back(); return;   // 자세히 → 목록 → 닫기 (뒤로 차례)
             }
         }
         if (k.Echo) return;
@@ -1370,6 +1433,8 @@ void fragment() {
             case Godot.Key.J: Do(Hk(UiAct.Tab, 2)); break;
             case Godot.Key.C: Do(Hk(UiAct.Tab, 3)); break;
             case Godot.Key.P: Do(Hk(UiAct.Tab, 4)); break;
+            case Godot.Key.G: Do(Hk(UiAct.Tab, 5)); break;
+            case Godot.Key.X: Do(Hk(UiAct.Tab, 6)); break;
             case Godot.Key.O: _cmds.Enqueue(s => s.CycleOverlay()); break;
             case Godot.Key.F3: _meter = !_meter; break;
             case Godot.Key.U: Do(Hk(UiAct.Captions)); break;
