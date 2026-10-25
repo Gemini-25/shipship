@@ -74,6 +74,9 @@ public static partial class Program
             Want("사람 0.6칸 · 빈 바닥", show.PickAt(fx0, fy0, p32, Spot(fx0, fy0, 0.6)), PickKind.Agent, 0);
             var both = new[] { new AgentSpot(1, fx0 + 0.3, fy0 + 0.15, true), new AgentSpot(0, fx0 - 0.5, fy0 + 0.15, false) };
             Want("로봇 0.3 · 사람 0.5", show.PickAt(fx0, fy0, p32, both), PickKind.Agent, 0);
+            // 검토 고침 (U4~U6): 컵 상자 안 — 0.45칸 안의 로봇이 0.45 ~ 0.9칸의 사람에게 가려져 컵이 골라졌다 → 로봇
+            var hidden = new[] { new AgentSpot(1, ux + 0.3, uy + 0.15, true), new AgentSpot(0, ux - 0.5, uy + 0.15, false) };
+            Want("컵 위 · 로봇 0.3 · 사람 0.5", show.PickAt(ux, uy, p32, hidden), PickKind.Agent, 1);
             if (!double.IsNaN(bare.x)) Want("컵 밖 탁자 칸", show.PickAt(bare.x, bare.y, p32, none), PickKind.Furniture, table.Id); else bad.Add("탁자에 빈 자리가 없다");
             Want("8도트 여유에서도 컵 (발자국이 작은 것)", show.PickAt(ux, uy, p8, none), PickKind.Prop, cup.Id);
             if (door >= 0) Want("문", show.PickAt(Mid(L.Doors[door].Cell).Item1, Mid(L.Doors[door].Cell).Item2, p32, none), PickKind.Door, door);
@@ -91,7 +94,7 @@ public static partial class Program
             for (int k = 0; k < 200; k++) show.LookCard();
             double cardUs = sw.Elapsed.TotalMilliseconds * 1000 / 200;
             show.LookClose();
-            Check("살펴보기 V1 누르기 차례: 사람 0.45칸 안은 늘 먼저 · 0.45 ~ 0.9칸은 물체 · 가구 상자 밖일 때만 · 사람과 로봇이 겹치면 사람 · 탁자 위 컵 > 탁자 · 문 · 벽 · 바닥 · 바깥은 없음 · 여유는 화면 10픽셀 (32도트 0.21칸 · 16도트 0.47칸 · 8도트 0.68칸)",
+            Check("살펴보기 V1 누르기 차례: 사람 0.45칸 안은 늘 먼저 · 0.45 ~ 0.9칸은 물체 · 가구 상자 밖일 때만 · 사람과 로봇이 겹치면 사람 (상자 안에서는 0.45칸 안의 로봇이 먼 사람에게 가려지지 않는다) · 탁자 위 컵 > 탁자 · 문 · 벽 · 바닥 · 바깥은 없음 · 여유는 화면 10픽셀 (32도트 0.21칸 · 16도트 0.47칸 · 8도트 0.68칸)",
                 bad.Count == 0 && Math.Abs(p32 - 0.21) < 0.01 && Math.Abs(p16 - 0.476) < 0.01 && Math.Abs(p8 - 0.667) < 0.01, bad.Count > 0 ? string.Join(" / ", bad.Take(6)) : $"여유 {p32:0.00} · {p16:0.00} · {p8:0.00} · 한 점 {pickUs:0}µs · 탁자 카드 {cardUs:0}µs (디딤호 물체 {st.Props.Count})");
         }
 

@@ -91,6 +91,18 @@ public static partial class Program
             Check("자세한 판 D4 판단 일지 32칸: 마흔 번 판단한 사람의 일지가 32칸까지 남고 (예전 여덟 칸 — 자세한 판에서 몇 분이면 밀렸다) · 일지 탭에 32줄 (새것 위)",
                 jr != null && jr.Count == Mind.JudgedKeep && Mind.JudgedKeep == 32 && judged >= 32 && jr.Newest(0).Tick == w.Tick + 39, $"일지 {jr?.Count} · 탭 줄 {judged}");
         }
+        // ── 일지 열쇠 (U4~U6 검토 고침): 새 판단이 들어와도 골라 둔 줄은 같은 판단 — 고치기 전 열쇠는 틱 × 32 + 칸 차례라 새 판단마다 밀려 다른 판단이 펼쳐졌다 ──
+        {
+            long t0 = w.Tick + 100;
+            foreach (var g in new[] { GoalKind.Repair, GoalKind.FightFire, GoalKind.Clean }) mind.NoteReleased(pid, t0, g, a.C.Cell);
+            var before = DetailOf(show, 5);
+            var picked = before.First(r => r.Main.Contains(Mind.GoalName(GoalKind.FightFire)));
+            mind.NoteReleased(pid, t0, GoalKind.Rescue, a.C.Cell);
+            var after = DetailOf(show, 5);
+            var same = after.Where(r => r.Key == picked.Key).ToList();
+            Check("자세한 판 일지 열쇠: 같은 틱의 판단 셋 가운데 고른 줄 (불 끄기) — 새 판단이 들어온 뒤에도 그 열쇠는 같은 판단 하나 (고치기 전: 칸 차례로 밀려 다른 판단)",
+                same.Count == 1 && same[0].Main == picked.Main && after.Select(r => r.Key).Distinct().Count() == after.Length, $"고른 '{picked.Main}' → {string.Join(" | ", same.Select(r => r.Main))}");
+        }
         show.DetailBack();
 
         // ── D2 로봇: 다리가 상한 로봇 — 다리 막대 · 원인 사슬 · 맡은 사건 · 막힘 까닭 · 주컴퓨터 말 기록의 그 로봇 줄 ──
@@ -125,6 +137,55 @@ public static partial class Program
             cm.Incidents.RemoveAt(cm.Incidents.Count - 1);
             Check("자세한 판 D2 로봇: 다리가 상한 로봇 — 다리 막대 (빨강) · '걷지 못한다' · 원인 사슬 (처음: 함장이 일으킨 …) · 보는 거리 · 맡은 사건 (방 · 갈래 · 막힘) · 막힘 까닭 · 맡은 까닭 · 일지에 주컴퓨터 말 기록의 그 로봇 줄 · 개발 말 0",
                 bad.Count == 0, bad.Count > 0 ? string.Join(" / ", bad.Take(3)) : $"줄 짓기 탭마다 {robotUs:0}µs");
+        }
+        show.DetailBack();
+
+        // ── D3 주컴퓨터: '지금' = J 판 줄 · '아는 것' — 못 보는 방 · 산소 조절 센서 0.7 · 센서 없는 방의 불 '모르는 일' · 꺼진 불 '틀린 앎' · 일감 · 말 기록 · 몸 · 방침 ──
+        {
+            for (int i = 0; i < 6; i++) show.Advance(1);   // 센서를 한 번은 읽는다 (12초)
+            var cm = w.Get<ShipMind>(); var net = w.Get<Network>(); var ch = w.Get<Chemistry>();
+            var mess = L.Rooms.First(x => x.Type == "Mess");
+            var dark = L.Rooms.First(x => x.Id != mess.Id && x.Cells.Length > 4 && cm.RoomSeen[x.Id] != 0);
+            show.OpenDetail(DetailKind.Computer, -1);
+            var bad = new List<string>();
+            bool Has(PanelRow[] rows, string t) => rows.Any(x => x.Main.Contains(t) || x.Sub.Contains(t));
+            var now = DetailOf(show, 0);
+            show.ClosePanel(); show.TogglePanel(PanelKind.Journal);
+            var jRows = show.PanelRows();
+            if (!Has(now, "배 형편") || now.Length != jRows.Length || now.Where((x, i) => x.Main != jRows[i].Main).Any()) bad.Add("지금 ≠ J 판: " + string.Join(" | ", now.Select(x => x.Main)));
+            // 차림 (세계에 직접): 센서가 못 읽는 방 · 그 방에 불 · 조절 센서 0.7 · 식당 불 사건 (실제는 타지 않는다)
+            byte seen0 = cm.RoomSeen[dark.Id]; cm.RoomSeen[dark.Id] = 0;
+            int fireCell = dark.Cells[dark.Cells.Length / 2]; byte burn0 = ch.Burning[fireCell]; ch.Burning[fireCell] = 1;
+            double gain0 = net.O2Gain; net.SetO2Drift(w, 0.7, 0);
+            cm.Incidents.Add(new Incident { Id = 9002, Kind = IncidentKind.Fire, Active = 1, Room = mess.Id, Cell = mess.Cells[0], Subject = -1, Since = w.Tick, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1 });
+            show.KnowsEverySec = 0;
+            var knows = DetailOf(show, 2);
+            if (!knows.Any(x => x.Main.StartsWith(dark.Name + " — 못 본다") && x.On)) bad.Add("못 보는 방 줄 없음");
+            if (!knows.Any(x => x.Main.Contains("산소 조절 센서") && x.Sub.Contains("읽는 몫 70%") && x.On)) bad.Add("조절 센서 0.7 줄 없음");
+            if (!knows.Any(x => x.Main.StartsWith("모르는 일") && x.Main.Contains(dark.Name) && x.Sub.Contains("불"))) bad.Add("모르는 일 (센서 없는 방의 불) 없음");
+            if (!knows.Any(x => x.Main.StartsWith("틀린 앎") && x.Main.Contains(mess.Name) && x.Sub.Contains("실제는 꺼졌다"))) bad.Add("틀린 앎 (꺼진 불) 없음");
+            var seenRow = knows.FirstOrDefault(x => x.Main.StartsWith(mess.Name + " — "));
+            if (seenRow.Sub == null || !seenRow.Sub.Contains("기압") || !seenRow.Sub.Contains("실제")) bad.Add($"읽은 방 줄 ({mess.Name}): {seenRow.Main} / {seenRow.Sub}");
+            if (!Has(knows, "사람 자리") || !Has(knows, "바깥")) bad.Add("사람 자리 · 바깥 줄 없음");
+            var chores = DetailOf(show, 3); var says = DetailOf(show, 4); var self = DetailOf(show, 5);
+            if (!Has(chores, "일감판") || !Has(chores, "배급")) bad.Add("일감: " + string.Join(" | ", chores.Select(x => x.Main)));
+            if (says.Length == 0 || !Has(says, "주컴퓨터가 한 말") && !Has(says, "아직")) bad.Add("말 기록: " + string.Join(" | ", says.Select(x => x.Main)));
+            if (!Has(self, "제 몸") || !Has(self, "센서가 닿는 곳") || !Has(self, "위험한 방을 봉쇄한다") || !Has(self, "이 항해의 셈")) bad.Add("몸 · 방침: " + string.Join(" | ", self.Select(x => x.Main)));
+            var f = show.Render(); show.Recycle(f.Img);
+            if (!f.DetailLine.Contains("센서") || !f.DetailLine.Contains("못 보는 방")) bad.Add("머리 줄: " + f.DetailLine);
+            foreach (var (tab, rows) in new[] { ("아는 것", knows), ("일감", chores), ("말 기록", says), ("몸 · 방침", self) })
+                foreach (var x in rows) foreach (var t in new[] { x.Main, x.Sub }.Where(t => t.Length > 0)) if (LookBad(t) is { } why) bad.Add($"{tab} '{t}' {why}");
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var (tab, rows) in new[] { ("아는 것", knows), ("일감", chores), ("말 기록", says), ("몸 · 방침", self) }) Console.WriteLine($"    [{tab}]\n      " + string.Join("\n      ", rows.Select(x => x.Main + (x.Sub.Length > 0 ? " / " + x.Sub.Replace("\n", " ⏎ ") : ""))));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            show.SetDetailSub(2); for (int q = 0; q < 20; q++) show.PanelRows();
+            double knowsUs = sw.Elapsed.TotalMilliseconds * 1000 / 20;
+            sw.Restart();
+            foreach (int sub in new[] { 3, 4, 5 }) { show.SetDetailSub(sub); for (int q = 0; q < 20; q++) show.PanelRows(); }
+            double restUs = sw.Elapsed.TotalMilliseconds * 1000 / 60;
+            show.KnowsEverySec = 0.5;
+            cm.Incidents.RemoveAt(cm.Incidents.Count - 1); cm.RoomSeen[dark.Id] = seen0; ch.Burning[fireCell] = burn0; net.SetO2Drift(w, gain0, 0);
+            Check("자세한 판 D3 주컴퓨터: '지금' = J 판 줄 · '아는 것' — 못 보는 방 (빨강) · 산소 조절 센서 읽는 몫 70% · 센서 없는 방의 불 '모르는 일' · 꺼진 불 '틀린 앎' · 읽은 방은 실제와 나란히 · 사람 자리 · 바깥 / 일감 · 말 기록 · 몸 · 방침 · 머리 줄 (센서 · 못 보는 방) · 개발 말 0",
+                bad.Count == 0, bad.Count > 0 ? string.Join(" / ", bad.Take(4)) : $"아는 것 {knowsUs:0}µs (디딤호 방 {L.Rooms.Count}) · 나머지 탭 {restUs:0}µs");
         }
     }
 }

@@ -36,17 +36,7 @@ public sealed partial class LiveShow
     private string DetailLineNow()
     {
         var w = World;
-        if (Detail == DetailKind.Computer)
-        {
-            var sm = w.Find<ShipMind>();
-            if (sm == null) return "이 배에는 주컴퓨터가 없다";
-            var bits = new List<string> { sm.Online ? "켜짐" : "멈췄다" };
-            if (sm.Throttled != 0) bits.Add("열 때문에 느려졌다");
-            if (sm.IntakeK > 0) bits.Add($"빨아들이는 공기 {sm.IntakeK - 273.15:0}℃");
-            int open = sm.Incidents.Count(x => x.Active != 0);
-            bits.Add(open > 0 ? $"붙잡은 사건 {open}" : "붙잡은 사건 없음");
-            return string.Join(" · ", bits);
-        }
+        if (Detail == DetailKind.Computer) return ComputerHeadLine(w);
         var a = DetailAgent();
         var mind = w.Find<Mind>();
         if (a == null || mind == null) return "";
@@ -82,17 +72,7 @@ public sealed partial class LiveShow
     /// <summary>자세한 판의 줄: 고른 작은 탭.</summary>
     private void DetailRows(List<PanelRow> rows)
     {
-        if (Detail == DetailKind.Computer)
-        {
-            if (DetailSub == 0) { JournalRows(rows); return; }
-            string soon = DetailSub switch
-            {
-                1 => "주컴퓨터가 한 예측과 실제 · 맞음 몫", 2 => "방마다 센서로 아는 값과 실제 · 모르는 일", 3 => "일감판 · 못 한 일감 · 막힌 곳 · 배급",
-                4 => "주컴퓨터가 한 말 · 해 본 방법 · 지어 본 방법", _ => "제 몸 · 센서가 닿는 곳 · 함장 방침 · 이 항해의 셈",
-            };
-            rows.Add(new PanelRow("곧 — " + soon, "지금은 '지금' 탭에서 사건 · 배 형편 · 일지를 본다", false, Key: -1));
-            return;
-        }
+        if (Detail == DetailKind.Computer) { ComputerRows(rows); return; }   // 주컴퓨터 자세히 (LiveComputer.cs — U7)
         var a = DetailAgent();
         var w = World; var mind = w.Find<Mind>();
         if (a == null || mind == null) { rows.Add(new PanelRow("그 이를 찾을 수 없다", "목록으로 돌아간다 (오른쪽 누르기)", false, Key: -1)); return; }
@@ -100,6 +80,9 @@ public sealed partial class LiveShow
     }
 
     private long DK(long n) => KeyDetail(DetailSub, n);
+
+    /// <summary>주컴퓨터 '아는 것' 표를 다시 셈하는 틈 (화면 초 — 시험은 0).</summary>
+    public double KnowsEverySec = 0.5;
 
     /// <summary>사람 자세히 (docs/UI2.md §4.2 — U5): 몸 · 마음 · 하는 일 · 아는 것 · 사람 사이 · 일지 · 지나온 길 (자리만 — docs/OBSERVER_REVIEW.md §4).</summary>
     private void PersonRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
@@ -379,7 +362,7 @@ public sealed partial class LiveShow
         {
             var nt = notes.Newest(k);
             if (nt.Kind != NoteKind.Ask || !nt.Text.Contains(name)) continue;
-            rows.Add(new PanelRow($"주컴퓨터의 부탁 — {HourMin(nt.Tick)}", TextLint.Clean(nt.Text), false, Key: DK((1L << 35) + n++)));
+            rows.Add(new PanelRow($"주컴퓨터의 부탁 — {HourMin(nt.Tick)}", TextLint.Clean(nt.Text), false, Key: DK((1L << 35) + notes.Added - 1 - k))); n++;   // 열쇠는 말의 차례 번호 (새 말에 밀리지 않게)
         }
     }
 
@@ -459,7 +442,7 @@ public sealed partial class LiveShow
             var nt = notes.Newest(k);
             if (nt.Robot != a.Id) continue;
             string kind = nt.Kind switch { NoteKind.Assign => "맡김", NoteKind.Defer => "미룸", NoteKind.Release => "놓아줌", NoteKind.Block or NoteKind.Stuck => "막힘", _ => "말" };
-            rows.Add(new PanelRow($"주컴퓨터 {kind} — {HourMin(nt.Tick)}", TextLint.Clean(nt.Text) + (nt.Reason != 0 && ShipMind.ReasonText(nt.Reason) is { Length: > 0 } why ? " · " + why : ""), false, Key: DK((1L << 35) + n++)));
+            rows.Add(new PanelRow($"주컴퓨터 {kind} — {HourMin(nt.Tick)}", TextLint.Clean(nt.Text) + (nt.Reason != 0 && ShipMind.ReasonText(nt.Reason) is { Length: > 0 } why ? " · " + why : ""), false, Key: DK((1L << 35) + notes.Added - 1 - k))); n++;
         }
     }
 
@@ -470,7 +453,7 @@ public sealed partial class LiveShow
         for (int k = 0; k < (jr?.Count ?? 0); k++)
         {
             ref var j = ref jr!.Newest(k);
-            rows.Add(new PanelRow(JudgedLine(j), "", j.Out is JudgeOut.Blocked or JudgeOut.CantPlan, Key: DK(Math.Min(j.Tick * 32 + (k & 31), (1L << 35) - 1))));   // 같은 틱의 판단도 칸마다 다른 열쇠 (32칸)
+            rows.Add(new PanelRow(JudgedLine(j), "", j.Out is JudgeOut.Blocked or JudgeOut.CantPlan, Key: DK(Math.Min(jr.Added - 1 - k, (1L << 35) - 1))));   // 열쇠는 그 판단의 차례 번호 (검토 고침 — 틱 × 32 + 칸 차례는 새 판단마다 밀려 고른 줄이 다른 판단으로 넘어갔다)
         }
         if (rows.Count == 0) rows.Add(new PanelRow("아직 적힌 판단이 없다", "목표를 세우거나 막히거나 그만두면 여기에 적힌다", false, Key: -1));
     }

@@ -30,6 +30,8 @@ public sealed partial class ShipMind
 
     /// <summary>맡긴 셈 수 (받기 전).</summary>
     public int Thinking => _thoughts.Count;
+    /// <summary>맡긴 셈들 (화면이 읽기만 — 방 · 사건 · 맡긴 틱 · 받을 틱 · docs/UI2.md §4.4 · §4.5).</summary>
+    public IReadOnlyList<Thought> Thoughts => _thoughts;
     /// <summary>재기용 (찍지 않는다): 맡긴 수 · 그 가운데 일꾼에서 돈 수.</summary>
     public long ThoughtsStarted { get; private set; }
     public long ThoughtsOnWorker { get; private set; }

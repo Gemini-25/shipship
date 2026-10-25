@@ -159,12 +159,11 @@ public sealed partial class LiveShow
         return default;
     }
 
-    /// <summary>누를 사람 · 로봇 (§3.2): 0.45칸 안이면 늘 · 0.9칸까지는 그 점이 물체 · 가구 상자 안이 아닐 때만 — 없으면 -1. 올림 · 누름 · 메인 스레드가 같은 셈.</summary>
-    public static int AgentAt(IReadOnlyList<AgentSpot> spots, double x, double y, bool inside)
-    {
-        int id = Nearest(spots, x, y, out double d);
-        return id >= 0 && (d <= 0.45 || !inside) ? id : -1;
-    }
+    /// <summary>
+    /// 누를 사람 · 로봇 (§3.2): 0.45칸 안이면 늘 · 0.9칸까지는 그 점이 물체 · 가구 상자 안이 아닐 때만 — 없으면 -1. 올림 · 누름 · 메인 스레드가 같은 셈.
+    /// 상자 안이면 0.45칸 안에서만 고른다 (검토 고침 — 0.45칸 안의 로봇이 0.45 ~ 0.9칸의 사람에게 가려져 물체 · 가구가 골라졌다).
+    /// </summary>
+    public static int AgentAt(IReadOnlyList<AgentSpot> spots, double x, double y, bool inside) => Nearest(spots, x, y, out _, inside ? 0.45 : 0.9);
 
     /// <summary>살펴본다 (올린 열쇠로 — 올린 것과 누른 것이 늘 같다): 사람 · 로봇은 고르기 · 없음은 놓기 · 물건은 카드 (고른 이는 놓는다).</summary>
     public void Inspect(PickKey k)

@@ -291,14 +291,17 @@ public sealed partial class LiveShow
     /// <summary>
     /// 0.9칸 안의 가장 가까운 이 · 그 거리 (칸): 사람 · 로봇이 겹치면 사람 (로봇보다 0.25칸 더 멀어도 — docs/UI2.md §3.2 · 사람을 따라가려다 곁의 로봇을 고르지 않게).
     /// </summary>
-    public static int Nearest(IReadOnlyList<AgentSpot> spots, double x, double y, out double dist)
+    public static int Nearest(IReadOnlyList<AgentSpot> spots, double x, double y, out double dist) => Nearest(spots, x, y, out dist, 0.9);
+
+    /// <summary>reach칸 안의 가장 가까운 이 (사람 먼저 — 위와 같은 셈).</summary>
+    public static int Nearest(IReadOnlyList<AgentSpot> spots, double x, double y, out double dist, double reach)
     {
         int best = -1; double score = double.MaxValue; dist = double.NaN;
         foreach (var s in spots)
         {
             if (double.IsNaN(s.X)) continue;
             double d = Math.Sqrt((s.X - x) * (s.X - x) + (s.Y - y - 0.15) * (s.Y - y - 0.15));
-            if (d >= 0.9) continue;
+            if (d >= 0.9 || d > reach) continue;
             double v = d + (s.Robot ? 0.25 : 0);
             if (v < score) { score = v; best = s.Id; dist = d; }
         }

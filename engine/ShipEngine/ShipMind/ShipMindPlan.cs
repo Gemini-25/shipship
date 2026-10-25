@@ -910,6 +910,9 @@ public sealed partial class ShipMind
         EndPlan(sim, id, x, done: false);
     }
 
+    /// <summary>걸음 글 (화면이 읽기만 — 해 본 방법 · 하는 중인 걸음).</summary>
+    public string StepText(in PlanStepRec st) => StepName(st);
+
     private string StepName(in PlanStepRec st) => (ActKind)st.Act switch
     {
         ActKind.Open => $"{DoorName(st.Obj)} 열기", ActKind.Close => $"{DoorName(st.Obj)} 닫기", ActKind.Go => $"{(st.Dest >= 0 ? RoomName(st.Dest) : "선체 바깥")}으로 가기",

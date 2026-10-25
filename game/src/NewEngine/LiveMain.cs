@@ -420,6 +420,17 @@ void fragment() {
             }
             case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
+            case "computer-cut":
+            {
+                // 센서 선을 끊은 뒤 (U7): 방 안 센서 선 칸 하나를 끊는다 (함장의 손 — 월드 길) · 주컴퓨터 자세히 '아는 것'
+                var L = s.Sim.Layout; var net = s.Sim.Find<ShipEngine.Network>();
+                int at = -1;
+                for (int c = 0; c < L.N && at < 0 && net != null; c++)
+                    if (net.OnData(c) && L.Room[c] >= 0 && ShipEngine.Hand.Why(s.Sim, new HandOrder { Kind = HandKind.DataCut, Cell = c, Size = 1 }).Length == 0) at = c;
+                if (at >= 0) { s.ArmHand(HandKind.DataCut, 1); s.HandAt(L.X(at) + 0.5, L.Y(at) + 0.5); }
+                s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub);
+                break;
+            }
             case "hand": if (s.Panel != PanelKind.Hand) s.TogglePanel(PanelKind.Hand); break;
             case "hand-armed" or "hand-fire":
             {

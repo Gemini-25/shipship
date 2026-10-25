@@ -125,6 +125,8 @@ public sealed partial class ShipMind : IEngine
     public int[] GaveAirAt;                     // 방마다: 열린 문 · 밸브로 더 낮은 기압의 방에 공기를 주던 마지막 읽기 번호 (그동안 줄어든 것은 샘이 아니다)
     public float[] RoomMoles;                   // [방 × 6]: 지난 1분(읽기 6번)의 기체량 — 새는지는 기체량이 줄어드는 것으로 (온도 · 문 여닫이로 기압이 흔들리는 것과 가른다)
     private int _reads;
+    /// <summary>센서를 읽은 번 (화면이 읽기만 — 무선 방이 몇 번 앞에 새 값을 받았나 · docs/UI2.md §4.4 '아는 것').</summary>
+    public int Reads => _reads;
     private byte[] _stale = Array.Empty<byte>();   // 이번 읽기에 무선 방의 새 값이 오지 않았다 (그 틱에 다시 정한다 — 찍지 않는다)
     /// <summary>배 전체 기체량 — 1분마다 10개 (느린 샘: 10분에 0.5% 넘게 줄면).</summary>
     public float[] ShipMolesHist = new float[10];
