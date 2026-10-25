@@ -423,6 +423,21 @@ public sealed partial class Field
     public const double MouthR = 0.25;
     private static readonly (int, int)[] Dirs4 = { (1, 0), (-1, 0), (0, 1), (0, -1) };
 
+    /// <summary>구멍 입이 될 수 있는 칸인가 (지나갈 수 있고 · 네 이웃에 구멍 벽 · 트인 바깥이 있다) — 아니면 구멍 입 동압이 0이다 (부르는 쪽이 값비싼 셈을 건너뛴다).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    public bool NearMouth(int cell)
+    {
+        if (cell < 0 || cell >= L.N || !Passable(cell)) return false;
+        int x = L.X(cell), y = L.Y(cell);
+        foreach (var (ox, oy) in Dirs4)
+        {
+            if (!L.In(x + ox, y + oy)) continue;
+            int j = L.Index(x + ox, y + oy);
+            if (IsOut(j) || L.Kind[j] == CellKind.Wall && Hole[j] > 0.01f) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// 구멍 입의 동압 (Pa — 순수 함수: 지금 기압 · 구멍 · 막음에서): 구멍 곁 칸(네 이웃이 구멍 · 트인 바깥)의 것이 받는다. 구멍의 빠르기 = min(소리 빠르기, √(2ΔP/ρ)) ·
     /// 드는 흐름 Q = 0.6 × (구멍 − 막음) × 그 빠르기가 반구로 모인다 → 25cm에서 v = min(구멍의 빠르기, Q / 2πr²) · ½ρv². 가장 센 구멍과 그 칸 (④ 물체 · ⑧ 끌림이 함께 읽는다).
@@ -432,16 +447,8 @@ public sealed partial class Field
     public double HoleMouthPa(int cell, out int mouth, double grow = 1)
     {
         mouth = -1;
-        if (cell < 0 || cell >= L.N || !Passable(cell)) return 0;
+        if (!NearMouth(cell)) return 0;   // 이웃에 구멍 벽 · 바깥이 없으면 기압을 세지 않는다 (물체 예산 고침 — 물체 둘레 칸 거의 모두)
         int x = L.X(cell), y = L.Y(cell);
-        bool near = false;   // 이웃에 구멍 벽 · 바깥이 없으면 기압을 세지 않는다 (물체 예산 고침 — 물체 둘레 칸 거의 모두)
-        foreach (var (ox, oy) in Dirs4)
-        {
-            if (!L.In(x + ox, y + oy)) continue;
-            int j = L.Index(x + ox, y + oy);
-            if (IsOut(j) || L.Kind[j] == CellKind.Wall && Hole[j] > 0.01f) { near = true; break; }
-        }
-        if (!near) return 0;
         double p = Pressure(cell) * grow;
         if (p < 1) return 0;
         double best = 0;

@@ -1346,7 +1346,7 @@ public sealed partial class ShipMind : IEngine
     /// </summary>
     public static Sim Imagined(Sim w)
     {
-        if (w.Find<Structure>() is { } st) st.PropDetail = 0;
+        w.Find<Structure>()?.Lighten();   // 가벼운 물체 셈 · 잠든 생활 소품은 빼고 (PH9)
         return w;
     }
 

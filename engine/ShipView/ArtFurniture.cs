@@ -15,7 +15,7 @@ public struct FurnFill
 /// 새 가구 그림 (docs/GRAPHICS.md 텍스처 T6 — 상위 15종): 3/4 시점 상자 (윗면 + 앞면) · 선택 외곽 (아래 · 오른쪽은 진하게 · 위 · 왼쪽은 한 단 밝게) ·
 /// 면 단 (윗면 밝게 · 앞면 가운데 · 앞 모서리 1도트 따뜻한 빛) · 재질 결 · 칸에 읽히는 부품 2~4.
 /// 세계 값: 선반의 소화기 · 봉합 꾸러미 (빈 칸이면 비었다) · 우주복 보관함의 우주복 · 산소마스크함의 마스크 수 · 침대 담요 = 주인의 색.
-/// 화물 · 책 · 공구 · 옷은 세계가 세지 않아 고정 꾸밈 (해시). 그림 크기 = 칸 × 32 · 높이 = 칸 × 32 + 솟음 (밑이 칸 바닥에 닿는다).
+/// 화물 · 책장의 책 · 공구 벽 · 옷은 세계가 세지 않아 고정 꾸밈 (해시) · 탁자 위 컵 · 접시와 선반 · 작업대 위 소품은 세계 물건 (④ 꾸밈 — PH9). 그림 크기 = 칸 × 32 · 높이 = 칸 × 32 + 솟음 (밑이 칸 바닥에 닿는다).
 /// </summary>
 public static class ArtFurniture
 {
@@ -91,7 +91,7 @@ public static class ArtFurniture
             case "RobotDock": RobotDock(o, 2, ty, W - 4, top, front, f); break;
             case "OxygenGenerator": OxyGen(o, 1, ty, W - 2, top, front, f); break;
             case "Bed": Bed(o, 1, ty, W - 2, top, front, f, fill); break;
-            case "Table": Table(o, 1, ty, W - 2, top, front, seed); break;
+            case "Table": Table(o, 1, ty, W - 2, top, front); break;
         }
         return o;
     }
@@ -461,8 +461,8 @@ public static class ArtFurniture
         for (int i = x + 6; i < x + w - 4; i += 16) o.Fill(i, y + top + 4, 2, front - 5, p[1]);
     }
 
-    /// <summary>탁자 (식당 · 쉼터 · 회의): 나무 윗판 · 가장자리 빛 · 앞 다리 · 위에 쟁반 · 컵 · 접시 (고정 꾸밈).</summary>
-    private static void Table(Img o, int x, int y, int w, int top, int front, int seed)
+    /// <summary>탁자 (식당 · 쉼터 · 회의): 나무 윗판 · 가장자리 빛 · 앞 다리. 위의 컵 · 접시는 세계 물건 (④ 꾸밈 — PH9)이 그 자리에 선다 (해시 꾸밈을 걷었다).</summary>
+    private static void Table(Img o, int x, int y, int w, int top, int front)
     {
         var p = Wood;
         o.Fill(x, y, w, top, p[4]);
@@ -471,17 +471,6 @@ public static class ArtFurniture
         o.Fill(x, y + top, w, 3, p[2]); o.Fill(x, y + top, w, 1, Rgba.Lerp(p[5], Warm, 0.4f));
         Outline(o, x, y, w, top + 3, p);
         o.Fill(x + 2, y + top + 3, 3, front - 3, p[1]); o.Fill(x + w - 5, y + top + 3, 3, front - 3, p[0]);   // 다리
-        for (int i = x + 6; i < x + w - 8; i += 11)
-        {
-            uint u = DotHash.U(seed, i, 41);
-            int py = y + 3 + (int)(u % (uint)Math.Max(1, top - 10));
-            switch (u >> 8 & 3)
-            {
-                case 0: o.Oval(i + 3, py + 3, 3.5f, 2.5f, H("#d8d4ca")); o.Oval(i + 3, py + 3, 2, 1.2f, H("#b8a888")); break;   // 접시
-                case 1: o.Fill(i + 1, py, 4, 5, H("#e8e4dc")); o.Fill(i + 1, py, 4, 1, H("#5a3a22")); o.Set(i + 5, py + 2, H("#c8c4bc")); break;   // 컵
-                case 2: o.Fill(i, py, 8, 5, H("#4a5462")); o.Fill(i, py, 8, 1, H("#6a7482")); break;   // 쟁반
-            }
-        }
     }
 
     /// <summary>옷걸이: 막대 · 옷 (색은 해시 — 방 사람들의 색은 나중에) · 받침 다리.</summary>

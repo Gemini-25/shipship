@@ -37,11 +37,14 @@ public static class ShipWorld
         return s;
     }
 
-    /// <summary>설계한 배 (도면 표): 새 배 + 만들 때 남은 작은 흠 (⑫ — 시드에서 · 시험의 글자 도면 배는 흠 없이 깨끗하다).</summary>
+    /// <summary>설계한 배 (도면 표): 새 배 + 만들 때 남은 작은 흠 (⑫ — 시드에서) + 생활 소품 (④ 꾸밈 — 탁자 위 컵 · 접시 · 선반 위 책 · 물병 · 작업대 위 공구 상자 · 시드에서 · PH9) ·
+    /// 시험의 글자 도면 배는 흠 · 꾸밈 없이 깨끗하다.</summary>
     public static Sim Create(string shipKey, ulong seed)
     {
         var s = Create(Layout.Ship(shipKey, Tables.Default), seed);
-        s.Get<Structure>().BuildFlaws(s);
+        var st = s.Get<Structure>();
+        st.BuildFlaws(s);
+        st.Decorate(s);
         return s;
     }
 

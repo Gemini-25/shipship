@@ -8,6 +8,7 @@ namespace ShipEngine;
 public sealed partial class Structure
 {
     private readonly Dictionary<int, DotForm> _propForms = new();   // (물건 번호 · 누움)마다 도트 꼴 (찍지 않는다 — 표에서 늘 같게)
+    private DotForm?[] _propFormAt = Array.Empty<DotForm?>();         // 같은 것을 물건 번호 × 8 + 누움 차례로 (사전을 찾지 않게)
     private string[]? _itemNames;
 
     /// <summary>물체의 도트 꼴 (물건: 사람 표의 그 물건 · 누움 Pose).</summary>
@@ -16,10 +17,16 @@ public sealed partial class Structure
     {
         if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
         int key = p.What * 8 + p.Pose;
+        if ((uint)key < (uint)_propFormAt.Length && _propFormAt[key] is { } at) return at;   // 표 차례로 곧장 (섬 짝마다 잔걸음마다 부른다 — 속도만)
         if (_propForms.TryGetValue(key, out var fm)) return fm;
         _itemNames ??= T.People.Items.Keys.ToArray();
         string name = p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default";
         _propForms[key] = fm = DotForge.Make(T, name, lie: p.Pose);
+        if (key >= 0 && key < 8 * (_itemNames.Length + 1))
+        {
+            if (_propFormAt.Length == 0) _propFormAt = new DotForm?[8 * (_itemNames.Length + 1)];
+            _propFormAt[key] = fm;
+        }
         return fm;
     }
 

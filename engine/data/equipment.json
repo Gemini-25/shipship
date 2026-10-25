@@ -2,6 +2,7 @@
 //   heat: 켜져 있을 때 내는 열 (W) — ⑥ 망 · 장치가 전기를 다루기 전까지는 늘 켜진 것으로 본다
 //   sealed: 포장되어 상하지 않는다 (식량 보관함)
 //   도트 꼴 (물리 세계 — docs/PHYSICS.md §2-5): h 높이 m (× 16 = 새 그림 앞면 도트 · 없으면 1m) · foot 발자국 [가로, 깊이] m (없으면 칸 상자) · anchorG 볼트가 견디는 가속 g (0 놓였다 · 없으면 16 — 기계)
+//   생활 소품 (PH9): decor 방 종류 (그 밖은 "_") → 칸마다 놓을 물건 · decorP 저마다 놓을 몫 (없으면 0.5) · decorSet 가구마다 목록 한 벌은 꼭 — 설계한 배를 만들 때 윗면에 시드에서 (꾸밈 · 제자리)
 //   옛 게임의 설비 이름을 그대로 쓴다 (배 도면이 그 이름으로 들어온다). 표에 없는 것은 "_default".
 {
   "_default":        { "name": "설비",         "parts": { "steel": 40, "polymer": 5 } },
@@ -9,10 +10,12 @@
   "CrashSeat":       { "name": "충격 좌석",    "parts": { "steel": 15, "polymer": 6, "foam": 2, "fabric": 2 } },
   "Bed":             { "name": "침대",         "parts": { "steel": 30, "foam": 10, "fabric": 8 }, "h": 0.5, "anchorG": 9 },
   "MedBed":          { "name": "치료 침대",    "parts": { "steel": 45, "foam": 8, "fabric": 3, "copper": 3 }, "heat": 150 },
-  "Table":           { "name": "탁자",         "parts": { "aluminum": 15, "polymer": 5 }, "h": 0.75, "anchorG": 0 },
+  "Table":           { "name": "탁자",         "parts": { "aluminum": 15, "polymer": 5 }, "h": 0.75, "anchorG": 0,
+                       "decor": { "Mess": ["컵", "접시"], "Galley": ["접시", "유리병"], "Lounge": ["컵", "책"], "_": ["컵"] }, "decorP": 0.7, "decorSet": true },
   "GameTable":       { "name": "놀이 탁자",    "parts": { "aluminum": 15, "polymer": 8, "fabric": 2 }, "anchorG": 0 },
-  "Shelf":           { "name": "선반",         "parts": { "steel": 25, "polymer": 6, "fabric": 4 }, "h": 1.625, "anchorG": 9 },
-  "Bookshelf":       { "name": "책장",         "parts": { "steel": 20, "fabric": 25 }, "h": 1.875, "anchorG": 9 },
+  "Shelf":           { "name": "선반",         "parts": { "steel": 25, "polymer": 6, "fabric": 4 }, "h": 1.625, "anchorG": 9,
+                       "decor": { "Quarters": ["책", "물병"], "Galley": ["유리병", "접시"], "Mess": ["컵"], "Lounge": ["책"], "Workshop": ["공구 상자"] }, "decorP": 0.35 },
+  "Bookshelf":       { "name": "책장",         "parts": { "steel": 20, "fabric": 25 }, "h": 1.875, "anchorG": 9, "decor": { "_": ["책"] }, "decorP": 0.4 },
   "Console":         { "name": "조종대",       "parts": { "steel": 15, "polymer": 8, "copper": 3, "glass": 2 }, "heat": 120, "h": 0.875 },
   "NavComputer":     { "name": "항법 컴퓨터",  "parts": { "steel": 20, "polymer": 6, "copper": 5, "glass": 2 }, "heat": 300 },
   "GravityGenerator":{ "name": "인공 중력 발생기", "parts": { "steel": 200, "copper": 60, "polymer": 10 }, "heat": 2000 },
@@ -41,12 +44,12 @@
   "Fermenter":       { "name": "발효조",       "parts": { "steel": 40, "food": 30 }, "heat": 50 },
   "NutrientDoser":   { "name": "양액 주입기",  "parts": { "steel": 10, "polymer": 8 } },
   "Fridge":          { "name": "냉장고",       "parts": { "steel": 60, "foam": 10, "polymer": 10, "food": 40 }, "heat": 250 },
-  "Stove":           { "name": "조리대",       "parts": { "steel": 50, "copper": 5, "ceramic": 5, "food": 3 }, "heat": 500 },
+  "Stove":           { "name": "조리대",       "parts": { "steel": 50, "copper": 5, "ceramic": 5, "food": 3 }, "heat": 500, "decor": { "_": ["유리병"] }, "decorP": 0.3 },
   "Oven":            { "name": "오븐",         "parts": { "steel": 45, "ceramic": 8 }, "heat": 300 },
   "MealDispenser":   { "name": "배식기",       "parts": { "steel": 40, "polymer": 10, "food": 20 }, "heat": 100 },
   "CoffeeMachine":   { "name": "커피 기계",    "parts": { "steel": 10, "polymer": 5, "food": 2 }, "heat": 150 },
   "IceMaker":        { "name": "제빙기",       "parts": { "steel": 20, "polymer": 5 }, "heat": 150 },
-  "Workbench":       { "name": "작업대",       "parts": { "steel": 80, "polymer": 5 } },
+  "Workbench":       { "name": "작업대",       "parts": { "steel": 80, "polymer": 5 }, "decor": { "_": ["공구 상자"] }, "decorP": 0.6 },
   "SolderStation":   { "name": "납땜대",       "parts": { "steel": 10, "copper": 3, "polymer": 3 } },
   "Lathe":           { "name": "선반 기계",    "parts": { "steel": 300, "copper": 10 } },
   "PartTestBench":   { "name": "부품 시험대",  "parts": { "steel": 40, "copper": 8, "polymer": 5 } },

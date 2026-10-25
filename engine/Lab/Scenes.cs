@@ -206,6 +206,8 @@ public static partial class Program
             case "props-zerog": PropsZeroGScene(dir); return;
             case "props-track": PropsTrackScene(dir); return;
             case "shatter": ShatterScene(dir); return;
+            case "props-ships": PropsShipsScene(dir); return;
+            case "mess": MessScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

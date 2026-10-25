@@ -139,6 +139,19 @@ public sealed partial class Structure
         if (Pairs) CountMisses(all, world);
     }
 
+    /// <summary>
+    /// 두 물체가 다른 기체 구역에 있다 (③ 구역 — 닫힌 문 · 벽으로 갈린 곳: 물체도 이 틱에 넘어가지 못한다 · 닫힌 문은 벽 · 둘 가운데 하나라도 구역을 모르면 거짓).
+    /// 걷는 섬이 다른 방의 잠든 것 (선반 · 탁자 위 생활 소품)을 쉬는 짝으로 들여 잔걸음마다 셈하지 않게 (PH9).
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
+    private bool Apart(in Prop a, in Prop b)
+    {
+        int ca = CellOf(a), cb = CellOf(b), rg = F.RegionOf.Length;
+        if (ca < 0 || cb < 0 || ca >= rg || cb >= rg) return false;
+        int ra = F.RegionOf[ca], rb = F.RegionOf[cb];
+        return ra >= 0 && rb >= 0 && ra != rb;
+    }
+
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int Find(int i)
     {
@@ -191,6 +204,7 @@ public sealed partial class Structure
                 if (j == i || (world ? _hostOf[j] : -1) != hi) continue;
                 if (_role[j] == 0)
                 {
+                    if (Apart(all[i], all[j])) continue;   // 닫힌 문 · 벽 너머 잠든 것은 이 틱에 닿을 수 없다 (쉬는 짝으로 들이지 않는다 — PH9)
                     StaticBox(all[j], j);
                     if (!BoxesMeet(i, j)) continue;
                     _role[j] = 2;
@@ -688,7 +702,7 @@ public sealed partial class Structure
                 {
                     int ai = _runNear[4 * k + q];
                     ref var ac = ref _actors[ai];
-                    if (DropperOf(p, ac) || p.Z >= ac.H) continue;   // 머리 위 (탁자 · 선반 위 높이)는 지나간다
+                    if (DropperOf(p, ac) || p.Z >= ac.H || r.On > 0) continue;   // 머리 위는 지나간다 · 가구 윗면 위의 것은 가구가 가린다 (칸 걸음이 가구 칸을 지나도 발은 가구 곁을 돈다 — PH9)
                     ActorAt(ac, tau, dt, out double ax, out double ay, out double avx, out double avy);
                     double sep = DiscSeparation(p, r.Sh, ax, ay, ac.R, out double nx, out double ny, out double cpX, out double cpY);
                     double rvx = p.Vx - avx, rvy = p.Vy - avy, rel = Math.Sqrt(rvx * rvx + rvy * rvy) + Math.Abs(p.W) * r.Sm.reach;
@@ -903,7 +917,7 @@ public sealed partial class Structure
         for (int c = 0; c < nCand; c++)
         {
             int j = _cand[c];
-            if (_role[j] != 0 || !Collides(all[j]) || (world ? _hostOf[j] : -1) != host) continue;
+            if (_role[j] != 0 || !Collides(all[j]) || (world ? _hostOf[j] : -1) != host || Apart(all[i], all[j])) continue;
             double e = SamplesOf(PropForm(all[j])).reach + 2 * DotForm.Dot;
             if (all[j].X + e < x0 || all[j].X - e > x1 || all[j].Y + e < y0 || all[j].Y - e > y1) continue;
             // 쉬는 짝으로 들인다

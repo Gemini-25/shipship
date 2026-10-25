@@ -33,6 +33,7 @@ public sealed partial class Painter
     private readonly List<int> _stale = new();
     /// <summary>구울 때 모은 솟은 설비 (도면 32도트 자리 — 사람 앞 가림에 쓴다).</summary>
     private readonly Dictionary<long, (Img img, int x, int y, int baseRow)> _farFront = new();
+    private readonly List<(Img img, int x, int y, int baseRow)> _farPropFront = new();   // 이 장의 가구 위 물체 (줄인 그림 · 이 그림 자리 — 사람 판을 얹은 뒤 다시)
     private readonly ConditionalWeakTable<Img, Img?[]> _down = new();
     private const int AgW = 72, AgH = 84, AgOx = 20, AgOy = 34;   // 사람 · 로봇을 32도트로 그릴 작은 판 (칸 왼쪽 위 자리)
 
@@ -268,6 +269,7 @@ public sealed partial class Painter
         {
             _stacks.BeginFrame();
             _samePlace.Clear();
+            _farPropFront.Clear();
             foreach (var (it, ix, iy, ith) in DrawnProps(st))   // ④ 물체 장부의 물건 몫 (틱 사이는 틱 안 기록으로 메운 자리)
             {
                 int c = CellAt(ix, iy);
@@ -280,7 +282,10 @@ public sealed partial class Painter
                 int half = k / 2;   // 16도트 그림 한 도트가 이 그림의 몇 분의 1인가 (16도트 1 · 8도트 2)
                 int rise = (int)Math.Round(z * 16 / k);   // 1층 = 32도트 그림의 1도트 (3/4 시점)
                 if (rise > 0) PropShadow(img, ((sx - x0) * T + nx) / k, ((sy - y0) * T + ny) / k, d.Img.W / half, z, k);
-                Put(img, DownOf(d.Img, half), (int)Math.Round(((sx - x0) * T + nx) / k - d.Ax / half), (int)Math.Round(((sy - y0) * T + ny) / k - d.Ay / half) - rise);
+                var down = DownOf(d.Img, half);
+                int qx = (int)Math.Round(((sx - x0) * T + nx) / k - d.Ax / half), qy = (int)Math.Round(((sy - y0) * T + ny) / k - d.Ay / half) - rise;
+                Put(img, down, qx, qy);
+                if (it.On > 0 && it.On <= L.Furniture.Count && rise > 0) _farPropFront.Add((down, qx, qy, FurnBottom(it.On - 1)));   // 가구 위 물체는 그 가구와 함께 앞 가림 (사람 판을 얹은 뒤 그 자리에 다시 — PH9)
             }
         }
         // ── 화장실 설비의 장마다 덧그림 (32도트 설비 고리와 같은 것 — 굽지 않는다): 샤워 칸 · 세면대 물줄기 · 빛을 끈 그림의 '사용 금지' 불 (빛을 켜면 FarGlows) ──
@@ -361,6 +366,12 @@ public sealed partial class Painter
                         PutClip(sc, fimg, qx, qy, sx0, sy0, sx1, sy1);
                     }
                     PutDown(img, sc, k, (gx - ox) / k, (gy - oy) / k);
+                    int bx0 = (gx - ox + sx0) / k, by0 = (gy - oy + sy0) / k, bx1 = (gx - ox + sx1) / k, by1 = (gy - oy + sy1) / k;   // 사람 판이 덮은 곳 (이 그림 자리)
+                    foreach (var (pimg, px, py, row) in _farPropFront)   // 가구 위 물체: 그 가구가 사람을 가렸으면 그 위 물체도 다시 (같은 줄인 그림 그대로)
+                    {
+                        if (row <= y || px >= bx1 || py >= by1 || px + pimg.W <= bx0 || py + pimg.H <= by0) continue;
+                        PutClip(img, pimg, px, py, bx0, by0, bx1, by1);
+                    }
                 }
             }
         }

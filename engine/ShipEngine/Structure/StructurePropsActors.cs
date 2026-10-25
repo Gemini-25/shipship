@@ -122,7 +122,7 @@ public sealed partial class Structure
                     for (int i = _propHead[L.Index(x, y)]; i >= 0; i = _propNext[i])
                     {
                         ref var p = ref all[i];
-                        if (p.State != 0 || DropperOf(p, ac)) continue;
+                        if (p.State != 0 || p.On > 0 || DropperOf(p, ac)) continue;   // 가구 윗면 위의 것은 가구가 가린다 (PH9 — 깨우지 않는다)
                         if (PathDistance(ac, p.X, p.Y) > ac.R + SamplesOf(PropForm(p)).reach + 2 * DotForm.Dot) continue;
                         if (Wake(ref p, p.Cause)) { woke = true; PropWoken++; }
                     }

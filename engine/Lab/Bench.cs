@@ -160,12 +160,13 @@ public static partial class Program
         // 물체 예산 (docs/PHYSICS.md §4-2 · PH4c · PH6b): 새뜰호 조용한 틱 '구조:물체' ≤ 0.02ms · 외판 0.5m² 감압에 곁 물건 20개 — 가장 긴 틱 ≤ 1ms (§4-2 위기 틱 물체 —
         // 0.3ms는 바람만 있던 PH4c 어림 · 물체끼리 · 걷는 이 원판이 든 위기 틱은 설계대로 1ms) · 감압 순간을 찍어 주컴퓨터 Rehearse처럼 125틱 복제 (가벼운 물체 셈 — ShipMind.Imagined) — 물체 몫 ≤ 3ms
         {
-            double noise = 0;
+            double noise = 0; int decor = 0;
             (double quiet, double breach, double rehearse, int woke) PropsBudget()
             {
                 var s = ShipWorld.Crewed("Saetteul", 7, 40, 10);
                 s.Run(100);
                 var st = s.Get<Structure>(); var f = s.Get<Field>(); var L = s.Layout;
+                decor = st.Props.Count(p => (p.Flags & Structure.DecorFlag) != 0);   // 잠든 생활 소품 (PH9 — 조용한 틱에 셈하지 않는다)
                 Prof.D = new(); s.Run(300);
                 double quiet = Prof.D.GetValueOrDefault("구조:물체") / 300;
                 bool Inside(int x, int y) => L.In(x, y) && L.Kind[L.Index(x, y)] == CellKind.Floor && L.Room[L.Index(x, y)] >= 0 && L.FurnitureAt[L.Index(x, y)] < 0;
@@ -208,7 +209,7 @@ public static partial class Program
             }
             BreakCost();
             double pk = BreakCost();
-            Check("물체 예산: 새뜰호 조용한 틱 — '구조:물체' ≤ 0.02ms", pq <= 0.02, $"{pq * 1000:0.0}µs/틱");
+            Check("물체 예산: 새뜰호 조용한 틱 (잠든 생활 소품 — PH9) — '구조:물체' ≤ 0.02ms", pq <= 0.02 && decor > 0, $"{pq * 1000:0.0}µs/틱 · 꾸밈 {decor}");
             Check("물체 예산: 외판 0.5m² 감압 · 곁 물건 20개 (걷는 이 곁) — 가장 긴 틱의 '구조:물체' ≤ 1ms (위기 틱 물체 — §4-2)", pb <= 1 && pw > 0, $"{pb:0.000}ms · 깬 것 {pw}");
             Check("물체 예산: 감압 순간을 찍어 125틱 (주컴퓨터 Rehearse 복제처럼 — 가벼운 물체 셈) — 물체 몫 ≤ 3ms", pr <= 3, $"{pr:0.000}ms / 125틱");
             Check("물체 예산: 깨짐 한 번 (가면 조각 · 가루 · 흩어짐 · 장부) ≤ 0.05ms · 감압 틱의 물체 소리 (방마다 · 갈래마다 한 번) ≤ 0.1ms (PH8)", pk <= 0.05 && noise <= 0.1, $"깨짐 한 번 {pk * 1000:0.0}µs · 물체 소리 가장 긴 틱 {noise * 1000:0.0}µs");

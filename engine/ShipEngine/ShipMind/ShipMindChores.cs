@@ -157,7 +157,7 @@ public sealed partial class ShipMind
         if (_st == null) return;
         foreach (var p in _st.Props)   // 바닥에 놓인 물건 (④ 물체 장부)
         {
-            if (p.Kind != 0) continue;
+            if (p.Kind != 0 || (p.Flags & Structure.DecorFlag) != 0) continue;   // 꾸밈 (제자리가 있다 — PH9)은 맡기지 않는다
             int cell = _st.CellOf(p); byte item = (byte)p.What;
             if (p.PlugAt != 0 || item == mind.iWaste || mind.ItemKg(item) < 5 || mind.HomeFor(item, cell) < 0) continue;
             int room = L.Room[cell];

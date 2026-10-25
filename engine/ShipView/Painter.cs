@@ -846,7 +846,9 @@ public sealed partial class Painter
                 var (nx, ny) = SamePlace(it);
                 int rise = (int)Math.Round(z * 16);   // 1층 (1/16m) = 1도트 (3/4 시점)
                 if (rise > 0) PropShadow(img, (sx - x0) * T + nx, (sy - y0) * T + ny, d.Img.W, z, 1);
-                Put(img, d.Img, (int)Math.Round((sx - x0) * T - d.Ax) + nx, (int)Math.Round((sy - y0) * T - d.Ay) + ny - rise);
+                int qx = (int)Math.Round((sx - x0) * T - d.Ax) + nx, qy = (int)Math.Round((sy - y0) * T - d.Ay) + ny - rise;
+                Put(img, d.Img, qx, qy);
+                if (it.On > 0 && it.On <= L.Furniture.Count && rise > 0) _front.Add((d.Img, qx, qy, FurnBottom(it.On - 1)));   // 가구 위 물체는 그 가구와 함께 앞 가림 (가구가 다시 얹힐 때 지워지지 않게 — PH9)
             }
         }
 
@@ -1136,6 +1138,9 @@ public sealed partial class Painter
 
     /// <summary>이 장에 그린 솟은 설비 (그림 · 자리 · 밑 줄) — 앞 가림에 쓴다.</summary>
     private readonly List<(Img img, int x, int y, int baseRow)> _front = new();
+
+    /// <summary>가구의 밑 줄 (가장 아래 칸의 y — 앞 가림 차례).</summary>
+    private int FurnBottom(int f) { int b = 0; foreach (int c in L.Furniture[f].Cells) b = Math.Max(b, L.Y(c)); return b; }
     /// <summary>시험용: null이 아니면 32도트 장마다 솟은 설비 몸 (그림 · 그림판 자리)을 모은다 (앞에 선 몸이 덮은 자리가 그대로인지 견준다).</summary>
     public List<(Img img, int x, int y)>? FrontLog;
 

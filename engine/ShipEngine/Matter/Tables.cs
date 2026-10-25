@@ -155,6 +155,11 @@ public sealed class EquipmentDef
     public double H;
     public double[]? Foot;
     public double AnchorG = 16;
+    /// <summary>생활 소품 (PH9 — 설계한 배를 만들 때 이 가구 윗면에 시드에서 놓는 물건): 방 종류 (그 밖은 "_") → 칸마다 물건 목록 · 저마다 놓을 몫 DecorP.</summary>
+    public Dictionary<string, string[]>? Decor;
+    public double DecorP = 0.5;
+    /// <summary>가구마다 목록 한 벌은 꼭 놓는다 (식탁 한 벌 — 몫에서 빠진 것은 칸 차례로 다시 찾는다).</summary>
+    public bool DecorSet;
 }
 
 /// <summary>
@@ -407,6 +412,10 @@ public sealed class Tables
         foreach (var (k, st) in t.People.Stock)
             foreach (var it in st.Keys)
                 if (!t.People.Items.ContainsKey(it)) throw new InvalidDataException($"사람 표: '{k}'에 든 '{it}'이 물건 표에 없다");
+        foreach (var (k, e) in t.Equipment)
+            if (e.Decor != null)
+                foreach (var it in e.Decor.Values.SelectMany(x => x))
+                    if (!t.People.Items.ContainsKey(it)) throw new InvalidDataException($"설비 표: '{k}'의 생활 소품 '{it}'이 물건 표에 없다");
         t.Forms = DataFiles.Load<Dictionary<string, FormDef>>("forms.json");
         foreach (var (k, f) in t.Forms)
             foreach (var p in f.Parts)

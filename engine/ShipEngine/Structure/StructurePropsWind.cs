@@ -54,7 +54,12 @@ public sealed partial class Structure
     {
         if (tau > 0) return F.HoleMouthPa(c, out mouth, Math.Exp(F.WindK[c] * (_tickDt - tau)));
         int k = c & (MouthSlots - 1);
-        if (_mouthTick[k] != _now || _mouthKey[k] != c) { _mouthQ[k] = (float)F.HoleMouthPa(c, out _mouthAt[k], Math.Exp(F.WindK[c] * _tickDt)); _mouthKey[k] = c; _mouthTick[k] = _now; }
+        if (_mouthTick[k] != _now || _mouthKey[k] != c)
+        {
+            if (F.NearMouth(c)) _mouthQ[k] = (float)F.HoleMouthPa(c, out _mouthAt[k], Math.Exp(F.WindK[c] * _tickDt));
+            else { _mouthQ[k] = 0; _mouthAt[k] = -1; }   // 구멍 곁이 아니면 지수를 세지 않는다 (속도만 — 값은 같다)
+            _mouthKey[k] = c; _mouthTick[k] = _now;
+        }
         mouth = _mouthAt[k];
         return _mouthQ[k];
     }

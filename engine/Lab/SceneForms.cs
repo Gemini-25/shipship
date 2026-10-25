@@ -251,10 +251,12 @@ public static partial class Program
             ("식량 상자", 9.5, 2.6, 0.2), ("식량 상자", 12.5, 5.5, -0.4), ("소화기", 13.6, 2.6, 0), ("공구 상자", 10.5, 4.4, 0.6), ("컵", 8.5, 3.6, 0),
             ("접시", 11.6, 6.4, 0), ("책", 14.2, 4.0, 1.1), ("유리병", 7.4, 2.4, 0), ("물병", 9.6, 6.6, 0), ("우주복", 12.6, 6.4, 0.3),
         };
+        var x0 = new Dictionary<int, double>();   // 물체 Id → 처음 자리 (깨진 조각은 세지 않는다)
         foreach (var (name, x, y, th) in put)
         {
             int id = Slide(s, name, x + 1, y + 1, 0, 0);
             int i = st.IndexOf(id); var p = st.Props[i]; p.Th = th; st.Props[i] = p;
+            x0[id] = x + 1;
         }
         for (int x = 11; x <= 14; x++) f.AddStore(s.Layout.Index(x, 6), f.T.sWater, 300);   // 젖은 바닥 한 줄
         var painter = new Painter(s.Layout);
@@ -271,7 +273,7 @@ public static partial class Program
             var img = painter.Frame(s, 1, 1, 16, 8, done).Scale(zoom);
             sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
             int awake = st.Props.Count(p => Structure.Awake(p));
-            double back = st.Props.Sum(p => Math.Max(0, put[st.Props.IndexOf(p)].x + 1 - p.X));
+            double back = st.Props.Where(p => x0.ContainsKey(p.Id)).Sum(p => Math.Max(0, x0[p.Id] - p.X));
             Console.WriteLine($"  props-burn {done}틱: 0.40g · 깨어 있음 {awake} · 깬 수 {st.PropWoken} · 튐 {st.Bounces} · 뒤로 간 길 합 {back:0.0}m");
         }
         Directory.CreateDirectory(dir);
