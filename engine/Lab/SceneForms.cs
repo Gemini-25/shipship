@@ -140,4 +140,46 @@ public static partial class Program
         Png.WriteRgba(Path.Combine(dir, "props-breach.png"), sheet.W, sheet.H, sheet.Px);
         Console.WriteLine($"  props-breach: {dir}/props-breach.png ({sheet.W}×{sheet.H}) — 감압 앞 · 첫 틱 · 둘째 · 넷째 틱 (외판 0.5m² 구멍 · 물건 열)");
     }
+    /// <summary>
+    /// props-burn 틀 (PH4d — 함장 장면 '화살호 추진제 반 0.40g'의 틀 · docs/PHYSICS.md §10): 몸이 없는 배가 0.40g로 점화한다 (엔진은 +x로 민다 — 배 안의 것은 −x로 −m·a) —
+    /// 마른 바닥 식량 상자 (μs 0.375)도 미끄러져 뒤 벽에 닿아 서고 · 젖은 바닥의 것은 더 빨리 · 소화기는 깨지만 (넘어짐 문턱) 정지 마찰이 붙든다 (넘어짐 · 구름 · 탁자 끝 병 낙하는 PH7) ·
+    /// 탁자 · 의자 곁 것은 가구에 걸린다. 점화 앞 한 장 + 첫 틱 · 둘째 · 넷째 틱 (틱 안 메움은 PH5).
+    /// </summary>
+    private static void PropsBurnScene(string dir)
+    {
+        const string art = "\n################\n#..............#\n#....tt........#\n#....tt........#\n#..............#\n#..........a...#\n#..............#\n################";
+        var s = PropWorld(1f, 7, art, new Dictionary<char, string> { ['t'] = "Table", ['a'] = "Seat" });
+        var st = s.Get<Structure>(); var f = s.Get<Field>();
+        (string name, double x, double y, double th)[] put =
+        {
+            ("식량 상자", 9.5, 2.6, 0.2), ("식량 상자", 12.5, 5.5, -0.4), ("소화기", 13.6, 2.6, 0), ("공구 상자", 10.5, 4.4, 0.6), ("컵", 8.5, 3.6, 0),
+            ("접시", 11.6, 6.4, 0), ("책", 14.2, 4.0, 1.1), ("유리병", 7.4, 2.4, 0), ("물병", 9.6, 6.6, 0), ("우주복", 12.6, 6.4, 0.3),
+        };
+        foreach (var (name, x, y, th) in put)
+        {
+            int id = Slide(s, name, x + 1, y + 1, 0, 0);
+            int i = st.IndexOf(id); var p = st.Props[i]; p.Th = th; st.Props[i] = p;
+        }
+        for (int x = 11; x <= 14; x++) f.AddStore(s.Layout.Index(x, 6), f.T.sWater, 300);   // 젖은 바닥 한 줄
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 2;
+        int[] at = { 0, 1, 2, 4 };
+        int fw = 16 * Painter.T * zoom, fh = 8 * Painter.T * zoom, gap = 6;
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 0;
+        st.ShipAx = 0.4 * 9.8;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k]) { s.Step(); done++; }
+            var img = painter.Frame(s, 1, 1, 16, 8, done).Scale(zoom);
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            int awake = st.Props.Count(p => Structure.Awake(p));
+            double back = st.Props.Sum(p => Math.Max(0, put[st.Props.IndexOf(p)].x + 1 - p.X));
+            Console.WriteLine($"  props-burn {done}틱: 0.40g · 깨어 있음 {awake} · 깬 수 {st.PropWoken} · 튐 {st.Bounces} · 뒤로 간 길 합 {back:0.0}m");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-burn.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-burn: {dir}/props-burn.png ({sheet.W}×{sheet.H}) — 점화 앞 · 첫 틱 · 둘째 · 넷째 틱 (0.40g · 물건 열 · 젖은 바닥 한 줄)");
+    }
 }

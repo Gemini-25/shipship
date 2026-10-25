@@ -43,6 +43,8 @@ public sealed partial class Structure
     public double GasPx, GasPy, GasL, BurnPx, BurnPy, BurnL, GasAbs;
     /// <summary>⑤의 요청: 배의 가속 (m/s² · 도면 좌표 — 엔진이 미는 쪽). 찍지 않는다 (⑤가 틱마다 넣는다).</summary>
     public double ShipAx, ShipAy;
+    /// <summary>⑤의 요청: 그 점화의 원인 (점화에 깨어 미끄러진 물체의 원인 — 찍지 않는다 · ⑤가 틱마다 넣는다).</summary>
+    public int ShipACause;
     public long BodySteps, Spins;
     public const double SubStepM = 0.25, SubStepRad = 0.1, SpinRadS = 0.05;
     public const int MaxSubSteps = 1024;   // 100m/s 넘는 몸도 한 걸음에 25cm 아래 (빠른 몸이 벽을 건너뛰지 않게)
@@ -176,19 +178,31 @@ public sealed partial class Structure
         Refit(0);
     }
 
-    /// <summary>몸 b의 세상 자리 (wx, wy)에 충격량 (jx, jy)를 준다 (N·s — 갈라짐 · 부딪힘 · 시험의 요청).</summary>
+    /// <summary>
+    /// 몸 b의 세상 자리 (wx, wy)에 충격량 (jx, jy)를 준다 (N·s — 갈라짐 · 몸끼리 부딪힘 · 부스러기 반동 · 붙음 · 시험의 요청) — 순간 바뀜이라 덜컹이다:
+    /// 그 몸 위 모든 물체 (잠든 것도)의 바닥이 바뀐다 (세상 빠르기는 그대로 — 바닥에 대한 빠르기가 −(Δv + Δω × r)) · 몸 걸음 안이면 그 잔걸음 때에 (물체 걸음이 그때 준다) · 틱 사이면 곧장.
+    /// </summary>
     public void Push(int b, double wx, double wy, double jx, double jy, int cause = 0)
     {
         if (b < 0 || b >= Bodies.Count) return;
         var o = Bodies[b];
         if (o.Mass <= 0) return;
-        o.Vx += jx / o.Mass; o.Vy += jy / o.Mass;
-        o.W += ((wx - o.X) * jy - (wy - o.Y) * jx) / o.Inertia;
+        double dvx = jx / o.Mass, dvy = jy / o.Mass, dw = ((wx - o.X) * jy - (wy - o.Y) * jx) / o.Inertia;
+        o.Vx += dvx; o.Vy += dvy; o.W += dw;
         o.Asleep = 0;
         double imp = Math.Sqrt(jx * jx + jy * jy);
         if (cause != 0 && imp >= o.PushImp) { o.PushCause = cause; o.PushImp = (float)imp; }
         Bodies[b] = o;
+        double c = Math.Cos(o.Th), s = Math.Sin(o.Th), lx = c * dvx + s * dvy, ly = -s * dvx + c * dvy;   // 제 틀의 Δv
+        if (_inBodies) _jolts.Add(new Jolt { B = b, Dvx = lx, Dvy = ly, Dw = dw, T = _subT, Cause = cause });
+        else JoltProps(b, lx, ly, dw, cause);
     }
+
+    /// <summary>덜컹 하나 (몸 · 제 틀의 Δv · Δω · 틱 처음에서 그 잔걸음 때 · 원인) — 찍지 않는다 (몸 걸음이 쌓고 같은 틱 물체 걸음이 쓴다).</summary>
+    private struct Jolt { public int B; public double Dvx, Dvy, Dw, T; public int Cause; }
+    private readonly List<Jolt> _jolts = new();
+    private bool _inBodies;
+    private double _subT;
 
     /// <summary>몸들의 운동량 · 원점에 대한 각운동량 · 운동 에너지 (법칙 시험).</summary>
     public (double px, double py, double l, double ke) BodyMomentum()
@@ -204,18 +218,14 @@ public sealed partial class Structure
         return (px, py, l, ke);
     }
 
-    private readonly List<(int b, double px, double py, double dx, double dy, double imp)> _vents = new();
+    /// <summary>이번 틱 뿜는 틈 (몸 · 제 틀의 힘 N · 무게중심에 대한 돌림힘 N·m · 충격량 N·s — 그 틱 동안 고르다).</summary>
+    private readonly List<(int b, double fx, double fy, double tq, double imp)> _vents = new();
     private double _burnDvx, _burnDvy;
-
-    /// <summary>칸 c에서 늘 느끼는 힘 (도면 축 m/s² — 그 몸의 틀): 도는 몸의 원심 ω²r (바깥쪽 · 코리올리는 뺀다). ⑧이 읽는다 — 마찰을 넘으면 고정 안 된 것이 바깥 벽으로 밀린다.</summary>
-    public (double ax, double ay) Felt(int c)
-    {
-        int b = BodyOf(c);
-        if (b < 0 || b >= Bodies.Count || Bodies[b].Mass <= 0) return (0, 0);
-        var o = Bodies[b];
-        double w2 = o.W * o.W;
-        return (w2 * (L.X(c) + 0.5 - o.Lx), w2 * (L.Y(c) + 0.5 - o.Ly));
-    }
+    /// <summary>
+    /// 이번 틱 몸마다 (찍지 않는다 — 몸 걸음이 쓰고 같은 틱 물체 걸음이 읽는다): 틱 처음 자세 · 움직임 (물체 장부) · 제 틀의 고른 가속 (힘 / 질량) · 각가속도 · 틱 처음 각속도.
+    /// </summary>
+    private struct BodySnap { public double X, Y, Th, Vx, Vy, W, Lx, Ly, Ax, Ay, Al; }
+    private BodySnap[] _snap = Array.Empty<BodySnap>();
 
     /// <summary>
     /// 칸 c의 덜컹임 (도면 축 m/s — 그 몸의 틀 · 점화는 빼고): 지난 틱에 그 자리 바닥의 빠르기가 바뀐 만큼의 반대 —
@@ -259,13 +269,15 @@ public sealed partial class Structure
     }
 
     /// <summary>
-    /// 몸이 움직인다 (매 틱 — 몸이 있을 때만): ③의 우주로 트인 틈마다 빠진 기체의 운동량을 그 자리에서 반대로 · 배의 점화 —
-    /// 한 틱의 충격량을 틱 처음과 끝에 반씩 (고른 힘과 같은 자리 정확도 · 운동량 · 각운동량 장부가 꼭 맞는다) · 사이는 힘 없이 잔걸음 (한 걸음에 25cm · 0.1rad 넘지 않게 — 부딪힘을 볼 걸음).
+    /// 몸이 움직인다 (매 틱 — 몸이 있을 때만): ③의 우주로 트인 틈마다 빠진 기체의 운동량을 그 자리에서 반대로 (F = 충격량 / dt) · 배의 점화 (m·ShipA) —
+    /// 그 틱 동안 몸의 틀에서 고른 힘이라 잔걸음마다 고른 가속으로 적분한다 (x += v·h + ½a·h² · θ += ω·h + ½α·h² · 힘의 쪽은 잔걸음 처음 자세로 · 장부도 잔걸음마다 같은 값으로 —
+    /// 틱 끝 자리 · 빠르기는 옛 반-차기와 같고 틱 가운데 길만 고르다). 잔걸음은 한 걸음에 25cm · 0.1rad 넘지 않게 (부딪힘 · 부스러기를 볼 걸음) · 그 사이 밂은 덜컹 (그 잔걸음 때).
     /// 조각의 떨어진 거리를 고친다.
     /// </summary>
     private void MoveBodies(Sim sim, double dt)
     {
         int n = Bodies.Count;
+        _jolts.Clear();
         if (n == 0) return;
         _vents.Clear();
         for (int b = 0; b < n; b++) { var o = Bodies[b]; if (o.Bump != 0 || o.PushImp != 0) { o.Bump = 0; o.PushImp *= 0.5f; Bodies[b] = o; } }
@@ -275,39 +287,53 @@ public sealed partial class Structure
             int b = BodyOf(k.A);
             if (b < 0 || b >= n || Bodies[b].Mass <= 0) continue;
             double px = k.Via != k.A ? L.X(k.Via) + 0.5 : L.X(k.A) + 0.5 + 0.5 * k.Dx, py = k.Via != k.A ? L.Y(k.Via) + 0.5 : L.Y(k.A) + 0.5 + 0.5 * k.Dy;
-            _vents.Add((b, px, py, k.Dx, k.Dy, k.Impulse));
             var o = Bodies[b];
+            double fx = -k.Impulse / dt * k.Dx, fy = -k.Impulse / dt * k.Dy;   // 기체는 틈 바깥쪽으로 · 몸은 반대로
+            _vents.Add((b, fx, fy, (px - o.Lx) * fy - (py - o.Ly) * fx, k.Impulse));
             int vc = VentCause(k);
             if (vc != 0 && k.Impulse >= o.PushImp) { o.PushCause = vc; o.PushImp = (float)k.Impulse; Bodies[b] = o; }
         }
         bool burn = ShipAx != 0 || ShipAy != 0;
         _burnDvx = _burnDvy = 0;
-        Kick(0.5 * dt, burn);
-        // 잔걸음 수 (빠르기 · 각속도로) — 힘 없이 곧게 · 돈다
+        // 이번 틱 몸마다 제 틀의 힘 · 돌림힘 (고르다) · 틱 처음 자세 (물체의 장부 · 틀)
+        if (_snap.Length < n) _snap = new BodySnap[n];
         int steps = 1;
         for (int b = 0; b < n; b++)
         {
             var o = Bodies[b];
+            double fx = 0, fy = 0, tq = 0;
+            foreach (var v in _vents) if (v.b == b) { fx += v.fx; fy += v.fy; tq += v.tq; }
+            if (b == 0 && burn && o.Mass > 0) { fx += o.Mass * ShipAx; fy += o.Mass * ShipAy; }
+            bool pushed = fx != 0 || fy != 0 || tq != 0;
+            if (pushed && o.Asleep != 0) { o.Asleep = 0; Bodies[b] = o; }
+            _snap[b] = new BodySnap { X = o.X, Y = o.Y, Th = o.Th, Vx = o.Vx, Vy = o.Vy, W = o.W, Lx = o.Lx, Ly = o.Ly,
+                Ax = o.Mass > 0 ? fx / o.Mass : 0, Ay = o.Mass > 0 ? fy / o.Mass : 0, Al = o.Mass > 0 ? tq / o.Inertia : 0 };
             if (o.Mass <= 0 || o.Asleep != 0) continue;
-            double move = Math.Sqrt(o.Vx * o.Vx + o.Vy * o.Vy) * dt + Math.Abs(o.W) * o.Reach * dt;
-            steps = Math.Max(steps, (int)Math.Ceiling(Math.Max(move / SubStepM, Math.Abs(o.W) * dt / SubStepRad)));
+            // 잔걸음 수 (빠르기 · 각속도 · 고른 가속으로)
+            double a = Math.Sqrt(fx * fx + fy * fy) / o.Mass, al = Math.Abs(tq) / o.Inertia;
+            double turn = Math.Abs(o.W) * dt + 0.5 * al * dt * dt;
+            double move = Math.Sqrt(o.Vx * o.Vx + o.Vy * o.Vy) * dt + 0.5 * a * dt * dt + turn * o.Reach;
+            steps = Math.Max(steps, (int)Math.Min(MaxSubSteps, Math.Ceiling(Math.Max(move / SubStepM, turn / SubStepRad))));
         }
         steps = Math.Clamp(steps, 1, MaxSubSteps);
         double h = dt / steps;
+        _inBodies = true;
         for (int k = 0; k < steps; k++)
         {
             for (int b = 0; b < n; b++)
             {
                 var o = Bodies[b];
                 if (o.Mass <= 0 || o.Asleep != 0) continue;
-                o.X += o.Vx * h; o.Y += o.Vy * h; o.Th += o.W * h;
+                Accelerate(ref o, b, h, burn);
                 BodySteps++;
                 Bodies[b] = o;
             }
-            if (n > 1) Contacts(sim);   // (다) 부딪힘 — 잔걸음마다
+            _subT = (k + 1) * h;
+            if (n > 1) Contacts(sim);   // (다) 부딪힘 — 잔걸음마다 (밂은 덜컹 — 그 때)
             MoveShards(sim, h);         // (마) 부스러기 알갱이
+            SubSeen?.Invoke(_subT);
         }
-        Kick(0.5 * dt, burn);
+        _inBodies = false; _subT = 0;
         for (int b = 0; b < n; b++)
         {
             var o = Bodies[b];
@@ -340,27 +366,30 @@ public sealed partial class Structure
         }
     }
 
-    /// <summary>이번 틱 힘의 반 (frac초 몫): 뿜는 틈마다 지금 자세의 자리 · 방향으로 · 점화는 배의 무게중심에 — 장부도 같은 자리로.</summary>
-    private void Kick(double frac, bool burn)
+    /// <summary>
+    /// 몸 하나의 잔걸음 h (고른 가속): 뿜는 틈마다 · 점화의 힘을 잔걸음 처음 자세로 세상 쪽으로 돌려 a = ΣF/m · α = Στ/I —
+    /// 장부는 원점에 대한 각운동량까지 그 잔걸음의 참 적분으로 (∫X dt × F + τ·h · ∫X dt = X₀h + ½V₀h²) — 몸들의 운동량 = 점화 − 기체가 꼭 맞는다.
+    /// </summary>
+    private void Accelerate(ref RigidBody o, int b, double h, bool burn)
     {
-        foreach (var (b, px, py, dx, dy, imp) in _vents)
+        double c = Math.Cos(o.Th), s = Math.Sin(o.Th), ix = o.X * h + 0.5 * o.Vx * h * h, iy = o.Y * h + 0.5 * o.Vy * h * h;
+        double fwx = 0, fwy = 0, tq = 0;
+        foreach (var (vb, fx, fy, vtq, imp) in _vents)
         {
-            var o = Bodies[b];
-            double c = Math.Cos(o.Th), s = Math.Sin(o.Th);
-            double wdx = c * dx - s * dy, wdy = s * dx + c * dy;
-            var (wx, wy) = WorldOf(b, px, py);
-            double gx = 0.5 * imp * wdx, gy = 0.5 * imp * wdy;   // 기체가 가져간 운동량 (반)
-            GasPx += gx; GasPy += gy; GasL += wx * gy - wy * gx; GasAbs += 0.5 * imp;
-            Push(b, wx, wy, -gx, -gy);
+            if (vb != b) continue;
+            double gx = c * fx - s * fy, gy = s * fx + c * fy;
+            fwx += gx; fwy += gy; tq += vtq;
+            GasPx -= gx * h; GasPy -= gy * h; GasL -= ix * gy - iy * gx + vtq * h; GasAbs += imp * h / _tickDt;   // 기체가 가져간 몫 (몸이 받은 것의 반대)
         }
-        if (burn && Bodies[0].Mass > 0)
+        if (b == 0 && burn)
         {
-            var o = Bodies[0];
-            double c = Math.Cos(o.Th), s = Math.Sin(o.Th);
-            double jx = o.Mass * (c * ShipAx - s * ShipAy) * frac, jy = o.Mass * (s * ShipAx + c * ShipAy) * frac;
-            BurnPx += jx; BurnPy += jy; BurnL += o.X * jy - o.Y * jx; _burnDvx += jx / o.Mass; _burnDvy += jy / o.Mass;
-            Push(0, o.X, o.Y, jx, jy);
+            double gx = o.Mass * (c * ShipAx - s * ShipAy), gy = o.Mass * (s * ShipAx + c * ShipAy);
+            fwx += gx; fwy += gy;
+            BurnPx += gx * h; BurnPy += gy * h; BurnL += ix * gy - iy * gx; _burnDvx += gx / o.Mass * h; _burnDvy += gy / o.Mass * h;
         }
+        double ax = fwx / o.Mass, ay = fwy / o.Mass, al = tq / o.Inertia;
+        o.X += o.Vx * h + 0.5 * ax * h * h; o.Y += o.Vy * h + 0.5 * ay * h * h; o.Th += o.W * h + 0.5 * al * h * h;
+        o.Vx += ax * h; o.Vy += ay * h; o.W += al * h;
     }
 
     /// <summary>뿜는 틈의 원인: 구멍 칸 · 안 칸 · 바깥 이웃(우주가 된 사이 칸 — 갈라짐)의 상처 원인.</summary>

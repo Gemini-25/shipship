@@ -11,10 +11,11 @@ public static partial class Program
     {
         if (Do("물체"))
         {
-            Console.WriteLine("\n[물체 — 문틀 · 사람 · 감압]");
+            Console.WriteLine("\n[물체 — 문틀 · 사람 · 감압 · 덜컹 · 점화 · 폭풍]");
             DoorFrameRules();
             PropHitRules();
             BreachRules();
+            FrameRules();
         }
         if (Do("물체 그림"))
         {
@@ -102,6 +103,122 @@ public static partial class Program
         Check("사람: 7m/s로 날아든 식량 상자(13kg)에 맞으면 ④ 장부에 한 번 (20J 넘게) → ⑦이 5틱 안에 읽어 타박 (E/800) · 원인은 걷어찬 것까지 · 장부는 빈다",
             hits.Count == 1 && e >= 20 && Math.Abs(got - Math.Min(1.5, e / 800)) < 1e-4 && hurt.Contains("식량 상자") && hurt.Contains("걷어찼다") && !st.PropHits.Any(h => h.Tag == body),
             $"맞음 {hits.Count} · {e:0}J · 타박 {got:0.000}/{Math.Min(1.5, e / 800):0.000} · \"{hurt}\" · 남은 장부 {st.PropHits.Count}");
+    }
+
+    /// <summary>
+    /// 덜컹 · 돎 · 점화 · 폭풍 (PH4d — docs/PHYSICS.md §3-2 · §4-1 · §10 '덜컹 · 돎' · '점화'): 몸을 바꾼 밂은 그 몸 위 모든 물체의 바닥을 바꾼다 (덜컹 — 세상 빠르기는 그대로) ·
+    /// 도는 조각 위 물체는 원심 · 코리올리를 · 점화하는 배 안 물체는 −a를 느낀다 — 정지 마찰 (젖으면 0.33배)이나 넘어짐 문턱 b/Hc를 넘으면 깬다 (넘어짐은 PH7) ·
+    /// 운석 충격파 · 기체 폭발은 그 둘레 물체를 폭원에서 바깥쪽으로 민다 (P첨두 × 앞면 × 3ms).
+    /// </summary>
+    private static void FrameRules()
+    {
+        // 덜컹: 갈라진 몸 1을 3m/s로 민다 → 그 바닥의 식량 상자는 세상에 그대로 (그 순간 세상 빠르기가 바뀌지 않는다) · 바닥에 대해 −3m/s로 미끄러져 v²/2μg = 1.53m (μ 0.3) 가서 잔다
+        //   그 몸이 아주 천천히 돌아도 (1e-8rad/s — 틀의 힘이 아주 작다) 같다 (고친 결함: 잔걸음 길이 식이 아주 작은 힘에 0이 되어 1024걸음을 제자리에서 돌고 상자가 서 버렸다)
+        {
+            (double slid, double wvx, double wvy, double y, byte state, string why) Run(double w0)
+            {
+                var (s, st) = SplitWorld(Sealed, 6);
+                int right = st.BodyOf(s.Layout.Index(10, 3));
+                { var b = st.Bodies[right]; b.W = w0; st.Bodies[right] = b; }
+                int id = Slide(s, "식량 상자", 11.4, 3.5, 0, 0);
+                var o = st.Bodies[right];
+                int hit = s.Causes.Add(CauseKind.Setup, "떠도는 잔해가 조각을 들이받았다", s.Tick);
+                var (_, _, ux, uy, _) = st.PropWorld(st.Props[st.IndexOf(id)]);
+                st.Push(right, o.X, o.Y, o.Mass * 3, 0, hit);
+                var (_, _, vx, vy, _) = st.PropWorld(st.Props[st.IndexOf(id)]);
+                s.Run(3);
+                var p = st.Props[st.IndexOf(id)];
+                return (11.4 - p.X, vx - ux, vy - uy, p.Y, p.State, p.Cause != 0 ? s.Causes.Story(p.Cause) : "");
+            }
+            var a = Run(0); var slow = Run(1e-8);
+            Check("덜컹: 갈라진 조각이 3m/s로 밀리면 그 바닥의 식량 상자는 세상에 그대로 (그 순간 세상 빠르기가 바뀌지 않는다) · 바닥이 움직인 반대쪽으로 1.53m ± 0.1 미끄러져 잔다 (μ 0.3 · v²/2μg) · 원인은 들이받은 것",
+                Math.Abs(a.wvx) < 1e-9 && Math.Abs(a.wvy) < 1e-9 && Math.Abs(a.slid - 1.53) <= 0.1 && Math.Abs(a.y - 3.5) < 1e-6 && a.state == 0 && a.why.Contains("들이받았다"),
+                $"민 순간 세상 빠르기 바뀜 ({a.wvx:0.0e0}, {a.wvy:0.0e0}) · 바닥에서 {a.slid:0.000}m · y {a.y:0.000} · {(a.state == 0 ? "잠" : "깸")} · \"{a.why}\"");
+            Check("덜컹 — 아주 천천히 도는 조각 (1e-8rad/s · 틀의 힘이 아주 작다)에서도 같게 1.53m 미끄러진다 (잔걸음 길이가 0이 되지 않는다)",
+                Math.Abs(slow.slid - a.slid) < 1e-3, $"{slow.slid:0.000}m (돌지 않으면 {a.slid:0.000}m)");
+        }
+        // 돎: 짝힘으로 분에 14바퀴 돈 조각 — 무게중심에서 먼 잠든 식량 상자가 깨어 (덜컹 + 원심 ω²r > 정지 마찰) 바깥 벽까지 간다
+        {
+            var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s = FieldStructure(lay, 2);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), 0);
+            s.Run(3);
+            int right = st.BodyOf(Worlds.At(lay, 15, 3));
+            int id = Slide(s, "식량 상자", 17.5, 2.6, 0, 0);
+            var o = st.Bodies[right];
+            double j = 1.5 * o.Inertia / 2;   // 짝힘 — 분에 14바퀴
+            st.Push(right, o.X, o.Y + 1, j, 0); st.Push(right, o.X, o.Y - 1, -j, 0);
+            double R(in Prop q) { var b = st.Bodies[right]; double dx = q.X - b.Lx, dy = q.Y - b.Ly; return Math.Sqrt(dx * dx + dy * dy); }
+            double r0 = R(st.Props[st.IndexOf(id)]);
+            s.Run(12);
+            var p = st.Props[st.IndexOf(id)];
+            double r1 = R(p);
+            int c = st.CellOf(p);
+            Span<int> nb = stackalloc int[4];
+            bool byWall = false;
+            if (c >= 0) { lay.Neighbors(c, nb); foreach (int q in nb) if (q >= 0 && lay.Kind[q] == CellKind.Wall) byWall = true; }
+            Check("돎: 짝힘으로 분에 14바퀴 돈 조각 — 무게중심에서 먼 잠든 식량 상자가 깨어 (덜컹 · 원심 ω²r이 정지 마찰을 넘는다) 바깥 벽까지 간다",
+                Math.Abs(st.Bodies[right].W) > 1.4 && r1 > r0 + 0.25 && byWall,
+                $"분에 {Math.Abs(st.Bodies[right].W) * 60 / (2 * Math.PI):0.0}바퀴 · 상자 무게중심에서 {r0:0.00} → {r1:0.00}m · 벽 곁 {byWall}");
+        }
+        // 점화: 몸이 없는 배 (평시) — 0.2g 마른 바닥 식량 상자 그대로 · 젖으면 (×0.33) 미끄러진다 · 0.4g면 마른 바닥에서도 · 0.33g에 잠든 소화기가 깬다 (넘어짐 문턱 b/Hc < 0.33 — 넘어짐은 PH7) · 식량 상자는 깨지 않는다
+        {
+            (double dx, byte state, long woken) Burn(string name, double g, bool wet, int wetAfter = -1)
+            {
+                var s = PropWorld(1);
+                var st = s.Get<Structure>(); var f = s.Get<Field>();
+                int id = Slide(s, name, 8.5, 4.5, 0, 0);
+                int cell = s.Layout.Index(8, 4);
+                if (wet && wetAfter < 0) f.AddStore(cell, f.T.sWater, 300);
+                st.ShipAx = g * 9.8;
+                for (int k = 0; k < 3; k++) { if (k == wetAfter) f.AddStore(cell, f.T.sWater, 300); s.Step(); }
+                var p = st.Props[st.IndexOf(id)];
+                return (p.X - 8.5, p.State, st.PropWoken);
+            }
+            var dry2 = Burn("식량 상자", 0.2, false); var wet2 = Burn("식량 상자", 0.2, true); var dry4 = Burn("식량 상자", 0.4, false);
+            var ext = Burn("소화기", 0.33, false); var box33 = Burn("식량 상자", 0.33, false); var late = Burn("식량 상자", 0.2, true, 2);
+            Check("점화: 몸이 없는 배 — 0.2g 마른 바닥 식량 상자는 그대로 · 젖은 바닥 (마찰 ×0.33)이면 엔진 반대쪽으로 미끄러진다 · 0.4g면 마른 바닥에서도 · 0.33g에 잠든 소화기가 깬다 (넘어짐 문턱 b/Hc) · 식량 상자는 깨지 않는다",
+                dry2.dx == 0 && dry2.woken == 0 && wet2.dx < -0.3 && dry4.dx < -0.3 && ext.woken > 0 && ext.dx == 0 && box33.woken == 0 && box33.dx == 0,
+                $"0.2g 마름 {dry2.dx:0.00}m · 젖음 {wet2.dx:0.00}m · 0.4g 마름 {dry4.dx:0.00}m · 0.33g 소화기 깸 {ext.woken} ({ext.dx:0.00}m) · 식량 상자 깸 {box33.woken}");
+            Check("점화 중 젖음: 0.2g 점화 중 잠든 식량 상자의 칸이 젖으면 (둘째 틱 뒤) 지금 칸 값으로 다시 보아 깨어 미끄러진다",
+                late.dx < -0.05 && late.woken > 0, $"{late.dx:0.00}m · 깸 {late.woken}");
+        }
+        // 폭풍: 운석 충격파 (Blast) · 기체 폭발 (수소 — ② GasBurstJ) — 둘레 컵이 폭원에서 바깥쪽으로 밀려 난다 (P첨두 × 앞면 × 3ms)
+        {
+            const string room = "\n##############\n#............#\n#............#\n#............#\n#............#\n##############";
+            var lay = Worlds.Ascii(room);
+            var s = FieldStructure(lay, 3);
+            var st = s.Get<Structure>();
+            int cup = Slide(s, "컵", 6.5, 4.5, 0, 0);
+            s.Run(2);
+            int bc = s.Causes.Add(CauseKind.Setup, "운석이 배 안에서 터졌다", s.Tick);
+            st.Blast(s, s.Layout.Index(3, 4), 1.5e6, bc);
+            s.Step();
+            var p = st.Props[st.IndexOf(cup)];
+            string why = p.Cause != 0 ? s.Causes.Story(p.Cause) : "";
+            var g = new Sim(new SimSetup(lay, 4, sim => { var f = new Field(sim.Layout, sim.Tables); sim.Add(f); sim.Add(new Chemistry(f)); sim.Add(new Structure(f)); }));
+            var gf = g.Get<Field>(); gf.FillAir();
+            for (int x = 2; x <= 4; x++) for (int y = 3; y <= 5; y++) gf.AddGas(g.Layout.Index(x, y), gf.T.gH2, 12, 293);
+            var gst = g.Get<Structure>();
+            int gcup = Slide(g, "컵", 6.5, 4.5, 0, 0);
+            g.Step();
+            g.Get<Chemistry>().Ignite(g.Layout.Index(3, 4), 5e4, 0);
+            double far = 0; string gwhy = "";
+            for (int k = 0; k < 6; k++)
+            {
+                g.Step();
+                int gi = gst.IndexOf(gcup);
+                if (gi < 0) break;
+                var q = gst.Props[gi];
+                far = Math.Max(far, q.X - 6.5);
+                if (q.Cause != 0) gwhy = g.Causes.Story(q.Cause);
+            }
+            Check("폭풍: 운석 충격파 (1.5MJ · 3m 거리)에 컵이 폭원에서 바깥쪽으로 날아간다 (원인 '충격파') · 수소 폭발 곁 컵도 (② 한꺼번에 탄 열 → TNT 당량 · 같은 셈)",
+                p.X > 6.5 + 0.3 && why.Contains("충격파") && far > 0.3 && gwhy.Contains("탔다"),
+                $"충격파 컵 x {p.X:0.00} · \"{why}\" / 수소 폭발 컵 {far:0.00}m · \"{gwhy}\"");
+        }
     }
 
     // 화물칸 (외판 x = 0에 구멍) · 닫힌 문 · 통로 — RulesFling과 같은 꼴

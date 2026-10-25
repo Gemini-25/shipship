@@ -56,6 +56,8 @@ public sealed class Chemistry : IEngine
     private byte[] _spark, _sparkNext;
     private int[] _sparkCause, _sparkCauseNext;
     public long Ignitions, GasBursts;
+    /// <summary>이번 틱 기체 불이 한꺼번에 탄 칸마다 (칸 · 탄 열 J · 원인) — ④가 같은 틱에 읽어 둘레 물체를 미는 폭풍으로 (찍지 않는다 · 틱마다 처음에 비운다).</summary>
+    public readonly List<(int cell, double heatJ, int cause)> GasBurstJ = new();
     /// <summary>[칸] 이웃과 이어진 탈 것 (위 1 · 오른쪽 2 · 아래 4 · 왼쪽 8) — 위 층이 요청한다 (전선 묶음): 불꽃 앞머리가 그 탈 것을 따라 기어간다.</summary>
     public byte[] FuelLink;
     /// <summary>[칸] 옆 칸에서 기어 온 불꽃 앞머리 (m — 1이면 그 칸에 닿아 붙는다).</summary>
@@ -176,6 +178,7 @@ public sealed class Chemistry : IEngine
     {
         F.RebuildNow(); // 장보다 먼저 돈다 — 구역이 바뀌었으면 지금 짠다
         Array.Clear(Hrr);
+        GasBurstJ.Clear();
         Array.Clear(_sparkNext);
         _stamp++;
         int burning = 0;
@@ -635,6 +638,7 @@ public sealed class Chemistry : IEngine
                 cause = sim.Causes.Add(CauseKind.Reaction, $"새어 나온 {Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i, gc, cause);
             else if (cause == 0) cause = sim.Causes.Add(CauseKind.Reaction, $"{Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i);
             sim.Facts.Emit(sim.Tick, FactKind.Ignition, i, (float)(heat / 1000), cause, other: gf.gas);
+            GasBurstJ.Add((i, heat, cause));
             int slot = RoomSlot(i);
             if (_boomJ[slot] <= 0 && _tickBurst[slot] <= 0) { _boomCell[slot] = i; _boomCause[slot] = cause; } // 쾅의 자리 · 원인: 그 불이 처음 터진 칸
             _tickBurst[slot] += heat;

@@ -44,7 +44,7 @@ public static partial class Program
             }
             int crateCell = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0)).Cell;
             return (st.DoorJam[door] != 0, f.DoorOpen[door], s.Causes.Story(st.DamageCause[At(6, 2)]), crateCell, !Worlds.Items(s).Any(x => x.Item == kit),
-                s.Book.OfItem(kit, Flow.Spaced), w.Other(s, Book.Bulk + kit), m.Spaced + st.PropSpaced, st.DoorTarget[door]);
+                s.Book.OfItem(kit, Flow.Spaced), w.Other(s, Book.Bulk + kit), st.PropSpaced, st.DoorTarget[door]);
         }
         var with = Run(true); var without = Run(false);
         Check("파편 사슬: 화물칸 외판에 1.5m² 구멍 — 통로 문 곁 식량 상자(13kg)가 돌풍에 밀려 문 칸에 들고 · 닫히는 문짝에 물려 문을 끼운다 (닫으라는 목표는 그대로 · 상자가 없으면 닫힌다) · 원인 사슬은 파편까지",

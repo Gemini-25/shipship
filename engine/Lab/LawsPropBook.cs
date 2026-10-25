@@ -56,7 +56,7 @@ public static partial class Program
                 string bad = string.Join(" · ", Enumerable.Range(0, kinds).Where(k => !worn.Contains(m.ItemNames[k]) && Math.Abs(n1[k] - n0[k] - (b1[k] - b0[k])) > 1e-9)
                     .Select(k => $"{m.ItemNames[k]} {n0[k]}→{n1[k]} 장부 {b1[k] - b0[k]:+0;-0;0}"));
                 Par.Threads = keep;
-                return (s.Hash(), bad, m.Flung + m.Spaced + st.PropWoken + st.PropSpaced, st.Props.Count);
+                return (s.Hash(), bad, st.PropWoken + st.PropSpaced, st.Props.Count);
             }
             var one = Run(1); var four = Run(4);
             Check("물건 수: 바닥 물체 + 손 + 보관함 = 처음 + 장부 흐름 (디딤호 · 물건 여덟 · 감압 · 줍기 10분 — 입은 것은 셈 밖)",

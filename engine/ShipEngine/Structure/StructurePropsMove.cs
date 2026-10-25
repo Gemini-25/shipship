@@ -65,6 +65,7 @@ public sealed partial class Structure
     /// <summary>한 틱 움직임: 몸 (조각 · 배) → 물체 (깨어 있는 것만).</summary>
     private void Motion(Sim sim, double dt, long t)
     {
+        _tickDt = dt;
         MoveBodies(sim, dt); t = Prof.Lap("구조:몸", t);
         MoveProps(sim, dt); Prof.Lap("구조:물체", t);
     }
@@ -72,23 +73,76 @@ public sealed partial class Structure
     public const double Gravity = 9.8, WetShare = 0.33, WetMol = 50, SleepV = 1e-3, SleepW = 0.01, SleepSec = 0.5, MaxPropH = 0.1, MaxPropTurn = 0.1;
     public const int MaxPropSteps = 1024;
 
-    /// <summary>깨어 있는 물체마다 (Id 차례 — 지금은 물체끼리 닿지 않아 하나가 한 섬) 한 틱을 잔걸음으로.</summary>
+    /// <summary>시험 갈고리: 몸 잔걸음이 끝날 때마다 그 때 (틱 처음에서 초) — 찍지 않는다 · null이면 부르지 않는다 (PH5 Track이 이어받는다).</summary>
+    public Action<double>? SubSeen;
+
+    /// <summary>물체의 질량 · 회전관성 (아직 깨지 않아 몸 값이 비었으면 꼴에서).</summary>
+    private (double kg, double inertia) MassOf(in Prop p)
+    {
+        if (p.Kg > 0) return (p.Kg, p.Inertia);
+        var fm = PropForm(p);
+        return (fm.Mass, fm.I);
+    }
+
+    /// <summary>
+    /// 물체의 세상 자리 · 빠르기 · 각속도 (몸이 있으면 그 칸 몸의 자세 · 움직임으로 옮긴다 — 물체 값은 바닥에 대한 것) · 몸이 없으면 도면 값 그대로.
+    /// </summary>
+    public (double x, double y, double vx, double vy, double w) PropWorld(in Prop p)
+    {
+        int b = Bodies.Count > 0 ? BodyOf(CellOf(p)) : -1;
+        if (b < 0 || b >= Bodies.Count || Bodies[b].Mass <= 0) return (p.X, p.Y, p.Vx, p.Vy, p.W);
+        var o = Bodies[b];
+        double c = Math.Cos(o.Th), s = Math.Sin(o.Th), dx = p.X - o.Lx, dy = p.Y - o.Ly, rx = c * dx - s * dy, ry = s * dx + c * dy;
+        return (o.X + rx, o.Y + ry, o.Vx - o.W * ry + c * p.Vx - s * p.Vy, o.Vy + o.W * rx + s * p.Vx + c * p.Vy, o.W + p.W);
+    }
+
+    /// <summary>물체들의 세상 운동량 · 원점에 대한 각운동량 (우주로 간 것이 가져간 몫 포함 — 법칙 시험의 장부).</summary>
+    public (double px, double py, double l) PropMomentum()
+    {
+        double px = PropPxGone, py = PropPyGone, l = PropLGone;
+        foreach (var p in Props)
+        {
+            if (p.State == 5) continue;
+            var (m, I) = MassOf(p);
+            var (x, y, vx, vy, w) = PropWorld(p);
+            px += m * vx; py += m * vy; l += m * (x * vy - y * vx) + I * w;
+        }
+        return (px, py, l);
+    }
+
+    /// <summary>
+    /// 깨어 있는 물체마다 (Id 차례 — 지금은 물체끼리 닿지 않아 하나가 한 섬) 한 틱을 잔걸음으로 — 깨우기 (막음 풀림 · 바람 · 덜컹 · 옆 가속 · 폭풍) 뒤 ·
+    /// 몸이 있으면 바닥 · 벽이 준 몫을 틱 끝에 그 몸이 되받는다.
+    /// </summary>
     private void MoveProps(Sim sim, double dt)
     {
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 잠든 것은 베끼지 않고 상태만 본다 (조용한 틱의 거의 전부)
-        bool any = false, plugged = false;
+        bool any = false, plugged = false, world = Bodies.Count > 0;
         for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; }
         _windy = F.WindCells.Count > 0; _tickDt = dt;
+        if (all.Length > 0) any |= GasBlasts(sim);             // 폭풍 (② 이 틱 기체 폭발 — 기체가 민 것은 바깥 몫이다)
+        _framed = false;
+        if (all.Length > 0 && (world || ShipAx != 0 || ShipAy != 0)) BeginFrames(all, world);
         if (plugged) any |= Unplug(all);                     // 구멍을 덧댔거나 누르는 힘이 빠졌으면 떨어진다
         if (_windy && all.Length > 0) any |= WakeByWind(all);   // 깨우기: 바람 · 구멍 입 (③ 이 틱 바람이 분 칸 곁)
+        if (_jolts.Count > 0) any |= WakeByJolts(all);        // 덜컹 (몸 걸음 안의 밂)
+        if (_framed) any |= WakeByFrame(all, world);           // 옆 가속 (점화 · 뿜는 틈 · 도는 몸)
         if (any)
         {
             BuildClearance();
             for (int i = 0; i < all.Length; i++)
-                if (Awake(all[i])) StepProp(sim, ref all[i], dt);   // 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
+            {
+                if (!Awake(all[i])) continue;
+                if (world) _stepped[i] = true;
+                StepProp(sim, ref all[i], dt, world ? _hostOf[i] : -1);   // 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
+            }
+        }
+        if (world && all.Length > 0) Reactions(all);
+        if (any)
+        {
             plugged = false;
             foreach (var p in all) plugged |= p.State == 6;
-            RemoveSpaced(sim);
+            RemoveSpaced(sim, world);
             all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         }
         WritePlugs(all, plugged);   // 물체 막음 → 장 (다음 틱 흐름부터)
@@ -99,7 +153,7 @@ public sealed partial class Structure
     /// 닿을 것이 없으면 마찰의 정확한 걸음 (x += v h + ½ a h² · 서는 걸음은 v²/2a에서 멈춘다) · 있으면 마찰 빠르기 → 충격량 → 자리 → 바로잡음.
     /// 빠르기 1mm/s · 각속도 0.01rad/s 아래가 0.5초 이어지면 잔다 (빠르기 0 · 놓임).
     /// </summary>
-    private void StepProp(Sim sim, ref Prop p, double dt)
+    private void StepProp(Sim sim, ref Prop p, double dt, int host)
     {
         if (p.Kg <= 0) FillBody(ref p);
         var fm = PropForm(p);
@@ -123,8 +177,22 @@ public sealed partial class Structure
                 near[nNear] = a; touching[nNear] = TouchesActor(p, sm, _actors[a]); nNear++;
             }
         }
+        int jp = 0;          // 몸 걸음 안의 덜컹 (때 차례) — 그 때가 지나면 바닥에 대한 빠르기를 고친다
+        double jw = 0;       // 지난 덜컹이 바꾼 몸의 각속도
         while (rem > 1e-12)
         {
+            double tau = dt - rem;
+            for (; jp < _jolts.Count && _jolts[jp].T <= tau + 1e-12; jp++)
+            {
+                var j = _jolts[jp];
+                if (j.B != host) continue;
+                var o = Bodies[host];
+                double jdx = p.X - o.Lx, jdy = p.Y - o.Ly;
+                p.Vx -= j.Dvx - j.Dw * jdy; p.Vy -= j.Dvy + j.Dw * jdx; p.W -= j.Dw; jw += j.Dw; p.Still = 0;
+                if (j.Cause != 0) p.Cause = j.Cause;
+            }
+            double nextJolt = double.PositiveInfinity;
+            for (int k = jp; k < _jolts.Count; k++) if (_jolts[k].B == host) { nextJolt = _jolts[k].T; break; }
             int c = CellOf(p);
             // 무게중심이 도면 밖 · 바깥에 들었다 → 우주로 · 구멍 벽 칸에 들었다 (큰 구멍의 틈) → 빨아들이면 막거나 우주로 (아니면 틈을 지나 그대로 간다)
             if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c)) { HoleHit(sim, ref p, -1); break; }
@@ -132,10 +200,14 @@ public sealed partial class Structure
             double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
             double muK = mat.Mu * (F.Stored(T.sWater, c) > WetMol ? WetShare : 1);   // 칸 값으로 늘 다시 읽는다 (젖으면 × 0.33)
             double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
-            // 바람 · 구멍 입 (잔걸음 처음 때 — 놓인 채 정지 타원 안이면 그대로)
-            double fx = 0, fy = 0, tq = 0;
-            bool blown = _windy && WindForce(p, fm, dt - rem, out fx, out fy, out tq);
-            if (blown && p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho)) { blown = false; fx = fy = tq = 0; }
+            // 바람 · 구멍 입 · 몸의 틀 (−a · 원심 · 오일러 — 잔걸음 처음 때 · 코리올리는 빠르기를 돌린다) — 놓인 채 정지 타원 안이면 그대로
+            double wfx = 0, wfy = 0, wtq = 0, wb = 0, ffx = 0, ffy = 0, ftq = 0;
+            bool windy = _windy && WindForce(p, fm, tau, out wfx, out wfy, out wtq);
+            bool framed = _framed && FrameForce(p, host, tau, jw, m, I, out ffx, out ffy, out ftq, out wb);
+            double fx = wfx + ffx, fy = wfy + ffy, tq = wtq + ftq;
+            bool blown = windy || framed;
+            if (p.Cause == 0 && (windy || framed)) p.Cause = windy ? WindCauseAt(c) : host >= 0 ? BodyCause(c) : ShipACause;   // 작은 덜컹에 깬 것도 미는 힘의 원인을 잇는다
+            if (blown && p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho)) { blown = windy = false; fx = fy = tq = wfx = wfy = wtq = 0; }
             double ax = fx / m, ay = fy / m, al = tq / I, acc = blown ? Math.Sqrt(ax * ax + ay * ay) + Math.Abs(al) * sm.reach : 0;
             double room = ClearAt(c) - sm.reach, gap = room, h = rem;
             for (int k = 0; k < nNear; k++)   // 원판도 건너뛰지 않게 (닿을 만큼만 간다)
@@ -147,10 +219,11 @@ public sealed partial class Structure
             double ell = Math.Max(2 * DotForm.Dot, gap);
             if (speed > 0) h = Math.Min(h, ell / speed);
             if (w > 0) h = Math.Min(h, MaxPropTurn / w);
-            if (acc > 0) h = Math.Min(h, (-speed + Math.Sqrt(speed * speed + 2 * acc * ell)) / acc);   // 힘을 받아 빨라져도 ℓ 넘게 가지 않는다
-            if (blown && al != 0) h = Math.Min(h, (-w + Math.Sqrt(w * w + 2 * Math.Abs(al) * MaxPropTurn)) / Math.Abs(al));
-            if ((speed > 0 || blown) && gp > 0 && muK > 0 || _windy) h = Math.Min(h, MaxPropH);   // 바람은 틱 안에서 준다
-            if (++steps >= MaxPropSteps) h = rem;
+            if (acc > 0) h = Math.Min(h, 2 * ell / (speed + Math.Sqrt(speed * speed + 2 * acc * ell)));   // 힘을 받아 빨라져도 ℓ 넘게 가지 않는다 (아주 작은 힘에도 0이 되지 않는 꼴)
+            if (blown && al != 0) h = Math.Min(h, 2 * MaxPropTurn / (w + Math.Sqrt(w * w + 2 * Math.Abs(al) * MaxPropTurn)));
+            if ((speed > 0 || blown) && gp > 0 && muK > 0 || _windy || framed) h = Math.Min(h, MaxPropH);   // 바람 · 틀의 힘은 틱 안에서 준다
+            if (nextJolt - tau < h) h = Math.Max(1e-9, nextJolt - tau);   // 덜컹 때에 맞춰 끊는다
+            if (++steps >= MaxPropSteps) h = Math.Min(rem, Math.Max(1e-9, nextJolt - tau));
             double px0 = m * p.Vx, py0 = m * p.Vy, l0 = m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W;
             double lw = blown ? (p.X * fy - p.Y * fx + tq) * h : 0;   // 바람이 준 각운동량 (원점 둘레)
             double speedEnd = speed + acc * h;
@@ -159,6 +232,7 @@ public sealed partial class Structure
             {
                 var pk = p;   // 받은 힘만큼 빨라진 길로 닿을 곳을 찾는다
                 if (blown) { pk.Vx += ax * h; pk.Vy += ay * h; pk.W += al * h; }
+                if (wb != 0) Coriolis(ref pk, -2 * wb * h);
                 nc = FindContacts(pk, sm, h, mat.Mu, mat.Rest);
                 if (nc > 0) p = pk;
             }
@@ -166,7 +240,9 @@ public sealed partial class Structure
             {
                 // 힘 반 → 마찰의 정확한 걸음 → 힘 반 (마찰로 선 채 정지 타원 안이면 그대로)
                 if (blown) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
+                if (wb != 0) Coriolis(ref p, -wb * h);
                 Friction(ref p, h, gp * muK, m, I, rho, true);
+                if (wb != 0) Coriolis(ref p, -wb * h);
                 if (blown && !(p.Vx == 0 && p.Vy == 0 && p.W == 0 && Holds(fx, fy, tq, StaticShare * muK, m * gp, rho))) { p.Vx += 0.5 * ax * h; p.Vy += 0.5 * ay * h; p.W += 0.5 * al * h; }
             }
             else
@@ -186,8 +262,9 @@ public sealed partial class Structure
                 for (int k = 0; k < nc; k++) if (_propHits[k].Bounce && _propHits[k].Jn > 0) { Bounces++; break; }
                 p.X += p.Vx * h; p.Y += p.Vy * h; p.Th += p.W * h;
             }
-            // 장부: 바닥 · 벽 · 가구가 받은 몫 (몸이 없는 배에 준 몫 — 바람이 준 몫은 뺀다 · 몸 고른 가속은 PH4d)
-            ToHostPx -= m * p.Vx - px0 - fx * h; ToHostPy -= m * p.Vy - py0 - fy * h; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - l0 - lw;
+            // 장부: 바닥 · 벽 · 가구가 받은 몫 — 몸이 없는 배에 준 몫 (바람 · 점화의 틀 힘이 준 몫은 뺀다) · 몸이 있으면 틱 끝에 그 몸이 되받는다 (바람 몫은 기체가 잃는다)
+            if (host < 0) { ToHostPx -= m * p.Vx - px0 - fx * h; ToHostPy -= m * p.Vy - py0 - fy * h; ToHostL -= m * (p.X * p.Vy - p.Y * p.Vx) + I * p.W - l0 - lw; }
+            else if (windy) WindToWorld(p, host, tau, wfx, wfy, wtq, h);
             if (nc > 0) FixOverlap(ref p, nc);
             for (int k = 0; k < nNear; k++)
             {
@@ -204,7 +281,7 @@ public sealed partial class Structure
                 if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
             }
             if (gone) break;
-            bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0;
+            bool still = gp > 0 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Z == 0 && p.Tilt == 0 && double.IsPositiveInfinity(nextJolt);
             p.Still = still ? p.Still + (float)h : 0;
             if (p.Still >= SleepSec) { p.Vx = p.Vy = p.W = 0; p.State = 0; p.Asleep = 1; p.Still = 0; p.Since = _now; break; }
         }
@@ -234,6 +311,13 @@ public sealed partial class Structure
         double v2 = p.Vx * p.Vx + p.Vy * p.Vy, speed = Math.Sqrt(v2);
         int cause = speed > BounceV ? sim.Causes.Add(CauseKind.Impact, $"날아든 {PropName(p)}에 맞았다", sim.Tick, a.Cell, p.Cause) : p.Cause;
         PropHits.Add(new PropHit { Tag = a.Tag, Cell = a.Cell, E = (float)(0.5 * p.Kg * v2), Kg = p.Kg, Speed = (float)speed, Cause = cause, Tick = sim.Tick });
+    }
+
+    /// <summary>코리올리 (−2ω × v — 도는 몸의 틀): 바닥에 대한 빠르기를 phi만큼 돌린다 (크기는 그대로 — 에너지를 꾸며내지 않는다).</summary>
+    private static void Coriolis(ref Prop p, double phi)
+    {
+        double c = Math.Cos(phi), s = Math.Sin(phi), vx = p.Vx;
+        p.Vx = c * vx - s * p.Vy; p.Vy = s * vx + c * p.Vy;
     }
 
     /// <summary>

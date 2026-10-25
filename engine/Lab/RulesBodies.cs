@@ -105,7 +105,7 @@ public static partial class Program
             {
                 var (s, st, m, _) = Split();
                 byte box = (byte)m.ItemIndex("식량 상자");
-                int start = Worlds.At(layD, 18, 3);
+                int start = Worlds.At(layD, 17, 5);   // 바깥 구석 쪽 바닥 (설비 칸 · 설비 곁이 아니다 — ④ 물체는 제자리 가구에 걸린다)
                 Worlds.PutItem(s, box, start);
                 var o = st.Bodies[1];
                 double j = 1.5 * o.Inertia / 2;   // 짝힘 — 분에 14바퀴
@@ -115,12 +115,13 @@ public static partial class Program
                 double r0 = R(start);
                 s.Run(12);
                 var it = Worlds.Items(s).FirstOrDefault(x => x.Item == box, new Worlds.FloorItem(0, 0, -1, 0, 0));
-                double r1 = it.Cell >= 0 ? R(it.Cell) : 0;
+                int pi = st.Props.FindIndex(x => x.Kind == 0 && x.What == box);
+                double r1 = pi >= 0 ? Math.Sqrt(Math.Pow(st.Props[pi].X - st.Bodies[1].Lx, 2) + Math.Pow(st.Props[pi].Y - st.Bodies[1].Ly, 2)) : 0;   // 실수 자리 (④)
                 Span<int> nb = stackalloc int[4];
                 bool byWall = false;
                 if (it.Cell >= 0) { layD.Neighbors(it.Cell, nb); foreach (int q in nb) if (q >= 0 && layD.Kind[q] == CellKind.Wall) byWall = true; }
-                Check("도는 조각: 분에 14바퀴로 돌면 무게중심에서 1.7m 떨어진 상자는 원심(ω²r 3.8m/s²)이 마찰(2.9m/s²)을 넘어 바깥 벽까지 밀려간다",
-                    Math.Abs(st.Bodies[1].W) > 1.4 && r1 > r0 + 0.9 && byWall, $"분에 {Math.Abs(st.Bodies[1].W) * 60 / (2 * Math.PI):0.0}바퀴 · 상자 무게중심에서 {r0:0.0} → {r1:0.0}m · 벽 곁 {byWall}");
+                Check("도는 조각: 분에 14바퀴로 돌면 무게중심에서 먼 상자는 원심(ω²r)이 정지 마찰(3.7m/s²)을 넘어 바깥 벽까지 밀려간다 (④ 실수 자리 — 코리올리로 휘며)",
+                    Math.Abs(st.Bodies[1].W) > 1.4 && r1 > r0 + 0.25 && byWall, $"분에 {Math.Abs(st.Bodies[1].W) * 60 / (2 * Math.PI):0.0}바퀴 · 상자 무게중심에서 {r0:0.0} → {r1:0.0}m · 벽 곁 {byWall}");
             }
         }
 

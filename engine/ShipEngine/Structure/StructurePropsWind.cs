@@ -261,15 +261,15 @@ public sealed partial class Structure
         return best;
     }
 
-    /// <summary>우주로 간 것을 목록에서 뺀다 (장부 '우주로' · 가져간 운동량 · 각운동량 — Id 차례 그대로).</summary>
-    private void RemoveSpaced(Sim sim)
+    /// <summary>우주로 간 것을 목록에서 뺀다 (장부 '우주로' · 가져간 운동량 · 각운동량 — Id 차례 그대로 · 몸이 있으면 세상 틀 몫은 반작용에서 이미 셌다).</summary>
+    private void RemoveSpaced(Sim sim, bool world)
     {
         bool any = false;
         foreach (var p in Props)
         {
             if (p.State != 5) continue;
             any = true;
-            PropPxGone += p.Kg * p.Vx; PropPyGone += p.Kg * p.Vy; PropLGone += p.Kg * (p.X * p.Vy - p.Y * p.Vx) + p.Inertia * p.W;
+            if (!world) { PropPxGone += p.Kg * p.Vx; PropPyGone += p.Kg * p.Vy; PropLGone += p.Kg * (p.X * p.Vy - p.Y * p.Vx) + p.Inertia * p.W; }
             if (p.Kind == 0) sim.Book.AddItem(p.What, Flow.Spaced, -1);
             PropSpaced++;
         }

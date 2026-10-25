@@ -189,6 +189,13 @@ public sealed partial class Outside
         if (kind is BurnKind.Arrive or BurnKind.Capture && LastBurnDv >= 0.95 * LastBurnWanted) { ArrivalDone = 1; Missed = 0; }
     }
 
+    /// <summary>배 안에서 느끼는 가속 · 그 점화의 원인을 장 · 구조에 넣는다 (요청 — 장 · 구조는 찍지 않는다: ⑤가 틱마다 먼저 돈다).</summary>
+    private void TellAccel(Sim sim)
+    {
+        F.AccelX = Ax; F.AccelY = Ay;
+        if (sim.Find<Structure>() is { } st) { st.ThrustG = Math.Sqrt(Ax * Ax + Ay * Ay) / G0; st.ShipAx = Ax; st.ShipAy = Ay; st.ShipACause = Ax != 0 || Ay != 0 ? BurnCause : 0; }
+    }
+
     // ───────────────────────── 한 틱 ─────────────────────────
 
     private void MotionStep(Sim sim, double dt)
@@ -215,8 +222,7 @@ public sealed partial class Outside
             }
             else if (BurnDvLeft <= 1e-6 || sim.Tick + 1 >= BurnUntil) EndBurn(sim);
         }
-        F.AccelX = Ax; F.AccelY = Ay;
-        if (sim.Find<Structure>() is { } st) { st.ThrustG = Math.Sqrt(Ax * Ax + Ay * Ay) / G0; st.ShipAx = Ax; st.ShipAy = Ay; }
+        TellAccel(sim);
         if (Kx == 0 && Ky == 0) return;
         // 배를 가운데 둔 좌표: 배가 a로 가속하면 바깥 물체는 −a로 (붙어 있는 배는 함께 간다)
         for (int k = 0; k < Rocks.Count; k++) { var r = Rocks[k]; r.Vx -= Kx * dt; r.Vy -= Ky * dt; Rocks[k] = r; }

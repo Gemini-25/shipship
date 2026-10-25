@@ -15,6 +15,128 @@ public static partial class Program
         FormLaw();
         PlaneLaws();
         WindLaws();
+        FrameLaws();
+    }
+
+    // 긴 방 (16m) 곁에 작은 방 — 가운데 겹을 끊으면 긴 방이 배 (몸 0 · 무거운 쪽) · 작은 방이 조각
+    private const string BurnShip = @"
+#######################
+#................###..#
+#................###..#
+#................###..#
+#######################";
+
+    /// <summary>글자 그림의 x 줄 벽을 위아래 끝까지 끊어 몸을 가른다 (부스러기 없이 — 몸 · 물체만의 역학).</summary>
+    private static (Sim s, Structure st) SplitWorld(string art, int cutX, ulong seed = 5)
+    {
+        var lay = Worlds.Ascii(art);
+        var s = FieldStructure(lay, seed);
+        var st = s.Get<Structure>();
+        st.Debris = false;
+        s.Run(3);
+        for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, cutX, y), 0);
+        s.Run(3);
+        return (s, st);
+    }
+
+    /// <summary>몸 + 물체 + 부스러기 + 우주로 간 기체 − 점화 (운동량 · 원점에 대한 각운동량 — 닫힌 계면 늘 같다).</summary>
+    private static (double px, double py, double l) WorldBook(Structure st)
+    {
+        var (bx, by, bl, _) = st.BodyMomentum(); var (px, py, pl) = st.PropMomentum(); var (sx, sy, sl) = st.ShardMomentum();
+        return (bx + px + sx + st.GasPx - st.BurnPx, by + py + sy + st.GasPy - st.BurnPy, bl + pl + sl + st.GasL - st.BurnL);
+    }
+
+    /// <summary>
+    /// 몸 위의 물체 (PH4d — docs/PHYSICS.md §3-2 '바닥 몸의 관성' · §10 법칙 6 · 7): 몸은 틱 안에서 고르게 가속하고 · 물체는 그 몸의 틀에서 −a · 원심 · 코리올리 · 오일러를 느낀다 —
+    /// 마찰 없는 물체는 세상에 선다 (갈릴레이) · 덜컹은 바닥이 바뀐 것이라 세상 빠르기를 바꾸지 않는다 · 바닥 · 벽이 물체에 준 몫은 몸이 되받는다 (장부).
+    /// </summary>
+    private static void FrameLaws()
+    {
+        // 법칙 7 갈릴레이: 긴 방이 0.3g로 점화 (몸 0 · 무게중심을 민다) · 무중력 바닥 (마찰 없음)의 식량 상자 — 틱 처음 · 가운데 · 끝 모두 세상 자리 그대로 (≤ 1e-6m)
+        {
+            var (s, st) = SplitWorld(BurnShip, 18);
+            var L = s.Layout;
+            for (int c = 0; c < L.N; c++) if (st.BodyOf(c) == 0) s.Get<Field>().Grav[c] = 0;
+            { var o = st.Bodies[0]; o.W = 0; st.Bodies[0] = o; }   // 차림: 갈라질 때 얻은 아주 작은 돎을 지운다 (틱 가운데 잣대를 곧은 식으로)
+            int id = Slide(s, "식량 상자", 2.6, 3.5, 0, 0);
+            double a = -0.3 * 9.8;   // 작은 방 (몸 1)에서 멀어지는 쪽으로
+            st.ShipAx = a;
+            var p0 = st.Props[st.IndexOf(id)];
+            var (wx0, wy0, wvx, wvy, _) = st.PropWorld(p0);   // 세상에서 곧게 (몸이 갈라질 때 얻은 빠르기 그대로)
+            var b0 = st.Bodies[0];
+            double worstMid = double.MaxValue, midT = 0, worstEnd = 0;
+            st.SubSeen = tau =>
+            {
+                if (Math.Abs(tau - Time.SecondsPerTick / 2) > Math.Abs(midT - Time.SecondsPerTick / 2)) return;
+                var o = st.Bodies[0];
+                double ax = a * Math.Cos(b0.Th), ay = a * Math.Sin(b0.Th);
+                midT = tau;
+                worstMid = Math.Max(Math.Abs(o.X - (b0.X + b0.Vx * tau + 0.5 * ax * tau * tau)), Math.Abs(o.Y - (b0.Y + b0.Vy * tau + 0.5 * ay * tau * tau)));
+            };
+            s.Step();
+            st.SubSeen = null;
+            var p1 = st.Props[st.IndexOf(id)];
+            var (wx1, wy1, _, _, _) = st.PropWorld(p1);
+            double dtk = Time.SecondsPerTick;
+            worstEnd = Math.Max(Math.Abs(wx1 - wx0 - wvx * dtk), Math.Abs(wy1 - wy0 - wvy * dtk));
+            double slid = p1.X - p0.X;   // 배 안에서
+            Check("갈릴레이: 0.3g로 고르게 가속하는 배 (갈라진 몸 0) 안 무중력 바닥의 식량 상자는 세상에서 곧게 간다 — 틱 끝 세상 자리 = 처음 + 처음 세상 빠르기 × t (≤ 1e-6m) · 몸은 틱 가운데에도 x₀ + v₀t + ½at² (≤ 1e-6m · 반-차기면 ⅛a·dt² = 2.1m 어긋난다) · 상자는 배 안에서 ½a·dt² 뒤로",
+                worstEnd <= 1e-6 && worstMid <= 1e-6 && Math.Abs(midT - Time.SecondsPerTick / 2) < 0.1 && Math.Abs(slid - 0.5 * Math.Abs(a) * Time.SecondsPerTick * Time.SecondsPerTick) < 1e-6,
+                $"틱 끝 어긋남 {worstEnd:0.0e0}m · 몸 틱 가운데 ({midT:0.00}초) 어긋남 {(worstMid == double.MaxValue ? "표본 없음" : $"{worstMid:0.0e0}m")} · 배 안에서 {slid:0.000}m 뒤로");
+        }
+        // 법칙 12 점화 중 왕복: 몸이 없는 배가 0.4g로 점화하는 중 미끄러지는 식량 상자 — 찍고 되살려 10틱 바이트 같음 (⑤가 틱마다 먼저 가속을 알린다 — 찍지 않는 요청)
+        {
+            var lay = Worlds.Ascii(HelmShip, HelmLegend);
+            var s = Worlds.Full(lay, 15);
+            var o = s.Get<Outside>(); var st = s.Get<Structure>();
+            o.DryKg = o.PropellantKg = o.Engines * o.EngineN / (0.4 * Outside.G0) / 2;
+            int id = Worlds.PutItem(s, "식량 상자", Worlds.At(lay, 12, 7));
+            s.Run(2);
+            o.Burn(s, BurnKind.Correct, 1, 0, 100, 0, 30, 0, false, o.Engines, s.Causes.Add(CauseKind.Route, "항로 고침", s.Tick));
+            s.Run(1);   // 상자가 미끄러지기 시작했다 (찍는 때 — 아직 벽에 닿지 않았다)
+            var r = new Sim(s.Setup); r.Load(s.Save());
+            double at = st.Props[st.IndexOf(id)].X;
+            s.Run(10); r.Run(10);
+            bool same = s.Save().AsSpan().SequenceEqual(r.Save());
+            int i = st.IndexOf(id);
+            double moved = i >= 0 ? Worlds.At(lay, 12, 7) % lay.W + 0.5 - st.Props[i].X : 0;
+            Check("점화 중 왕복: 몸이 없는 배가 0.4g로 점화하는 중 미끄러지는 식량 상자 — 찍고 되살려 10틱 바이트 같음 (배의 가속은 ⑤가 틱마다 먼저 알리는 요청)",
+                same && moved > 0.3 && at > st.Props[i].X + 0.3, $"바이트 같음 {same} · 상자 {moved:0.00}m 뒤로 (찍은 때 뒤로 {at - st.Props[i].X:0.00}m)");
+        }
+        // 법칙 6 운동량 장부: 닫힌 두 방 — 몸 0은 0.3g 점화 (마른 바닥 식량 상자는 잠든 채 실려 가고 · 젖은 바닥 컵은 미끄러져 벽에 눌린다) · 몸 1은 3m/s로 밀려 (덜컹) 식량 상자가 미끄러져 벽에 부딪힌다 —
+        // 몸 + 물체 + 기체 = 점화 (운동량 · 원점에 대한 각운동량 1e-9)
+        {
+            var (s, st) = SplitWorld(Sealed, 6);
+            var f = s.Get<Field>();
+            int left = st.BodyOf(s.Layout.Index(3, 3)), right = st.BodyOf(s.Layout.Index(10, 3));
+            int cup = Slide(s, "컵", 3.4, 2.5, 0, 0);
+            f.AddStore(s.Layout.Index(3, 2), f.T.sWater, 300);
+            int boxL = Slide(s, "식량 상자", 3.5, 3.6, 0, 0), boxR = Slide(s, "식량 상자", 9.9, 3.4, 0, 0);
+            st.ShipAx = -0.3 * 9.8;   // 몸 1에서 멀어지는 쪽 (부딪지 않게)
+            var e0 = WorldBook(st);
+            var o = st.Bodies[right];
+            double jx = o.Mass * 3, jy = o.Mass * 0.4;
+            st.Push(right, o.X + 0.3, o.Y - 0.2, jx, jy);
+            var e1 = WorldBook(st);
+            double pushL = (o.X + 0.3) * jy - (o.Y - 0.2) * jx;
+            double worstP = Math.Sqrt((e1.px - e0.px - jx) * (e1.px - e0.px - jx) + (e1.py - e0.py - jy) * (e1.py - e0.py - jy)), worstL = Math.Abs(e1.l - e0.l - pushL);
+            double scale = 0;
+            int bounced = 0;
+            for (int k = 0; k < 10; k++)
+            {
+                long b0 = st.Bounces;
+                s.Step();
+                if (st.Bounces > b0) bounced++;
+                var e = WorldBook(st);
+                double ex = e.px - e0.px - jx, ey = e.py - e0.py - jy;
+                worstP = Math.Max(worstP, Math.Sqrt(ex * ex + ey * ey)); worstL = Math.Max(worstL, Math.Abs(e.l - e0.l - pushL));
+                scale = Math.Max(scale, Math.Sqrt(st.BurnPx * st.BurnPx + st.BurnPy * st.BurnPy) + Math.Sqrt(jx * jx + jy * jy));
+            }
+            var pc = st.Props[st.IndexOf(cup)]; var pl = st.Props[st.IndexOf(boxL)]; var pr = st.Props[st.IndexOf(boxR)];
+            Check("운동량 장부 (물체): 닫힌 두 방 — 0.3g 점화하는 몸 0 (잠든 식량 상자는 실려 가고 · 젖은 바닥 컵은 미끄러져 벽에 눌린다) · 3m/s로 밀린 몸 1의 식량 상자가 미끄러져 벽에 부딪힌다 — 몸 + 물체 + 기체 = 점화 + 민 것 (운동량 · 각운동량 1e-9)",
+                left != right && scale > 0 && worstP <= 1e-9 * scale && worstL <= 1e-9 * scale * 20 && pl.State == 0 && pc.X > 3.7 && bounced > 0,
+                $"몸 {left}/{right} · 점화 {Math.Sqrt(st.BurnPx * st.BurnPx + st.BurnPy * st.BurnPy) / 1000:0.0}kN·s · 남는 운동량 {worstP:0.0e0} · 각운동량 {worstL:0.0e0} · 컵 x {pc.X:0.000} · 몸 0 상자 {(pl.State == 0 ? "잠" : "깸")} · 몸 1 상자 x {pr.X:0.000} (튐 {bounced}틱)");
+        }
     }
 
     /// <summary>

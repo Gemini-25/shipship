@@ -10,6 +10,8 @@ namespace ShipEngine;
 public sealed partial class Mind
 {
     public const double PersonKg = 70, PersonCd = 1.0, StandArea = 0.7, LowArea = 0.3, FootMu = 0.6, HandGrip = 500;
+    public const double WetMu = 0.1, Gravity = 9.8;   // 젖은 바닥 발 마찰 · 중력 (물건의 미끄러짐 · 날림은 모두 ④ — PH4d가 다리를 걷었다)
+    public const double JamKg = 10;                   // 이보다 무거운 짐을 든 이는 잘 넘어진다
     public const double BodyPass = 0.25, BodyFace = 0.5, BodySeal = 0.97, PinFreeN = 300;
     public long PeoplePulled, PeopleSpaced, PeoplePinned, HoldsHeld, HolesPlugged;
     private readonly SortedDictionary<int, float> _plugs = new();   // 지난 틱에 장에 요청한 몸 막음 (칸 → 넓이) — 찍지 않는다: 되살리면 장의 PlugBody에서 다시 세운다
@@ -180,5 +182,17 @@ public sealed partial class Mind
         _plugs.Clear();
         if (now == null) return;
         foreach (var kv in now.OrderBy(kv => kv.Key)) { F.SetPlug(kv.Key, kv.Value); _plugs[kv.Key] = kv.Value; }
+    }
+
+    /// <summary>물건 무게 (kg — 데이터 표).</summary>
+    public double ItemKg(int item) => P.Items.TryGetValue(ItemNames[item], out var d) ? d.Kg : 2;
+
+    /// <summary>그 칸 바람의 원인 (구역이 새는 틈을 낸 원인).</summary>
+    private int WindCause(int c)
+    {
+        int r = F.RegionOf.Length > c ? F.RegionOf[c] : -1;
+        if (_st == null || r < 0) return 0;
+        foreach (var k in F.Links) if (k.RA == r && k.RB < 0 && _st.DamageCause[k.Via] != 0) return _st.DamageCause[k.Via];
+        return 0;
     }
 }

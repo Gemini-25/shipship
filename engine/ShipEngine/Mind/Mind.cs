@@ -506,8 +506,6 @@ public sealed partial class Mind : IEngine
         Bind(sim);
         ClearOldActs(sim.Tick);   // 오랜 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);
-        Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
-        t = Lap("준비:물건", t);
         if (Agents.Count == 0) { ApplyPlugs(); PutActors(); return; }
         F.RebuildNow();
         t = Lap("준비:장 다시", t);

@@ -147,19 +147,7 @@ public sealed partial class Structure
         foreach (var p in Props) if (p.Kind == 0 && CellOf(p) == cell) yield return p.Id;
     }
 
-    /// <summary>요청 (⑧ 다리 — 미끄러짐 · 날림): 물건을 그 칸 가운데로 옮긴다 (민 원인 — 0이면 그대로) · 칸 −1이면 구멍 밖 우주로 (목록에서 뺀다).</summary>
-    public void MoveItemCell(int id, int cell, int cause = 0)
-    {
-        int i = IndexOf(id);
-        if (i < 0) return;
-        if (cell < 0) { Props.RemoveAt(i); return; }
-        var p = Props[i];
-        p.X = L.X(cell) + 0.5; p.Y = L.Y(cell) + 0.5;
-        if (cause != 0) p.Cause = cause;
-        Props[i] = p;
-    }
-
-    /// <summary>요청 (⑧ 다리 — 빨려 붙음 · 떨어짐): 구멍을 막았다 (구멍 칸 + 1 · 0이면 떨어졌다).</summary>
+    /// <summary>요청 (시험 차림 — 빨려 붙음 · 떨어짐): 구멍을 막았다 (구멍 칸 + 1 · 0이면 떨어졌다).</summary>
     public void SetItemPlug(int id, int plugAt)
     {
         int i = IndexOf(id);

@@ -393,32 +393,9 @@ public sealed partial class Structure
         if (w < 0.05 || cell < 0) return;
         Blasts++;
         double w3 = Math.Cbrt(w);
-        int maxD = (int)Math.Ceiling(9 * w3);   // Z 9 언저리에서 15kPa 아래
-        var dist = new Dictionary<int, int> { [cell] = 0 };
-        var pq = new PriorityQueue<int, int>();
-        pq.Enqueue(cell, 0);
-        Span<int> nb = stackalloc int[4];
-        var hit = new List<(int c, double kpa)>();
-        while (pq.TryDequeue(out int c, out int d))
-        {
-            if (d > dist[c]) continue;
-            double r = Math.Max(0.5, d), kpa = BlastKPa(r / w3);
-            if (kpa < BlastFloorKPa) continue;
-            hit.Add((c, kpa));
-            bool solid = L.Kind[c] is CellKind.Wall || L.Kind[c] == CellKind.Door && !F.DoorPassable(L.DoorAt[c]);
-            if (solid && F.Hole[c] < 2 && c != cell) continue;  // 버틴 벽 너머는 아래에서 다시 본다 (찢기면 지나간다)
-            L.Neighbors(c, nb);
-            foreach (int j in nb)
-            {
-                if (j < 0 || F.IsOut(j)) continue;
-                bool js = L.Kind[j] is CellKind.Wall or CellKind.Door;
-                int nd = d + (js ? 4 : 1);
-                if (nd > maxD || dist.TryGetValue(j, out int old) && old <= nd) continue;
-                dist[j] = nd; pq.Enqueue(j, nd);
-            }
-        }
-        hit.Sort((a, b) => a.c.CompareTo(b.c));
+        var hit = BlastReach(cell, w3);
         int bc = sim.Causes.Add(CauseKind.Impact, "충격파가 배 안을 휩쓸었다", sim.Tick, cell, cause);
+        BlastProps(cell, hit, bc);   // 둘레 물체를 바깥쪽으로 민다 (벽이 찢기기 전 첨두로)
         foreach (var (c, kpa) in hit)
         {
             if (L.Kind[c] is CellKind.Wall or CellKind.Door)
@@ -446,6 +423,85 @@ public sealed partial class Structure
         }
         sim.Facts.Emit(sim.Tick, FactKind.LoudSound, cell, (float)Math.Min(194, 120 + 20 * Math.Log10(Math.Max(1, w))), bc);
         sim.Find<Sound>()?.Emit(sim, NearestAir(cell), (float)Math.Min(160, 130 + 10 * Math.Log10(Math.Max(1, w))), SoundKind.Bang, bc);
+    }
+
+    /// <summary>폭풍이 닿는 칸 · 첨두 압력 (kPa · 칸 차례): 칸 길을 따라 퍼지며 벽 · 문을 지날 때마다 거리 넷만큼 준다 · 버틴 벽 너머는 끊긴다 (15kPa 아래는 뺀다).</summary>
+    private List<(int c, double kpa)> BlastReach(int cell, double w3)
+    {
+        int maxD = (int)Math.Ceiling(9 * w3);   // Z 9 언저리에서 15kPa 아래
+        var dist = new Dictionary<int, int> { [cell] = 0 };
+        var pq = new PriorityQueue<int, int>();
+        pq.Enqueue(cell, 0);
+        Span<int> nb = stackalloc int[4];
+        var hit = new List<(int c, double kpa)>();
+        while (pq.TryDequeue(out int c, out int d))
+        {
+            if (d > dist[c]) continue;
+            double r = Math.Max(0.5, d), kpa = BlastKPa(r / w3);
+            if (kpa < BlastFloorKPa) continue;
+            hit.Add((c, kpa));
+            bool solid = L.Kind[c] is CellKind.Wall || L.Kind[c] == CellKind.Door && !F.DoorPassable(L.DoorAt[c]);
+            if (solid && F.Hole[c] < 2 && c != cell) continue;  // 버틴 벽 너머는 아래에서 다시 본다 (찢기면 지나간다)
+            L.Neighbors(c, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0 || F.IsOut(j)) continue;
+                bool js = L.Kind[j] is CellKind.Wall or CellKind.Door;
+                int nd = d + (js ? 4 : 1);
+                if (nd > maxD || dist.TryGetValue(j, out int old) && old <= nd) continue;
+                dist[j] = nd; pq.Enqueue(j, nd);
+            }
+        }
+        hit.Sort((a, b) => a.c.CompareTo(b.c));
+        return hit;
+    }
+
+    /// <summary>폭풍의 양압 길이 (초 — 작은 폭발 1~5ms · Kinney–Graham) · 기체 폭발 열 가운데 폭풍이 되는 몫 (갇힌 폭연 — 맞춤 값).</summary>
+    public const double BlastPositiveSec = 0.003, GasBlastShare = 0.1;
+
+    /// <summary>
+    /// 폭풍이 물체를 민다 (§3-2 '폭풍'): 닿은 바닥 칸에 무게중심이 든 물체마다 폭원 칸 가운데에서 바깥쪽으로 J = P첨두 × 앞면 A⊥(그 쪽) × t₊ (요청 Shove — 깨운다 · 원인).
+    /// 35kPa × 0.01m² → 1N·s (0.25kg 컵이 4m/s). 폭원 칸에 든 것은 그 칸 가운데에서 바깥쪽 (가운데면 민 쪽 없이 그대로).
+    /// </summary>
+    private bool BlastProps(int cell, List<(int c, double kpa)> hit, int cause)
+    {
+        if (Props.Count == 0 || hit.Count == 0) return false;
+        double sx = L.X(cell) + 0.5, sy = L.Y(cell) + 0.5;
+        bool any = false;
+        for (int i = 0; i < Props.Count; i++)
+        {
+            var p = Props[i];
+            if (p.State is 5 or 6 or 7) continue;
+            int c = CellOf(p);
+            if (c < 0 || L.Kind[c] != CellKind.Floor) continue;
+            int k = hit.BinarySearch((c, 0), Comparer<(int c, double kpa)>.Create((a, b) => a.c.CompareTo(b.c)));
+            if (k < 0) continue;
+            double dx = p.X - sx, dy = p.Y - sy, dl = Math.Sqrt(dx * dx + dy * dy);
+            if (dl < 1e-9) continue;
+            var fm = PropForm(p);
+            double phi = Math.Atan2(dy, dx) - p.Th;   // 몸 틀에서 본 폭풍의 쪽 (16갈래 앞면)
+            int a16 = (int)Math.Round(phi / (Math.PI / 8)) & 15;
+            double j = hit[k].kpa * 1000 * fm.Area16[a16] * BlastPositiveSec;
+            if (j <= 0) continue;
+            any |= Shove(p.Id, j * dx / dl, j * dy / dl, 0, cause);
+        }
+        return any;
+    }
+
+    /// <summary>폭풍 — 기체 폭발 (② 이 틱 한꺼번에 탄 칸마다): TNT 당량 W = 열 × 0.1 / 4.184MJ로 바꿔 그 칸에서 <see cref="Blast"/>와 같은 셈으로 둘레 물체만 민다 (벽 · 설비는 장의 압력이 맡는다).</summary>
+    private bool GasBlasts(Sim sim)
+    {
+        if (_chem == null || _chem.GasBurstJ.Count == 0 || Props.Count == 0) return false;
+        bool any = false;
+        foreach (var (cell, heat, cause) in _chem.GasBurstJ)
+        {
+            double w = heat * GasBlastShare / TntJ;
+            if (w <= 0) continue;
+            double w3 = Math.Cbrt(w);
+            if (BlastKPa(0.5 / w3) < BlastFloorKPa) continue;
+            any |= BlastProps(cell, BlastReach(cell, w3), cause);
+        }
+        return any;
     }
 
     /// <summary>설비 하나의 질량 (kg — 설비 표의 재질 합).</summary>
