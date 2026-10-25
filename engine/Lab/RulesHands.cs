@@ -208,5 +208,36 @@ public static partial class Program
                 down == 2 && told == 2 && m.Emptied == 2 && !Worlds.Items(s).Any(x => x.Item == m.iWaste) && m.WasteDown.Count == 0 && Math.Abs(life.Heap[bin] - kg) < 1e-3,
                 $"내려놓인 통 {down} · 알림 {told} · 비움 {m.Emptied} · 바닥 통 {Worlds.Items(s).Count(x => x.Item == m.iWaste)} · 남은 알림 {m.WasteDown.Count} · 퇴비통 {life.Heap[bin]:0.000}/{kg:0.000}kg · 셋째 로봇 {m[r3].C.Goal}");
         }
+        // ── 저장 판 (PH3b 검토): 오물 통 알림 · 줍기 일감 · 맡김의 대상이 칸에서 물체 Id로 바뀌었다 — 그 뜻이 칸이던 판 106 저장(PH3a)은 거절하고 ·
+        //    지금 판의 저장 왕복은 내려놓인 통을 그대로 알려 되살린 세계가 비운다 (예전엔 판이 106 그대로라 칸을 Id로 읽어 통이 영영 잊혔다) ──
+        {
+            var legend = new Dictionary<char, string> { ['e'] = "Bed", ['r'] = "RobotDock", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer",
+                ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['o'] = "Composter" };
+            var lay = Worlds.Ascii(WashCareShip, legend);
+            var s = Worlds.Full(lay, 17);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            int dock = Worlds.At(lay, 6, 1);
+            int r1 = m.AddRobot(s, Worlds.At(lay, 30, 1), AgentKind.Robot, dock); m.AddRobot(s, Worlds.At(lay, 5, 1), AgentKind.Robot, dock);
+            s.Run(30);
+            int toilet = lay.Furniture.First(f => f.Type == "Toilet").Id;
+            life.Tank[toilet] = 3;
+            m[r1].Plan.Clear(); m[r1].C.Goal = GoalKind.Idle;
+            m[r1].C.Holding = m.iWaste; m[r1].C.HoldCharge = (float)life.LiftTank(toilet);
+            s.Book.AddItem(m.iWaste, Flow.Removed, 1);
+            net.Robot(m[r1].C.Mech).Battery = 0;   // 통을 든 채 멈춘다 → 내려놓고 알린다
+            s.Step();
+            var save = s.Save();
+            var old = (byte[])save.Clone();
+            BitConverter.GetBytes(106).CopyTo(old, 8);   // 이름표(8바이트) 다음이 판 번호 — PH3a가 밖에 낸 판 (알림 · 일감 대상이 칸)
+            string refused = "";
+            try { new Sim(s.Setup).Load(old); } catch (InvalidDataException e) { refused = e.Message; }
+            var back = new Sim(s.Setup); back.Load(save);
+            var bm = back.Get<Mind>();
+            int told = bm.WasteDown.Count;
+            for (long k = 0; k < Time.Hours(2) && bm.Emptied < 1; k++) back.Step();
+            Check("저장 판: 오물 통 알림 · 줍기 대상이 칸이던 판 106 저장은 거절한다 · 지금 판의 저장에서 되살린 세계는 내려놓인 통을 알린 그대로 주워 비운다 (예전엔 판이 같아 칸을 Id로 읽어 통이 영영 잊혔다)",
+                refused.Contains("저장 판 106") && told == 1 && bm.Emptied == 1 && !Worlds.Items(back).Any(x => x.Item == bm.iWaste) && bm.WasteDown.Count == 0,
+                $"판 106: \"{(refused.Length > 0 ? refused : "읽었다")}\" · 되살린 알림 {told} · 비움 {bm.Emptied} · 바닥 통 {Worlds.Items(back).Count(x => x.Item == bm.iWaste)} · 남은 알림 {bm.WasteDown.Count}");
+        }
     }
 }
