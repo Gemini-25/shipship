@@ -153,5 +153,60 @@ public static partial class Program
             Check("꼼꼼한 이와 덤벙대는 이: 소화기를 든 채 배가 고프면 꼼꼼한 이는 제자리에 넣고 먹으러 가고 · 덤벙대는 이는 그 자리에 내려놓는다",
                 !carefulLaid && carelessLaid && ps[0].C.Holding == 255 && ExtInBoxes(s) >= box0 + 1, $"꼼꼼 내려놓음 {carefulLaid} · 덤벙 내려놓음 {carelessLaid} · 보관함 {box0} → {ExtInBoxes(s)}");
         }
+        // ── 줍기는 고른 그 물건 (PH3b): 로봇 방 한 칸에 둘 곳 없는 물건이 먼저 · 소화기가 뒤에 — 로봇은 소화기를 줍는다 (예전엔 그 칸의 첫 물건을 집으려다 둘 곳이 없어 계획이 깨졌다) ──
+        // 줍기는 곁 칸에서: 줍는 이는 물체 칸에 들어서지 않는다 (물체가 움직이면 밟히지 않게 — 곁에서 손을 뻗는다)
+        {
+            var s = ShipWorld.Crewed("Hwasal", 11, 0, 1, 0);
+            var m = s.Get<Mind>(); var lay = s.Layout;
+            s.Run(Time.Minutes(10));
+            var r0 = m.Agents.First(a => a.C.Kind == AgentKind.Robot);
+            var room = lay.Rooms[lay.Room[r0.C.Cell]];
+            int cell = room.Cells.Where(c => lay.Kind[c] == CellKind.Floor && lay.FurnitureAt[c] < 0 && m.Dist(c, r0.C.Cell) >= 3).OrderBy(c => c).First();
+            byte stray = (byte)Enumerable.Range(0, m.ItemCount).First(i => i != m.iWaste && i != m.iScrap && i != m.iScrapElec && !m.IsFood(i) && m.HomeFor((byte)i, cell) < 0);   // 둘 곳이 없는 물건 (표에서)
+            int box0 = ExtInBoxes(s);
+            Worlds.PutItem(s, stray, cell, 0);
+            Worlds.PutItem(s, m.iExt, cell, 500);
+            bool stepped = false;
+            for (long t = 0; t < Time.Hours(1) && Worlds.Items(s).Any(x => x.Item == m.iExt); t++)
+            {
+                s.Step();
+                if (Worlds.Items(s).Any(x => x.Item == m.iExt) && m.Agents.Any(a => a.C.Goal == GoalKind.Gather && a.C.Cell == cell)) stepped = true;
+            }
+            s.Run(Time.Minutes(20));
+            bool extBack = !Worlds.Items(s).Any(x => x.Item == m.iExt) && ExtInBoxes(s) == box0 + 1 && ExtHeld(m) == 0;
+            bool strayLeft = Worlds.Items(s).Count(x => x.Item == stray) == 1;
+            Check("줍기는 고른 그 물건: 한 칸에 둘 곳 없는 물건과 소화기 — 로봇이 소화기를 주워 제자리에 (둘 곳 없는 것은 그대로) (예전엔 그 칸의 첫 물건을 집으려다 계획이 깨졌다)",
+                extBack && strayLeft, $"소화기 {extBack} · 둘 곳 없는 {m.ItemNames[stray]} 남음 {strayLeft} · 주움 {m.Gathered} · 로봇 {r0.C.Goal} {m.Thought(r0.Id)}");
+            Check("줍기는 곁 칸에서: 줍는 로봇은 물체 칸에 들어서지 않고 곁 칸에서 줍는다 (예전엔 그 칸에 올라섰다)",
+                extBack && !stepped, $"주움 {extBack} · 올라섬 {stepped}");
+        }
+        // ── 오물 통 알림은 그 통 (PH3b): 통을 든 로봇 둘이 한 칸에서 멈춘다 → 내려놓인 통 둘을 다른 로봇이 하나씩 주워 쏟는다 (예전엔 알림이 칸이라 하나를 주우면 다른 통이 잊혔다) ──
+        {
+            var legend = new Dictionary<char, string> { ['e'] = "Bed", ['r'] = "RobotDock", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer",
+                ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['o'] = "Composter" };
+            var lay = Worlds.Ascii(WashCareShip, legend);
+            var s = Worlds.Full(lay, 17);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            int here = Worlds.At(lay, 30, 1), dock = Worlds.At(lay, 6, 1);
+            int r1 = m.AddRobot(s, here, AgentKind.Robot, dock), r2 = m.AddRobot(s, here, AgentKind.Robot, dock), r3 = m.AddRobot(s, Worlds.At(lay, 5, 1), AgentKind.Robot, dock);
+            s.Run(30);
+            var toilets = lay.Furniture.Where(f => f.Type == "Toilet").Select(f => f.Id).ToArray();
+            int bin = lay.Furniture.First(x => x.Type == "Composter").Id;
+            double kg = 0;
+            foreach (var (r, k) in new[] { (r1, 0), (r2, 1) })
+            {
+                life.Tank[toilets[k]] = 3 + k;
+                m[r].Plan.Clear(); m[r].C.Goal = GoalKind.Idle;
+                m[r].C.Holding = m.iWaste; m[r].C.HoldCharge = (float)life.LiftTank(toilets[k]); kg += m[r].C.HoldCharge;
+                s.Book.AddItem(m.iWaste, Flow.Removed, 1);
+                net.Robot(m[r].C.Mech).Battery = 0;   // 통을 든 채 한 칸에서 멈춘다
+            }
+            s.Step();
+            int down = Worlds.Items(s).Count(x => x.Item == m.iWaste), told = m.WasteDown.Count;
+            for (long k = 0; k < Time.Hours(2) && m.Emptied < 2; k++) s.Step();
+            Check("오물 통 알림은 그 통: 한 칸에 내려놓인 통 둘을 저마다 알린다 → 다른 로봇이 둘 다 주워 퇴비통에 쏟는다 — 질량 그대로 (예전엔 칸으로 알려 하나를 주우면 다른 통이 잊혔다)",
+                down == 2 && told == 2 && m.Emptied == 2 && !Worlds.Items(s).Any(x => x.Item == m.iWaste) && m.WasteDown.Count == 0 && Math.Abs(life.Heap[bin] - kg) < 1e-3,
+                $"내려놓인 통 {down} · 알림 {told} · 비움 {m.Emptied} · 바닥 통 {Worlds.Items(s).Count(x => x.Item == m.iWaste)} · 남은 알림 {m.WasteDown.Count} · 퇴비통 {life.Heap[bin]:0.000}/{kg:0.000}kg · 셋째 로봇 {m[r3].C.Goal}");
+        }
     }
 }

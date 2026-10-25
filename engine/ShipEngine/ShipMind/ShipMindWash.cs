@@ -76,12 +76,14 @@ public sealed partial class ShipMind
             else if (clog) PostCare(sim, fu, 1, cell, person => person.C.SkRepair >= 0.2f);
             else if (_life.Flushes[fu] - _life.ScrubbedAt[fu] >= ScrubEvery) PostCare(sim, fu, 0, cell, person => true);
         }
-        // 바닥에 내려놓인 오물 통 (내려놓은 이가 알린 자리): 주워 비울 곳으로 (로봇 먼저)
-        foreach (int at in _mind.WasteDown)
+        // 바닥에 내려놓인 오물 통 (내려놓은 이가 알린 그 통 — 물체 Id): 주워 비울 곳으로 (로봇 먼저 · 한 칸에 둘이어도 저마다)
+        foreach (int id in _mind.WasteDown)
         {
+            int at = PropCell(id);
+            if (at < 0) continue;
             bool posted = false;
-            foreach (var j in Jobs) if (j.Kind == GoalKind.ToiletCare && j.Arg == 3 && j.Target == at) { posted = true; break; }
-            if (!posted) Post(sim, new Job { Kind = GoalKind.ToiletCare, Target = at, Arg = 3 }, at, person => true);
+            foreach (var j in Jobs) if (j.Kind == GoalKind.ToiletCare && j.Arg == 3 && j.Target == id) { posted = true; break; }
+            if (!posted) Post(sim, new Job { Kind = GoalKind.ToiletCare, Target = id, Arg = 3 }, at, person => true);
         }
         WashQueues(sim);
     }
@@ -116,7 +118,7 @@ public sealed partial class ShipMind
         _ => _life.Flushes[j.Target] - _life.ScrubbedAt[j.Target] < ScrubEvery,
     };
 
-    private bool LooseWasteAt(int cell) => _mind!.WasteDown.Contains(cell);   // 알린 자리 (가 본 이가 지운다)
+    private bool LooseWasteAt(int id) => _mind!.WasteDown.Contains(id);   // 알린 통 (가 본 이가 지운다)
 
     /// <summary>
     /// 화장실 줄 (사람 표의 자리 — 1분마다): 화장실 방 안에서 변기 · 샤워 칸 위에 있지 않은 이가 기다리는 이다.

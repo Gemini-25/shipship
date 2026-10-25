@@ -97,7 +97,7 @@ public sealed partial class Mind
         int cell = a.C.Cell, vb = a.C.Carrying;
         if (vb >= 0) DropCarried(sim, a, false);   // 업던 이를 놓친다 (바닥에 부딪힌 몸은 월드가)
         _life!.Fall(sim, a.C.Body, g, how, parent, a.Id, NameOf(a.Id), a.Id, showG, vb);
-        if (a.C.Holding != 255) { if (a.C.Holding == iWaste && !WasteDown.Contains(cell)) WasteDown.Add(cell); _st!.PutItem(a.C.Holding, a.C.HoldCharge, cell); a.C.Holding = 255; a.C.HoldCharge = 0; }
+        if (a.C.Holding != 255) { int id = _st!.PutItem(a.C.Holding, a.C.HoldCharge, cell); if (a.C.Holding == iWaste) WasteDown.Add(id); a.C.Holding = 255; a.C.HoldCharge = 0; }
         a.C.MoveBudget = 0; a.C.StepStart = t;
         a.C.Fear = Math.Min(1, a.C.Fear + 0.2f);
         Falls++;

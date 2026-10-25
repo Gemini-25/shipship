@@ -376,7 +376,7 @@ public sealed partial class Mind
 
     // ───────────────────────── (다) 변기 손질 (맡긴 일 — 로봇 먼저) ─────────────────────────
 
-    /// <summary>일이 끊겨 오물 통을 내려놓은 자리 (내려놓은 이가 주컴퓨터에 알린다 — 주컴퓨터는 이것만 안다).</summary>
+    /// <summary>일이 끊겨 내려놓은 오물 통 (물체 Id — 내려놓은 이가 그 통을 주컴퓨터에 알린다 · 주컴퓨터는 이것만 안다).</summary>
     public readonly List<int> WasteDown = new();
 
     /// <summary>오물을 비울 가장 가까운 곳 (퇴비통 · 압축기 — 없으면 화물 상자 · −1 없음).</summary>
@@ -398,13 +398,12 @@ public sealed partial class Mind
             plan.Add(new PlanStep { Kind = StepKind.Sanitize, Target = dump, Arg = 3 });
             return true;
         }
-        if (c.AssignedGoal == GoalKind.ToiletCare && c.AssignedArg == 3)   // 바닥에 내려놓인 오물 통 (대상: 칸) — 주워 비울 곳으로
+        if (c.AssignedGoal == GoalKind.ToiletCare && c.AssignedArg == 3)   // 바닥에 내려놓인 오물 통 (대상: 그 통의 물체 Id) — 주워 비울 곳으로
         {
-            int at = c.AssignedTarget, dump = WasteDump(at);
-            var book = _st!;
-            if (at < 0 || dump < 0 || !book.Props.Any(x => x.Kind == 0 && x.What == iWaste && book.CellOf(x) == at)) return false;
+            int id = c.AssignedTarget, at = LooseCell(id), dump = at < 0 ? -1 : WasteDump(at);
+            if (at < 0 || dump < 0 || _st!.Props[_st.IndexOf(id)].What != iWaste) return false;
             plan.Add(Go(at, 1));
-            plan.Add(new PlanStep { Kind = StepKind.Sanitize, Cell = at, Target = -1, Arg = 4 });
+            plan.Add(new PlanStep { Kind = StepKind.Sanitize, Cell = at, Target = id, Arg = 4 });
             plan.Add(Go(L.Furniture[dump].Cells[0], 1));
             plan.Add(new PlanStep { Kind = StepKind.Sanitize, Target = dump, Arg = 3 });
             return true;
@@ -431,14 +430,14 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         if (_life == null || st.Arg != 4 && (st.Target < 0 || st.Target >= L.Furniture.Count)) { JobDone(a, t); return; }
-        if (st.Arg == 4)   // 바닥에 내려놓인 오물 통을 줍는다 (일이 끊겨 내려놓았던 것)
+        if (st.Arg == 4)   // 바닥에 내려놓인 오물 통을 줍는다 (일이 끊겨 내려놓았던 그 통 — 곁 칸에서)
         {
-            if (Dist(c.Cell, st.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-            var book = _st!; var props = book.Props;
-            int li = props.FindIndex(x => x.Kind == 0 && x.What == iWaste && book.CellOf(x) == st.Cell);
-            WasteDown.Remove(st.Cell);   // 가 보았다 — 알린 자리는 지운다
-            if (li < 0) { a.C.AssignedUntil = t; EndPlan(a); return; }   // 누가 벌써 주웠다 — 쏟기 걸음으로 넘어가지 않는다
-            var bin = props[li];
+            var book = _st!;
+            int at = LooseCell(st.Target);
+            if (at >= 0 && !Reach(sim, a, st.Target, at, iWaste)) return;
+            WasteDown.Remove(st.Target);   // 가 보았다 — 알린 통은 지운다
+            if (at < 0) { a.C.AssignedUntil = t; EndPlan(a); return; }   // 누가 벌써 주웠다 — 쏟기 걸음으로 넘어가지 않는다
+            var bin = book.Props[book.IndexOf(st.Target)];
             if (c.Holding != 255) DropHeld(a);
             c.Holding = iWaste; c.HoldCharge = bin.Charge;
             book.TakeItem(bin.Id);

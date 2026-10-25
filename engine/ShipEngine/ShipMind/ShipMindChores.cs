@@ -162,17 +162,24 @@ public sealed partial class ShipMind
             if (p.PlugAt != 0 || item == mind.iWaste || mind.ItemKg(item) < 5 || mind.HomeFor(item, cell) < 0) continue;
             int room = L.Room[cell];
             if (room < 0 || _net != null && !_net.RoomPowered(room)) continue;   // 카메라가 꺼진 방은 모른다
-            if (Jobs.Any(j => j.Kind == GoalKind.Gather && j.Target == cell && j.Arg == item)) continue;
-            Post(sim, new Job { Kind = GoalKind.Gather, Target = cell, Arg = item }, cell, person => true);
+            if (Jobs.Any(j => j.Kind == GoalKind.Gather && j.Target == p.Id)) continue;
+            Post(sim, new Job { Kind = GoalKind.Gather, Target = p.Id, Arg = item }, cell, person => true);   // 대상: 그 물체 Id (칸은 쓸 때마다 장부에서)
         }
     }
 
-    /// <summary>줍기 끝: 그 칸에 그 물건이 없고 맡은 이도 들고 있지 않다 (제자리에 넣었다).</summary>
-    private bool GatherDone(int cell, int item, int agent)
+    /// <summary>줍기 끝: 그 물체가 바닥에 없고 맡은 이도 그 물건을 들고 있지 않다 (제자리에 넣었다).</summary>
+    private bool GatherDone(int id, int item, int agent)
     {
         var mind = _mind!;
-        if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && x.What == item && x.PlugAt == 0 && _st.CellOf(x) == cell) return false;
+        if (PropCell(id) >= 0) return false;
         return agent < 0 || agent >= mind.Agents.Count || mind.Agents[agent].C.Holding != item;
+    }
+
+    /// <summary>바닥에 놓인 그 물체의 칸 (카메라 — ④ 물체 장부 · 없거나 구멍을 막았으면 −1).</summary>
+    private int PropCell(int id)
+    {
+        int i = _st?.IndexOf(id) ?? -1;
+        return i < 0 || _st!.Props[i].Kind != 0 || _st.Props[i].PlugAt != 0 ? -1 : _st.CellOf(_st.Props[i]);
     }
 
     public List<JobFail> JobFails = new();
@@ -264,7 +271,8 @@ public sealed partial class ShipMind
             GoalKind.Harvest => _life != null && j.Target < _life.Crops.Count ? _life.Crops[j.Target].Cell : -1,
             GoalKind.Restock => F(j.Arg),
             GoalKind.Haul => F(j.Arg / 256),
-            GoalKind.ToiletCare => j.Arg == 3 ? j.Target : F(j.Target),
+            GoalKind.ToiletCare => j.Arg == 3 ? PropCell(j.Target) : F(j.Target),
+            GoalKind.Gather => PropCell(j.Target),
             _ => j.Target,
         };
     }

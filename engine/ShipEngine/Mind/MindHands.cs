@@ -133,14 +133,47 @@ public sealed partial class Mind
             if (x.Kind != 0) continue;
             int xc = book.CellOf(x); byte xi = (byte)x.What;
             if (xi == iWaste || x.PlugAt != 0 || HomesOf(xi).Length == 0 && !IsFood(xi)) continue;
-            bool mine = assigned && xc == c.AssignedTarget && xi == c.AssignedArg;
+            bool mine = assigned && x.Id == c.AssignedTarget;   // 맡긴 그 물체 (일감 대상은 물체 Id)
             if (!mine && (room < 0 || RoomOf(xc) != room)) continue;   // 제 눈에 보이는 것 (같은 방)
             int d = mine ? -1 : PathDist(here, xc);
             if (d < bd) { bd = d; best = i; }
         }
         if (best < 0) return;
-        int at = book.CellOf(props[best]);
-        Add(GoalKind.Gather, at, at, assigned && at == c.AssignedTarget ? 1.2f : a.IsPerson ? 0.6f * c.Consc : 0.8f);
+        var pick = props[best];   // 고른 그 물체를 Id로 넘긴다 (계획이 다른 물건을 집지 않게)
+        Add(GoalKind.Gather, pick.Id, book.CellOf(pick), assigned && pick.Id == c.AssignedTarget ? 1.2f : a.IsPerson ? 0.6f * c.Consc : 0.8f);
+    }
+
+    /// <summary>바닥에 놓인 그 물체의 칸 (④ 물체 장부에서 쓸 때마다 읽는다 — 없거나 · 물건이 아니거나 · 구멍을 막았으면 −1).</summary>
+    private int LooseCell(int id)
+    {
+        var book = _st!;
+        int i = book.IndexOf(id);
+        return i < 0 || book.Props[i].Kind != 0 || book.Props[i].PlugAt != 0 ? -1 : book.CellOf(book.Props[i]);
+    }
+
+    /// <summary>
+    /// 줍는 걸음 앞: 그 물체가 손 닿는 곳(곁 칸)에 있나. 움직이는 중이면 멈출 때까지 기다리고 (1분 넘으면 막힘) ·
+    /// 다른 칸으로 옮겨 갔으면 앞 걸음(가기)을 그 칸으로 고쳐 다시 간다. 참이면 이 틱에 줍는다.
+    /// </summary>
+    private bool Reach(Sim sim, Agent a, int id, int cell, int item)
+    {
+        ref var c = ref a.C;
+        var p = _st!.Props[_st.IndexOf(id)];
+        if (p.State is not (0 or 6))
+        {
+            if (sim.Tick - c.StepStart > Time.Minutes(1)) Fail(sim, a, "물건이 아직 움직인다", SnagKind.NoItem, cell, item);
+            return false;
+        }
+        if (Dist(c.Cell, cell) <= 1) return true;
+        if (c.StepIndex > 0 && a.Plan[c.StepIndex - 1].Kind == StepKind.GoTo)
+        {
+            var go = a.Plan[c.StepIndex - 1];
+            go.Cell = cell; a.Plan[c.StepIndex - 1] = go;
+            c.StepIndex--; a.Path.Clear(); a.PathIdx = 0;
+            return false;
+        }
+        Fail(sim, a, "멀다", SnagKind.Far);
+        return false;
     }
 
     /// <summary>돌려놓기 계획: 제자리로 가서 넣는다.</summary>
@@ -152,25 +185,25 @@ public sealed partial class Mind
         return true;
     }
 
-    /// <summary>줍기 계획: 그 칸으로 가서 줍고 → 제자리 (손이 차 있으면 먼저 비운다).</summary>
+    /// <summary>줍기 계획 (대상: 고른 물체 Id): 곁 칸으로 가서 줍고 → 제자리 (손이 차 있으면 먼저 비운다).</summary>
     private bool PlanGather(Agent a, Option o, int here, List<PlanStep> plan)
     {
-        var book = _st!;
-        int li = book.Props.FindIndex(x => x.Kind == 0 && x.What != iWaste && x.PlugAt == 0 && book.CellOf(x) == o.Target);
-        if (li < 0) return false;
-        byte item = (byte)book.Props[li].What;
+        int at = LooseCell(o.Target);
+        if (at < 0) return false;
+        byte item = (byte)_st!.Props[_st.IndexOf(o.Target)].What;
+        if (item == iWaste) return false;
         FreeHands(a, ref here, plan, false);
-        plan.Add(Go(o.Target, 0));
-        plan.Add(new PlanStep { Kind = StepKind.Gather, Cell = o.Target, Arg = item });
+        plan.Add(Go(at, 1));   // 곁 칸까지 (물체 칸에 들어서지 않는다 — 손을 뻗어 줍는다)
+        plan.Add(new PlanStep { Kind = StepKind.Gather, Cell = at, Target = o.Target, Arg = item });
         if (IsFood(item))
         {
-            int store = Nearest(o.Target, _food, _ => true);
+            int store = Nearest(at, _food, _ => true);
             if (store < 0) return false;
             plan.Add(Go(L.Furniture[store].Cells[0], 1));
             plan.Add(new PlanStep { Kind = StepKind.Stow, Target = store });
             return true;
         }
-        int home = HomeFor(item, o.Target);
+        int home = HomeFor(item, at);
         if (home < 0) return false;
         plan.Add(Go(L.Furniture[home].Cells[0], 1));
         plan.Add(new PlanStep { Kind = StepKind.Put, Target = home, Arg = 1 });
@@ -266,16 +299,16 @@ public sealed partial class Mind
         Next(a, sim.Tick);
     }
 
-    /// <summary>바닥 물건을 줍는다 (그 칸 · 그 물건 — 없으면 끝).</summary>
+    /// <summary>바닥 물건을 줍는다 (그 물체 Id — 칸은 장부에서 · 곁 칸에서 손을 뻗는다 · 없으면 끝).</summary>
     private void GatherStep(Sim sim, Agent a, PlanStep st)
     {
         ref var c = ref a.C;
         long t = sim.Tick;
-        var book = _st!; var props = book.Props;
-        int li = props.FindIndex(x => x.Kind == 0 && x.What == st.Arg && x.PlugAt == 0 && book.CellOf(x) == st.Cell);
-        if (li < 0) { if (c.AssignedGoal == GoalKind.Gather) JobDone(a, t); else EndPlan(a); return; }
-        if (Dist(c.Cell, st.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
-        var got = props[li];
+        var book = _st!;
+        int at = LooseCell(st.Target);
+        if (at < 0) { if (c.AssignedGoal == GoalKind.Gather) JobDone(a, t); else EndPlan(a); return; }   // 누가 벌써 주웠다
+        if (!Reach(sim, a, st.Target, at, st.Arg)) return;
+        var got = book.Props[book.IndexOf(st.Target)];
         if (c.Holding != 255) DropHeld(a);
         c.Holding = (byte)got.What; c.HoldCharge = got.Charge;
         book.TakeItem(got.Id);

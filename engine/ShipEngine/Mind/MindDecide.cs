@@ -1020,7 +1020,7 @@ public sealed partial class Mind
             GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,
             GoalKind.Restock => c.AssignedArg >= 0 && c.AssignedArg < L.Furniture.Count ? L.Furniture[c.AssignedArg].Cells[0] : -1,
             GoalKind.Haul => c.AssignedArg >= 0 && c.AssignedArg / 256 < L.Furniture.Count ? L.Furniture[c.AssignedArg / 256].Cells[0] : -1,
-            GoalKind.ToiletCare => c.AssignedArg == 3 ? c.AssignedTarget : c.AssignedTarget >= 0 && c.AssignedTarget < L.Furniture.Count && L.Furniture[c.AssignedTarget].Cells.Length > 0 ? L.Furniture[c.AssignedTarget].Cells[0] : -1,   // 3: 내려놓인 통이 있는 칸
+            GoalKind.ToiletCare => c.AssignedArg == 3 ? LooseCell(c.AssignedTarget) : c.AssignedTarget >= 0 && c.AssignedTarget < L.Furniture.Count && L.Furniture[c.AssignedTarget].Cells.Length > 0 ? L.Furniture[c.AssignedTarget].Cells[0] : -1,   // 3: 내려놓인 그 통이 있는 칸 (물체 Id → 장부의 칸)
             _ => c.AssignedTarget,
         };
         if (cell >= 0) Add(c.AssignedGoal, c.AssignedTarget, cell, 1.2f);

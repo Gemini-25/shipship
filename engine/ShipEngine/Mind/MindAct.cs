@@ -194,8 +194,8 @@ public sealed partial class Mind
     private void DropHeld(Agent a)
     {
         if (a.C.Holding == 255) return;
-        if (a.C.Holding == iWaste && !WasteDown.Contains(a.C.Cell)) WasteDown.Add(a.C.Cell);   // 오물 통을 내려놓으면 주컴퓨터에 알린다 (주워 비우게)
-        _st!.PutItem(a.C.Holding, a.C.HoldCharge, a.C.Cell);   // 바닥에 내려놓는다 (④ 물체 장부에 요청)
+        int id = _st!.PutItem(a.C.Holding, a.C.HoldCharge, a.C.Cell);   // 바닥에 내려놓는다 (④ 물체 장부에 요청)
+        if (a.C.Holding == iWaste) WasteDown.Add(id);   // 오물 통을 내려놓으면 그 통을 주컴퓨터에 알린다 (주워 비우게)
         a.C.Holding = 255; a.C.HoldCharge = 0;
     }
 
