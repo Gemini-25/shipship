@@ -10,7 +10,7 @@ namespace Lab;
 /// </summary>
 public static partial class Program
 {
-    private static readonly Regex LookUnits = new(@"\d[\d.,]*\s*(kPa|mL|mm|cm|kg|kW|m/s|ppm|g|m)(?![A-Za-z])", RegexOptions.Compiled);
+    private static readonly Regex LookUnits = new(@"\d[\d.,]*\s*(kPa|mL|mm|cm|kg|kW|m/s|ppm|g|m|L)(?![A-Za-z])", RegexOptions.Compiled);
 
     /// <summary>카드 글에 개발 말이 없다 (로마자는 숫자 뒤 단위만 · 못 채운 자리 · NaN · null 없음).</summary>
     private static string? LookBad(string s)

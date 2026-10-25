@@ -143,7 +143,7 @@ public sealed partial class Mind
         return 255;
     }
 
-    /// <summary>판단 일지: 1순위를 세우지 못했다 — 같은 (목표 · 대상)이 여덟 칸 안에 있고 10분 안이면 때만 고친다 (2틱마다 되풀이해 칸을 채우지 않게).</summary>
+    /// <summary>판단 일지: 1순위를 세우지 못했다 — 같은 (목표 · 대상)이 일지 안에 있고 10분 안이면 때만 고친다 (2틱마다 되풀이해 칸을 채우지 않게).</summary>
     private void NoteCantPlan(Agent a, GoalKind g, int target, int cell, long t)
     {
         if (!Journal) return;

@@ -882,7 +882,7 @@ public sealed partial class LiveShow
     /// <summary>자세한 판 (docs/UI2.md §4): 사람 · 로봇 · 주컴퓨터 하나 · 작은 탭 번호.</summary>
     public DetailKind Detail;
     public int DetailId = -1, DetailSub;
-    public static readonly string[] PersonTabs = { "몸", "마음", "하는 일", "아는 것", "사람 사이", "일지" };
+    public static readonly string[] PersonTabs = { "몸", "마음", "하는 일", "아는 것", "사람 사이", "일지", "지나온 길" };   // 지나온 길은 자리만 (docs/OBSERVER_REVIEW.md §4)
     public static readonly string[] RobotTabs = { "몸", "하는 일", "아는 것", "일지" };
     public static readonly string[] ComputerTabs = { "지금", "예측", "아는 것", "일감", "말 기록", "몸 · 방침" };
 

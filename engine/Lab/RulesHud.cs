@@ -210,7 +210,7 @@ public static partial class Program
             show.PanelClick(keyB);   // 사람 판: 누르면 자세히 + 따라간다 (판은 열린 채)
             var fd = show.Render(); show.Recycle(fd.Img);
             bool detailB = show.Selected == b && show.FollowSelected && show.Panel == PanelKind.People && fd.Detail == DetailKind.Person && fd.DetailId == b
-                && fd.DetailTabs.Length == 6 && fd.PanelTitle.StartsWith(m.NameOf(b)) && fd.DetailFollow;
+                && fd.DetailTabs.Length == 7 && fd.DetailTabs[^1] == "지나온 길" && fd.PanelTitle.StartsWith(m.NameOf(b)) && fd.DetailFollow;
             show.DetailBack();
             show.Release();
             var fl = show.Render(); show.Recycle(fl.Img);

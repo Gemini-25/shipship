@@ -336,6 +336,9 @@ public sealed partial class Mind : IEngine
 
     /// <summary>로봇 · 사람에게 일을 맡긴다: 믿음을 넣고 그 목표에 점수를 더한다 (until 틱까지).</summary>
     /// <summary>⑪ 일감판이 일을 맡긴다 (믿음 없이).</summary>
+    /// <summary>판단 일지 칸 수 (사람 · 로봇마다 — 자세한 판에서 몇 분이면 밀리던 여덟 칸을 32로: docs/UI2.md §7 결함 2 · 136명 × 32칸 약 200KB · 찍지 않는다).</summary>
+    public const int JudgedKeep = 32;
+
     /// <summary>판단 일지를 쓰나 (세계마다 — 기본 끔 · 찍지 않는다: 되살린 세계 · 복제 · 상상 · 앞선 세계는 쓰지 않는다 · 화면과 시험이 산 세계에서 켠다).</summary>
     public bool Journal;
 
@@ -343,7 +346,7 @@ public sealed partial class Mind : IEngine
     private void Jot(Agent a, in Judgment j)
     {
         if (!Journal) return;
-        (a.Judged ??= new Ring<Judgment>(8)).Add(j);
+        (a.Judged ??= new Ring<Judgment>(JudgedKeep)).Add(j);
     }
 
     /// <summary>판단 일지 (쓰기만): 주컴퓨터가 이 로봇을 그 일에서 놓아줬다.</summary>
@@ -453,17 +456,22 @@ public sealed partial class Mind : IEngine
         string s = a.C.Goal == GoalKind.Relax && a.IsPerson ? HobbyNameAt((Hobby)a.C.Hobby, RelaxSpot(a)) : GoalName(a.C.Goal);
         if (a.Plan.Count > 0 && a.C.StepIndex < a.Plan.Count)
         {
-            var st = a.Plan[a.C.StepIndex];
-            string step = st.Kind switch
-            {
-                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => a.C.Holding == iBlanket ? "담요로 덮는 중" : a.C.Holding == iCO2 ? "소화기를 뿜는 중" : "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Tighten => "조이는 중", StepKind.Clean => "닦는 중", StepKind.Harvest => "거두는 중", StepKind.Stow => "갈무리하는 중", StepKind.TakeFood => "식량 상자 꺼내는 중",
-                StepKind.Sanitize => st.Arg switch { 0 => "변기를 닦는 중", 1 => "막힌 변기를 뚫는 중", 2 => "오물 통을 드는 중", 4 => "내려놓은 오물 통을 줍는 중", _ => "오물 통을 비우는 중" }, StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중",
-                StepKind.Put => st.Arg >= 1 ? "제자리에 넣는 중" : "넣는 중", StepKind.Lay => "내려놓는 중", StepKind.Gather => "줍는 중",
-                StepKind.Refill => st.Arg == iExt ? "물을 채우는 중" : st.Arg == iCO2 ? "이산화탄소를 채우는 중" : "산소를 채우는 중", _ => "",
-            };
+            string step = StepText(a, a.Plan[a.C.StepIndex]);
             if (step.Length > 0) s += " — " + step;
         }
         return s;
+    }
+
+    /// <summary>계획 걸음 하나의 글 ('가는 중' · '소화기 꺼내는 중' … — 머릿속 한 줄과 자세한 판의 계획 걸음이 같은 글을 쓴다 · 그 걸음을 든 것으로 읽는다).</summary>
+    public string StepText(Agent a, in PlanStep st)
+    {
+        return st.Kind switch
+        {
+            StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => a.C.Holding == iBlanket ? "담요로 덮는 중" : a.C.Holding == iCO2 ? "소화기를 뿜는 중" : "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Tighten => "조이는 중", StepKind.Clean => "닦는 중", StepKind.Harvest => "거두는 중", StepKind.Stow => "갈무리하는 중", StepKind.TakeFood => "식량 상자 꺼내는 중",
+            StepKind.Sanitize => st.Arg switch { 0 => "변기를 닦는 중", 1 => "막힌 변기를 뚫는 중", 2 => "오물 통을 드는 중", 4 => "내려놓은 오물 통을 줍는 중", _ => "오물 통을 비우는 중" }, StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중",
+            StepKind.Put => st.Arg >= 1 ? "제자리에 넣는 중" : "넣는 중", StepKind.Lay => "내려놓는 중", StepKind.Gather => "줍는 중",
+            StepKind.Refill => st.Arg == iExt ? "물을 채우는 중" : st.Arg == iCO2 ? "이산화탄소를 채우는 중" : "산소를 채우는 중", _ => "",
+        };
     }
 
     // ───────────────────────── 한 틱 ─────────────────────────
