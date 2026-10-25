@@ -63,7 +63,7 @@ public sealed partial class Structure
         if (!fm.Solid(lx, ly)) return 0;
         double top = fm.Top[ly * fm.W + lx] * DotForm.Layer;
         if (top > z + 1e-3) return 0;   // 그 기둥 아래에 있다 (탁자 밑) · 기둥 속은 평면 닿음이 민다
-        on = fu + 1; mat = fm.Mat[ly * fm.W + lx];
+        on = fu + 1; mat = fm.TopMat.Length > 0 ? fm.TopMat[ly * fm.W + lx] : fm.Mat[ly * fm.W + lx];   // 윗면 겉 재질 (침대는 천 — PH8)
         return top;
     }
 
@@ -150,6 +150,7 @@ public sealed partial class Structure
         LastLandJ = 0.5 * r.M * (vin * vin - (stop ? 0 : vout * vout));
         if (stop) { p.Vz = 0; p.State = 1; } else p.Vz = (float)vout;
         if (fell >= 0.05) sim.Facts.Emit(sim.Tick, FactKind.ItemFell, CellOf(p), (float)fell, p.Cause, -1, p.Id);
+        NoteHit(sim, p, LastLandJ, r.ZMat, p.X, p.Y, vin, fell, HowFell, t1);   // 맞음 (PH8 — 깨짐 · 소리는 틱 끝에)
         if (Track != null) { Track.Add(MotionTrack.WhoProp, p.Id, t1, p.X, p.Y, p.Th, p.Vx, p.Vy, p.W, MotionTrack.EvLand, p.Z, p.Vz); r.LastKey = t1; }
     }
 
@@ -224,7 +225,7 @@ public sealed partial class Structure
             double w2 = v0 * v0 + 2 / ip * (fa * hF * (1 - Math.Sin(y0)) + m * g * R * (Math.Cos(beta - y0) - Math.Sin(beta)));
             double wl = Math.Sqrt(Math.Max(0, w2));
             LastLandJ = 0.5 * ip * wl * wl;
-            LieDown(sim, ref r, ref p, side, b + hc);
+            LieDown(sim, ref r, ref p, side, b + hc, t1);
             return;
         }
         if (y1 <= 0 && v1 <= 0) { p.Tilt = 0; p.TiltW = 0; p.State = 1; return; }   // 흔들려 돌아와 선다
@@ -233,7 +234,7 @@ public sealed partial class Structure
 
     /// <summary>눕는다: 누운 꼴 (그 쪽 — 1 +x · 2 +y · 3 −x · 4 −y)로 바꾸고 무게중심을 그 쪽으로 b + Hc 옮긴다 (막히면 제자리) · 몸 값을 다시 · 사실 '넘어졌다'.</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private void LieDown(Sim sim, ref PropRun r, ref Prop p, int side, double shift)
+    private void LieDown(Sim sim, ref PropRun r, ref Prop p, int side, double shift, double t)
     {
         var (dx, dy) = SideDir(p.Th, side);
         p.Pose = (byte)(side + 1); p.Tilt = 0; p.TiltW = 0; p.State = 1; p.Still = 0;
@@ -247,6 +248,7 @@ public sealed partial class Structure
         r.Fm = fm; r.Sh = fm.Shape; r.Sm = r.Sh.Hit; r.Hs = r.Sh; r.Reach = r.Sm.reach; r.In = p.Inertia; r.Rho = fm.Rho;
         Toppled++;
         sim.Facts.Emit(sim.Tick, FactKind.Toppled, CellOf(p), (float)LastLandJ, p.Cause, -1, p.Id);
+        NoteHit(sim, p, LastLandJ, r.ZMat, p.X, p.Y, Math.Sqrt(2 * LastLandJ / Math.Max(1e-9, r.M)), 0, HowTopple, t);   // 넘어져 누운 닿음 (PH8)
     }
 
     // ───────────────────────── 구름 (누운 둥근 것) ─────────────────────────

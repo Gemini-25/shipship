@@ -314,10 +314,10 @@ public static partial class Program
             while (done < at[k].tick) { if (done == 1) st.ShipAx = 0.4 * 9.8; s.Step(); done++; }
             var img = SceneFrame(painter, s, at[k].f, 1, 1, 16, 8, done * 8 + k, zoom);
             sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
-            string Of(int id) { var p = st.Props[st.IndexOf(id)]; return $"({p.X:0.00}, {p.Y:0.00}, {p.Z:0.00}) 누움 {p.Pose} 상태 {p.State}"; }
+            string Of(int id) { if (st.IndexOf(id) < 0) return "깨졌다"; var p = st.Props[st.IndexOf(id)]; return $"({p.X:0.00}, {p.Y:0.00}, {p.Z:0.00}) 누움 {p.Pose} 상태 {p.State}"; }
             Console.WriteLine($"  topple {done - 1}틱 + {at[k].f:0.000}: 소화기 {Of(ext)} · 물병 {Of(water)} · 유리병 {Of(bottle)} · 넘어짐 {st.Toppled}");
         }
-        Console.WriteLine($"  topple: 식량 상자 Δx {st.Props[st.IndexOf(box)].X - 13.5:0.00}m · 공구 상자 Δx {st.Props[st.IndexOf(tools)].X - 9.5:0.00}m · 컵 Δx {st.Props[st.IndexOf(cup)].X - 7.4:0.00}m · 사실 {string.Join(" · ", s.Facts.Since(0).Where(f => f.Kind is FactKind.Toppled or FactKind.ItemFell).Select(f => s.Causes.Text(f.Cause) is { Length: > 0 } c ? $"{f.Kind} {c}" : f.Kind.ToString()))}");
+        Console.WriteLine($"  topple: 식량 상자 Δx {st.Props[st.IndexOf(box)].X - 13.5:0.00}m · 공구 상자 Δx {st.Props[st.IndexOf(tools)].X - 9.5:0.00}m · 컵 {(st.IndexOf(cup) >= 0 ? $"Δx {st.Props[st.IndexOf(cup)].X - 7.4:0.00}m" : "깨졌다")} · 사실 {string.Join(" · ", s.Facts.Since(0).Where(f => f.Kind is FactKind.Toppled or FactKind.ItemFell).Select(f => s.Causes.Text(f.Cause) is { Length: > 0 } c ? $"{f.Kind} {c}" : f.Kind.ToString()))}");
         Directory.CreateDirectory(dir);
         Png.WriteRgba(Path.Combine(dir, "topple.png"), sheet.W, sheet.H, sheet.Px);
         Console.WriteLine($"  topple: {dir}/topple.png ({sheet.W}×{sheet.H}) — 0.40g 점화: 소화기 · 물병이 눕고 · 상자가 미끄러지고 · 탁자 위 누운 유리병이 굴러 떨어진다 (첫 틱 안 네 장)");
@@ -357,11 +357,56 @@ public static partial class Program
             }
             var img = SceneFrame(painter, s, at[k].f, 1, 1, 14, 8, done * 8 + k, zoom);
             sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
-            Console.WriteLine($"  props-zerog {done - 1}틱 + {at[k].f:0.00}: 중력 {f.Grav[L.Index(6, 4)]:0} · 높이 {string.Join(" ", ids.Select(id => st.Props[st.IndexOf(id)].Z.ToString("0.00")))} · 떠 있음 {st.Props.Count(p => p.State == 4)}");
+            Console.WriteLine($"  props-zerog {done - 1}틱 + {at[k].f:0.00}: 중력 {f.Grav[L.Index(6, 4)]:0} · 높이 {string.Join(" ", ids.Select(id => st.IndexOf(id) >= 0 ? st.Props[st.IndexOf(id)].Z.ToString("0.00") : "깨짐"))} · 떠 있음 {st.Props.Count(p => p.State == 4)}");
         }
         Console.WriteLine($"  props-zerog: 사실 {string.Join(" · ", s.Facts.Since(0).Where(x => x.Kind == FactKind.ItemFell).Select(x => $"떨어졌다 {x.Size:0.00}m"))}");
         Directory.CreateDirectory(dir);
         Png.WriteRgba(Path.Combine(dir, "props-zerog.png"), sheet.W, sheet.H, sheet.Px);
         Console.WriteLine($"  props-zerog: {dir}/props-zerog.png ({sheet.W}×{sheet.H}) — 중력이 꺼져 떠오르고 · 공조 바람에 흘러가고 · 돌아오면 떨어진다");
+    }
+
+    /// <summary>
+    /// shatter 틀 (PH8 — docs/PHYSICS.md §5 · §6-2 깨진 면): 공기가 있는 방 · 탁자 위 끝의 물 든 유리컵 · 접시 · 누운 유리병을 동쪽으로 밀어 떨군다 —
+    /// 0.75m에서 강철 바닥에 닿아 깨지고 (가면 조각 · 깨진 면 반짝임 · 3도트 아래는 가루 · 담긴 물은 바닥으로) · 다음 틱에 조각이 흩어진다.
+    /// 탁자 위 · 떨어지는 · 닿는 · 깨진 · 흩어지는 · 선 장.
+    /// </summary>
+    private static void ShatterScene(string dir)
+    {
+        const string art = "\n##############\n#............#\n#..tt........#\n#..tt........#\n#............#\n#............#\n##############";
+        var lay = Worlds.Ascii(art, new Dictionary<char, string> { ['t'] = "Table" });
+        var s = FieldStructure(lay, 21);
+        var st = s.Get<Structure>(); var f = s.Get<Field>();
+        st.Track = new MotionTrack();
+        int Put(string name, double x, double y, float liquid = 0)
+        {
+            int item = s.Tables.People.Items.Keys.ToList().IndexOf(name);
+            int id = st.PutItem(item, 0, s.Layout.Index((int)x, (int)y), 0, liquid);
+            int i = st.IndexOf(id); var p = st.Props[i]; p.X = x; p.Y = y; st.Props[i] = p;
+            return id;
+        }
+        int cup = Put("컵", 5.85, 3.6, 11), plate = Put("접시", 5.75, 4.35), bottle = Put("유리병", 5.7, 4.85);
+        { int i = st.IndexOf(bottle); var p = st.Props[i]; p.Pose = 1; st.Props[i] = p; }   // 누운 병 (축이 동서)
+        s.Step();
+        foreach (var (id, v) in new[] { (cup, 1.6), (plate, 1.9), (bottle, 2.2) }) { var q = st.Props[st.IndexOf(id)]; var fm = st.PropForm(q); st.Shove(id, fm.Mass * v, 0); }
+        var painter = new Painter(s.Layout);
+        const int cols = 2, zoom = 3;
+        (int tick, double f)[] at = { (1, 1), (2, 0.1), (2, 0.2), (2, 0.3), (2, 1), (3, 0.15), (3, 0.4), (4, 1) };
+        int fw = 9 * Painter.T * zoom, fh = 5 * Painter.T * zoom, gap = 6;
+        var sheet = new Img(cols * fw + (cols - 1) * gap, (at.Length + cols - 1) / cols * (fh + gap) - gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 1;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k].tick) { s.Step(); done++; }
+            var img = SceneFrame(painter, s, at[k].f, 2, 2, 9, 5, done * 8 + k, zoom);
+            sheet.Draw(img, k % cols * (fw + gap), k / cols * (fh + gap));
+            Console.WriteLine($"  shatter {done - 1}틱 + {at[k].f:0.00}: 물체 {st.Props.Count} (조각 {st.Props.Count(p => p.Kind == 2)}) · 깨짐 {st.Shattered} · 가루 {st.GritKg * 1000:0}g · 바닥 물 {Enumerable.Range(0, lay.N).Sum(c => f.Stored(f.T.sWater, c)):0.0}몰");
+        }
+        var snd = s.Find<Sound>();
+        Console.WriteLine($"  shatter: 사실 {string.Join(" · ", s.Facts.Since(0).Where(x => x.Kind is FactKind.Shattered or FactKind.ItemFell).Select(x => x.Kind == FactKind.Shattered ? s.Causes.Text(x.Cause) : $"떨어졌다 {x.Size:0.00}m"))}");
+        Console.WriteLine($"  shatter: 원인 있는 고인 물 칸 {Enumerable.Range(0, lay.N).Count(c => f.Stored(f.T.sWater, c) > 1 && f.WetCause[c] != 0)} · 가루 칸 {st.Grit.Count(g => g > 0)}");
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "shatter.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  shatter: {dir}/shatter.png ({sheet.W}×{sheet.H}) — 탁자 끝에서 밀려 떨어진 유리컵 · 접시 · 유리병이 깨지고 · 다음 틱에 조각이 흩어진다");
     }
 }

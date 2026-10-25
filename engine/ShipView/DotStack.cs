@@ -46,9 +46,10 @@ public static class DotStack
     /// <summary>
     /// 꼴 하나를 각 단 step (0~63 — 2π × step / 64만큼 +x에서 +y 쪽으로 · 화면에서 시계 방향)으로 그린다.
     /// scale 1 = 칸당 32도트 (도트 하나가 그림 도트 하나) · 2 = 칸당 16도트 (넓은 보기 — 그림 도트 하나에 도트 2×2 · 층 둘).
-    /// fill · seed: 새 그림 가구의 윗면 무늬에 넘기는 세계 값 (없으면 빈 것).
+    /// fill · seed: 새 그림 가구의 윗면 무늬에 넘기는 세계 값 (없으면 빈 것). dents: 찌그러짐 둘 (월드 Prop.Dent0 | Dent1 &lt;&lt; 32 — 그 둘레 기둥을 한 단 어둡게 · PH8).
+    /// 조각 꼴 (DotForm.Cut)의 깨진 면은 유리 · 세라믹이면 빛 단 5로 반짝인다.
     /// </summary>
-    public static Drawn Draw(DotForm f, int step, int scale = 1, FurnFill fill = default, int seed = 0)
+    public static Drawn Draw(DotForm f, int step, int scale = 1, FurnFill fill = default, int seed = 0, ulong dents = 0)
     {
         if (f.Mass <= 0 || f.W == 0) return new(new Img(1, 1), 0, 0);
         int k = Math.Clamp(scale, 1, 2), words = (f.H + 63) >> 6;
@@ -107,7 +108,7 @@ public static class DotStack
         var named = NameTop.GetValueOrDefault(f.Name);
         var ramps = named != null ? named.Select(c => Ramp.Select(m => c.Scale(m)).ToArray()).ToArray() : null;
         var img = new Img(side, ih);
-        Paint(f, img, side, ih, hp, k == 2 ? 1 : 0, shade, wc, wz, top, ramps, art, map);
+        Paint(f, img, side, ih, hp, k == 2 ? 1 : 0, shade, wc, wz, top, ramps, art, map, dents);
         return new(img, (rd + fx0) / k, (rd + fy0) / k + hp);
     }
 
@@ -284,9 +285,9 @@ public static class DotStack
 
     /// <summary>면 단 → 색 (외곽 · 재질 · 부위) · 새 그림 가구의 윗면 무늬 (map: 바닥면 도트 → 그림 자리 곧은 꼴).</summary>
     private static void Paint(DotForm f, Img img, int side, int ih, int hp, int ks, sbyte[] shade, int[] wc, int[] wz, bool[] top, Rgba[][]? ramps, Img? art,
-        (double x0, double y0, double xpx, double ypx, double xpy, double ypy) map)
+        (double x0, double y0, double xpx, double ypx, double xpy, double ypy) map, ulong dents = 0)
     {
-        var px = img.Px; var mat = f.Mat; var part = f.Part;
+        var px = img.Px; var mat = f.Mat; var part = f.Part; var cut = f.Cut;
         var apx = art?.Px; int aw = art?.W ?? 0, ah = art?.H ?? 0;
         for (int sy = 0; sy < ih; sy++)
             for (int sx = 0, si = sy * side; sx < side; sx++, si++)
@@ -297,6 +298,8 @@ public static class DotStack
                 if (sy == ih - 1 || shade[si + side] < 0 || sx == side - 1 || shade[si + 1] < 0) sh = 0;
                 else if (sy == 0 || shade[si - side] < 0 || sx == 0 || shade[si - 1] < 0) sh = Math.Min(sh, 1);
                 int c = wc[si];
+                if (cut != null && cut[c] != 0 && sh >= 2 && Glassy[Math.Min(mat[c], Glassy.Length - 1)]) sh = 5;   // 깨진 면: 유리 · 세라믹이 반짝인다 (PH8)
+                else if (dents != 0 && sh > 0 && Dented(dents, c % f.W, c / f.W)) sh--;                              // 찌그러진 자리는 한 단 어둡게
                 var col = ramps != null ? ramps[Math.Min(part[c], ramps.Length - 1)][sh] : MatRamp[Math.Min(mat[c] * 2 + (part[c] == 1 ? 1 : 0), MatRamp.Length - 1)][sh];
                 if (apx != null && sh >= 1 && top[si])
                 {
@@ -307,6 +310,22 @@ public static class DotStack
                 int o = si * 4;
                 px[o] = col.R; px[o + 1] = col.G; px[o + 2] = col.B; px[o + 3] = col.A;
             }
+    }
+
+    // 재질 번호 → 깨진 면이 반짝이나 (유리 · 세라믹)
+    private static readonly bool[] Glassy = ShipEngine.Tables.Default.Materials.Select(m => m.Id is "glass" or "ceramic").ToArray();
+
+    /// <summary>기둥 (x, y)가 찌그러짐 둘 (u · v · 반지름 도트 8비트씩 — 0이면 없음) 안인가.</summary>
+    private static bool Dented(ulong dents, int x, int y)
+    {
+        for (int k = 0; k < 2; k++)
+        {
+            uint d = (uint)(dents >> (32 * k));
+            if (d == 0) continue;
+            int u = (int)(d & 0xFF), v = (int)(d >> 8 & 0xFF), r = (int)(d >> 16 & 0xFF);
+            if ((x - u) * (x - u) + (y - v) * (y - v) <= r * r) return true;
+        }
+        return false;
     }
 
     // 꼴마다 기둥 → 여덟 이웃 가운데 이 기둥과 다른 것 (비었나 · 아래 · 위 층 · 재질 · 부위 — 꼴 밖은 빈 기둥) 비트: 서 · 동 · 북 · 남 · 북서 · 북동 · 남서 · 남동
@@ -372,7 +391,7 @@ public static class DotStack
 /// </summary>
 public sealed class DotStackCache
 {
-    public readonly record struct Key(DotForm Form, ulong Mask, byte Pose, byte Tilt, byte Step, byte Scale, uint Dent);
+    public readonly record struct Key(DotForm Form, ulong Mask, byte Pose, byte Tilt, byte Step, byte Scale, uint Dent, ulong Dents = 0);
     public const double FrameBuildMs = 1;
     private const int Overhead = 96;   // 한 장의 덧 바이트 (열쇠 · 마디 · 그림 머리 어림)
 
@@ -411,16 +430,16 @@ public sealed class DotStackCache
     }
 
     /// <summary>선 꼴 · 누운 꼴 그림: 있으면 꺼내고 · 없으면 짓는다 — 이 장에 이미 1ms를 지었으면 지어 둔 가까운 각 단 (±8단 안)을 쓴다.</summary>
-    public DotStack.Drawn Get(DotForm f, int step, int scale = 1, FurnFill fill = default, int seed = 0)
+    public DotStack.Drawn Get(DotForm f, int step, int scale = 1, FurnFill fill = default, int seed = 0, ulong dents = 0)
     {
-        var key = new Key(f, (ulong)fill.Key, f.Lie, 0, (byte)(step & 63), (byte)scale, (uint)seed);
+        var key = new Key(f, (ulong)fill.Key, f.Lie, 0, (byte)(step & 63), (byte)scale, (uint)seed, dents);
         if (TryGet(key, out var d)) return d;
         if (BuiltMs >= FrameBuildMs)
             for (int dk = 1; dk <= 8; dk++)
                 foreach (int sgn in new[] { -1, 1 })
                     if (TryGet(key with { Step = (byte)((step + sgn * dk) & 63) }, out d)) return d;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        d = DotStack.Draw(f, step, scale, fill, seed);
+        d = DotStack.Draw(f, step, scale, fill, seed, dents);
         BuiltMs += System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
         Put(key, d);
         return d;

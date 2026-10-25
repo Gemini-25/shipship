@@ -59,6 +59,9 @@ public sealed partial class Structure
         public byte ZMat;
         public double Gz, Zs, Hz, TipFa, TipHf, RAx, RAy, Radius;
         public int Cell;
+        // 맞음 (PH8): 이 잔걸음에 잃은 에너지 (제 몫) · 가장 센 닿음의 충격량 · 다가온 빠르기 · 팔 · 상대 재질 · 어떻게 / 이 틱 가장 빨리 미끄러진 빠르기² · 그 때
+        public double HitE, HitJ, HitV, HitRx, HitRy, SlideV2;
+        public byte HitMat, HitHow, SlideSub;
     }
 
     private struct IslandContact
@@ -66,7 +69,9 @@ public sealed partial class Structure
         public int A, B;   // 섬 안 차례 (B < 0: 바닥 · 벽 · 가구)
         public double Rx, Ry, Qx, Qy, Nx, Ny, Sep, Mu, E, Kn, Kt, Target, Jn, Jt;   // R: A 쪽 팔 · Q: B 쪽 팔 · 법선은 B에서 A 쪽
         public double Ux, Uy, Cap;   // B < 0 쪽의 빠르기 (걷는 원판 — 벽 · 가구는 0) · 법선 충격량 한도 (원판: 150N × h — 벽 · 가구는 끝없음)
+        public double Vn0;           // 닿기 직전 법선 빠르기 (다가오면 음수 — 잃은 에너지 ½ Jn (−vn₀)(1 − e) · PH8)
         public int Cell, Key;
+        public byte Mat;             // B < 0 쪽 재질 (벽 · 가구 기둥 — 깨짐의 단단함 몫)
         public bool Bounce;
     }
 
@@ -81,9 +86,9 @@ public sealed partial class Structure
     private int _wkN;
     private double _warmH;
 
-    /// <summary>물체끼리 닿을 수 있나 (물건 · 놓임 · 미끄러짐 · 넘어짐 · 떨어짐 · 떠 있음 — 우주 · 막음 · 낌은 빼고).</summary>
+    /// <summary>물체끼리 닿을 수 있나 (물건 · 조각 (PH8) · 놓임 · 미끄러짐 · 넘어짐 · 떨어짐 · 떠 있음 — 우주 · 막음 · 낌은 빼고).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private static bool Collides(in Prop p) => p.Kind == 0 && p.State is 0 or 1 or 2 or 3 or 4;
+    private static bool Collides(in Prop p) => p.Kind is 0 or 2 && p.State is 0 or 1 or 2 or 3 or 4;
 
     /// <summary>물건 꼴 (표의 물건마다 누움 다섯)의 가장 먼 꼭짓점 — 표의 순수 함수 (칸 통을 훑는 넓이 · 표마다 한 번 — 새 세계 · 복제가 다시 세지 않는다).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -673,7 +678,7 @@ public sealed partial class Structure
                         for (int c = 0; c < nc; c++)
                         {
                             ref var hc = ref _propHits[c];
-                            _icStage[nStage++] = new IslandContact { A = k, B = -1, Rx = hc.Rx, Ry = hc.Ry, Nx = hc.Nx, Ny = hc.Ny, Sep = hc.Sep, Mu = hc.Mu, E = hc.E, Kn = hc.Kn, Kt = hc.Kt, Cell = hc.Cell, Key = hc.Quad, Cap = double.PositiveInfinity };
+                            _icStage[nStage++] = new IslandContact { A = k, B = -1, Rx = hc.Rx, Ry = hc.Ry, Nx = hc.Nx, Ny = hc.Ny, Sep = hc.Sep, Mu = hc.Mu, E = hc.E, Kn = hc.Kn, Kt = hc.Kt, Cell = hc.Cell, Key = hc.Quad, Cap = double.PositiveInfinity, Mat = hc.Mat };
                         }
                     }
                 }
@@ -786,6 +791,7 @@ public sealed partial class Structure
                 double vn0 = (a.Tvx - a.Tw * ct.Ry - ct.Ux) * ct.Nx + (a.Tvy + a.Tw * ct.Rx - ct.Uy) * ct.Ny;
                 if (ct.B >= 0) { ref var b = ref _runs[ct.B]; vn0 -= (b.Tvx - b.Tw * ct.Qy) * ct.Nx + (b.Tvy + b.Tw * ct.Qx) * ct.Ny; }
                 ct.Bounce = -vn0 > BounceV && (ct.Sep <= 0 || -vn0 * h > ct.Sep);
+                ct.Vn0 = vn0;
                 ct.Target = ct.Bounce ? -ct.E * vn0 : -Math.Max(ct.Sep, 0) / h;
                 hit |= ct.Bounce;
             }
@@ -796,6 +802,7 @@ public sealed partial class Structure
                 if (nPair > 0) WarmStart(all, h);
                 SolveIsland(all, _icount, steps == 1 || hit ? FirstIters : nPair > 0 ? PileIters : BaseIters);   // 틱 첫 잔걸음 · 부딪는 잔걸음은 16번 (따뜻한 시작이 없다)
                 if (nPair > 0) KeepWarm(all, h);
+                if (hit) IslandHits(sim, all, tau);   // 맞음 (PH8 — 깨짐 · 소리는 틱 끝에)
                 for (int k = 0; k < _icount; k++)
                 {
                     ref var r = ref _runs[k];
@@ -868,6 +875,7 @@ public sealed partial class Structure
         {
             ref var r = ref _runs[k];
             if (r.Active && !r.Done) TrackEnd(tr, all[r.I], dt - rem, ref r.LastKey);
+            if (r.SlideV2 > ScrapeV * ScrapeV) Noise(CellOf(all[r.I]), SoundKind.Scrape, 0.5 * r.M * r.SlideV2, all[r.I], r.SlideSub);   // 드르륵 (1m/s 넘게 바닥을 미끄러졌다)
             PropSteps += r.Steps;
         }
     }
@@ -1070,6 +1078,7 @@ public sealed partial class Structure
         // 높이 (PH7): 넘어지는 중 (평면은 받침이 붙든다) · 떨어지는 · 떠 있는 것의 오르내림 · 닿음
         if (p.State == 2) TipStep(sim, ref r, ref p, h, dt - rem);
         else if (r.Air) HeightEnd(sim, ref r, ref p, dt - rem - h, h);
+        if (p.State == 1 && !r.Air && r.Gp > 0 && p.Kind is 0 or 2) { double v2 = p.Vx * p.Vx + p.Vy * p.Vy; if (v2 > r.SlideV2) { r.SlideV2 = v2; r.SlideSub = sim.Facts.SubNow; } }
         if (p.State == 4 && r.Ns > 0)
         {
             // 무중력: 평면 부딪힘 (벽 · 가구)의 0.2|Δv|를 오르내림으로 (쪽은 Id · 틱 · 잔걸음으로 정한다 — 벽이 평면에 꼭 수직이지 않은 흩어짐 어림)

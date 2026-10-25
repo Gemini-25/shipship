@@ -275,7 +275,7 @@ public sealed partial class Painter
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
                 var (look, sx, sy, z) = PropPose(s.Tables, it, ix, iy);
-                var d = _stacks.Get(look, PropStep(ith), 2);
+                var d = _stacks.Get(look, PropStep(ith), 2, default, 0, (ulong)it.Dent0 | (ulong)it.Dent1 << 32);
                 var (nx, ny) = SamePlace(it);
                 int half = k / 2;   // 16도트 그림 한 도트가 이 그림의 몇 분의 1인가 (16도트 1 · 8도트 2)
                 int rise = (int)Math.Round(z * 16 / k);   // 1층 = 32도트 그림의 1도트 (3/4 시점)

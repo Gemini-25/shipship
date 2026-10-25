@@ -14,6 +14,7 @@ public sealed partial class Structure
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     public DotForm PropForm(in Prop p)
     {
+        if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
         int key = p.What * 8 + p.Pose;
         if (_propForms.TryGetValue(key, out var fm)) return fm;
         _itemNames ??= T.People.Items.Keys.ToArray();
@@ -136,6 +137,8 @@ public sealed partial class Structure
             StepIslands(sim, all, dt, world);   // 섬마다 함께 걷는다 — 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
         }
         if (world && all.Length > 0) Reactions(all);
+        if (_breakHits.Count > 0) { long tb = Prof.Start(); Breaks(sim, world); Prof.Lap("구조:깨짐", tb); }       // 깨짐 · 이음매 · 찌그러짐 · 쏟음 (PH8 — 몸이 되받은 뒤 · 맞은 그 때의 상태에서)
+        if (_noises.Count > 0) { long tn = Prof.Start(); EmitNoises(sim); Prof.Lap("구조:물체 소리", tn); }       // 물체 소리 (방마다 · 갈래마다 한 번)
         if (any)
         {
             plugged = false;

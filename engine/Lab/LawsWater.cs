@@ -20,6 +20,7 @@ public static partial class Program
             double w = net.WaterTank + net.WasteWater + f.Total(f.T.gH2O);
             for (int c = 0; c < lay.N; c++) w += f.Stored(f.T.sWater, c) + 6 * f.Stored(f.T.sFood, c);   // 음식(포도당)은 눌거나 썩으면 물 6몰이 된다 — 그만큼 물로 센다
             foreach (var d in net.Devices) w += net.PanWater[d.Id];
+            foreach (var p in s.Get<Structure>().Props) w += p.Liquid;   // 컵 · 물병에 든 물 (PH8 — 깨지거나 넘어지면 바닥으로)
             return w;
         }
         double w0 = Water(), tank0 = net.WaterTank, book0 = s.Book.BulkFlow[(int)Res.Water * Book.Flows + (int)Flow.Cooking];

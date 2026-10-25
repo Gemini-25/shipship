@@ -59,9 +59,10 @@ public sealed partial class Painter
     /// <summary>바닥 물건마다 그릴 자리 (이번 틱에 사라진 것도 — 틱 안 기록의 마지막 때까지).</summary>
     private IEnumerable<(Prop p, double x, double y, double th)> DrawnProps(Structure st)
     {
+        _pst = st;
         foreach (var it in st.Props)
         {
-            if (it.Kind != 0) continue;
+            if (it.Kind is not (0 or 2)) continue;   // 물건 · 조각 (PH8)
             if (PropAt == null) { yield return (it, it.X, it.Y, it.Th); continue; }
             var (ok, x, y, th) = PropAt(it.Id);
             if (ok) yield return (it, x, y, th);
@@ -70,7 +71,7 @@ public sealed partial class Painter
         if (PropAt == null || tr == null || tr.Tick != _tick - 1) yield break;
         foreach (var it in tr.Gone)
         {
-            if (it.Kind != 0) continue;
+            if (it.Kind is not (0 or 2)) continue;
             var (ok, x, y, th) = PropAt(it.Id);
             if (ok) yield return (it, x, y, th);
         }
@@ -841,7 +842,7 @@ public sealed partial class Painter
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
                 var (look, sx, sy, z) = PropPose(s.Tables, it, ix, iy);
-                var d = _stacks.Get(look, PropStep(ith));
+                var d = _stacks.Get(look, PropStep(ith), 1, default, 0, (ulong)it.Dent0 | (ulong)it.Dent1 << 32);
                 var (nx, ny) = SamePlace(it);
                 int rise = (int)Math.Round(z * 16);   // 1층 (1/16m) = 1도트 (3/4 시점)
                 if (rise > 0) PropShadow(img, (sx - x0) * T + nx, (sy - y0) * T + ny, d.Img.W, z, 1);
@@ -863,6 +864,7 @@ public sealed partial class Painter
                 if (L.Kind[c] == CellKind.Door) MoldOn(img, life, c, Px(x), Py(y));   // 문 칸 곰팡이는 문짝 위에 (5단 A3 — 바닥 칸은 바닥 타일과 함께 · 굽는 덩어리는 문 칸을 건너뛴다)
                 FloorLiquids(img, f, c, Px(x), Py(y), frame);   // 냉매 · 전해액 웅덩이
                 if (_bake) continue;   // 물 · 서리 · 열 · 어둠은 넓은 보기가 장마다
+                if (st != null && c < st.Grit.Length && st.Grit[c] > 0) GritOn(img, st.Grit[c], st.GritMat[c], c, Px(x), Py(y));   // 깨진 유리 · 세라믹 가루 (PH8)
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2)
                 {
@@ -1049,8 +1051,11 @@ public sealed partial class Painter
     private string[]? _itemNames;
 
     /// <summary>물체의 도트 꼴 (물건: 사람 표의 그 물건 · 누움 — 세계와 같은 꼴 · 표의 캐시는 스레드에 안전하다).</summary>
+    private Structure? _pst;   // 그리는 세계의 구조 (조각 꼴 — 가면을 읽는다)
+
     private DotForm PropLook(Tables t, in Prop p)
     {
+        if (p.Piece > 0 && _pst != null) return _pst.PieceLook(p);   // 조각은 원래 꼴을 그 가면으로 자른 것 (PH8)
         _itemNames ??= t.People.Items.Keys.ToArray();
         return DotForge.Make(t, p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default", lie: p.Pose);
     }
@@ -1070,6 +1075,20 @@ public sealed partial class Painter
         if (it.Tilt < Math.PI / 4) return (stand, x + dx * k, y + dy * k, z);
         var lay = it; lay.Pose = (byte)(side + 1);
         return (PropLook(t, lay), x + dx * k, y + dy * k, z);
+    }
+
+    /// <summary>칸 가루 (깨진 유리 · 세라믹 — 3도트 아래 조각): 칸 안 해시 자리에 1도트 반짝임 (10g마다 하나 · 많아야 12 · 재질 색).</summary>
+    private static void GritOn(Img img, float kg, byte mat, int c, int px, int py)
+    {
+        string id = mat < Tables.Default.Materials.Count ? Tables.Default.Materials[mat].Id : "";
+        var col = Rgba.Hex(id == "glass" ? "#cdeef6" : id == "ceramic" ? "#f4f4f0" : "#b8bcc2");
+        int n = Math.Clamp((int)(kg * 100), 1, 12);
+        for (int k = 0; k < n; k++)
+        {
+            uint h = (uint)(c * 2654435761u) ^ (uint)(k * 40503u + 977u);
+            h ^= h >> 13; h *= 0x5bd1e995u; h ^= h >> 15;
+            img.Blend(px + 2 + (int)(h % 28), py + 2 + (int)(h >> 8) % 28, col, 0.9f);
+        }
     }
 
     /// <summary>떠 있는 · 떨어지는 물체의 그림자 (바닥 자리 · 그림 너비의 2/3 · 높을수록 옅다 — scale 1 = 32도트).</summary>

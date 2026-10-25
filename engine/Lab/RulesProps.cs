@@ -28,6 +28,7 @@ public static partial class Program
             Console.WriteLine("\n[넘어짐 · 높이]");
             TipRules();
         }
+        BreakRules();   // 묶음 '깨짐' (RulesBreak.cs — PH8)
         if (Do("물체 그림"))
         {
             Console.WriteLine("\n[물체 그림]");
@@ -69,17 +70,20 @@ public static partial class Program
             s.Step();
             st.ShipAx = 0.4 * 9.8;
             s.Run(2);
-            var q = st.Props[st.IndexOf(bottle)];
             var fell = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.ItemFell && f.Other == bottle);
-            Check("높이: 탁자 위 (0.75m)에 누운 유리병이 0.40g 점화에 굴러 탁자 끝을 넘어 바닥에 떨어진다 (사실 '떨어졌다' 0.75m · 굴렀다)",
-                z0 == 0.75f && q.Z == 0 && q.X < 6 && fell.Kind == FactKind.ItemFell && Math.Abs(fell.Size - 0.75) < 0.02 && q.Roll != 0,
-                $"처음 높이 {z0:0.00}m · 지금 ({q.X:0.00}, {q.Y:0.00}, {q.Z:0.00}) · 떨어진 높이 {fell.Size:0.00}m · 구른 각 {q.Roll:0.0}rad");
+            var broke = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.Shattered && f.Other == bottle);
+            // 바닥에 떨어진 누운 유리병 (ε₀ 1.9J/kg)은 깨진다 (PH8 — docs/PHYSICS.md §10 '점화'): 병이 남았으면 그 병 · 깨졌으면 조각이 탁자 서쪽 끝 너머 바닥에 있다
+            var rest = st.IndexOf(bottle) >= 0 ? new List<Prop> { st.Props[st.IndexOf(bottle)] } : st.Props.Where(p => p.Kind == 2 && p.Parent == bottle).ToList();
+            Check("높이: 탁자 위 (0.75m)에 누운 유리병이 0.40g 점화에 굴러 탁자 끝을 넘어 바닥에 떨어진다 (사실 '떨어졌다' 0.75m · 굴렀다) · 떨어져 깨진다 (조각도 탁자 끝 너머 바닥에)",
+                z0 == 0.75f && rest.Count > 0 && rest.All(q => q.Z == 0 && q.X < 6.1) && fell.Kind == FactKind.ItemFell && Math.Abs(fell.Size - 0.75) < 0.02 && rest.Any(q => q.Roll != 0) && broke.Kind == FactKind.Shattered && broke.Tick >= fell.Tick,
+                $"처음 높이 {z0:0.00}m · {(st.IndexOf(bottle) >= 0 ? "병" : "조각")} {rest.Count} ({string.Join(" ", rest.Select(q => $"({q.X:0.00}, {q.Y:0.00}, {q.Z:0.00})"))}) · 떨어진 높이 {fell.Size:0.00}m · 구른 각 {rest.Max(q => Math.Abs(q.Roll)):0.0}rad · 깨짐 {(broke.Kind == FactKind.Shattered ? s.Causes.Story(broke.Cause) : "없음")}");
         }
         // ── 걷다 쓰러진 이의 컵: 손 높이 1m에서 걷던 빠르기로 날아 떨어진다 (내려놓은 컵은 발치 앞에 그대로) ──
         {
             var s = PropWorld(1, 9);
             var st = s.Get<Structure>();
             int cup = s.Tables.People.Items.Keys.ToList().IndexOf("컵");
+            st.Breakage = false;   // 날아 떨어지는 길만 잰다 (1m에서 떨어진 유리컵은 대개 깨진다 — 묶음 '깨짐')
             int thrown = st.DropItem(cup, 0, 3.5, 3.5, 1f, 1.7, 0, 0, 3), put = st.DropItem(cup, 0, 3.5, 6.5, 0f, 0, 0, 0, 4, 1, 0);
             var t0 = st.Props[st.IndexOf(thrown)]; var u0 = st.Props[st.IndexOf(put)];
             s.Run(2);
@@ -94,6 +98,7 @@ public static partial class Program
             var s = ShipWorld.Crewed("Hwasal", 3, 6, 0, 0);
             var m = s.Get<Mind>(); var st = s.Get<Structure>(); var life = s.Get<Life>(); var lay = s.Layout;
             byte cupItem = (byte)m.ItemNames.ToList().IndexOf("컵");
+            st.Breakage = false;   // 놓친 컵이 떨어지는 자리만 잰다 (깨짐은 묶음 '깨짐')
             s.Step();
             var prev = m.Agents.Select(a => a.C.Cell).ToArray();
             var moved = new (int dx, int dy)[m.Agents.Count];   // 지난 틱에 옮긴 칸 (선 이는 0)
@@ -266,6 +271,7 @@ public static partial class Program
             int who = m.AddPerson(s, Worlds.At(lay, 5, 1)), body = m[who].C.Body;
             s.Run(2);
             m[who].C.Holding = (byte)m.ItemNames.ToList().IndexOf("컵"); m[who].C.HoldCharge = 0;
+            st.Breakage = false;   // 놓는 자리만 잰다 (1m에서 떨군 유리컵은 대개 깨진다 — 묶음 '깨짐')
             life[body].Conscious = 0;
             s.Step();
             int cell = life[body].Cell;
@@ -786,6 +792,7 @@ public static partial class Program
             {
                 var s = s0.Clone();
                 var st = s.Get<Structure>(); var f = s.Get<Field>();
+                st.Breakage = false;   // 구멍이 빨아들이나만 잰다 (9m/s로 벽에 닿은 유리컵이 깨지는 것은 묶음 '깨짐')
                 int id = Worlds.PutItem(s, item, Worlds.At(twin, 3, 2));
                 var p = st.Props[st.IndexOf(id)];
                 int what = p.What;

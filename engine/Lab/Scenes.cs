@@ -205,6 +205,7 @@ public static partial class Program
             case "topple": ToppleScene(dir); return;
             case "props-zerog": PropsZeroGScene(dir); return;
             case "props-track": PropsTrackScene(dir); return;
+            case "shatter": ShatterScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

@@ -94,3 +94,63 @@ public sealed class Wind : Voice
         return (body * 3.2f + whistle + sand) * 0.9f * (1 - 0.3f * _grit);   // 크기 기준 (모래가 날려도 같은 크기 — 세기는 섞개의 크기가 정한다)
     }
 }
+
+/// <summary>
+/// 쨍그랑 (PH8 — 유리 · 세라믹이 깨진다): 처음 터지는 잡음 한 번 · 조각마다 높은 고유 진동 (재질 f1 × 작은 조각일수록 높게 · 짧게)이 0.3초 안에 흩어져 울린다 (조각이 튀며 바닥에 다시 닿는 딸랑).
+/// 큰 에너지일수록 조각이 많다.
+/// </summary>
+public sealed class Shatter : Voice
+{
+    private readonly Mode[] _modes;
+    private readonly int[] _at;
+    private Noise _n;
+    private OnePole _hp;
+    private int _i;
+    private readonly int _len;
+    public Shatter(Acoustic m, float kJ, uint seed, float sizeScale = 0.1f)
+    {
+        _n = new Noise(seed);
+        int k = Math.Clamp(6 + (int)(4 * MathF.Log10(1 + kJ * 1000)), 6, 18);
+        _modes = new Mode[k]; _at = new int[k];
+        float f1 = m.F1 * 6 / Math.Clamp(sizeScale / 0.1f, 0.3f, 3f);
+        for (int q = 0; q < k; q++)
+        {
+            float f = Math.Min(Dsp.Top * 0.9f, f1 * (1.5f + 2.5f * (_n.White() + 1)));
+            _modes[q] = new Mode(f, Math.Clamp(0.25f / (1 + q * 0.2f), 0.04f, 0.4f), 0.25f / MathF.Sqrt(1 + q), _n.White() * MathF.PI);
+            _at[q] = q == 0 ? 0 : (int)(Dsp.Rate * 0.32f * (_n.White() + 1) * 0.5f);   // 조각이 튀어 다시 닿는 때
+        }
+        _len = (int)(Dsp.Rate * 0.9f);
+    }
+    public override float Next()
+    {
+        if (_i >= _len) { Done = true; return 0; }
+        float t = _i / (float)Dsp.Rate, s = _hp.High(_n.White(), 2500) * MathF.Exp(-t * 60f) * 0.9f;   // 깨지는 순간의 쨍
+        for (int q = 0; q < _modes.Length; q++) if (_i >= _at[q]) s += _modes[q].Next();
+        _i++;
+        return s * 0.6f;
+    }
+}
+
+/// <summary>드르륵 (PH8 — 물건이 바닥을 미끄러진다): 붙었다 미끄러지는 마찰 (맥박 간격이 흔들린다)이 띠 거른 잡음을 두드린다 · 0.4초 · 단단한 재질일수록 높다.</summary>
+public sealed class Scrape : Voice
+{
+    private Biquad _band;
+    private Noise _n;
+    private int _i, _next;
+    private readonly int _len;
+    private float _env;
+    public Scrape(Acoustic m, uint seed)
+    {
+        _n = new Noise(seed);
+        _band = Biquad.Band(600 + 2400 * m.Hard, 2.5f);
+        _len = (int)(Dsp.Rate * 0.4f);
+    }
+    public override float Next()
+    {
+        if (_i >= _len) { Done = true; return 0; }
+        if (_i >= _next) { _env = 1; _next = _i + (int)(Dsp.Rate * (0.008f + 0.006f * (_n.White() + 1))); }
+        _env *= 0.996f;
+        float t = _i++ / (float)Dsp.Rate, fade = MathF.Min(1, t * 40) * MathF.Min(1, (0.4f - t) * 10);
+        return _band.Run(_n.White()) * _env * fade * 1.6f;
+    }
+}

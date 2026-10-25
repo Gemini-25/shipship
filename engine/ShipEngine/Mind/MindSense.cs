@@ -532,6 +532,7 @@ public sealed partial class Mind
                 }
                 break;
             }
+            // 물체 소리 (덜그럭 · 쨍그랑 · 드르륵 · 쿵 — ④ PH8)는 생활 소리다: 믿음을 세우지 않는다 (3.2kJ 넘는 닿음만 '쾅' — 쨍그랑에 가 보는 판단은 PH13)
             case SoundKind.Bang when h.Db >= 45:
                 Learn(a, t, BeliefKind.Bang, h.Source, -1, (float)Math.Min(1, (h.Db - 40) / 50), BeliefSource.Heard, h.Cause, h.Db); break;
             case SoundKind.Crack or SoundKind.Creak:

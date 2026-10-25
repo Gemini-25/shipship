@@ -19,6 +19,8 @@ public sealed class DotForm
     /// <summary>발자국 (도트) · 층 수 · 칸 상자 안 발자국 모서리 (도트 — 가구만 · 물건은 0) · 칸 상자 (칸 — 가구만 · 물건은 0).</summary>
     public int W, D, H, Ox, Oy, Bw, Bh;
     public byte[] Bot = Array.Empty<byte>(), Top = Array.Empty<byte>(), Mat = Array.Empty<byte>(), Part = Array.Empty<byte>();
+    /// <summary>기둥 꼭대기 층의 재질 (그 위에 놓인 것이 닿는 겉 — 침대는 천 · 탁자는 알루미늄: 받침의 반발 · 마찰 · 깨짐의 단단함 몫 — PH8).</summary>
+    public byte[] TopMat = Array.Empty<byte>();
     /// <summary>기둥 질량 (kg — 재질 부피 몫 × 밀도를 표의 kg에 맞춰 늘리고 줄였다 · 합 = Mass).</summary>
     public double[] Kg = Array.Empty<double>();
     /// <summary>질량 · 무게중심 (꼴 틀 m — 발자국 모서리에서) · 회전관성 Σm(r² + d²/6) · 무게중심 높이 (m) · 바닥 마찰 반지름 (m).</summary>
@@ -49,6 +51,18 @@ public sealed class DotForm
     /// <summary>끌림 계수 (상자 1.05 · 원기둥 0.8 — Hoerner) · 둥긂 (구른다) · 이음매 문턱 (J/kg).</summary>
     public double Cd = 1.05, JointEps = 20;
     public bool Round;
+    /// <summary>
+    /// 부위 (PH8 — 이음매): 꼴의 부위 수 · 부위가 둘인 기둥 (위아래로 붙은 부위 — 소화기 노즐 · 병뚜껑)의 아래 부위 · 위 부위가 시작하는 층 · 아래 부위 질량 · 재질
+    /// (그런 기둥이 없는 꼴은 null — <see cref="Part"/>는 꼭대기 부위).
+    /// </summary>
+    public int Parts = 1;
+    public byte[]? PartLo, PartZ, MatLo;
+    public double[]? KgLo;
+    /// <summary>조각 (PH8): 온전한 꼴에서 내린 층 수 (조각 밑면 = 온전한 꼴 밑면 + ZShift 층) · 깨진 면 (이웃 · 위아래가 떨어져 나간 기둥 — 그림이 반짝인다 · 온전한 꼴은 null).</summary>
+    public int ZShift;
+    public byte[]? Cut;
+    /// <summary>조각 꼴의 누움 표시 (넘어지지 않는다 · 구르지 않는다 — 조각은 그 자세 그대로 미끄러지고 튄다).</summary>
+    public const byte PieceLie = 5;
 
     public int Columns => W * D;
     public bool Solid(int x, int y) => (uint)x < (uint)W && (uint)y < (uint)D && Top[y * W + x] > Bot[y * W + x];
@@ -332,20 +346,23 @@ public static class DotForge
         const double d = DotForm.Dot, dz = DotForm.Layer;
         int W = v.W, D = v.D, n = W * D;
         fm.W = W; fm.D = D; fm.H = v.H;
-        fm.Bot = new byte[n]; fm.Top = new byte[n]; fm.Mat = new byte[n]; fm.Part = new byte[n]; fm.Kg = new double[n];
+        fm.Bot = new byte[n]; fm.Top = new byte[n]; fm.Mat = new byte[n]; fm.Part = new byte[n]; fm.Kg = new double[n]; fm.TopMat = new byte[n];
         var dens = new double[t.Materials.Count];
         for (int k = 0; k < dens.Length; k++) dens[k] = t.Materials[k].Def.Density;
         double raw = 0;
         foreach (var c in v.C) if (c != 0) raw += dens[(c & 0xFF) - 1];
         double s = raw > 0 ? kg / raw : 0;   // 도트 칸 하나의 질량 = 밀도 × s (속 빈 정도를 흡수)
         double m = 0, mx = 0, my = 0, mz = 0;
-        Span<double> byMat = stackalloc double[t.Materials.Count];
+        Span<double> byMat = stackalloc double[t.Materials.Count], byLo = stackalloc double[t.Materials.Count];
+        var partLo = new byte[n]; var partZ = new byte[n]; var matLo = new byte[n]; var kgLo = new double[n];
+        bool split = false;
+        uint partSet = 0;
         for (int y = 0; y < D; y++)
             for (int x = 0; x < W; x++)
             {
-                int i = y * W + x, bot = -1, top = -1;
-                byMat.Clear();
-                double ck = 0;
+                int i = y * W + x, bot = -1, top = -1, lo = -1, pz = -1;
+                byMat.Clear(); byLo.Clear();
+                double ck = 0, cl = 0;
                 var col = v.Col(x, y);
                 for (int z = 0; z < v.H; z++)
                 {
@@ -355,14 +372,24 @@ public static class DotForge
                     top = z;
                     double k = dens[(c & 0xFF) - 1] * s;
                     byMat[(c & 0xFF) - 1] += k; ck += k; mz += k * (z + 0.5) * dz;
-                    fm.Part[i] = (byte)(c >> 8);
+                    fm.Part[i] = (byte)(c >> 8); fm.TopMat[i] = (byte)((c & 0xFF) - 1);
+                    int pt = c >> 8;
+                    if (lo < 0) lo = pt; else if (pz < 0 && pt != lo) pz = z;   // 아래 부위 · 위 부위가 시작하는 층 (이음매)
+                    if (pz < 0) { cl += k; byLo[(c & 0xFF) - 1] += k; }
                 }
                 if (bot < 0) { fm.Bot[i] = 1; fm.Top[i] = 0; continue; }
                 fm.Bot[i] = (byte)bot; fm.Top[i] = (byte)(top + 1);
                 int best = 0; for (int k = 1; k < byMat.Length; k++) if (byMat[k] > byMat[best]) best = k;
                 fm.Mat[i] = (byte)best; fm.Kg[i] = ck;
                 m += ck; mx += ck * (x + 0.5) * d; my += ck * (y + 0.5) * d;
+                partSet |= 1u << (lo & 31) | 1u << (fm.Part[i] & 31);
+                partLo[i] = (byte)lo; partZ[i] = (byte)(pz >= 0 ? pz : bot); kgLo[i] = pz >= 0 ? cl : ck;
+                int bl = 0; for (int k = 1; k < byLo.Length; k++) if (byLo[k] > byLo[bl]) bl = k;
+                matLo[i] = (byte)(pz >= 0 ? bl : best);
+                split |= pz >= 0;
             }
+        fm.Parts = System.Numerics.BitOperations.PopCount(partSet);
+        if (split) { fm.PartLo = partLo; fm.PartZ = partZ; fm.MatLo = matLo; fm.KgLo = kgLo; }
         fm.Mass = m;
         if (m <= 0) return;
         fm.Cx = mx / m; fm.Cy = my / m; fm.Hc = mz / m;
@@ -382,6 +409,101 @@ public static class DotForge
                 sx0 = Math.Min(sx0, x); sy0 = Math.Min(sy0, y); sx1 = Math.Max(sx1, x); sy1 = Math.Max(sy1, y);
             }
         fm.I = I; fm.Rho = rho / nr;
+        fm.TipB[0] = (sx1 + 1) * d - fm.Cx; fm.TipB[1] = (sy1 + 1) * d - fm.Cy; fm.TipB[2] = fm.Cx - sx0 * d; fm.TipB[3] = fm.Cy - sy0 * d;
+        Outline(fm);
+    }
+
+    private static readonly ConcurrentDictionary<(DotForm, byte, int, string), DotForm> _pieces = new();
+
+    /// <summary>
+    /// 조각 꼴 (PH8 — §5-2): 온전한 꼴 orig의 기둥 가운데 가면 (줄 y0부터 줄마다 ulong — x 비트)에 든 것 · 부위 part (255 기둥 통째 · 아니면 그 부위의 층만).
+    /// 질량 · 무게중심 · 회전관성 · 마찰 반지름 · 넘어짐 여유 · 껍질을 그 기둥으로 다시 센다 (기둥 질량 합 — 조각끼리 더하면 온전한 꼴) · 밑면을 바닥으로 내린다 (ZShift) ·
+    /// 깨진 면 (온전한 꼴에서 이웃 · 위아래가 떨어져 나간 기둥). 같은 가면이면 같은 꼴 하나를 함께 쓴다 (그림 캐시 · 여러 세계).
+    /// </summary>
+    public static DotForm Piece(DotForm orig, ReadOnlySpan<ulong> rows, int y0, byte part)
+    {
+        var key = (orig, part, y0, Convert.ToHexString(System.Runtime.InteropServices.MemoryMarshal.AsBytes(rows)));
+        if (_pieces.TryGetValue(key, out var hit)) return hit;
+        var copy = rows.ToArray();
+        return _pieces.GetOrAdd(key, _ => BuildPiece(orig, copy, y0, part));
+    }
+
+    private static DotForm BuildPiece(DotForm orig, ulong[] rows, int y0, byte part)
+    {
+        int W = orig.W, D = orig.D, n = W * D;
+        var fm = new DotForm { Name = orig.Name, Face = orig.Face, Lie = DotForm.PieceLie, Id = orig.Id, W = W, D = D, Cd = 1.05, JointEps = orig.JointEps };
+        fm.Bot = new byte[n]; fm.Top = new byte[n]; fm.Mat = new byte[n]; fm.Part = new byte[n]; fm.Kg = new double[n]; fm.Cut = new byte[n]; fm.TopMat = new byte[n];
+        Array.Fill(fm.Bot, (byte)1);
+        bool In(int x, int y) => (uint)x < (uint)W && y >= y0 && y < y0 + rows.Length && (rows[y - y0] >> x & 1) != 0 && orig.Solid(x, y);
+        int zmin = int.MaxValue;
+        for (int y = y0; y < y0 + rows.Length && y < D; y++)
+            for (int x = 0; x < W; x++)
+            {
+                if (!In(x, y)) continue;
+                int i = y * W + x;
+                bool two = orig.PartLo != null && orig.PartLo[i] != orig.Part[i];
+                if (part == 255 || !two)
+                {
+                    if (part != 255 && orig.Part[i] != part) continue;
+                    fm.Bot[i] = orig.Bot[i]; fm.Top[i] = orig.Top[i]; fm.Mat[i] = orig.Mat[i]; fm.Part[i] = orig.Part[i]; fm.Kg[i] = orig.Kg[i]; fm.TopMat[i] = orig.TopMat[i];
+                }
+                else if (orig.PartLo![i] == part) { fm.Bot[i] = orig.Bot[i]; fm.Top[i] = orig.PartZ![i]; fm.Mat[i] = orig.MatLo![i]; fm.Part[i] = part; fm.Kg[i] = orig.KgLo![i]; fm.Cut[i] = 1; fm.TopMat[i] = orig.MatLo[i]; }
+                else if (orig.Part[i] == part) { fm.Bot[i] = orig.PartZ![i]; fm.Top[i] = orig.Top[i]; fm.Mat[i] = orig.Mat[i]; fm.Part[i] = part; fm.Kg[i] = orig.Kg[i] - orig.KgLo![i]; fm.Cut[i] = 1; fm.TopMat[i] = orig.TopMat[i]; }
+                else continue;
+                zmin = Math.Min(zmin, fm.Bot[i]);
+            }
+        if (zmin == int.MaxValue) { fm.Bot = new byte[n]; Array.Fill(fm.Bot, (byte)1); return fm; }
+        fm.ZShift = orig.ZShift + zmin;
+        int h = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (fm.Top[i] <= fm.Bot[i]) continue;
+            fm.Bot[i] -= (byte)zmin; fm.Top[i] -= (byte)zmin; h = Math.Max(h, fm.Top[i]);
+        }
+        fm.H = h;
+        // 깨진 면: 온전한 꼴에서는 찼던 4이웃이 이 조각에 없다 (위아래로 갈린 기둥은 이미 표시했다)
+        for (int y = 0; y < D; y++)
+            for (int x = 0; x < W; x++)
+            {
+                int i = y * W + x;
+                if (fm.Top[i] <= fm.Bot[i]) continue;
+                if (orig.Solid(x - 1, y) && !fm.Solid(x - 1, y) || orig.Solid(x + 1, y) && !fm.Solid(x + 1, y) || orig.Solid(x, y - 1) && !fm.Solid(x, y - 1) || orig.Solid(x, y + 1) && !fm.Solid(x, y + 1)) fm.Cut[i] = 1;
+            }
+        FoldColumns(fm);
+        return fm;
+    }
+
+    /// <summary>기둥 (아래 · 위 층 · 질량)에서 질량 · 무게중심 · 무게중심 높이 (기둥 가운데 층 — 조각의 어림) · 회전관성 · 마찰 반지름 · 넘어짐 여유 · 껍질 (조각 꼴).</summary>
+    private static void FoldColumns(DotForm fm)
+    {
+        const double d = DotForm.Dot, dz = DotForm.Layer;
+        int n = fm.W * fm.D;
+        double m = 0, mx = 0, my = 0, mz = 0;
+        for (int y = 0; y < fm.D; y++)
+            for (int x = 0; x < fm.W; x++)
+            {
+                int i = y * fm.W + x;
+                if (fm.Top[i] <= fm.Bot[i]) continue;
+                double k = fm.Kg[i];
+                m += k; mx += k * (x + 0.5) * d; my += k * (y + 0.5) * d; mz += k * (fm.Bot[i] + fm.Top[i]) * 0.5 * dz;
+            }
+        fm.Mass = m;
+        if (m <= 0) return;
+        fm.Cx = mx / m; fm.Cy = my / m; fm.Hc = mz / m;
+        double I = 0, rho = 0; int nr = 0;
+        int sx0 = int.MaxValue, sy0 = int.MaxValue, sx1 = -1, sy1 = -1;
+        for (int y = 0; y < fm.D; y++)
+            for (int x = 0; x < fm.W; x++)
+            {
+                int i = y * fm.W + x;
+                if (fm.Top[i] <= fm.Bot[i]) continue;
+                double rx = (x + 0.5) * d - fm.Cx, ry = (y + 0.5) * d - fm.Cy;
+                I += fm.Kg[i] * (rx * rx + ry * ry + d * d / 6);
+                if (fm.Bot[i] != 0) continue;
+                rho += Math.Sqrt(rx * rx + ry * ry); nr++;
+                sx0 = Math.Min(sx0, x); sy0 = Math.Min(sy0, y); sx1 = Math.Max(sx1, x); sy1 = Math.Max(sy1, y);
+            }
+        fm.I = I; fm.Rho = nr > 0 ? rho / nr : 0;
         fm.TipB[0] = (sx1 + 1) * d - fm.Cx; fm.TipB[1] = (sy1 + 1) * d - fm.Cy; fm.TipB[2] = fm.Cx - sx0 * d; fm.TipB[3] = fm.Cy - sy0 * d;
         Outline(fm);
     }

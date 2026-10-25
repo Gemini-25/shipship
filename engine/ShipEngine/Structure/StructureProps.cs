@@ -37,7 +37,10 @@ public struct Prop
     public int Spare0, Spare1;     // 판을 이 단에서 한 번만 올리려고 남긴 칸
 }
 
-/// <summary>조각 가면 (꼴 안 상자 · 무게중심 · 비트 시작 — 비트는 <see cref="Structure.MaskBits"/>).</summary>
+/// <summary>
+/// 조각 가면 (꼴 안 상자 · 무게중심 · 비트 시작 — 비트는 <see cref="Structure.MaskBits"/>: 상자의 줄마다 ulong 하나 (꼴 x 비트) · 부위 (255 기둥 통째 · 아니면 그 부위의 층만 — 이음매로 갈린 조각: PH8)).
+/// 꼴은 늘 깨지기 전 온전한 물건의 꼴 (물건 · 누움) 틀이다 — 조각이 다시 깨지면 그 가면의 부분 집합.
+/// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PropMask
 {
@@ -45,6 +48,7 @@ public struct PropMask
     public byte X0, Y0, W, H;
     public float Cx, Cy;
     public int Bit;
+    public byte Part;
 }
 
 /// <summary>물체가 무엇을 맞혔다 (꼬리표 · 칸 · 에너지 · 질량 · 빠르기 · 날카로움 · 원인 · 때) — ⑦ · ⑥이 제 꼬리표로 읽고 비운다.</summary>
@@ -132,14 +136,14 @@ public sealed partial class Structure
 
     /// <summary>
     /// 요청: 물건을 놓는다 (그 칸 가운데 · 남은 양 그대로) — 새 물체 Id. 높이 z (밑면 m — 0이면 손 높이에서 내려놓듯 그 아래 받침 (탁자 윗면 · 바닥)에 선다) ·
-    /// 받침보다 높으면 그 높이에서 떨어진다 (PH7).
+    /// 받침보다 높으면 그 높이에서 떨어진다 (PH7). 담긴 물 liquid (몰 — 컵 · 물병: 깨지거나 넘어지면 그 칸 바닥으로 쏟는다 · PH8).
     /// </summary>
-    public int PutItem(int item, float charge, int cell, float z = 0)
+    public int PutItem(int item, float charge, int cell, float z = 0, float liquid = 0)
     {
         if (item < 0 || cell < 0 || cell >= L.N) return -1;
         int id = NextPropId++;
         double x = L.X(cell) + 0.5, y = L.Y(cell) + 0.5, zs = SupportAt(x, y, Math.Max(z, HandZ), out int on, out _);
-        var p = new Prop { Id = id, Kind = 0, What = (short)item, X = x, Y = y, Z = (float)Math.Max(z, zs), On = on, Charge = charge, G = F.Grav[cell] };
+        var p = new Prop { Id = id, Kind = 0, What = (short)item, X = x, Y = y, Z = (float)Math.Max(z, zs), On = on, Charge = charge, Liquid = Math.Max(0, liquid), G = F.Grav[cell] };
         if (z > zs + ZEps) { FillBody(ref p); p.State = 3; p.On = 0; }
         Props.Add(p);
         return id;
@@ -200,7 +204,8 @@ public sealed partial class Structure
     public string PropName(in Prop p)
     {
         _itemNames ??= T.People.Items.Keys.ToArray();
-        return p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
+        string name = p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
+        return p.Kind == 2 ? name + " 조각" : name;
     }
 
     // ───────────────────────── 문짝 (PH4b — §3-6) ─────────────────────────
@@ -337,6 +342,7 @@ public sealed partial class Structure
         PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64();
         NextPropId = r.I32(); PropSteps = r.I64(); Bounces = r.I64(); Shattered = r.I64(); Toppled = r.I64(); TornLoose = r.I64(); Rolled = r.I64(); IslandMiss = r.I64();
         LoadActors(r);
+        _pieceForms.Clear();   // 조각 가면 번호 → 꼴 (다른 세계의 가면일 수 있다)
         _plugStale = true;   // 물체 막음 칸은 장의 PlugProp에서 다시 세운다
         Array.Fill(_mouthTick, long.MinValue);   // 구멍 입 틱 안 캐시도 잊는다 (같은 틱 번호의 다른 세계)
     }

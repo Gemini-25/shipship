@@ -10,7 +10,7 @@ public static partial class Program
     private static void PropLaws()
     {
         if (!Do("물체")) return;
-        Console.WriteLine("\n[물체 — 보는 쪽 · 도트 꼴 · 평면 움직임]");
+        Console.WriteLine("\n[물체 — 보는 쪽 · 도트 꼴 · 평면 움직임 · 깨짐]");
         FacingLaw();
         FormLaw();
         PlaneLaws();
@@ -19,6 +19,7 @@ public static partial class Program
         TrackLaws();
         PileLaws();
         HeightLaws();
+        BreakLaws();
     }
 
     // 긴 방 (16m) 곁에 작은 방 — 가운데 겹을 끊으면 긴 방이 배 (몸 0 · 무거운 쪽) · 작은 방이 조각
@@ -835,6 +836,7 @@ public static partial class Program
                 var (s, f) = WindWorld(1);
                 var st = s.Get<Structure>(); var L = s.Layout;
                 for (int c = 0; c < L.N; c++) if (L.Kind[c] == CellKind.Floor) Blow(f, c, q, wx, wy);
+                st.Breakage = false;   // 바람의 돌림힘만 잰다 (벽에 17m/s로 닿은 우주복 이음매가 갈라지는 것은 깨짐 법칙의 몫)
                 int id = Slide(s, name, 4.5, 3.5, 0, 0);
                 s.Step();
                 return st.Props[st.IndexOf(id)];

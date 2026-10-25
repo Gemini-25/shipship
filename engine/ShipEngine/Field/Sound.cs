@@ -27,6 +27,10 @@ public enum SoundKind : byte
     Music,      // 음악 (소리 단계 S5 — 쉬는 이가 작은 스피커로 틀거나 악기를 친다 · 판단 엔진이 정한 행동)
     Tick,       // 딱 · 뚝 (소리 단계 S6 — 데워지거나 식은 외판 · 이음매가 늘고 줄며 미끄러진다: ④ 구조가 낸다 · 위험한 소리가 아니다)
     Chime,      // 띵동 (소리 단계 S6 — 주컴퓨터 방송 알림음: 깨어 있는 이가 있는 방의 스피커에서)
+    // ── 물체 소리 (PH8 — ④ 구조가 낸다 · 생활 소리: 마음은 믿음을 세우지 않는다 · 3.2kJ 넘는 닿음만 '쾅') ──
+    Knock,      // 덜그럭 (단단한 물건이 벽 · 바닥 · 서로에 닿음)
+    Shatter,    // 쨍그랑 (유리 · 세라믹이 깨진다)
+    Scrape,     // 드르륵 (1m/s 넘게 바닥을 미끄러진다)
 }
 
 /// <summary>낸 소리 하나 (보기용 기록).</summary>
@@ -37,6 +41,8 @@ public struct Emission
     public int Cell, Source, Actor, Cause;
     public float Db;           // 1m에서의 크기
     public byte Sub;           // 틱 안의 때 (0~255 — 그 틱 사이 언제 났나: 귀는 그리는 때가 그 때를 지날 때 듣는다)
+    public byte Mat;           // 소리를 낸 물체의 재질 (재질 표 차례 · 255 모름 — 화면 소리가 그 재질로 울린다: PH8)
+    public float SizeM;        // 소리를 낸 물체의 크기 (m — 가장 긴 변 · 0 모름: 작을수록 높게 운다)
 }
 
 /// <summary>들린 소리 하나.</summary>
@@ -197,12 +203,12 @@ public sealed class Sound : IEngine
     private readonly PriorityQueue<int, float> _pq = new();
 
     /// <summary>칸 cell에서 크기 db(1m에서의 dB)의 소리가 난다 (source: 들은 이가 아는 소리의 자리 — 없으면 cell).</summary>
-    public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1, int source = -1)
+    public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1, int source = -1, byte mat = 255, float sizeM = 0)
     {
         int src = source >= 0 ? source : cell;
         int ev = ++_nextEvent;
         Emitted++;
-        _log[Logged % LogSize] = new Emission { Tick = sim.Tick, Kind = kind, Cell = cell, Source = src, Db = db, Actor = actor, Cause = cause, Sub = sim.Facts.SubNow };
+        _log[Logged % LogSize] = new Emission { Tick = sim.Tick, Kind = kind, Cell = cell, Source = src, Db = db, Actor = actor, Cause = cause, Sub = sim.Facts.SubNow, Mat = mat, SizeM = sizeM };
         Logged++;
         if (Thin(cell) <= 0) return ev; // 진공: 아무도 못 듣는다
         // 다익스트라 (칸마다 가장 큰 크기 — 다시 쓰는 배열: 생활 소리로 낸 소리가 많아져 사전을 새로 만들지 않는다 · 결과는 같다)
