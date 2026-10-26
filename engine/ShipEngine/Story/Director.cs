@@ -130,6 +130,7 @@ public sealed partial class Director
         for (int i = 0; i < Heat.Length; i++) { if (Heat[i] > 0.01f) Heat[i] *= decay; else Heat[i] = 0; if (Aux[i] > 0.01f) Aux[i] *= decay; else Aux[i] = 0; }
 
         var mind = sim.Find<Mind>(); var life = sim.Find<Life>();
+        _peopleMind = mind;
         // 사실
         Fact best = default; float bestScore = 0;
         foreach (var f in sim.Facts.Since(_cursor))
@@ -153,6 +154,7 @@ public sealed partial class Director
             }
             Watch(cell, w, rec != null && rec.Count >= 2, f.Kind, root);
             DayNote(sim, f, w, cell, AgentOf(mind, f), rec);   // ⑬ 이야기 편집 — 오늘의 장
+            PeopleNote(sim, f, AgentOf(mind, f), mind);        // 사람 일 장부 (V3 — 적기만)
             if (w >= ChainFactAt && cell >= 0) Recent(cell, root, AgentOf(mind, f), score, t);
             if (cell >= 0 && cell < Heat.Length) Heat[cell] += score;
             if (Omen(f)) OmenSeen(f, w, root, t);
@@ -160,6 +162,7 @@ public sealed partial class Director
             if (score > bestScore && cell >= 0) { bestScore = score; best = f; best.Cell = cell; }
         }
         _cursor = sim.Facts.Total;
+        if (People.MournFor >= 0) MournRead(sim, mind);   // 열린 추모 모임의 말 (말 기록 고리가 돌기 전에)
 
         // 위험한 칸의 사람 (매 틱)
         bool danger = false;

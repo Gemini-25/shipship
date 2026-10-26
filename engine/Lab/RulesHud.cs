@@ -162,9 +162,9 @@ public static partial class Program
                         }
                         foreach (var o in hud.Overlaps()) bad.Add($"{pw}×{ph} 사람 {n} {tag}: {o}");
                         foreach (var o in hud.Outside()) bad.Add($"{pw}×{ph} 사람 {n} {tag}: 밖 {o}");
-                        // 탭 일곱 · 자세한 판 (넓은 폭 · 작은 탭 한 줄 · 판 안 · [목록] · [따라가기]은 사람 · 로봇만) · 카드 [자세히 보기]
+                        // 탭 여덟 (기록 — V3) · 자세한 판 (넓은 폭 · 작은 탭 한 줄 · 판 안 · [목록] · [따라가기]은 사람 · 로봇만) · 카드 [자세히 보기]
                         int tabs = hud.Hits.Count(x => x.Act == UiAct.Tab);
-                        if (tabs != 7) bad.Add($"{pw}×{ph} {tag}: 탭 {tabs}");
+                        if (tabs != 8) bad.Add($"{pw}×{ph} {tag}: 탭 {tabs}");
                         if (on && f.Card.Length > 0 && f.CardIs == CardKind.Agent && !hud.Hits.Any(x => x.Act == UiAct.DetailOpen)) bad.Add($"{pw}×{ph} {tag}: 카드 [자세히 보기] 없음");
                         if (detail != DetailKind.None)
                         {
@@ -183,7 +183,7 @@ public static partial class Program
                             if (h.R.H + 0.01f < need || h.R.W + 0.01f < (h.Act == UiAct.PanelBar ? 18 : Math.Min(need, 28))) small.Add($"{pw}×{ph} 사람 {n}: {h.Act} {h.R.W:0}×{h.R.H:0}");
                         }
                     }
-            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 · 자세한 판 (사람 · 로봇 · 주컴퓨터) · 사고 판 (겨눔 줄 · 크기 칩 — 겨눈 갈래가 사람 수 홀짝으로 불씨 · 인공 중력 발생기) · 로봇 판 · 물건 카드 ([사고 ›] · [×] — 따라가기 · 자세히 보기 없음) — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상) · 탭 일곱 · 자세한 판은 넓은 폭 · 작은 탭 한 줄 (docs/UI2.md M1)",
+            Check("마우스 자리표: 여섯 창 (1920×1080 · 최대화 1920×1010 · 1600×900 · 1366×768 · 1280×720 · 2560×1440) × 사람 3 · 12 · 40 · 100 (로봇 ⅓) × 모두 켬 (판 / 말 창) · 끔 · 자세한 판 (사람 · 로봇 · 주컴퓨터) · 사고 판 (겨눔 줄 · 크기 칩 — 겨눈 갈래가 사람 수 홀짝으로 불씨 · 인공 중력 발생기) · 로봇 판 · 물건 카드 ([사고 ›] · [×] — 따라가기 · 자세히 보기 없음) — 가리는 판끼리 겹침 0 · 화면 밖 0 · 누를 자리 높이 (사람 줄 30 · 주 단추 32 · 그 밖 26 이상) · 탭 여덟 · 자세한 판은 넓은 폭 · 작은 탭 한 줄 (docs/UI2.md M1)",
                 bad.Count == 0 && small.Count == 0, $"자리표 {layouts}가지 · 겹침 · 밖 {bad.Count} {string.Join(" | ", bad.Take(4))} · 작은 자리 {small.Count} {string.Join(" | ", small.Take(3))}");
         }
         // 3: 누름이 새지 않는다 · 같은 손잡이일 때만 · 자막 위는 세계로
@@ -245,7 +245,7 @@ public static partial class Program
             }
             texts.AddRange(HudLayout.TabNames.Concat(LiveShow.SpeedLabels).Concat(HudLayout.OverlayWords).Concat(LiveShow.PersonTabs).Concat(LiveShow.RobotTabs).Concat(LiveShow.ComputerTabs));
             var bad = texts.Where(t => t.Any(c => Hud.Missing.Contains(c))).ToList();
-            Check("마우스 글자: 풀이 글 · 탭 일곱 · 작은 탭 · 자세한 판 단추 · 빠르기 · 겹쳐 보기 글에 글꼴(Pretendard)에 없는 글자(✕ ▾ ✔ ≡)가 없다 — 그것들은 도형으로 그린다 (docs/UI2.md M4)", bad.Count == 0, bad.Count == 0 ? $"글 {texts.Count}줄" : string.Join(" | ", bad.Take(3)));
+            Check("마우스 글자: 풀이 글 · 탭 여덟 · 작은 탭 · 자세한 판 단추 · 빠르기 · 겹쳐 보기 글에 글꼴(Pretendard)에 없는 글자(✕ ▾ ✔ ≡)가 없다 — 그것들은 도형으로 그린다 (docs/UI2.md M4)", bad.Count == 0, bad.Count == 0 ? $"글 {texts.Count}줄" : string.Join(" | ", bad.Take(3)));
         }
 
         var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);

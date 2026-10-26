@@ -15,6 +15,10 @@ public sealed class Chapter
     public readonly List<int> Cast = new();      // 사람 · 로봇 (마음의 번호)
     public float Peak;
     public string Arc = "";
+    /// <summary>그날 가장 높이 오른 분위기 (0 조용함 · 1 조짐 · 2 위험 · 3 결정적 순간 — 지나온 날 띠의 칸 색 · V3).</summary>
+    public int Mood;
+    /// <summary>그날 잃은 이 (마음의 번호 — 날 띠의 흰 십자 · V3).</summary>
+    public readonly List<int> Lost = new();
 }
 
 /// <summary>다시보기의 컷 하나 — 언제부터 언제까지 · 그 컷의 한가운데 순간(At — 사진 한 장이면 이때) · 어디(칸) · 누구를 따라 · 빠르기 · 자막 · 갈래(조짐 · 순간 · 정점 · 시점 · 뒤).</summary>
@@ -38,6 +42,7 @@ public sealed partial class Director
     private readonly List<string> _dayVoyage = new();
     private readonly List<string> _dayMoods = new();   // 하루의 결: 조용함 · 조짐 n번 · 위험(때) · 결정적 순간(때)
     private int _episodePeak, _omenRun;                // 지금 소동의 가장 높은 분위기 (0 조용함 · 1 조짐 · 2 위험 · 3 결정적 순간) · 이어진 조짐뿐인 소동 수
+    private int _dayMood;                              // 오늘 가장 높이 오른 분위기 (날 띠 — V3)
     private long _episodePeakAt;
     private static readonly string[] MoodNames = { "조용함", "조짐", "위험", "결정적 순간" };
     private static int MoodLevel(string m) => m switch { "결정적 순간" => 3, "위험" => 2, "조짐" => 1, _ => 0 };
@@ -59,6 +64,7 @@ public sealed partial class Director
         int day = (int)(t / Time.TicksPerDay);
         if (_day < 0) { _day = day; _dayFrom = t; }
         int lv = MoodLevel(Mood);
+        if (day == _day && lv > _dayMood) _dayMood = lv;
         if (lv == 0 && _dayMoods.Count == 0 && _omenRun == 0 && _episodePeak == 0) _dayMoods.Add(MoodNames[0]);
         if (lv > _episodePeak) { _episodePeak = lv; _episodePeakAt = t; }
         else if (lv == 0 && _episodePeak > 0)
@@ -72,7 +78,7 @@ public sealed partial class Director
         Chapters.Add(ch);
         if ((ch.Day + 1) % 7 == 0) Chapters.Add(WeekOf(Chapters.Where(c => !c.Week).TakeLast(7).ToList()));
         _day = day; _dayFrom = t;
-        _dayDeaths.Clear(); _dayDecisions.Clear(); _dayVoyage.Clear(); _dayMoods.Clear(); _dayCast.Clear(); _omenRun = 0;
+        _dayDeaths.Clear(); _dayDecisions.Clear(); _dayVoyage.Clear(); _dayMoods.Clear(); _dayCast.Clear(); _omenRun = 0; _dayMood = lv;
     }
 
     private static string Peak(int lv, long at) => $"{MoodNames[lv]}({at % Time.TicksPerDay / Time.TicksPerHour:00}:{at % Time.TicksPerHour * 60 / Time.TicksPerHour:00})";
@@ -117,8 +123,13 @@ public sealed partial class Director
         foreach (var kv in _dayCast.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key).Take(3)) ch.Cast.Add(kv.Key);
         // 제목
         var top = today.OrderByDescending(h => h.Score).FirstOrDefault();
+        var people = People.Between(_dayFrom, t).ToList();   // 사람 일 (무게 순 — 짝 · 고백 · 화해 · 꿈 · 별명 · 관습 · 부고)
+        bool turning = _day >= 0 && t / Time.TicksPerDay != _day;   // 날이 막 바뀐 틱 — 이 틱의 분위기는 새 날의 것
+        ch.Mood = turning ? _dayMood : Math.Max(_dayMood, MoodLevel(Mood));
+        foreach (var d in _dayDeaths) if (!ch.Lost.Contains(d.actor)) ch.Lost.Add(d.actor);
         if (_dayDeaths.Count > 0) ch.Title = $"{day + 1}일째 — {Ko.Eul(Name(_dayDeaths[0].actor) + (_dayDeaths.Count > 1 ? $" 외 {_dayDeaths.Count - 1}명" : ""))} 잃은 날";
         else if (top != null) ch.Title = $"{day + 1}일째 — {Tail(top.Title)}";
+        else if (people.Count > 0) ch.Title = $"{day + 1}일째 — {Tail(people[0].Text, 40)}";   // 큰 일 없는 날의 제목은 사람 일에서 (V3 — 문턱 · 하이라이트는 그대로)
         else if (_dayVoyage.Count > 0) ch.Title = $"{day + 1}일째 — {Tail(_dayVoyage[0])}";
         else ch.Title = $"{day + 1}일째 — 조용한 하루";
         // 요약 줄
@@ -126,6 +137,7 @@ public sealed partial class Director
         if (big != null && big.Cause != 0) ch.Lines.Add($"큰 사슬 [{SpreadPath(big)}] {Ends(sim.Causes.Story(big.LineCause != 0 ? big.LineCause : big.Cause))}");
         foreach (var h in today.Where(h => h.People).OrderByDescending(h => h.Score).Take(2)) ch.Lines.Add($"사람 — {(h.Line.Length > 0 ? h.Line : Ends(h.Title))}");
         foreach (var d in _dayDeaths) ch.Lines.Add($"잃음 — {Name(d.actor)}: {(d.cause != 0 ? Ends(sim.Causes.Story(d.cause)) : "")}");
+        foreach (var n in people.Take(2)) ch.Lines.Add($"사람 일 — {n.Text}");
         var dec = _dayDecisions.OrderByDescending(x => x.depth).FirstOrDefault();
         if (dec.cause != 0) ch.Lines.Add($"판단 — {Ends(sim.Causes.Story(dec.cause))}");
         foreach (string v in _dayVoyage.Distinct().Take(2)) ch.Lines.Add($"항해 — {v}");
@@ -135,6 +147,25 @@ public sealed partial class Director
         if (ch.Cast.Count > 0) ch.Lines.Add($"주인공 — {string.Join(" · ", ch.Cast.Select(Name))}");
         if (top == null && _dayDeaths.Count == 0) ch.Lines.Insert(0, "큰일 없이 지나갔다");
         return ch;
+    }
+
+    private static readonly string[] PeopleWord = { "짝", "고백", "화해", "꿈", "별명", "관습", "부고" };
+    private Mind? _peopleMind;   // 이름 (한 주 장 — 장부의 번호를 이름으로 · 마지막으로 본 세계의 마음)
+    private string PeopleName(int a) => _peopleMind != null && a >= 0 && a < _peopleMind.Agents.Count ? _peopleMind.NameOf(a) : "누군가";
+
+    /// <summary>원인 이야기를 짧게 — 둘보다 길면 '처음 → … → 끝' (묘비 · 결산).</summary>
+    public static string Short(string story) => Ends(story);
+
+    /// <summary>그 원인의 사슬이 지나간 엔진 길 '[불·화학 → 공기·열 → 몸]' (사슬을 모르면 빈 글 — 묘비).</summary>
+    public string PathOf(Sim sim, int cause)
+    {
+        if (cause == 0) return "";
+        var chain = sim.Causes.Chain(cause);
+        int root = chain.Count > 0 ? chain[0] : 0;
+        var rec = Chains.TryGetValue(root, out var c) ? c : BestChains.FirstOrDefault(x => x.Root == root);
+        if (rec == null) return "";
+        string p = SpreadPath(rec);
+        return p.Length > 0 ? $"[{p}]" : "";
     }
 
     private string SpreadPath(CauseChain c) => string.Join(" → ", c.Order.Select(e => PlainName[e]).Where(n => n.Length > 0).Distinct());
@@ -151,6 +182,15 @@ public sealed partial class Director
         if (cast != null) { ch.Cast.Add(cast.Key); }
         foreach (var d in days) foreach (var h in d.Scenes) if (ch.Scenes.Count < SceneCount && (best == null || d == best || h.Score >= HighlightAt * 2)) ch.Scenes.Add(h);
         ch.Peak = days.Count > 0 ? days.Max(d => d.Peak) : 0;
+        ch.Mood = days.Count > 0 ? days.Max(d => d.Mood) : 0;
+        foreach (var d in days) foreach (int a in d.Lost) if (!ch.Lost.Contains(a)) ch.Lost.Add(a);
+        // 관계 장면: 같은 두 사람 사이 일이 이레에 셋을 넘으면 한 줄 (사람 일 장부 — V3)
+        if (days.Count > 0)
+            foreach (var (a, b, n) in People.Pairs(ch.From, ch.To + 1).Where(p => p.n > 3).Take(2))
+            {
+                var kinds = People.Notes.Where(x => x.Tick >= ch.From && x.Tick <= ch.To && (x.A == a && x.B == b || x.A == b && x.B == a)).Select(x => PeopleWord[(int)x.Kind]).Distinct();
+                ch.Lines.Add($"관계 장면 — {Ko.Gwa(PeopleName(a))} {PeopleName(b)} 사이 {n}번 ({string.Join(" · ", kinds)})");
+            }
         return ch;
     }
 

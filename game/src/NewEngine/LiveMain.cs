@@ -111,6 +111,10 @@ void fragment() {
     private double _view = -1;   // --view=칸 수 (0 = 배 전체) — 관찰 장면용 확대
     private string? _ui;          // --ui=장면[:작은 탭] (docs/UI2.md §7 결함 6 — 화면 사진용: person · robot · robots · computer · hand) — 3초에 차린다
     private string? _shotName;    // --shot=이름: 5초에 한 장 (이름.png) 찍고 몇 초마다 찍기는 하지 않는다
+    private double _firstShown = -1;   // 첫 그림이 온 때 (--skip이 길면 몇 분 — 찍기는 그 뒤 1.5초 · --for는 한 장을 찍을 때까지 기다린다)
+    private bool _shotTaken;
+    private volatile bool _uiDone = true;   // --ui 차림이 작업 스레드에서 끝났나 (차림이 앞으로 감으면 몇 초 — 찍기는 그 뒤 1.5초)
+    private double _uiReadyT;
     private PanelKind _openPanel;
     private bool _ignite;                                      // --ignite: 감은 뒤 침대 하나에 불씨 (화면 사진용 — 사건 띠 · 불 연출)
     private double _skipHours;                                 // --skip=시간: 띄우기 전에 그만큼 앞으로 감는다 (화면 사진용)
@@ -150,7 +154,7 @@ void fragment() {
             else if (a == "--ignite") _ignite = true;
             else if (a == "--help") _helpOnce = true;
             else if (a == "--hold") _noHold = false;
-            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, "G" => PanelKind.Robots, "X" => PanelKind.Hand, _ => PanelKind.None };
+            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, "G" => PanelKind.Robots, "X" => PanelKind.Hand, "Y" => PanelKind.Record, _ => PanelKind.None };
             else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
             else if (a.StartsWith("--thoughts=") && int.TryParse(a[11..], out var th)) _thoughts = Math.Clamp(th, 0, 2);
         }
@@ -240,6 +244,7 @@ void fragment() {
             if (_chapters >= 0 && chapters > _chapters) _saveDue = true;
             _chapters = chapters;
             if (_saveDue && !(show.Sim.Find<ShipMind>()?.WorkerBusy ?? false)) { _saveDue = false; SaveNow(show, SaveKind.Daily, wait: false); }
+            if (show.EndSaveDue) { show.EndSaveDue = false; SaveNow(show, SaveKind.End, wait: false); }   // 항해가 끝났다 (결산 — card.json에 끝 갈래)
             var pic = new Pic { F = show.Render(), Gen = gen };
             var old = Interlocked.Exchange(ref _ready, pic);
             if (old != null) show.Recycle(old.F.Img);            // 메인이 미처 못 가져간 장
@@ -450,17 +455,20 @@ void fragment() {
         if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
         if (_ui == "newvoyage" && _runT > 3) { _ui = null; OpenVoyageWindow(); }   // 번호 창 (메뉴 [새 항해 ›])
-        if (_ui != null && _runT > 3) { string ui = _ui; _ui = null; _cmds.Enqueue(s => SetUpUi(s, ui)); }
+        if (_ui != null && _runT > 3) { string ui = _ui; _ui = null; _uiDone = false; _cmds.Enqueue(s => { SetUpUi(s, ui); _uiDone = true; }); }
+        if (!_uiDone) _uiReadyT = _runT;
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
-        if (_shotDir != null && _shown != null && _runT >= _nextShot)
+        if (_shown != null && _firstShown < 0) _firstShown = _runT;
+        if (_shotDir != null && _shown != null && _runT >= _nextShot && _runT >= _firstShown + 1.5 && _uiDone && _runT >= _uiReadyT + 1.5)
         {
+            _shotTaken = true;
             _nextShot = _runT + _shotEvery;
             var img = GetViewport().GetTexture().GetImage();
             string path = System.IO.Path.Combine(_shotDir, _shotName != null ? _shotName + ".png" : $"{_shotN++:00}-{_runT:000}s.png");
             img.SavePng(path);
             GD.Print($"{path} · {_shown.Status} · {_shown.Story}");
         }
-        if (_runFor > 0 && _runT >= _runFor)
+        if (_runFor > 0 && _runT >= _runFor && (_shotName == null || _shotTaken || _runT > 1800))
         {
             var o = _frameMs.OrderBy(x => x).ToList();
             double P(double q) => o.Count == 0 ? 0 : o[(int)Math.Min(o.Count - 1, q * o.Count)];
@@ -539,6 +547,22 @@ void fragment() {
                 break;
             }
             case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
+            // 기록 (V3): 기록 판 (작은 탭 — record:1 · 잃은 이는 record:lost — 첫 사람 곁에 큰 폭발 (함장의 손) → 30분) · 장 카드 (마지막 장) · 결산 카드 (그만둠)
+            case "record" when parts.Length > 1 && parts[1] == "lost":
+            {
+                int p0 = First(true);
+                if (p0 >= 0 && mind != null)
+                {
+                    int c0 = mind.Agents[p0].C.Cell;
+                    s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Blast, Cell = c0, Size = 2 });
+                    s.FastForward(Time.Minutes(30));
+                }
+                s.OpenRecord(1);
+                break;
+            }
+            case "record": s.OpenRecord(sub); break;
+            case "chapter": if (s.Dir.Chapters.Count > 0) s.DayTurned(s.Dir.Chapters[^1]); break;
+            case "end": s.EndVoyage(VoyageEnd.Quit); break;
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
             case "scenes":
             {
@@ -1192,6 +1216,53 @@ void fragment() {
             }
             foreach (var h in _hud.Hits) if (h.Act == UiAct.ResumeGo) DrawButton(h, "계속", 16);
         }
+        if (_hud.Areas.TryGetValue("결산 카드", out var eb))
+        {
+            // 결산 카드 (V3): 제목 · 사람마다 한 줄 (숨진 이는 옅은 빨강) · 큰 장면 · 단추 둘
+            var r = R(eb);
+            DrawRect(r, new Color(0.03f, 0.04f, 0.08f, 0.96f)); DrawRect(r, new Color(0.95f, 0.85f, 0.55f, 0.95f), false, 2);
+            float y = r.Position.Y + 14 * U + Fs(20) * 0.9f;
+            int shown = Math.Min(f.EndCard.Length, Math.Max(1, _hud.EndShown));
+            for (int i = 0; i < shown; i++)
+            {
+                bool head = i == 0;
+                string line = f.EndCard[i];
+                var col = head ? new Color(1f, 0.92f, 0.7f) : line.Contains("일째 — ") ? new Color(0.95f, 0.66f, 0.6f) : line.StartsWith("큰 장면") ? new Color(0.75f, 0.8f, 0.92f) : new Color(0.86f, 0.9f, 0.97f);
+                DrawString(head ? _bold : _font, new Vector2(r.Position.X + 24 * U, y), line, HorizontalAlignment.Left, r.Size.X - 48 * U, Fs(head ? 20 : 15), col);
+                y += (head ? 34 : 22) * U;
+            }
+            foreach (var h in _hud.Hits)
+            {
+                if (h.Act == UiAct.EndNew) DrawButton(h, HudLayout.EndButton(true), 15);
+                else if (h.Act == UiAct.EndWatch) DrawButton(h, HudLayout.EndButton(false), 15);
+            }
+        }
+        if (_hud.Areas.TryGetValue("장 카드", out var cb))
+        {
+            // 장 카드 (V3 — 4초 · 한 주 6초): 제목 · 하루의 결 · 주인공 얼굴 · '누르면 기록 ›' (스며들고 사라진다)
+            var r = R(cb); float a = f.ChapterAlpha;
+            var hit = _hud.Hits.FirstOrDefault(x => x.Act == UiAct.ChapterCard);
+            var edge = f.ChapterWeek ? new Color(0.95f, 0.85f, 0.55f, 0.95f * a) : new Color(0.55f, 0.75f, 1f, 0.9f * a);
+            DrawRect(r, new Color(0.03f, 0.05f, 0.09f, (hit != null && Hovered(hit) ? 0.97f : 0.9f) * a)); DrawRect(r, edge, false, f.ChapterWeek ? 2 : 1.5f);
+            DrawString(_bold, new Vector2(r.Position.X + 20 * U, r.Position.Y + 12 * U + Fs(18) * 0.9f), f.ChapterTitle, HorizontalAlignment.Left, r.Size.X - 40 * U, Fs(18), new Color(1f, 0.95f, 0.85f, a));
+            DrawString(_font, new Vector2(r.Position.X + 20 * U, r.Position.Y + 40 * U + Fs(15) * 0.9f), f.ChapterLine, HorizontalAlignment.Left, r.Size.X - 40 * U, Fs(15), new Color(0.75f, 0.82f, 0.95f, a));
+            float fy = r.Position.Y + 66 * U;
+            if (_facesTex != null)
+            {
+                float fx = r.Position.X + 20 * U;
+                int fs = Math.Max(1, (int)Math.Floor(2 * U));
+                foreach (int slot in f.ChapterFaces)
+                {
+                    var src = new Rect2(slot % f.FacesPerRow * Painter.FaceW, slot / f.FacesPerRow * Painter.FaceH, Painter.FaceW, Painter.FaceH);
+                    var dst = new Rect2(fx, fy, Painter.FaceW * fs, Painter.FaceH * fs);
+                    DrawRect(dst.Grow(2), new Color(0.06f, 0.08f, 0.12f, a));
+                    DrawTextureRectRegion(_facesTex, dst, src, new Color(1, 1, 1, a));
+                    DrawRect(dst.Grow(2), new Color(0.4f, 0.52f, 0.7f, 0.7f * a), false, 1);
+                    fx += dst.Size.X + 8 * U;
+                }
+            }
+            DrawString(_font, new Vector2(r.Position.X, r.End.Y - 10 * U), HudLayout.ChapterHint + "  ", HorizontalAlignment.Right, r.Size.X - 8 * U, Fs(14), new Color(0.7f, 0.78f, 0.9f, a));
+        }
         if (_hud.Areas.TryGetValue("★ 띠", out var sb))
         {
             var r = R(sb); float a = f.BannerAlpha;
@@ -1434,6 +1505,25 @@ void fragment() {
                 if (h.Act == UiAct.Depart) DrawButton(h, "이대로 출항"); else if (h.Act == UiAct.Recrew) DrawButton(h, "다른 사람들로");
             }
         }
+        if (_hud.Areas.TryGetValue("날 띠", out var dsr))
+        {
+            // 지나온 날 띠 (V3): 칸마다 그날 가장 높은 분위기 (조용함 회색 · 조짐 노랑 · 위험 주황 · 결정적 순간 빨강) · 잃은 날 흰 십자 · 오늘 테두리
+            DrawRect(R(dsr), new Color(0.05f, 0.07f, 0.11f, 0.9f));
+            foreach (var (cr, mood, lost, today) in _hud.DayCells)
+            {
+                var r = R(cr);
+                var col = mood switch { 3 => new Color(0.95f, 0.28f, 0.25f), 2 => new Color(1f, 0.58f, 0.22f), 1 => new Color(0.95f, 0.82f, 0.32f), _ => new Color(0.36f, 0.4f, 0.47f) };
+                var hit = _hud.Hits.FirstOrDefault(x => x.Act == UiAct.DayCell && x.R == cr);
+                DrawRect(r, hit != null && Hovered(hit) ? col.Lightened(0.3f) : col);
+                if (lost)
+                {
+                    var c = r.GetCenter(); float s = Math.Min(r.Size.X, r.Size.Y) * 0.32f, t = Math.Max(1, r.Size.X * 0.18f);
+                    DrawRect(new Rect2(c.X - t / 2, c.Y - s * 1.3f, t, s * 2.6f), Colors.White);
+                    DrawRect(new Rect2(c.X - s, c.Y - s * 0.6f, s * 2, t), Colors.White);
+                }
+                if (today) DrawRect(r.Grow(1.5f), Colors.White, false, 1.5f);
+            }
+        }
         var mouse = _mouse;
         foreach (var (i, rf) in _hud.PanelLines)
         {
@@ -1539,16 +1629,16 @@ void fragment() {
                     DrawButton(h with { On = false }, "");
                     DrawString(h.On ? _bold : _font, R(h.R).Position + new Vector2(14, 22) * U, (h.On ? "● " : "") + HudLayout.OverlayWords[h.Key], HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), Ink);
                     break;
-                case UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help when h.Key >= 100:
+                case UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuEnd or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help when h.Key >= 100:
                 {
                     string t = h.Act switch
                     {
-                        UiAct.MenuShip => "배 바꾸기  ›", UiAct.MenuRestart => "새 항해  ›", UiAct.MenuStart => "처음 화면으로",
+                        UiAct.MenuShip => "배 바꾸기  ›", UiAct.MenuRestart => "새 항해  ›", UiAct.MenuEnd => "항해 끝내기", UiAct.MenuStart => "처음 화면으로",
                         UiAct.Sound => _hs.Mute switch { 0 => "소리: 다 켬", 1 => "소리: 음악 끔", _ => "소리: 끔" }, UiAct.Captions => f.CaptionsOn ? "소리 자막: 켬" : "소리 자막: 끔",
                         UiAct.Speech => f.SpeechOn ? "말풍선: 켬" : "말풍선: 끔", UiAct.Thoughts => ThoughtWords[Math.Clamp(f.ThoughtsOn, 0, 2)], _ => "도움말",
                     };
                     DrawButton(h with { On = false }, "");
-                    DrawString(_font, R(h.R).Position + new Vector2(14, 24) * U, t, HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), Ink);
+                    DrawString(_font, R(h.R).Position + new Vector2(14, 24) * U, t, HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), h.Enabled ? Ink : new Color(Ink, 0.4f));
                     break;
                 }
                 case UiAct.ShipPick:
@@ -1607,17 +1697,12 @@ void fragment() {
         DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, 0.5f));
         DrawRect(a, new Color(0.03f, 0.04f, 0.07f, 0.97f));
         DrawRect(a, new Color(1f, 0.6f, 0.4f, 0.9f), false, 1.5f);
-        string q = _hs.Ask switch
-        {
-            HudAsk.Ship => $"'{_hs.AskShip}'로 새로 띄울까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)",
-            HudAsk.Restart => "같은 배로 새 항해를 띄울까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)",
-            _ => "처음 화면으로 갈까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)",
-        };
+        string q = _hs.Ask == HudAsk.Ship ? $"'{_hs.AskShip}'로 새로 띄울까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)" : HudLayout.AskText(_hs.Ask);
         DrawMultilineString(_bold, a.Position + new Vector2(24, 44) * U, q, HorizontalAlignment.Center, a.Size.X - 48 * U, Fs(17), 3, Ink);
         foreach (var h in _hud.Hits)
         {
             if (h.Act == UiAct.AskNo) DrawButton(h, "그만두기");
-            else if (h.Act == UiAct.AskYes) DrawButton(h, _hs.Ask == HudAsk.Start ? "처음 화면으로" : "새로 띄우기", 15, true);
+            else if (h.Act == UiAct.AskYes) DrawButton(h, _hs.Ask switch { HudAsk.Start => "처음 화면으로", HudAsk.End => "항해 끝내기", _ => "새로 띄우기" }, 15, true);
         }
     }
 
@@ -1719,6 +1804,12 @@ void fragment() {
             case UiAct.OverlayMenu: _hs.Open = _hs.Open == HudOpen.Overlay ? HudOpen.None : HudOpen.Overlay; break;
             case UiAct.Overlay: { var o = (Overlay)k; _cmds.Enqueue(s => s.SetOverlay(o)); _hs.Open = HudOpen.None; break; }
             case UiAct.ReplayLast: _cmds.Enqueue(s => { if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
+            // 기록 (V3): 장 카드 → 기록 그 장 · 날 띠의 칸 → 그날 · [항해 끝내기] (확인 창) · 결산 카드
+            case UiAct.ChapterCard: _cmds.Enqueue(s => s.ChapterCardGo()); break;
+            case UiAct.DayCell: _cmds.Enqueue(s => s.DayCellGo(k)); break;
+            case UiAct.MenuEnd: if (h.Enabled) { _hs.Ask = HudAsk.End; _hs.AskFocus = 0; _hs.Open = HudOpen.None; } break;
+            case UiAct.EndWatch: _cmds.Enqueue(s => s.EndWatch()); break;
+            case UiAct.EndNew: _seed = VoyageNumber.Draw(); Launch(_ships[_shipAt], _seed); break;   // 끝난 항해는 끝날 때 저장했다 — 같은 배 · 새 번호 · 새 사람들
         }
     }
 
@@ -1741,6 +1832,7 @@ void fragment() {
             case HudAsk.Ship: _shipAt = _askShipAt; Launch(_ships[_shipAt], _seed); break;
             case HudAsk.Restart: _seed = VoyageNumber.Draw(); Launch(_ships[_shipAt], _seed); break;
             case HudAsk.Start: SaveAndThen(() => GetTree().ChangeSceneToFile(StartScene)); break;
+            case HudAsk.End: _cmds.Enqueue(s => s.EndVoyage(VoyageEnd.Quit)); break;   // 결산 카드 · 저장 (작업 스레드가 끝난 틱에)
             case HudAsk.NewVoyage:
                 if (VoyageNumber.Parse(_hs.AskNumber) is not { } n) { _hs.Ask = HudAsk.NewVoyage; break; }   // 틀린 번호 — 창을 닫지 않는다
                 _shipAt = Math.Clamp(_hs.AskShipAt, 0, Math.Max(0, _ships.Length - 1)); _seed = n; Launch(_ships[_shipAt], _seed);
@@ -1754,6 +1846,7 @@ void fragment() {
         if (_shown == null) return false;
         switch (_hs.Back(_shown))
         {
+            case BackStep.CloseCard: _cmds.Enqueue(s => s.EndWatch()); return true;   // 결산 카드: 그대로 지켜보기
             case BackStep.Disarm: _cmds.Enqueue(s => s.Disarm()); return true;
             case BackStep.CloseDetail: _cmds.Enqueue(s => s.DetailBack()); return true;
             case BackStep.ClosePanel: _cmds.Enqueue(s => s.ClosePanel()); return true;
@@ -1959,6 +2052,7 @@ void fragment() {
             case Godot.Key.P: Do(Hk(UiAct.Tab, 4)); break;
             case Godot.Key.G: Do(Hk(UiAct.Tab, 5)); break;
             case Godot.Key.X: Do(Hk(UiAct.Tab, 6)); break;
+            case Godot.Key.Y: Do(Hk(UiAct.Tab, 7)); break;
             case Godot.Key.O: _cmds.Enqueue(s => s.CycleOverlay()); break;
             case Godot.Key.F3: _meter = !_meter; break;
             case Godot.Key.U: Do(Hk(UiAct.Captions)); break;

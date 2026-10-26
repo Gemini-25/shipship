@@ -79,5 +79,30 @@ public static partial class Program
                 week.Week && week.Title == "1주째 — 하늘을 잃은 날" && week.Lines.Count == 7 && week.Cast.SequenceEqual(new[] { 1 }) && calm.Title == "2주째 — 조용한 한 주",
                 $"\"{week.Title}\" · 주인공 {string.Join(",", week.Cast)} · \"{calm.Title}\"");
         }
+
+        // ── G6 (docs/OBSERVER.md §5.5 — V3 · 바뀜): 큰 일 없는 날 둘이 짝이 되면 그날의 제목 · 같은 두 사람 사이 일이 이레에 셋을 넘으면 한 주 장에 '관계 장면' · 하이라이트 · 문턱은 그대로 ──
+        //    (조용한 날의 장이 사람 일 장부를 읽는다 — 위 '조용한 날' 시험의 세계는 한 시간 혼자라 사람 일이 없어 그대로 '조용한 하루'다)
+        {
+            var s = Worlds.Full(lay, 7);
+            var m = s.Get<Mind>();
+            int a = m.AddPerson(s, At(14, 2)), b = m.AddPerson(s, At(17, 3));
+            var d = new Director(s.Layout) { KeepRing = false };
+            for (int i = 0; i < 30; i++) { s.Step(); d.Observe(s); }
+            string na = m.NameOf(a), nb = m.NameOf(b);
+            int c = s.Causes.Add(CauseKind.Society, $"{Ko.Gwa(na)} {Ko.I(nb)} 짝이 되었다", s.Tick, m[a].C.Cell, 0, 0, a);
+            s.Facts.Emit(s.Tick, FactKind.Relationship, m[a].C.Cell, 1, c, a, b);
+            for (int k = 0; k < 3; k++)   // 사과 셋 (따로따로 — 한 자리에 몰면 관심이 문턱을 넘는다)
+            {
+                for (int i = 0; i < 30; i++) { s.Step(); d.Observe(s); }
+                s.Facts.Emit(s.Tick, FactKind.Talk, m[b].C.Cell, (int)TalkEnd.Apology, 0, b, a);
+            }
+            for (int i = 0; i < 30; i++) { s.Step(); d.Observe(s); }
+            var ch = d.ChapterNow(s);
+            var week = d.WeekOf(Enumerable.Range(0, 7).Select(n => new Chapter { Day = n, Title = $"{n + 1}일째 — 조용한 하루", From = n == 0 ? 0 : n * Time.TicksPerDay, To = n == 6 ? s.Tick + 1 : (n + 1) * Time.TicksPerDay }).ToList());
+            Check("G6 사람 일 장 제목: 큰 일 없는 날 둘이 짝이 되면 '1일째 — 김하늘과 정지우가 짝이 되었다' · '사람 일' 줄 · 같은 두 사람 사이 일이 이레에 셋을 넘으면 한 주 장에 '관계 장면' 줄 · 하이라이트 0 · 문턱 80 그대로",
+                ch.Title == $"1일째 — {Ko.Gwa(na)} {Ko.I(nb)} 짝이 되었다" && ch.Lines.Any(l => l.StartsWith("사람 일 — ")) && week.Lines.Any(l => l.StartsWith("관계 장면 — ") && l.Contains(na) && l.Contains(nb))
+                && d.Highlights.Count == 0 && Director.HighlightAt == 80,
+                $"\"{ch.Title}\" · {string.Join(" / ", ch.Lines)} · 주 {string.Join(" / ", week.Lines.Skip(7))} · 하이라이트 {d.Highlights.Count}");
+        }
     }
 }

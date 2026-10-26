@@ -347,7 +347,8 @@ public sealed partial class LiveShow
     /// <summary>[계속] · 스페이스: 카드를 닫고 다시 간다.</summary>
     public void ResumeGo() { ResumeCard = Array.Empty<string>(); Paused = false; }
 
-    public const int ScreenVersion = 1;
+    /// <summary>화면 마디 판: 2 — 끝난 항해 (결산 · V3 — 판 1도 읽는다).</summary>
+    public const int ScreenVersion = 2;
 
     /// <summary>산 세계가 한 틱 돈 뒤: 한 손 장부의 새 손 (받은 차례가 더 큰 것)을 항해 손 기록에 옮긴다.</summary>
     private void LogHands()
@@ -380,7 +381,7 @@ public sealed partial class LiveShow
         {
             Ship = Sim.Setup.Layout.Key, ShipName = ShipName, Voyage = (long)Sim.Setup.Seed, Route = Sim.Find<Outside>()?.Route ?? 0,
             Day = (int)(Sim.Tick / Time.TicksPerDay) + 1, Tick = Sim.Tick, Alive = alive, Aboard = aboard, Robots = robots,
-            Yesterday = Dir.Chapters.LastOrDefault(c => !c.Week)?.Title ?? "", WorldVersion = Sim.SaveVersion, BundleVersion = VoyageBundle.Version,
+            Yesterday = Dir.Chapters.LastOrDefault(c => !c.Week)?.Title ?? "", End = EndText(Ended), WorldVersion = Sim.SaveVersion, BundleVersion = VoyageBundle.Version,
             SavedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Kind = kind, People = aboard, RobotCount = robots,
         };
         return b;
@@ -412,6 +413,7 @@ public sealed partial class LiveShow
                     w.I64(j.Tick); w.Byte((byte)j.Goal); w.I32(j.Target); w.I32(j.Cell); w.Byte(j.Method); w.Byte(j.Held); w.Byte((byte)j.Out); w.Byte((byte)j.Why); w.I32(j.By); w.Byte(j.Reason); w.Str(j.Note);
                 }
             }
+        w.Byte((byte)Ended);
         w.Tag("화면 끝");
         return w.ToArray();
     }
@@ -420,7 +422,8 @@ public sealed partial class LiveShow
     {
         var r = new StateReader(data);
         r.Tag("화면");
-        if (r.I32() != ScreenVersion) { ResumeNotes.Add("화면 설정은 옮겨 오지 못했다"); return; }
+        int ver = r.I32();
+        if (ver is < 1 or > ScreenVersion) { ResumeNotes.Add("화면 설정은 옮겨 오지 못했다"); return; }
         SpeedOverride = r.F64(); DayMinutes = r.F64(); FollowDayMinutes = r.F64();
         var sm = Sim.Find<ShipMind>();
         int nn = r.I32(); long nAdded = r.I64();
@@ -444,6 +447,7 @@ public sealed partial class LiveShow
             }
             ring?.Rebase(jAdded);
         }
+        if (ver >= 2) Ended = (VoyageEnd)r.Byte();
         r.Tag("화면 끝");
     }
 
@@ -488,6 +492,7 @@ public sealed partial class LiveShow
         if (b.Screen != null) show.LoadScreen(b.Screen);
         else show.ResumeNotes.Add("화면 설정은 옮겨 오지 못했다");
         show._lastHighlights = show.Dir.Highlights.Count; show._lastTitle = show._lastHighlights > 0 ? show.Dir.Highlights[^1].Title : "";   // 이어 본 첫 장에 지난 하이라이트를 띄우지 않는다
+        show._chaptersSeen = show.Dir.Chapters.Count;   // 지난 날의 장 카드도
         return show;
     }
 }

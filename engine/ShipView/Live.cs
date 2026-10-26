@@ -98,6 +98,14 @@ public sealed class LiveFrame
     public string LookHandWhy = "", HoverLookName = "";
     public double HoverAtX = double.NaN, HoverAtY;
     public Outline[] Outlines = Array.Empty<Outline>();
+    // ── 기록 (docs/OBSERVER.md §5 — V3): 장 카드 (제목 · 하루의 결 · 주인공 얼굴 칸 · 알파 · 한 주 장) · 지나온 날 띠 (기록 판 '날마다'일 때만) · 결산 카드 (첫 줄 제목 — 빈 배열이면 없다) · 끝난 항해 ──
+    public string ChapterTitle = "", ChapterLine = "";
+    public int[] ChapterFaces = Array.Empty<int>();
+    public float ChapterAlpha;
+    public bool ChapterWeek;
+    public DayCell[] Days = Array.Empty<DayCell>();
+    public string[] EndCard = Array.Empty<string>();
+    public bool Ended;
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -120,10 +128,10 @@ public sealed record PanelBoard(string Title, float[] RoomKPa, int[] Cells, byte
 public readonly record struct PanelBar(string Name, float Value, int Level);
 
 /// <summary>관전 화면의 판 (탭 일곱 — 로봇 · 사고는 docs/UI2.md §4.1).</summary>
-public enum PanelKind { None, Highlights, Route, Journal, Chain, People, Robots, Hand }
+public enum PanelKind { None, Highlights, Route, Journal, Chain, People, Robots, Hand, Record }
 
 /// <summary>자세한 판이 보이는 것 (없음 = 목록) — 주컴퓨터 판은 늘 자세히.</summary>
-public enum DetailKind { None, Person, Robot, Computer }
+public enum DetailKind { None, Person, Robot, Computer, Record }
 
 /// <summary>
 /// 관전 화면의 속 (docs/ENGINE.md §새 화면 2단계) — 세계를 돌리고, 연출이 정한 빠르기 · 볼 곳을 따르고, 그린다.
@@ -249,6 +257,7 @@ public sealed partial class LiveShow
         for (long i = 0; i < ticks; i++) { Sim.Step(); LogHands(); Dir.Observe(Sim); Book.Observe(Sim); }
         WatchComputer(0);
         _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
+        _chaptersSeen = Dir.Chapters.Count;   // 감은 동안 지난 날의 장 카드도
     }
 
     /// <summary>화면 시간 realSec만큼 나아간다 — 돌린 틱 수.</summary>
@@ -300,7 +309,9 @@ public sealed partial class LiveShow
             if (n > 0) Trace();
             AL("자세 · 걸음");
             if (_replay != null && _replay.Tick >= _replayEnd) StopReplay();
+            if (n > 0) CheckEnd();   // 결산 (산 세계 · 나아간 뒤 — 모두 잃음 · 임무 마침)
         }
+        WatchChapters(realSec);   // 날이 바뀌면 장 카드 (V3)
         _anim += realSec;
         if (!Paused) { _rateTicks += n; _rateSec += realSec; if (_rateSec >= 0.5) { Rate = _rateTicks / _rateSec; _rateTicks = 0; _rateSec = 0; } }
         if (HandCam && _anim - _handAt > HandHoldSec) Follow = true;   // 손이 쉬었다 — 연출이 다시 맡는다
@@ -816,6 +827,7 @@ public sealed partial class LiveShow
         var lookHand = cardIs == CardKind.Thing ? LookHandPick() : default;
         SyncPick(prows);
         var latest = Dir.Highlights.Count > 0 ? Dir.Highlights[^1] : null;
+        bool chCard = _cardLeft > 0 && _cardCh != null;
         float sk = D / (float)Painter.T;   // 흔들림은 32도트 자리
         float srcX = Math.Clamp((float)((left - x0) * D) + shx * sk, 0, Math.Max(0, needW - (float)(w * D)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
         float srcY = Math.Clamp((float)((top - y0) * D) + shy * sk, 0, Math.Max(0, needH - (float)(h * D)));
@@ -852,6 +864,11 @@ public sealed partial class LiveShow
             CardIs = cardIs, Look = cardIs == CardKind.Thing ? Look : default, LookHandOk = lookHand.kind != HandKind.None, LookHandWhy = cardIs == CardKind.Thing ? lookHand.why : "",
             HoverLook = hoverLook, HoverInside = hoverInside, HoverAtX = _hoverX, HoverAtY = _hoverY, HoverLookName = hoverLook.Any ? LookName(hoverLook) : "", Outlines = outlines.ToArray(),
             HoverId = HoverOk() ? HoverId : -1, HoverName = HoverOk() ? World.Find<Mind>()!.NameOf(HoverId) : "", HoverDoing = HoverOk() ? World.Find<Mind>()!.Thought(HoverId) : "",
+            // 기록 (V3): 장 카드 · 지나온 날 띠 (기록 판 '날마다'일 때만) · 결산 카드
+            ChapterTitle = chCard ? _cardCh!.Title : "", ChapterLine = chCard ? (_cardCh!.Arc.Length > 0 ? "하루의 결 — " + _cardCh.Arc : _cardCh.Lines.FirstOrDefault() ?? "") : "", ChapterFaces = chCard ? _cardFaces : Array.Empty<int>(),
+            ChapterAlpha = chCard ? (float)Math.Clamp(Math.Min(_cardLeft, _cardFull - _cardLeft + 0.1) / 0.4, 0, 1) : 0, ChapterWeek = chCard && _cardCh!.Week,
+            Days = Panel == PanelKind.Record && Detail == DetailKind.Record && DetailSub == 0 ? DayStrip() : Array.Empty<DayCell>(),
+            EndCard = EndCard, Ended = Ended != VoyageEnd.None,
         };
     }
 
@@ -908,7 +925,7 @@ public sealed partial class LiveShow
     {
         if (Panel == k) { ClosePanel(); return; }
         Panel = k;
-        Detail = k == PanelKind.Journal ? DetailKind.Computer : DetailKind.None;
+        Detail = k == PanelKind.Journal ? DetailKind.Computer : k == PanelKind.Record ? DetailKind.Record : DetailKind.None;   // 주컴퓨터 · 기록 판은 목록 없이 곧 자세히
         DetailId = -1; DetailSub = 0;
         if (k == PanelKind.Journal) JournalNew = false;
         var o = Sim.Find<Outside>();
@@ -942,7 +959,7 @@ public sealed partial class LiveShow
             if (PanelPickKey >= KeyPerson(0) && PanelPickKey < KeyPerson(0) + (1L << 32)) OpenDetail(Panel == PanelKind.People ? DetailKind.Person : DetailKind.Robot, (int)(PanelPickKey - KeyPerson(0)));
             return;
         }
-        if (d < 0 && DetailSub == 0) { if (Detail != DetailKind.Computer) DetailBack(); return; }
+        if (d < 0 && DetailSub == 0) { if (Detail is not (DetailKind.Computer or DetailKind.Record)) DetailBack(); return; }
         SetDetailSub(DetailSub + Math.Sign(d));
     }
 
@@ -964,6 +981,8 @@ public sealed partial class LiveShow
                 return ChooseRoute(PanelPick + 1);
             case PanelKind.Hand:
                 return PanelClick(PanelPickKey);
+            case PanelKind.Record:
+                return RecordAct(PanelPickKey) || PanelClick(PanelPickKey);   // ▶ 장면이면 다시보기 · 아니면 펼치기 · 자세히
             case PanelKind.Chain:
             {
                 // 고른 마디의 자리로 카메라를 옮긴다 (손으로 — F로 다시 연출을 따른다)
@@ -1057,7 +1076,8 @@ public sealed partial class LiveShow
     };
 
     private string PanelFootOf() => Detail is DetailKind.Person or DetailKind.Robot ? "줄을 누르면 펼친다 · 휠로 넘기기 · 오른쪽 누르기로 목록 (← → · Esc)"
-        : Detail == DetailKind.Computer ? "줄을 누르면 펼친다 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · J)" : Panel switch
+        : Detail == DetailKind.Computer ? "줄을 누르면 펼친다 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · J)"
+        : Detail == DetailKind.Record ? (DetailSub == 0 ? "장을 누르면 펼친다 · 띠의 칸을 누르면 그날 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)" : "줄을 누르면 고른다 · ▶ 그 장면 다시보기 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)") : Panel switch
     {
         PanelKind.Highlights => "줄을 눌러 고르기 · ▶ 다시보기 · 휠로 넘기기 (↑↓ · Enter · L)",
         PanelKind.Route => double.IsNaN(DepartInMin()) ? "항로는 출항 때만 고른다 · 휠로 넘기기 (T)" : "항로를 누르면 그 길로 · 출항 전에만 (↑↓ · Enter · T)",

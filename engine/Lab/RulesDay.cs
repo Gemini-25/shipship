@@ -281,9 +281,10 @@ public static partial class Program
         // ── ⑬ 이야기 편집: 날이 바뀌는 순간 지난 하루가 한 장이 된다 (제목 · 하루의 결 · 그 날의 때) ──
         {
             var ch = dir.Chapters.FirstOrDefault(c => !c.Week);
-            Check("하루의 장: 날이 바뀌면 지난 하루를 한 장으로 묶는다 — '1일째 — …' 제목 · 하루의 결 · 그 날의 처음부터 날이 바뀐 때까지",
-                ch != null && ch.Title.StartsWith("1일째 — ") && ch.Arc.Length > 0 && ch.From == startTick + 1 && ch.To == Time.TicksPerDay && dir.Chapters.Count(c => !c.Week) == 1,
-                ch == null ? $"장 없음 (시작 {startTick} · 끝 {day.Tick})" : $"\"{ch.Title}\" · {Time.Clock(ch.From)}~{Time.Clock(ch.To)} · 장면 {ch.Scenes.Count} · {string.Join(" / ", ch.Lines)}");
+            static int ArcMax(string arc) => arc.Contains("결정적 순간") ? 3 : arc.Contains("위험") ? 2 : arc.Contains("조짐") ? 1 : 0;
+            Check("하루의 장: 날이 바뀌면 지난 하루를 한 장으로 묶는다 — '1일째 — …' 제목 · 하루의 결 · 그 날의 처음부터 날이 바뀐 때까지 · 날 띠의 분위기 (그날 가장 높이 오른 것 — 하루의 결보다 낮지 않다 · V3)",
+                ch != null && ch.Title.StartsWith("1일째 — ") && ch.Arc.Length > 0 && ch.From == startTick + 1 && ch.To == Time.TicksPerDay && dir.Chapters.Count(c => !c.Week) == 1 && ch.Mood >= ArcMax(ch.Arc) && ch.Mood <= 3,
+                ch == null ? $"장 없음 (시작 {startTick} · 끝 {day.Tick})" : $"\"{ch.Title}\" · {Time.Clock(ch.From)}~{Time.Clock(ch.To)} · 장면 {ch.Scenes.Count} · 분위기 {ch.Mood} · {string.Join(" / ", ch.Lines)}");
             // S3 이어 보기 (docs/OBSERVER.md §16): 밤 열 시에 찍어 되살린 연출이 날이 바뀔 때 같은 장을 짓는다 (제목 · 줄 · 장면 · 주인공)
             static string Of(Chapter? c) => c == null ? "" : $"{c.Title} / {string.Join(" / ", c.Lines)} / 장면 {string.Join(" ", c.Scenes.Select(h => $"{h.Tick}:{h.Title}"))} / 주인공 {string.Join(" ", c.Cast)}";
             var back = resumed?.Result;
