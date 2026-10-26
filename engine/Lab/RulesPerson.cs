@@ -81,7 +81,7 @@ public static partial class Program
             m[p].C.ShiftHour = 8;
             s.Run(5);
             bool exercised = false, night = false;
-            for (long t = 0; t < Time.Hours(2); t++)
+            for (long t = 0; t < 2; t++)   // 밤에 깨어 있는 이가 운동을 고른 때(첫 틱)의 두 배 (예전 2시간)
             {
                 ref var c = ref m[p].C;
                 c.Sleepy = 0.1f; c.Hunger = 0; c.Bored = 0; c.Lonely = 0; c.Unfit = 1;

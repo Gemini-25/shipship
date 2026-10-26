@@ -255,7 +255,7 @@ public static partial class Program
             var s6 = ShipWorld.Create("Didim", 3);
             var o6 = s6.Get<Outside>(); var st6 = s6.Get<Structure>(); var f6 = s6.Get<Field>();
             o6.Land("venuslike", s6.Tick);
-            s6.Run(Time.Minutes(2));
+            s6.Run(4);   // 외판이 터지고 450K를 넘는 때(2틱)의 두 배 (예전 2분 — 무거운 것은 터지는 두 틱의 물체 셈)
             double hot = Enumerable.Range(0, f6.Cells).Where(i => f6.RegionOf[i] >= 0).Max(i => f6.Temp(i));
             Check("끓는 행성(92기압 · 735K)에 내리면 외판이 짓눌려 터지고 뜨거운 이산화탄소가 밀려든다", st6.Breaches > 0 && hot > 450,
                 $"터진 벽 {st6.Breaches} · 배 안 가장 뜨거운 곳 {hot:0}K");
@@ -305,7 +305,7 @@ public static partial class Program
             int src = rooms[0], open = rooms[^1], shut = rooms[^2];
             n5.SetDamper(shut, false);
             f5.AddGas(n5.Vent[src], f5.T.gSoot, 40, 320);
-            s5.Run(Time.Minutes(10));
+            s5.Run(10);   // 덕트는 틱마다 통풍구 공기를 고루 돌린다 — 먼 방에 번지고 닫은 방이 빠진 때(5틱 안)의 두 배 (예전 10분)
             double ppmOpen = f5.Ppm(f5.T.gSoot, n5.Vent[open]), ppmShut = f5.Ppm(f5.T.gSoot, n5.Vent[shut]);
             Check("연기가 덕트를 타고 먼 방까지 번진다 · 댐퍼를 닫은 방은 빠진다", ppmOpen > 5 && ppmShut < ppmOpen * 0.1,
                 $"열린 방 {ppmOpen:0}ppm · 닫은 방 {ppmShut:0.0}ppm");
@@ -315,7 +315,7 @@ public static partial class Program
             var n6 = s6.Get<Network>(); var f6 = s6.Get<Field>();
             int pump = n6.Devices.First(d => d.Def.Role == "pump").Id;
             n6.Age(pump, Part.Seal, 0.99995);
-            s6.Run(Time.Hours(3));
+            s6.Run(Time.Minutes(70));   // 봉함이 망가져 암모니아가 25ppm을 넘는 때(35분)의 두 배 (예전 3시간)
             int pc = n6.Devices[pump].Cell;
             var fail = s6.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.MachineFail && x.Other == pump);
             Check("낡은 냉각 펌프 봉함이 망가지면 암모니아가 그 방으로 샌다 (확률이 아니라 마모에서)", n6.IsBroken(pump, Part.Seal) && f6.Ppm(f6.T.gNH3, pc) > 25,
@@ -343,7 +343,7 @@ public static partial class Program
             var n9 = s9.Get<Network>(); var f9 = s9.Get<Field>();
             for (int c = 0; c < f9.Cells; c++) f9.RemoveGas(c, f9.T.gO2, f9.Gas(f9.T.gO2, c) * 0.05);
             double o2a = f9.Total(f9.T.gO2), w0 = n9.WaterTank;
-            s9.Run(Time.Hours(2));
+            s9.Run(Time.Minutes(26));   // 산소가 늘고 · 물이 줄고 · 수소를 뺀 때(13분)의 두 배 (예전 2시간)
             Check("산소가 모자라면 산소 발생기가 물을 갈라 산소를 낸다 (물탱크가 준다 · 수소는 배 밖으로)", f9.Total(f9.T.gO2) > o2a && n9.WaterTank < w0 && n9.VentedH2 > 0,
                 $"산소 {o2a:0} → {f9.Total(f9.T.gO2):0}몰 · 물 {w0 / 55.5:0}L → {n9.WaterTank / 55.5:0}L · 분압 {n9.PpO2:0.00}kPa");
         }
@@ -461,7 +461,7 @@ public static partial class Program
             int mid = Worlds.At(f10.L, 5, 3);
             for (int i = 0; i < f10.Cells; i++) if (f10.L.Kind[i] == CellKind.Floor) { double o = f10.Gas(f10.T.gO2, i); f10.RemoveGas(i, f10.T.gO2, o); f10.AddGas(i, f10.T.gN2, o, 293); f10.AddGas(i, f10.T.gH2O, 1.5, 293); }
             f10.AddStore(mid, f10.T.sFood, 100);
-            s10.Run(Time.Days(4));
+            s10.Run(Time.Hours(8));   // 메탄이 0.5몰을 넘는 때(4시간)의 두 배 (예전 나흘)
             Check("산소 없는 창고의 음식은 썩으며 메탄을 낸다 (불이 붙을 수 있는 기체)", f10.Total(f10.T.gCH4) > 0.5, $"메탄 {f10.Total(f10.T.gCH4):0.0}몰 · 남은 음식 {f10.Stored(f10.T.sFood, mid):0.0}몰");
 
             // 충격: 파편이 지나간 칸의 사람은 다친다
