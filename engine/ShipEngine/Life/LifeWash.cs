@@ -59,6 +59,9 @@ public sealed partial class Life
     /// 아니면 오줌은 오수로 (물 재생기가 되돌린다) · 대변은 그 변기의 오물 통으로 — 흡입 팬이 돌지 않거나 (망가짐 · 전기) · 통이 가득 찼거나 ·
     /// 0.4% (통이 90% 넘게 찼으면 20%)로 관에 걸리면 막힌다 (원인 마디 '변기가 막혔다 — 까닭'). 돌려준다: 넘쳤으면 참.
     /// </summary>
+    /// <summary>쉬익 (변기 물 내림 — 1m에서 dB) · 쏴 (손 씻는 물).</summary>
+    public const float FlushDb = 72, FaucetDb = 55;
+
     public bool Flush(Sim sim, int body, int toilet, int cell)
     {
         WashArrays();
@@ -70,6 +73,9 @@ public sealed partial class Life
         if (stool > 0) { b.Bowel = 0; SewageKg += stool; }
         Voids++; Flushes[toilet]++;
         Grime[toilet] = Math.Min(1, Grime[toilet] + (stool > 0 ? 0.06f : 0.03f));
+        ToiletGerms(sim, body, toilet, cell);   // 손 · 겉면 장염 균 (5단 C21 — 변기는 월드가 스스로 만진다)
+        int fan = ToiletDev(toilet);
+        if (fan < 0 || _net!.Working(fan)) sim.Find<Sound>()?.Emit(sim, cell, FlushDb, SoundKind.Flush, 0, Sound.BodyActor(body));   // 쉬익 — 흡입 팬이 돌면 (망 없는 시험 배도) · 낸 이는 그 몸 (5단 C7)
         if (Clogged[toilet] != 0)
         {
             int cause = sim.Causes.Add(CauseKind.Machine, "막힌 변기를 모르고 써서 넘쳤다", sim.Tick, cell, ClogCause[toilet]);
@@ -108,10 +114,63 @@ public sealed partial class Life
     }
 
     /// <summary>변기를 닦는다 (월드): 때가 없어지고 · 조절기에 닦은 때의 물 내린 수를 적는다.</summary>
-    public void Scrub(int toilet) { WashArrays(); Grime[toilet] = 0; ScrubbedAt[toilet] = Flushes[toilet]; }
+    public void Scrub(int toilet) { WashArrays(); Grime[toilet] = 0; ScrubbedAt[toilet] = Flushes[toilet]; SurfGerm[toilet] = 0; SurfCause[toilet] = 0; }   // 닦으면 겉면 균도 (5단 C21)
 
     /// <summary>오물 통을 들어낸다 (곁의 빈 통으로 바꿔 끼운다 — 변기는 바로 다시 쓸 수 있다): 든 무게 (kg).</summary>
     public double LiftTank(int toilet) { WashArrays(); double kg = Tank[toilet]; Tank[toilet] = 0; WasteCarried += kg; return kg; }
+
+    /// <summary>오물의 썩는 유기물 몫 (포도당으로 친다) · 포도당 1몰의 질량 (kg).</summary>
+    public const double WasteOrganic = 0.2, GlucoseKg = 0.18;
+    /// <summary>오물을 썩히는 미생물이 사는 온도 (K — 썩음 반응의 바닥 · 그 위는 미생물이 죽는다).</summary>
+    public const double RotMinK = 275, RotMaxK = 330;
+
+    /// <summary>
+    /// 오물이 썩는다 (월드 — 5단 C19 · 125틱마다): 유기물 몫 0.2를 포도당으로 쳐 하루 몫만큼 (293K 기준 10K마다 두 배) 그 칸에서 썩힌다 (<see cref="Decompose"/>) —
+    /// ① 닫힌 오물 통: 하루 1% 메탄 발효 · 통의 봉함이 망가졌으면 악취 0.5% ② 막혀 걸린 것: 하루 5% 썩음 (산소) + 악취 0.5% ③ 퇴비통: 5% (95% 썩음 · 5% 발효) · 악취 0.05% ·
+    /// ④ 때 1인 변기는 시간에 악취 2 × 10⁻⁶몰. 압축기 · 화물 상자는 봉해 두어 그대로. 썩어 나간 오물 (kg)은 <see cref="WasteRotKg"/>.
+    /// </summary>
+    public void WasteRot(Sim sim, double dt)
+    {
+        WashArrays();
+        _net ??= sim.Find<Network>();
+        double day = dt / 86400;
+        for (int fu = 0; fu < L.Furniture.Count; fu++)
+        {
+            var f = L.Furniture[fu];
+            if (f.Cells.Length == 0) continue;
+            int c = f.Cells[0];
+            if (F.RegionOf.Length <= c || F.RegionOf[c] < 0) continue;   // 떨어져 나간 · 진공 칸 (공기가 없다)
+            double t = F.Temp(c);
+            if (t < RotMinK || t > RotMaxK) continue;   // 미생물이 사는 온도에서만 (검토 고침 — 불에 달군 통이 한 번에 메탄을 뿜지 않게 · 언 통은 그대로)
+            double k = Math.Pow(2, (t - 293) / 10) * day;
+            if (f.Type == "Toilet")
+            {
+                int dev = ToiletDev(fu);
+                bool leaky = dev >= 0 && _net!.IsBroken(dev, Part.Seal);
+                Tank[fu] -= Rot(sim, c, Tank[fu], 0.01 * k, _ferment, t);
+                if (leaky) Tank[fu] -= Rot(sim, c, Tank[fu], 0.005 * k, _stink, t);
+                Bowl[fu] -= Rot(sim, c, Bowl[fu], 0.05 * k, _rot, t);
+                Bowl[fu] -= Rot(sim, c, Bowl[fu], 0.005 * k, _stink, t);
+                if (Grime[fu] > 0) F.AddGas(c, T.gStench, 2e-6 * Grime[fu] * dt / 3600, t);   // 묵은 때의 냄새 (질량은 셈에 들지 않을 만큼)
+            }
+            else if (f.Type == "Composter")
+            {
+                Heap[fu] -= Rot(sim, c, Heap[fu], 0.05 * 0.95 * k, _rot, t);
+                Heap[fu] -= Rot(sim, c, Heap[fu], 0.05 * 0.05 * k, _ferment, t);
+                Heap[fu] -= Rot(sim, c, Heap[fu], 0.0005 * k, _stink, t);
+            }
+        }
+    }
+
+    /// <summary>오물 kg의 share 몫을 칸 c에서 반응 r로 썩힌다 — 썩어 나간 kg를 돌려준다 (장부 <see cref="WasteRotKg"/>).</summary>
+    private double Rot(Sim sim, int c, double kg, double share, Reaction r, double t)
+    {
+        if (kg <= 1e-9 || share <= 0) return 0;
+        double xi = Decompose(sim, c, r, kg * Math.Min(1, share) * WasteOrganic / GlucoseKg, t);
+        double gone = Math.Min(kg, xi * GlucoseKg / WasteOrganic);
+        WasteRotKg += gone;
+        return gone;
+    }
 
     /// <summary>들고 온 오물을 비울 곳(퇴비통 · 압축기 · 화물 상자)에 쏟는다.</summary>
     public void Dump(int fu, double kg)
@@ -125,10 +184,13 @@ public sealed partial class Life
     /// <summary>시험 · 사고: 변기를 막는다 (원인 마디를 받는다).</summary>
     public void Clog(int toilet, int cause) { WashArrays(); Clogged[toilet] = 1; ClogCause[toilet] = cause; }
 
+    /// <summary>참지 못하는 장 (kg): 배탈을 앓으면 0.2 (5단 C22) · 아니면 0.45.</summary>
+    public static double BowelLimit(in Body b) => b.Gut == 2 ? GutBowelMax : BowelMax;
+
     /// <summary>참지 못했다: 방광 · 장이 한계를 넘었다 — 그 자리 바닥이 젖고 · 몸과 옷이 더러워진다 (원인: 그때 하던 일은 마음이 안다 — 여기는 몸의 한계).</summary>
     private void Soil(Sim sim, int id, ref Body b, int c)
     {
-        bool bowel = b.Bowel > BowelMax;
+        bool bowel = b.Bowel > BowelLimit(b);
         double urine = b.Bladder;
         b.SoilCause = sim.Causes.Add(CauseKind.Biology, bowel ? "참지 못하고 옷에 지렸다 (장이 찼다)" : "참지 못하고 옷에 지렸다 (방광이 찼다)", sim.Tick, c);
         if (urine > 0) { F.AddStore(c, T.sWater, urine, b.SoilCause); b.Bladder = 0; }   // 바닥이 젖는다 (오줌의 물 — 고인 물 장부 · 그 물의 원인)
@@ -160,17 +222,65 @@ public sealed partial class Life
         ref var b = ref this[body];
         b.Dirt = (float)Math.Max(0, b.Dirt - water / ShowerMol);
         if (water >= 200) { b.Wet = 0; Showers++; }
+        if (water > 0) b.HandGerm *= (float)HandWashKeep;   // 물로 씻으면 손의 균이 거의 다 씻긴다 (5단 C21)
         double steam = waterK > 305 ? water * 0.01 : 0;   // 따뜻한 물의 1%가 김으로 (8L면 80mL)
         if (steam > 0 && cell >= 0) { F.AddGas(cell, T.gH2O, steam, waterK); F.AddHeat(cell, water * 75.3 * (waterK - F.Temp(cell)) * 0.15); }
         if (_net != null) _net.WasteWater += water - steam;
     }
 
+    /// <summary>
+    /// ⑧의 요청 (세면대 · 망 없는 샤워 칸): 물 want몰을 망의 물탱크에서 꺼내 (망이 없으면 그대로 · 장부 '씻었다') 씻는다 — 꺼낸 몰을 돌려준다.
+    /// 판단은 탱크 · 장부를 만지지 않는다 (C10 검토 고침).
+    /// </summary>
+    public double WashFromTap(Sim sim, int body, double want, double waterK, int cell)
+    {
+        _net ??= sim.Find<Network>();
+        double got = _net != null ? Math.Min(Math.Max(0, _net.WaterTank), want) : want;
+        if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
+        Wash(sim, body, got, waterK, cell);
+        return got;
+    }
+
+    /// <summary>손을 씻는다 (⑧의 요청 — 세면대): 물탱크에서 want몰을 꺼내 씻고 · 물이 나왔으면 세면대 칸에서 쏴 (낸 이는 그 몸 — 5단 C7).</summary>
+    public double HandWash(Sim sim, int body, double want, int cell)
+    {
+        if (cell >= 0 && L.FurnitureAt[cell] >= 0) Touch(body, L.FurnitureAt[cell]);   // 수도꼭지를 만지고 씻는다
+        double got = WashFromTap(sim, body, want, 300, cell);
+        if (got > 0 && cell >= 0) sim.Find<Sound>()?.Emit(sim, cell, FaucetDb, SoundKind.Faucet, 0, Sound.BodyActor(body));
+        return got;
+    }
+
     /// <summary>샤워 칸에서 흐른 물로 씻긴다 (월드 — 물은 ⑥ 샤워 칸이 이미 흘려 오수로 보냈다): 더러움이 water/ShowerMol만큼 · 지린 옷도 (물 200몰 넘게).</summary>
+    /// <summary>
+    /// 샤워 물에 씻긴다 · 데인다 (월드 — 5단 C17): 물을 맞은 시간 = 흐른 물 ÷ 흐름 · 물이 316K 넘으면 초마다 화상 0.08 × 2^((K − 333)/1.7) (물 온도와 데는 시간 어림 —
+    /// 60℃에 3초 · 52℃에 1분 남짓) · 화상이 0.02를 넘을 때만 덴다 (원인 '샤워 물이 데일 듯 뜨거웠다' ← 그 물을 뜨겁게 한 까닭 · 사실 '다쳤다').
+    /// </summary>
+    public void Rinse(Sim sim, int body, double water, double waterK, int cause)
+    {
+        Rinse(body, water);
+        if (waterK <= 316 || water <= 0 || body < 0 || body >= Bodies.Count) return;
+        double sec = water / Network.ShowerFlow;
+        double burn = 0.08 * Math.Pow(2, (waterK - 333) / 1.7) * sec;
+        if (burn <= 0.02) return;
+        int c = sim.Causes.Add(CauseKind.Machine, $"샤워 물이 데일 듯 뜨거웠다 ({waterK - 273.15:0}℃)", sim.Tick, this[body].Cell, cause);
+        Scald(sim, body, (float)Math.Min(1, burn), c);
+    }
+
+    /// <summary>⑧의 요청: 그 샤워 칸 (장치)에서 흐른 물 water몰에 씻긴다 — 물 온도 · 그 까닭 (조절기 고장)은 ⑥에서 읽는다.</summary>
+    public void Rinse(Sim sim, int body, double water, int device)
+    {
+        _net ??= sim.Find<Network>();
+        if (_net == null || device < 0 || device >= _net.Devices.Count) { Rinse(body, water); return; }
+        Touch(body, _net.Devices[device].Furniture);   // 샤워 칸 손잡이를 만진다 (5단 C21)
+        Rinse(sim, body, water, _net.ShowerWaterK(device), device < _net.ThermoCause.Length ? _net.ThermoCause[device] : 0);
+    }
+
     public void Rinse(int body, double water)
     {
         ref var b = ref this[body];
         b.Dirt = (float)Math.Max(0, b.Dirt - water / ShowerMol);
         if (water >= 200) { b.Wet = 0; Showers++; }
+        if (water > 0) b.HandGerm *= (float)HandWashKeep;
     }
 
     /// <summary>물수건으로 닦는다 (물 없이 — 샤워를 못 쓸 때 · 제 침대에서): 더러움이 반으로 · 지린 옷은 갈아입는다.</summary>

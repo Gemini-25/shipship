@@ -39,10 +39,8 @@ public sealed partial class Mind
                 {
                     Vomits++;
                     double mol = Math.Min(15, Math.Max(0, b.Water * 0.01));   // 0.27L
-                    b.Water -= mol;
-                    F.AddDrops(c.Cell, T.sWater, mol);
                     c.Hunger = Math.Min(1, c.Hunger + 0.15f); c.Stress = Math.Min(1, c.Stress + 0.1f);
-                    sim.Facts.Emit(t, FactKind.Vomit, c.Cell, (float)mol, sim.Causes.Add(CauseKind.Biology, $"{Ko.I(NameOf(a.Id))} 우주 멀미로 토했다", t, c.Cell, _net.GravityCauses(c.Cell).lost, 0, a.Id), a.Id);
+                    _life.Vomit(sim, c.Body, mol, sim.Causes.Add(CauseKind.Biology, $"{Ko.I(NameOf(a.Id))} 우주 멀미로 토했다", t, c.Cell, _net.GravityCauses(c.Cell).lost, 0, a.Id));   // 몸은 월드가 (무중력이면 방울 — 5단 C22 토함 하나로)
                 }
                 if (c.Floated == 0)
                 {

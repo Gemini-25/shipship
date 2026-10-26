@@ -58,7 +58,7 @@ public sealed partial class Director
     private static int AgentOf(Mind? mind, in Fact f)
     {
         if (mind == null || f.Actor < 0) return -1;
-        int a = f.Kind is FactKind.Died or FactKind.Collapsed or FactKind.Hurt or FactKind.Sick ? mind.AgentOfBody(f.Actor) : f.Actor;
+        int a = f.Kind is FactKind.Died or FactKind.Collapsed or FactKind.Hurt or FactKind.Sick or FactKind.Vomit ? mind.AgentOfBody(f.Actor) : f.Actor;
         return a >= 0 && a < mind.Agents.Count ? a : -1;
     }
 

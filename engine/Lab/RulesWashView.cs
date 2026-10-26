@@ -556,7 +556,7 @@ public static partial class Program
             var stand = Ear(ear);
             m[pp].C.Cell = lay.Index(lay.X(sc), lay.Y(sc) - 1); life[m[pp].C.Body].Cell = m[pp].C.Cell;   // 샤워 칸 밖으로
             net.SetValve(dev, false);
-            bool heater = net.NoiseDb(dev) > 30;   // 온수기는 아직 돈다 (흐름 스위치는 다음 틱에 끈다)
+            bool heater = net.On[dev] != 0 && net.NoiseDb(dev) == 0;   // 온수기는 아직 돈다 (흐름 스위치는 다음 틱에 끈다) — 그래도 소리는 물 흐름을 따라 그친다 (5단 C7)
             var shut = Ear(ear);
             s.Run(2);
             var after = Ear(ear);
@@ -566,8 +566,8 @@ public static partial class Program
                 $"더운 물 {hot} · 켜기 전 {Water(quiet).Length} · 샤워 물 {string.Join("/", w.Select(u => $"열쇠 {u.Key} B {u.B:0} 크기 {u.Gain:0.000}"))} · 기계 웅웅 {HumOf(on)} · 자막 {string.Join(" / ", caps.Select(x => x.Text))}");
             var ws = Water(stand);
             var hs = Hums(shut);
-            Check("화장실 소리: 샤워 칸 — 그 칸에 사람이 서면 B = 1 (몸이 물을 받아 먹먹하다) · 밸브를 잠그면 같은 틱 (온수기는 아직 돈다)에도 쏴아가 없고 그 장치의 기계 웅웅 하나 (열쇠 6,000,000 + 장치) · 온수기가 꺼진 뒤에는 둘 다 없다",
-                ws.Length == 1 && ws[0].B == 1 && heater && Water(shut).Length == 0 && hs.Length == 1 && hs[0].Key == 6_000_000 + dev && Water(after).Length == 0 && !HumOf(after),
+            Check("화장실 소리: 샤워 칸 — 그 칸에 사람이 서면 B = 1 (몸이 물을 받아 먹먹하다) · 밸브를 잠그면 같은 틱 (온수기는 아직 돈다)에도 쏴아도 그 장치의 기계 웅웅도 없다 (샤워 칸 소리는 물 흐름을 따른다 — 5단 C7 · 예전: 온수기만 켠 빈 칸이 50dB 웅웅) · 온수기가 꺼진 뒤에도 둘 다 없다",
+                ws.Length == 1 && ws[0].B == 1 && heater && Water(shut).Length == 0 && hs.Length == 0 && Water(after).Length == 0 && !HumOf(after),
                 $"사람이 선 샤워 물 {string.Join("/", ws.Select(u => $"B {u.B:0}"))} · 잠근 틱 온수기 {heater} · 쏴아 {Water(shut).Length} · 기계 열쇠 {string.Join("/", hs.Select(u => u.Key))} · 두 틱 뒤 쏴아 {Water(after).Length} · 기계 {HumOf(after)}");
         }
 

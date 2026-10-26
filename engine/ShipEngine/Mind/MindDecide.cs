@@ -226,7 +226,7 @@ public sealed partial class Mind
             }
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
-            float sick = _life != null && c.Body >= 0 ? _life[c.Body].Nausea : 0;   // 우주 멀미: 속이 울렁거려 덜 먹는다
+            float sick = _life != null && c.Body >= 0 ? Life.Queasy(_life[c.Body]) : 0;   // 우주 멀미 · 배탈 (5단 C22): 속이 울렁거려 덜 먹는다
             bool feast = c.Hunger > 0.3f && sick < 0.3f && MealTime(hour);   // ⑨ 함께 먹는 때가 배의 관습이 됐다
             if ((c.Hunger > 0.55f + 0.3f * sick + 0.25f * c.Depress || kinMeal >= 0 && sick < 0.3f && c.Depress < 0.3f || feast) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
             {
@@ -493,7 +493,8 @@ public sealed partial class Mind
                 }
                 if (Sheltering(a) && (c.Bed < 0 || RoomOf(c.Bed) != ShelterRoom))
                 {
-                    if (RoomOf(here) != ShelterRoom) plan.Add(Go(ShelterSpot(a, ShelterCell), 1));
+                    int spot = StandSpot(a, ShelterRoom, ShelterCell);   // 문 칸 · 문 곁 · 남의 자리가 아닌 바닥 (5단 C1)
+                    if (spot != here) plan.Add(Go(spot, 0));
                     plan.Add(Use(UseKind.Sleep, Time.Hours(10)));
                     return true;
                 }
@@ -556,14 +557,14 @@ public sealed partial class Mind
             case GoalKind.Meeting:
             {
                 if (GatherRoom < 0) return false;
-                plan.Add(Go(SpotIn(a, GatherRoom, o.Cell, GoalKind.Meeting), 1));
+                plan.Add(Go(StandSpot(a, GatherRoom, o.Cell), 0));   // 머물 자리 (5단 C1)
                 plan.Add(Use(UseKind.None, Time.Minutes(20)));
                 return true;
             }
             case GoalKind.Shelter:
             {
                 if (ShelterRoom < 0) return false;
-                plan.Add(Go(ShelterSpot(a, o.Cell), 1));
+                plan.Add(Go(StandSpot(a, ShelterRoom, o.Cell), 0));   // 머물 자리 (5단 C1)
                 plan.Add(Use(UseKind.None, Time.Minutes(5)));
                 return true;
             }

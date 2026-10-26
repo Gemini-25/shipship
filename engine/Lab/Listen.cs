@@ -16,6 +16,7 @@ public static partial class Program
         if (rest.Length > 0 && rest[0] == "life") { ListenLife(); return; }
         if (rest.Length > 0 && rest[0] == "music") { ListenMusic(); return; }
         if (rest.Length > 0 && rest[0] == "world") { ListenWorld(); return; }
+        if (rest.Length > 0 && rest[0] == "wash") { ListenWash(); return; }
         string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double screenSec = rest.Length > 2 ? double.Parse(rest[2]) : 60;
@@ -199,6 +200,47 @@ public static partial class Program
     }
 
     /// <summary>
+    /// 화장실 물소리 (--listen wash — 5단 C7): 화장실 문 곁에 귀를 두고 — 변기 쉬익 · 세면대 쏴 · 샤워 밸브를 열어 둔 쏴아 (온수기 없이 · 6초) · 잠근 뒤 · 먼 변기 쉬익. → build/sound/wash.wav
+    /// </summary>
+    private static void ListenWash()
+    {
+        var legend = new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery", ['w'] = "WaterRecycler" };
+        var lay = Worlds.Ascii(WashViewShip, legend);
+        var show = new LiveShow(Worlds.Full(lay, 3), "시험호");
+        var sim = show.Sim;
+        var net = sim.Get<Network>(); var snd = sim.Get<Sound>();
+        const double dt = 1.0 / 60;
+        show.Advance(dt);
+        var toilets = lay.Furniture.Where(x => x.Type == "Toilet").ToArray();
+        var sink = lay.Furniture.First(x => x.Type == "Sink"); var shower = lay.Furniture.First(x => x.Type == "Shower");
+        int dev = net.Devices.First(d => d.Furniture == shower.Id).Id;
+        show.Ears.ForceEar = toilets[0].Cells[0] + lay.W + 1;
+        show.SpeedOverride = 1;
+        var cues = new (double t, string what, Action act)[]
+        {
+            (0.5, "변기 쉬익 (72dB · 곁)", () => snd.Emit(sim, toilets[0].Cells[0], Life.FlushDb, SoundKind.Flush)),
+            (3.0, "세면대 쏴 (55dB)", () => snd.Emit(sim, sink.Cells[0], Life.FaucetDb, SoundKind.Faucet)),
+            (5.5, "샤워 밸브를 연다 (찬물 · 50dB)", () => { net.SetValve(dev, true); net.SetOn(dev, false); }),
+            (12.0, "샤워 밸브를 잠근다", () => net.SetValve(dev, false)),
+            (14.0, "먼 변기 쉬익", () => snd.Emit(sim, toilets[^1].Cells[0], Life.FlushDb, SoundKind.Flush)),
+        };
+        var mix = new Mixer { MusicGain = 0 };
+        int per = (int)(Dsp.Rate * dt), frames = (int)(17 / dt);
+        var all = new float[frames * per * 2];
+        int next = 0;
+        for (int f = 0; f < frames; f++)
+        {
+            double t = f * dt;
+            while (next < cues.Length && t >= cues[next].t) { Console.WriteLine($"  {cues[next].t,5:0.0}초 · {cues[next].what}"); cues[next].act(); next++; }
+            show.Advance(dt);
+            mix.Take(show.Ears);
+            mix.Render(all.AsSpan(f * per * 2, per * 2), per);
+        }
+        Mixer.WriteWav("build/sound/wash.wav", all);
+        Console.WriteLine($"build/sound/wash.wav · 17초 · 꼭대기 {all.Max(MathF.Abs):0.00}");
+    }
+
+    /// <summary>
     /// 음악 견본 (--listen music — 소리 단계 S5): 배 안 음악 (세계의 소리 — 같은 방 · 벽 너머) 다음에 바탕 음악이 따라가는 것.
     /// 0~12초 기타 (치는 이가 기쁘다 — 장조) · 12~24초 같은 기타 (가라앉았다 — 단조 · 느리게) · 24~36초 작은 스피커 노래 · 36~48초 옆 방에서 듣는 기타 (열어 둔 문 너머 — 작고 먹먹하게) /
     /// 48초부터 20초씩 바탕 음악: 낮 · 밤 · 축하 자리 · 추모 모임 · 파편 구간 앞 불안 → build/sound/music.wav
@@ -323,7 +365,7 @@ public static partial class Program
         ("용접", () => new Weld(14)), ("망치", () => new Hammer(15)), ("코골이", () => new Snore(16, 0.5f)), ("잠꼬대", () => new Mumble(140, 17)),
         ("기침", () => new CoughVoice(140, 18)), ("웃음", () => new LaughVoice(140, 19)), ("흥얼", () => new HumVoice(140, 20)), ("낮은 울림", () => new Boom(0.5f)),
         ("기타 (기쁨)", () => Tuned(new Tune(21, 2), 0.6f)), ("기타 (가라앉음)", () => Tuned(new Tune(21, 2), -0.6f)), ("스피커 노래", () => Tuned(new Tune(22, 1), 0.3f)),
-        ("딱 (열 수축)", () => new Ping(23)), ("띵동 (방송)", () => new Chime()),
+        ("딱 (열 수축)", () => new Ping(23)), ("띵동 (방송)", () => new Chime()), ("쉬익 (변기)", () => new Whoosh(24)), ("쏴 (손 씻는 물)", () => new FaucetVoice(25)),
     };
 
     private static Voice Tuned(Tune t, float mood) { t.Set(mood); return t; }

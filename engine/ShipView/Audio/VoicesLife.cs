@@ -379,3 +379,44 @@ public sealed class Spray : Voice
         return _cur * (hiss * 0.7f + patter + gurgle * 2f) * 1.48f;   // 크기 기준 (가장 센 0.1초 RMS 0.25)
     }
 }
+
+/// <summary>
+/// 쉬익 — 변기 물 내림 (5단 C7 · 진공 변기): 흡입 팬이 빨아들이는 센 흰 잡음 — 띠가 2.5kHz에서 900Hz로 내려가며 (빨려 내려간다) ·
+/// 0.05초에 솟고 끝 0.6초에 잦아든다 · 1.8초.
+/// </summary>
+public sealed class Whoosh : Voice
+{
+    private Noise _n;
+    private Biquad _band;
+    private OnePole _low;
+    private int _i;
+    private readonly int _len = (int)(Dsp.Rate * 1.8f);
+    public Whoosh(uint seed) { _n = new Noise(seed); _band = Biquad.Band(2500, 0.9f); Send = 0.2f; }
+    public override float Next()
+    {
+        if (_i >= _len) { Done = true; return 0; }
+        float t = _i++ / (float)Dsp.Rate;
+        if (_i % 64 == 0) _band.SetBand(2500 - 1600 * MathF.Min(1, t / 1.2f), 0.9f);   // 띠가 내려간다 (64표본마다 · 걸러 둔 값은 이어 쓴다)
+        float env = MathF.Min(1, t / 0.05f) * MathF.Min(1, (1.8f - t) / 0.6f);
+        float w = _n.White();
+        return env * (_band.Run(w) * 1.06f + _low.Low(w, 300) * 0.24f);
+    }
+}
+
+/// <summary>쏴 — 손 씻는 물 (5단 C7): 수도꼭지 물줄기가 대야에 떨어지는 고른 잡음 (1.5~6kHz) + 드문 투둑 · 0.1초에 솟고 끝 0.3초에 잦아든다 · 1.5초.</summary>
+public sealed class FaucetVoice : Voice
+{
+    private Noise _n;
+    private Biquad _band, _drip;
+    private int _i;
+    private readonly int _len = (int)(Dsp.Rate * 1.5f);
+    public FaucetVoice(uint seed) { _n = new Noise(seed); _band = Biquad.Band(3500, 0.7f); _drip = Biquad.Band(1200, 6f); Send = 0.25f; }
+    public override float Next()
+    {
+        if (_i >= _len) { Done = true; return 0; }
+        float t = _i++ / (float)Dsp.Rate;
+        float env = MathF.Min(1, t / 0.1f) * MathF.Min(1, (1.5f - t) / 0.3f);
+        float pop = _n.Chance(40f / Dsp.Rate) ? _n.White() * 4f : 0;
+        return env * (_band.Run(_n.White()) * 0.83f + _drip.Run(pop) * 0.32f);
+    }
+}

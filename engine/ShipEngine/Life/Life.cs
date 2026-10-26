@@ -182,7 +182,7 @@ public sealed partial class Life : IEngine
     private readonly Field F;
     private readonly Layout L;
     private readonly Tables T;
-    private readonly Reaction _breathe, _photo, _rot, _ferment;
+    private readonly Reaction _breathe, _photo, _rot, _ferment, _stink;
     private readonly Substance _glucose, _waterL, _fat;
     private Network? _net;
 
@@ -248,7 +248,7 @@ public sealed partial class Life : IEngine
     public Life(Field f)
     {
         F = f; L = f.L; T = f.T;
-        _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment");
+        _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment"); _stink = T.R("stink");
         _glucose = T.S("Glucose"); _waterL = T.S("H2O_l"); _fat = T.S("Fat");
         Mold = new float[L.N]; MoldCause = new int[L.N]; RoomSpore = new float[L.Rooms.Count];
         _sealed = new bool[L.N];
@@ -397,7 +397,7 @@ public sealed partial class Life : IEngine
         Ears(sim, dt);        // 소리 단계 S3: 큰 소리가 귀를 먹먹하게 한다
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
-        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); }
+        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); WasteRot(sim, dt * 25); GermStep(dt * 25); }
         if (sim.Tick % 25 == 3) Spread(sim, dt * 5);   // 옮는 병 (1분마다)
         if (st != null) StampAirLoss(sim, st, sim.Tick % 25 == 7);
     }
@@ -660,7 +660,7 @@ public sealed partial class Life : IEngine
         // 몸이 더러워진다: 날마다 · 땀 · 피 (씻는 것은 사람의 판단 — 샤워 칸 · 물수건)
         b.Dirt = (float)Math.Min(1, b.Dirt + DirtPerDay * dt / 86400 + (b.Bleed + b.BleedIn > 0 ? DirtPerBloodL * b.Bleed * dt / 3600 : 0));
         // 참지 못한다 (월드): 방광 · 장이 한계를 넘으면 그 자리에 지린다 — 바닥이 젖고 몸이 더러워진다 (비우러 가는 것은 사람의 판단)
-        if (b.Bladder > BladderMax || b.Bowel > BowelMax) Soil(sim, id, ref b, c);
+        if (b.Bladder > BladderMax || b.Bowel > BowelLimit(b)) Soil(sim, id, ref b, c);
         // 늘 조금씩 물을 잃는다 (숨 · 피부 — 하루 1.5L)
         double insens = Insensible * dt;
         b.Water -= insens;
@@ -965,6 +965,7 @@ public sealed partial class Life : IEngine
         {
             if (k < 0 || k >= L.N) continue;
             if ((what & MopKind.Mold) != 0) { Mold[k] = 0; MoldCause[k] = 0; }
+            if ((what & MopKind.Germ) != 0 && L.FurnitureAt[k] >= 0) { WashArrays(); SurfGerm[L.FurnitureAt[k]] = 0; SurfCause[L.FurnitureAt[k]] = 0; }   // 소독 (5단 C21 — 그 칸 설비 겉면)
             if ((what & MopKind.Water) == 0 || _net == null) continue;
             double w = F.Stored(T.sWater, k);
             if (w > 0) { double got = F.TakeStore(k, T.sWater, w); _net.WasteWater += got; wiped += got; }
@@ -994,4 +995,4 @@ public sealed partial class Life : IEngine
 
 /// <summary>닦는 갈래 (Life.Mop — 겹쳐 쓴다).</summary>
 [Flags]
-public enum MopKind : byte { None = 0, Mold = 1, Water = 2 }
+public enum MopKind : byte { None = 0, Mold = 1, Water = 2, Germ = 4 }

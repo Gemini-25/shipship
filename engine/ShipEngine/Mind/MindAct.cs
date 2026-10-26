@@ -274,7 +274,7 @@ public sealed partial class Mind
                 double got = 0, meal = Math.Min(MealMol, FoodLeft(a.Id));   // ⑪ 배급: 오늘 몫 안에서만
                 foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, meal - got)); if (got >= meal) break; }
                 if (got <= 0 && RationFood > 0 && meal < 0.05) Refused++;
-                if (got > 0) { CountAte(a, got); _life!.Eat(c.Body, got); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
+                if (got > 0) { CountAte(a, got); _life!.EatBy(sim, c.Body, got, st.Target); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
                 break;
             }
             case UseKind.Pilfer when a.IsPerson: PilferDone(sim, a, st); break;
@@ -285,10 +285,8 @@ public sealed partial class Mind
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)
-                double got = _net != null ? Math.Min(_net.WaterTank, want) : want;
-                if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Drunk, -got); }
-                _life!.Drink(c.Body, got);
-                CountDrank(a, got);
+                var (got, spilled, _) = _life!.Drink(sim, c.Body, st.Target, want, c.Sleepy, Math.Clamp(c.Stress, 0, 1), c.Careful, a.Id, NameOf(a.Id));   // 월드 요청 (5단 C10 — 탱크에서 빼고 · 쏟음을 셈한다)
+                CountDrank(a, got + spilled);   // ⑪ 배급: 받은 물 (쏟은 것도 — 제가 쏟은 것을 안다)
                 WaterDrunk += got;
                 c.DrankAt = t; Drinks++;
                 break;
@@ -870,6 +868,17 @@ public sealed partial class Mind
             }
             c.MoveBudget -= L.FurnitureAt[n] >= 0 ? 1.5f : 1f;
             CloseBehind(sim, a);
+            // 젖은 바닥 (5단 C12): 든 칸의 발 디딤은 월드가 셈한다 (요청 — 기어가는 이는 미끄러지지 않는다) · 미끄러졌으면 업던 이 · 든 것을 놓고 멈춘다
+            if (a.IsPerson && _life != null && !SmokeBad(a, n))
+            {
+                int vb = c.Carrying;
+                if (_life.Footing(sim, c.Body, n, c.Speed, vb >= 0 || c.Holding != 255, false, c.Sleepy, a.Id, NameOf(a.Id), vb) != 0)
+                {
+                    if (vb >= 0) DropCarried(sim, a, false);
+                    Fallen(a, t);
+                    return;
+                }
+            }
         }
         if (a.PathIdx >= a.Path.Count) c.MoveBudget = Math.Min(c.MoveBudget, 1);
     }

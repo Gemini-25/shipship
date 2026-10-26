@@ -148,8 +148,8 @@ public static partial class Program
             bool signed = false;
             for (long k = 0; k < Time.Minutes(90) && (life.Clogged[near] != 0 || m.WashSign[near] != 0 || !signed); k++) { s.Step(); signed |= m.WashSign[near] != 0; }
             Check("통이 가득 차서 막힌 변기: 주컴퓨터는 비우기부터 맡기고 그다음 뚫기 → 걸린 대변은 빈 통으로 · 불이 꺼진다",
-                signed && m.Emptied == 1 && m.Unclogged == 1 && life.Clogged[near] == 0 && m.WashSign[near] == 0 && Math.Abs(life.Tank[near] - 0.4) < 1e-9,
-                $"불 {signed} · 비움 {m.Emptied} · 뚫음 {m.Unclogged} · 막힘 {life.Clogged[near]} · 지금 불 {m.WashSign[near]} · 통 {life.Tank[near]:0.00}kg");
+                signed && m.Emptied == 1 && m.Unclogged == 1 && life.Clogged[near] == 0 && m.WashSign[near] == 0 && life.Tank[near] is > 0.399 and <= 0.4,   // 빈 통에 든 0.4kg — 닫힌 통에서 조금씩 썩어 준다 (5단 C19 · 하루 1%)
+                $"불 {signed} · 비움 {m.Emptied} · 뚫음 {m.Unclogged} · 막힘 {life.Clogged[near]} · 지금 불 {m.WashSign[near]} · 통 {life.Tank[near]:0.0000}kg");
         }
 
         // ── 전력을 줄이려 온수기를 꺼도 (주컴퓨터의 부하 덜기) 물 밸브는 그대로 — 찬물이 흘러 씻긴다 (찾아 고친 결함 — 물까지 멈춰 '씻었다'만 남았다) ──
@@ -183,9 +183,10 @@ public static partial class Program
             f.AddStore(cell, f.T.sWater, 40);
             double waste0 = net.WasteWater;
             for (long k = 0; k < Time.Minutes(40) && m.Scrubbed == 0; k++) s.Step();
-            Check("닦기: 물 내린 수가 지난번 닦은 뒤로 12번이면 (안은 못 본다 — 쓴 수로) 로봇이 변기를 닦는다 — 때가 없어지고 둘레에 고인 물은 오수로",
-                m.Scrubbed == 1 && life.Grime[near] == 0 && life.ScrubbedAt[near] == 12 && WaterNear(s, cell) < 1 && net.WasteWater - waste0 >= 39,
-                $"닦음 {m.Scrubbed} · 때 {life.Grime[near]:0.00} · 닦은 때의 수 {life.ScrubbedAt[near]} · 고인 물 {WaterNear(s, cell):0.0}몰 · 오수 +{net.WasteWater - waste0:0}몰");
+            double roomFloor = Enumerable.Range(0, lay.N).Where(c => lay.Room[c] == lay.Room[cell]).Sum(c => f.Stored(f.T.sWater, c));   // 화장실 바닥에 막으로 남은 물 (5단 C14 — 젖는 방 바닥은 배수구 쪽으로 기울어 닦기 전에 흘러간다)
+            Check("닦기: 물 내린 수가 지난번 닦은 뒤로 12번이면 (안은 못 본다 — 쓴 수로) 로봇이 변기를 닦는다 — 때가 없어지고 둘레에 고인 물은 오수로 (닦기 · 배수구 — 남은 것은 화장실 바닥의 얇은 막)",
+                m.Scrubbed == 1 && life.Grime[near] == 0 && life.ScrubbedAt[near] == 12 && WaterNear(s, cell) < 1 && net.WasteWater - waste0 >= 20 && net.WasteWater - waste0 + roomFloor >= 36,   // 40분 동안 막의 몇 몰은 김으로 마른다
+                $"닦음 {m.Scrubbed} · 때 {life.Grime[near]:0.00} · 닦은 때의 수 {life.ScrubbedAt[near]} · 고인 물 {WaterNear(s, cell):0.0}몰 · 오수 +{net.WasteWater - waste0:0}몰 · 화장실 바닥 막 {roomFloor:0.0}몰");
         }
 
         // ── 샤워 배급: 물 배급을 열면 '샤워는 3분 · 이틀에 한 번'도 — 성실한 이는 3분(물 4L)만 쓰고 이틀은 다시 씻지 않는다 (지리면 씻는다) ·

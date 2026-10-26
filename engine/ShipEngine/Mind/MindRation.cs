@@ -82,7 +82,7 @@ public sealed partial class Mind
         double got = 0;
         foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, MealMol - got)); if (got >= MealMol) break; }
         if (got <= 0) return;
-        _life!.Eat(c.Body, got); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got);
+        _life!.EatBy(sim, c.Body, got, st.Target); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got);
         c.Hunger = (float)Math.Max(0, c.Hunger - got); c.AteAt = sim.Tick; Meals++;
         c.Stress = Math.Min(1, c.Stress + 0.05f * c.Consc);   // 마음이 편하지는 않다
         Pilfered++; PilferedMol += got;

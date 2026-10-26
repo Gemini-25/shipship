@@ -64,22 +64,6 @@ public sealed partial class Mind
         return k;
     }
 
-    /// <summary>그 방 안의 빈 바닥 칸 (같은 목표로 가는 이와 겹치지 않게 — 가운데에서 가까운 차례).</summary>
-    private int SpotIn(Agent a, int room, int center, GoalKind goal)
-    {
-        if (room < 0) return center;
-        int best = center; int bd = int.MaxValue;
-        foreach (int c in L.Rooms[room].Cells)
-        {
-            if (L.Kind[c] != CellKind.Floor || L.FurnitureAt[c] >= 0) continue;
-            bool taken = false;
-            foreach (var o in Agents) if (o != a && (o.C.Cell == c || o.C.Goal == goal && o.C.GoalCell == c)) { taken = true; break; }
-            if (taken) continue;
-            int d = Manhattan(c, center);
-            if (d < bd) { bd = d; best = c; }
-        }
-        return best;
-    }
 
     private void SaveCouncil(StateWriter w)
     {

@@ -272,6 +272,18 @@ public sealed partial class Network : IEngine
         return take;
     }
     public const double PanFill = 55.5;   // 냄비 물 1L (몰)
+    /// <summary>냄비를 쏟는다 (⑦의 요청 — 5단 C10): 냄비 물의 share를 조리대 칸 바닥으로 (원인) · 그 물이 지닌 열 (냄비 온도 − 칸 온도)은 그 칸 겉면으로. 쏟은 몰 · 냄비 온도를 돌려준다.</summary>
+    public (double mol, double panK) SpillPan(Sim sim, int device, double share, int cause)
+    {
+        float before = PanWater[device];
+        PanWater[device] = (float)(before * (1 - Math.Clamp(share, 0, 1)));
+        double mol = before - (double)PanWater[device];   // 냄비 눈금은 float — 바닥에 둔 몫과 바이트까지 같게
+        int cell = Devices[device].Cell;
+        if (mol <= 0 || cell < 0) return (0, PanK[device]);
+        F.AddStore(cell, F.T.sWater, mol, cause);
+        F.AddSurfaceHeat(cell, mol * 75.3 * (PanK[device] - F.Temp(cell)));   // 물 몰 열용량 75.3 J/K
+        return (mol, PanK[device]);
+    }
     public const double AromaFromK = 350, AromaPerSec = 1e-4 / 2.4;   // 음식 향이 오르는 냄비 온도 · 빠르기 (몰/초 — 예전 마음이 내던 틱마다 1e-4)
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; if (BreakerWeld[feeder] != 0) BreakerStuck[feeder] = 1; }   // 상한 접점은 올리는 순간 눌어붙는다
     /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>
@@ -348,7 +360,8 @@ public sealed partial class Network : IEngine
         return f <= 0.6 ? 0 : (float)(12 * Math.Pow((f - 0.6) / 0.4, 2));
     }
     /// <summary>돌아가는 장치가 1m에서 내는 소리 (dB — 표의 크기 + 낡은 몫 · 멈췄으면 0).</summary>
-    public float NoiseDb(int d) => Devices[d].Def.Db > 0 && Working(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0;
+    public float NoiseDb(int d) => Devices[d].Type == "Shower" ? (ShowerRunning(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0)   // 샤워 칸은 물 흐름을 따른다 (온수기와 상관없이 — 5단 C7)
+        : Devices[d].Def.Db > 0 && Working(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0;
     /// <summary>끽끽 · 덜컹을 내기 시작하는 낡은 몫 (dB — 마모 0.8 남짓).</summary>
     public const float GrindFromDb = 3;
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
@@ -396,7 +409,8 @@ public sealed partial class Network : IEngine
     public int BrokenCause(int device, Part p) => Broken[device * 4 + (int)p] != 0 && _brokeCause.TryGetValue(device * 4 + (int)p, out int bc) ? bc : 0;
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { if (p == Part.Filter) EmptyBed(device); Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
+    public void Repair(int device, Part p) { if (p == Part.Electric && device < ThermoFault.Length) { ThermoFault[device] = 0; ThermoCause[device] = 0; }   // 전기 부품을 갈면 온수기 조절기도 새것 (5단 C16)
+        if (p == Part.Filter) EmptyBed(device); Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -562,6 +576,7 @@ public sealed partial class Network : IEngine
             if (ef < 0 || On[d] == 0 || Broken[d * 4] != 0) continue;
             if (dev.Def.Role is "reactor" or "aux" or "battery") continue;
             if (_dropCut[d]) continue;   // 가지선이 끊겼다 — 그 장치로는 전류가 흐르지 않는다
+            if (d < ThermoFault.Length && ThermoFault[d] == 2) continue;   // 온수기 조절기가 열린 채 굳었다 — 데우지 않는다 (5단 C16)
             double kw = dev.Def.Kw * (dev.Def.Role == "o2gen" ? Math.Max(0.1, Duty[d]) : 1); // 산소 발생기는 일 몫만큼 (팬 · 정화는 늘 10%)
             load[ef] += kw;
             if (dev.Room >= 0) _roomLoad[dev.Room] += kw;
@@ -923,6 +938,7 @@ public sealed partial class Network : IEngine
                     break;
                 case "appliance" when dev.Type == "Shower":
                     ShowerStep(sim, d, kw, dt);   // 샤워 칸: 틀어 두면 물이 흐르고 · 열은 물과 함께 배수구로 (NetworkShower)
+                    ShowerDrain(d, dt);           // 바닥 배수구 (5단 C14 — 젖는 방 바닥에 고인 물이 오수로)
                     break;
                 default:
                     // 전기는 결국 열 — 장치가 차지한 칸에 고루 (긴 재배 선반의 전등 열이 한 칸에 몰리지 않게)
@@ -1226,6 +1242,12 @@ public sealed partial class Network : IEngine
             if (SealLeakCause[dev.Id] == 0 || dev.Def.Role != "recycler" || dev.Room != room) continue;
             int d = Math.Abs(L.X(dev.Cell) - L.X(cell)) + Math.Abs(L.Y(dev.Cell) - L.Y(cell));
             if (d < bd) { bd = d; best = SealLeakCause[dev.Id]; }
+        }
+        foreach (var dev in Devices)   // 무중력에 떠다닌 샤워 물 (5단 C18 — 같은 방 샤워 칸)
+        {
+            if (dev.Id >= ShowerFloatCause.Length || ShowerFloatCause[dev.Id] == 0 || dev.Room != room) continue;
+            int d = Math.Abs(L.X(dev.Cell) - L.X(cell)) + Math.Abs(L.Y(dev.Cell) - L.Y(cell));
+            if (d < bd) { bd = d; best = ShowerFloatCause[dev.Id]; }
         }
         return best;
     }

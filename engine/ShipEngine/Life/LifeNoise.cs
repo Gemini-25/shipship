@@ -61,9 +61,25 @@ public sealed partial class Life
             if (rate > 0 && Rng.Unit(sim.Seed, Rng.Key("기침"), sim.Tick, i) < Math.Min(0.9, rate * dt / 3600))
             {
                 Coughs++;
-                snd.Emit(sim, b.Cell, CoughDb, SoundKind.Cough, b.HurtCause, Sound.BodyActor(i));
+                snd.Emit(sim, b.Cell, CoughDb, SoundKind.Cough, CoughCause(b), Sound.BodyActor(i));
             }
         }
+    }
+
+    /// <summary>
+    /// 기침의 원인 (5단 C20): 곰팡이 포자 몫 (30 × 포자)이 앓음 (15) · 폐 손상 (40 × 손상)보다 크면 제 칸의 곰팡이 마디로 시작해 그 방에서 곰팡이가 더 짙은 칸의 마디 (같으면 먼저 본 것) —
+    /// 아니면 몸을 다치게 한 원인.
+    /// </summary>
+    private int CoughCause(in Body b)
+    {
+        double spore = 30 * b.Spore;
+        if (spore <= 0 || spore < (b.Ill == 2 ? 15 : 0) || spore < 40 * b.LungDamage && b.HurtCause != 0) return b.HurtCause;
+        int room = L.Room[b.Cell], best = MoldCause[b.Cell];
+        float most = best != 0 ? Mold[b.Cell] : -1;
+        if (room >= 0)
+            foreach (int c in L.Rooms[room].Cells)
+                if (MoldCause[c] != 0 && Mold[c] > most) { most = Mold[c]; best = MoldCause[c]; }
+        return best != 0 ? best : b.HurtCause;
     }
 
     /// <summary>확인용 셈 (찍지 않는다).</summary>

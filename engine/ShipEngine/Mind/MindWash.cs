@@ -294,8 +294,9 @@ public sealed partial class Mind
                 bool hot = d < 0 || _net!.Working(d);
                 if (d >= 0)
                 {
-                    double got = ShowerOff(a, d);   // 잠근다 — 흐른 물(계량기의 차)만큼 씻겼다 (6분에 8L · 배급이면 3분에 4L)
-                    _life!.Rinse(c.Body, got);
+                    double got = ShowerTaken(a, d);   // 흐른 물 (계량기의 차)만큼 씻겼다 (6분에 8L · 배급이면 3분에 4L)
+                    _life!.Rinse(sim, c.Body, got, d);   // 물 온도 · 데임은 월드가 (5단 C17) — 잠그기 전의 물로 (검토 고침: 온수기를 끈 뒤에 읽으면 늘 찬물이었다)
+                    ShowerOff(a, d);   // 잠근다
                     if (got < Network.ShowerFlow * 30)   // 물이 나오지 않았다 (물관이 끊겼다 · 물탱크가 비었다) — 씻은 것이 아니다: 이 샤워 칸은 한 시간 쓰지 않는다 (막히면 다른 길 — 물수건)
                     {
                         a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Wash, Target = st.Target, Until = t + Time.Hours(1) });
@@ -308,10 +309,7 @@ public sealed partial class Mind
                 }
                 else   // 망이 없는 샤워 칸 (시험 배): 물을 직접 쓴다
                 {
-                    double want = ShowerWater * st.Value / Time.Minutes(6);
-                    double got = _net != null ? Math.Min(_net.WaterTank, want) : want;
-                    if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
-                    _life!.Wash(sim, c.Body, got, 313, st.Cell);
+                    _life!.WashFromTap(sim, c.Body, ShowerWater * st.Value / Time.Minutes(6), 313, st.Cell);   // 물은 월드가 탱크에서 꺼낸다 (요청)
                 }
                 c.ShoweredAt = t; ShowersTaken++;
                 CountWashMoved(a, st.Target);
@@ -324,9 +322,7 @@ public sealed partial class Mind
             case UseKind.Hands:
             {
                 if (_net != null && !_net.WaterAt(st.Target)) break;   // 물관이 끊겼다 — 물이 나오지 않는다 (씻지 못했다)
-                double got = _net != null ? Math.Min(_net.WaterTank, HandWater) : HandWater;
-                if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
-                _life!.Wash(sim, c.Body, got, 300, -1);
+                _life!.HandWash(sim, c.Body, HandWater, st.Target >= 0 && st.Target < L.Furniture.Count ? L.Furniture[st.Target].Cells[0] : -1);   // 손 씻는 물 (월드가 탱크에서 꺼내고 · 세면대 칸에서 쏴)
                 c.HandsAt = t; HandWashes++;
                 break;
             }
@@ -535,10 +531,14 @@ public sealed partial class Mind
     }
 
     /// <summary>물을 잠그고 온수기를 끈다: 틀 때부터 흐른 물 (몰).</summary>
+    /// <summary>틀 때부터 흐른 물 (계량기의 차 — 몰).</summary>
+    private double ShowerTaken(Agent a, int d) => a.Id < _showerDev.Length && _showerDev[a.Id] == d + 1 && d < _net!.ShowerMeter.Length ? Math.Max(0, _net.ShowerMeter[d] - _showerFrom[a.Id]) : 0;
+
+    /// <summary>물을 잠그고 온수기를 끈다 — 흐른 물을 돌려준다.</summary>
     private double ShowerOff(Agent a, int d)
     {
+        double got = ShowerTaken(a, d);
         _net!.SetValve(d, false); _net.SetOn(d, false);
-        double got = a.Id < _showerDev.Length && _showerDev[a.Id] == d + 1 && d < _net.ShowerMeter.Length ? Math.Max(0, _net.ShowerMeter[d] - _showerFrom[a.Id]) : 0;
         if (a.Id < _showerDev.Length) _showerDev[a.Id] = 0;
         return got;
     }
@@ -556,7 +556,7 @@ public sealed partial class Mind
         int d = _showerDev[a.Id] - 1;
         double got = d < _net.ShowerMeter.Length ? Math.Max(0, _net.ShowerMeter[d] - _showerFrom[a.Id]) : 0;
         _showerDev[a.Id] = 0;
-        if (a.IsPerson) _life.Rinse(c.Body, got);
+        if (a.IsPerson) _life.Rinse(sim, c.Body, got, d);
         if (!_net.ValveOpen(d)) return;
         bool urgent = c.Up == 0 || c.Mode != 0 || c.Goal is GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Investigate or GoalKind.GetSuit or GoalKind.Down;
         float p = (0.1f + 0.25f * (1 - c.Consc)) * (urgent ? 1.5f : 0.6f) * (1 - c.Careful);

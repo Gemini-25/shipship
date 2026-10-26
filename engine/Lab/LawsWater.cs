@@ -18,7 +18,7 @@ public static partial class Program
         double Water()
         {
             double w = net.WaterTank + net.WasteWater + f.Total(f.T.gH2O);
-            for (int c = 0; c < lay.N; c++) w += f.Stored(f.T.sWater, c) + 6 * f.Stored(f.T.sFood, c);   // 음식(포도당)은 눌거나 썩으면 물 6몰이 된다 — 그만큼 물로 센다
+            for (int c = 0; c < lay.N; c++) w += f.Stored(f.T.sWater, c) + f.Drops[f.T.sWater * lay.N + c] + 6 * f.Stored(f.T.sFood, c);   // 음식(포도당)은 눌거나 썩으면 물 6몰이 된다 — 그만큼 물로 센다 · 떠 있는 방울도
             foreach (var d in net.Devices) w += net.PanWater[d.Id];
             foreach (var p in s.Get<Structure>().Props) w += p.Liquid;   // 컵 · 물병에 든 물 (PH8 — 깨지거나 넘어지면 바닥으로)
             return w;
@@ -36,6 +36,50 @@ public static partial class Program
             $"담음 {took:0.0}몰 · 탱크 {tank0:0.0}→{net.WaterTank:0.0} · 장부 {book:0.0}");
         Check("물 보존: 탱크 · 오수 · 냄비 · 공기의 김 · 바닥 물 (+ 음식 속 물 6배)의 합이 끓이고 졸아 눌어도 같다 (조리대 40분)", boiled > 1 && Math.Abs(w1 - w0) < 1e-6 * w0,
             $"졸아든 물 {boiled:0.0}몰 · 합 {w0:0.000} → {w1:0.000}몰 ({w1 - w0:+0.0e0;-0.0e0;0})");
+
+        // 쏟음 (5단 C10): 목마른 이가 컵을 쏟아도 (몫 1) 탱크 · 오수 · 바닥 물 · 공기의 김 · 컵 물의 합이 줄어든 만큼이 마신 물이다 (쏟은 물은 바닥에 남는다)
+        {
+            var s3 = Worlds.Full(Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend), 1);
+            var n3 = s3.Get<Network>(); var f3 = s3.Get<Field>(); var m3 = s3.Get<Mind>(); var l3 = s3.Get<Life>();
+            var lay3 = s3.Layout;
+            int p3 = m3.AddPerson(s3, Worlds.At(lay3, 3, 7));
+            s3.Run(2);
+            l3.CupFumble = 1;
+            double W3()
+            {
+                double w = n3.WaterTank + n3.WasteWater + f3.Total(f3.T.gH2O);
+                for (int c = 0; c < lay3.N; c++) w += f3.Stored(f3.T.sWater, c) + f3.Drops[f3.T.sWater * lay3.N + c] + 6 * f3.Stored(f3.T.sFood, c);
+                foreach (var d in n3.Devices) w += n3.PanWater[d.Id];
+                foreach (var p in s3.Get<Structure>().Props) w += p.Liquid;
+                return w;
+            }
+            long d0 = m3.Drinks;
+            double drunk0 = m3.WaterDrunk, sp0 = l3.Spills, v0 = 0, v1 = 0;
+            for (int k = 0; k < (int)Time.Minutes(20) && m3.Drinks == d0; k++)
+            {
+                ref var c = ref m3[p3].C; c.Thirst = 1; c.Hunger = 0; c.Sleepy = 0;
+                v0 = W3(); s3.Step(); v1 = W3();
+            }
+            double drunk = m3.WaterDrunk - drunk0;
+            Check("물 보존: 컵을 쏟아도 (5단 C10 · 몫 1) 그 틱에 물의 합이 줄어든 만큼이 마신 물이다 — 쏟은 물은 바닥에 남는다",
+                m3.Drinks == d0 + 1 && l3.Spills == sp0 + 1 && Math.Abs((v0 - v1) - drunk) < 1e-6 * v0,
+                $"마신 물 {drunk:0.0}몰 · 합 {v0:0.000} → {v1:0.000} (줄어듦 {v0 - v1:0.000}) · 쏟음 {l3.Spills - sp0}");
+        }
+
+        // 배수구 (5단 C14): 샤워 칸이 있는 방 바닥에 쏟은 물 400몰이 배수구 쪽으로 기울어 흘러 오수로 — 탱크 · 오수 · 바닥 물 · 떠 있는 방울 · 공기의 김의 합은 그대로
+        {
+            var lay4 = Worlds.Ascii("\n############\n#.....#....#\n#.....D..S.#\n#.....#....#\n############", new Dictionary<char, string> { ['S'] = "Shower" });
+            var s4 = Worlds.Full(lay4, 1);
+            var n4 = s4.Get<Network>(); var f4 = s4.Get<Field>();
+            s4.Run(2);
+            double W4() { double w = n4.WaterTank + n4.WasteWater + f4.Total(f4.T.gH2O); for (int c = 0; c < lay4.N; c++) w += f4.Stored(f4.T.sWater, c) + f4.Drops[f4.T.sWater * lay4.N + c]; return w; }
+            f4.AddStore(Worlds.At(lay4, 7, 1), f4.T.sWater, 400);
+            double v0 = W4(), d0 = n4.Drained;
+            s4.Run(Time.Minutes(10));
+            double v1 = W4();
+            Check("물 보존: 배수구 (5단 C14) — 샤워 칸이 있는 방 바닥에 쏟은 물 400몰이 배수구로 빠져 오수가 되어도 탱크 · 오수 · 바닥 물 · 떠 있는 방울 · 김의 합이 같다",
+                n4.Drained - d0 > 300 && Math.Abs(v1 - v0) < 1e-6 * v0, $"배수구 {n4.Drained - d0:0.0}몰 · 합 {v0:0.000} → {v1:0.000}");
+        }
 
         // 쓴 소화기 채우기 (docs/MIND.md 3단 — 손): 채우는 물은 물탱크에서 · 장부 '소화기에 담았다' · 탱크 + 소화기 물의 합은 같다 · 이산화탄소는 모아 둔 것에서 · 산소는 방 공기에서
         {

@@ -54,22 +54,6 @@ public sealed partial class Mind
         Add(GoalKind.Shelter, ShelterRoom, ShelterCell, 4f, ShelterCause);
     }
 
-    /// <summary>대피실 안의 빈 바닥 칸 (모인 사람끼리 겹치지 않게 — 가운데에서 가까운 차례).</summary>
-    private int ShelterSpot(Agent a, int center)
-    {
-        if (ShelterRoom < 0) return center;
-        int best = center; int bd = int.MaxValue;
-        foreach (int c in L.Rooms[ShelterRoom].Cells)
-        {
-            if (L.Kind[c] != CellKind.Floor || L.FurnitureAt[c] >= 0) continue;
-            bool taken = false;
-            foreach (var o in Agents) if (o != a && (o.C.Cell == c || o.C.Goal == GoalKind.Shelter && o.C.GoalCell == c)) { taken = true; break; }
-            if (taken) continue;
-            int d = Manhattan(c, center);
-            if (d < bd) { bd = d; best = c; }
-        }
-        return best;
-    }
 
     private void SaveShelter(StateWriter w)
     {
