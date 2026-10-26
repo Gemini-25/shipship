@@ -281,7 +281,7 @@ public static partial class Program
             var o = s.Get<Outside>(); var st = s.Get<Structure>();
             s.Run(3);
             var show = new ShipView.LiveShow(s, "운석") { SpeedOverride = 1, Follow = false };
-            o.AddRock(1.0, 6000, 1, 0, 0, 6000 * 1.2, 0);   // 왼쪽에서 · 틱 가운데에 맞게
+            o.AddRock(20.0, 6000, 1, 0, 0, 6000 * 1.2, 0);   // 왼쪽에서 · 틱 가운데에 맞게 (20kg — 운석 지름의 구멍 (DF9)이라 1kg은 외판에 14cm 구멍만 내 부스러기가 없다 · 충격파가 벽을 뜯는 무게)
             int ran = show.Advance(1.0);
             int struck = o.Struck.Count;
             double sub = struck > 0 ? o.Struck[0].Sub / 255.0 : double.NaN;

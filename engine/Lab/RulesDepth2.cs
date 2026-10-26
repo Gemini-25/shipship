@@ -116,5 +116,32 @@ public static partial class Program
                     row4 >= 3 && width >= 2, $"맞은 칸 {hit.Count} · 넷째 줄 {row4}칸 · 가장 먼 옆 {width}칸");
             }
         }
+
+        // ── DF9 사고의 물리 2: 폭발은 충격량으로 판을 찢는다 ──
+        if (Do("사고의 물리 2"))
+        {
+            Console.WriteLine("\n[사고의 물리 2 — 폭발의 충격량 · 판]");
+            // 방 가운데 바닥에서 터진 폭발: 0.5MJ (TNT 120g — 함장의 손 '작게')는 첨두압이 바닥 정격을 넘어도 양압이 0.1ms 남짓이라 판을 못 뚫는다 · 8MJ (TNT 1.9kg)는 뚫는다 (예전: 0.5MJ도 바닥 2m²)
+            (int holes, double kpa) Deck(double j)
+            {
+                var lay = Worlds.Ascii(@"
+###########
+#.........#
+#.........#
+#.........#
+#.........#
+#.........#
+###########");
+                var s = Worlds.Full(lay, 1);
+                s.Run(2);
+                var st = s.Get<Structure>(); var f = s.Get<Field>();
+                int mid = Worlds.At(lay, 5, 3);
+                st.Blast(s, mid, j, s.Causes.Add(CauseKind.Setup, "폭발", s.Tick, mid));
+                return (Enumerable.Range(0, lay.N).Count(c => lay.Kind[c] == CellKind.Floor && f.Hole[c] > 0), st.BlastPeakKPa[mid]);
+            }
+            var small = Deck(0.5e6); var big = Deck(8e6);
+            Check("폭발은 충격량으로 판을 찢는다: 방 가운데 0.5MJ (TNT 120g)는 첨두압이 바닥 정격을 넘어도 바닥을 못 뚫고 · 8MJ (TNT 1.9kg)는 뚫는다",
+                small.kpa > 300 && small.holes == 0 && big.holes > 0, $"0.5MJ 첨두 {small.kpa:0}kPa · 뚫린 바닥 {small.holes}칸 / 8MJ 첨두 {big.kpa:0}kPa · {big.holes}칸");
+        }
     }
 }

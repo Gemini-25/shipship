@@ -297,10 +297,11 @@ public sealed partial class Outside : IEngine
                     double m = PowerLaw(d.MinKg, d.MaxKg, d.Alpha);
                     double e = 0.5 * m * sp * sp;
                     double off = (_rng.Unit() - 0.5) * width;
-                    if (HitShip(sim, ux, uy, off, e, c.Cause, $"{d.Name}의 {m * 1000:0.##}g 파편", out int hc))
+                    byte sub = (byte)Math.Round((h + 0.5) / hits * 255);
+                    if (HitShip(sim, ux, uy, off, e, m, c.Cause, $"{d.Name}의 {m * 1000:0.##}g 파편", out int hc, _ => sub))
                     {
                         c.Hits++; DebrisHits++;
-                        Struck.Add(new Struck { Ux = (float)ux, Uy = (float)uy, Cell = hc, Kg = (float)m, Speed = (float)sp, Sub = (byte)Math.Round((h + 0.5) / hits * 255), Cloud = true });   // 구름 속 맞음은 틱 안에 고르게 (난수를 더 뽑지 않는다)
+                        Struck.Add(new Struck { Ux = (float)ux, Uy = (float)uy, Cell = hc, Kg = (float)m, Speed = (float)sp, Sub = sub, Cloud = true });   // 구름 속 맞음은 틱 안에 고르게 (난수를 더 뽑지 않는다)
                     }
                 }
             }
@@ -334,11 +335,11 @@ public sealed partial class Outside : IEngine
             {
                 double off = cx * -uy + cy * ux; // 비낀 거리 (진행 방향의 왼쪽 +)
                 double e = 0.5 * r.Mass * sp * sp;
-                if (HitShip(sim, ux, uy, -off, e, r.Cause, $"{r.Mass:0.#}kg 운석", out int hc))
+                // 틱 안의 때: 틱 처음 자리에서 맞은 칸 가운데까지 진행 방향 길이 ÷ (빠르기 × dt) — 배 가운데 틀 (도면 가운데)
+                byte SubOf(int hc) => (byte)Math.Round(Math.Clamp(((L.X(hc) + 0.5 - L.W / 2.0 - x0) * ux + (L.Y(hc) + 0.5 - L.H / 2.0 - y0) * uy) / (sp * dt), 0, 1) * 255);
+                if (HitShip(sim, ux, uy, -off, e, r.Mass, r.Cause, $"{r.Mass:0.#}kg 운석", out int hc, SubOf))
                 {
-                    // 틱 안의 때: 틱 처음 자리에서 맞은 칸 가운데까지 진행 방향 길이 ÷ (빠르기 × dt) — 배 가운데 틀 (도면 가운데)
-                    double along = (L.X(hc) + 0.5 - L.W / 2.0 - x0) * ux + (L.Y(hc) + 0.5 - L.H / 2.0 - y0) * uy;
-                    Struck.Add(new Struck { Ux = (float)ux, Uy = (float)uy, Cell = hc, Kg = (float)r.Mass, Speed = (float)sp, Sub = (byte)Math.Round(Math.Clamp(along / (sp * dt), 0, 1) * 255) });
+                    Struck.Add(new Struck { Ux = (float)ux, Uy = (float)uy, Cell = hc, Kg = (float)r.Mass, Speed = (float)sp, Sub = SubOf(hc) });
                     RockHits++; r.Mass = 0;
                 }
             }
@@ -356,7 +357,7 @@ public sealed partial class Outside : IEngine
     /// <summary>
     /// (ux, uy) 방향으로 날아오는 것이, 진행 방향에 수직으로 off(m)만큼 비껴 배를 지난다 — 처음 닿는 칸을 찾아 ④ 구조에 충돌로 (그 칸 → hit).
     /// </summary>
-    private bool HitShip(Sim sim, double ux, double uy, double off, double energy, int parentCause, string what, out int hit)
+    private bool HitShip(Sim sim, double ux, double uy, double off, double energy, double kg, int parentCause, string what, out int hit, Func<int, byte>? subOf = null)
     {
         hit = -1;
         double cx = L.W / 2.0, cy = L.H / 2.0;
@@ -373,7 +374,10 @@ public sealed partial class Outside : IEngine
             if (L.Kind[c] == CellKind.Outside) continue;
             int cause = sim.Causes.Add(CauseKind.Impact, $"{Ko.I(what)} 부딪혔다 ({energy / 1000:0.#}kJ)", sim.Tick, c, parentCause);
             int dx = Math.Abs(ux) >= Math.Abs(uy) ? Math.Sign(ux) : 0, dy = dx == 0 ? Math.Sign(uy) : 0;
-            sim.Find<Structure>()?.Impact(sim, c, energy, dx, dy, cause);
+            byte was = sim.Facts.SubNow;
+            if (subOf != null) sim.Facts.SubNow = subOf(c);   // 맞은 그 때 — 그 운석에 난 사실 · 부스러기 · 소리도 그 때부터 (DF9)
+            sim.Find<Structure>()?.Rock(sim, c, kg, energy, ux, uy, dx, dy, cause);
+            sim.Facts.SubNow = was;
             hit = c;
             return true;
         }

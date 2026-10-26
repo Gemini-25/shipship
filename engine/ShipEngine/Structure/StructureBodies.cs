@@ -456,7 +456,7 @@ public sealed partial class Structure
         w.Tag("몸"); w.List(Bodies);
         w.Arr(Sub); w.Arr(_blow); w.I64(SubCarved);
         SaveShards(w);
-        w.F64(GasPx); w.F64(GasPy); w.F64(GasL); w.F64(BurnPx); w.F64(BurnPy); w.F64(BurnL); w.F64(GasAbs); w.I64(BodySteps); w.I64(Spins); w.I64(Crashes);
+        w.F64(GasPx); w.F64(GasPy); w.F64(GasL); w.F64(BurnPx); w.F64(BurnPy); w.F64(BurnL); w.F64(GasAbs); w.F64(RockPx); w.F64(RockPy); w.F64(RockL); w.I64(BodySteps); w.I64(Spins); w.I64(Crashes);
     }
 
     private void LoadBodies(StateReader r)
@@ -464,6 +464,6 @@ public sealed partial class Structure
         r.Tag("몸"); Bodies.Clear(); Bodies.AddRange(r.List<RigidBody>());
         r.ArrInto(Sub); r.ArrInto(_blow); SubCarved = r.I64(); _holeSeen = -1; _edgeVersion = -1;
         LoadShards(r);
-        GasPx = r.F64(); GasPy = r.F64(); GasL = r.F64(); BurnPx = r.F64(); BurnPy = r.F64(); BurnL = r.F64(); GasAbs = r.F64(); BodySteps = r.I64(); Spins = r.I64(); Crashes = r.I64();
+        GasPx = r.F64(); GasPy = r.F64(); GasL = r.F64(); BurnPx = r.F64(); BurnPy = r.F64(); BurnL = r.F64(); GasAbs = r.F64(); RockPx = r.F64(); RockPy = r.F64(); RockL = r.F64(); BodySteps = r.I64(); Spins = r.I64(); Crashes = r.I64();
     }
 }

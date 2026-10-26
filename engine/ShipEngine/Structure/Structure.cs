@@ -43,7 +43,9 @@ public sealed partial class Structure : IEngine
     public const double BraceFactor = 1.6;   // 덧대 받친 문 · 벽의 정격 배율   // 피로 쌓임 (초당 · 넘친 부하의 세제곱에 곱한다)
     public const double CrackArea = 0.0005;  // 금 (m²)
     /// <summary>초고속 충돌이 배 안 공기 칸에 남긴 열 가운데 충격파가 되는 몫 (어림 — 파편 구름 · 증기의 팽창).</summary>
-    public const double BlastShare = 0.15, BlastFromJ = 20e6;
+    public const double BlastShare = 0.15;
+    /// <summary>충격파가 되는 가장 작은 에너지 (J — TNT 50g · 그 아래는 그 방의 열로).</summary>
+    public const double BlastMinJ = 0.05 * 4.184e6;
 
     private readonly Field F;
     private readonly Layout L;
@@ -164,6 +166,44 @@ public sealed partial class Structure : IEngine
     /// <summary>파편이 지난 칸 (DF8 — ⑥ 망이 읽고 비운다: 그 칸의 선 · 관이 파편 에너지에 찢긴다 · 칸 · 지난 에너지 J · 원인).</summary>
     public readonly List<ShardPass> ShardPasses = new();
 
+    /// <summary>운석 · 구름 파편의 밀도 (kg/m³ — 돌 · 알루미늄 어림 · 구멍 크기의 운석 지름).</summary>
+    public const double RockDensity = 2800;
+    private double _rockKg;
+
+    /// <summary>얇은 판 관통의 구멍 넓이 (m² — 운석 kg · 에너지 J · 판 두께 mm): D = d (0.45 V (t/d)^⅔ + 0.9) · d = 같은 무게 공의 지름 (DF9).</summary>
+    public static double RockHoleM2(double kg, double joules, double mm)
+    {
+        double d = Math.Cbrt(6 * kg / (Math.PI * RockDensity)), v = Math.Sqrt(2 * joules / kg) / 1000, t = mm / 1000;
+        double dd = d * (0.45 * v * Math.Pow(t / d, 2.0 / 3) + 0.9);
+        return Math.PI / 4 * dd * dd;
+    }
+
+    /// <summary>
+    /// 운석 · 구름 파편이 배에 부딪힌다 (⑤ 바깥이 부른다 — 무게 kg · 에너지 J · 날아온 쪽 (ux, uy) · 칸 축 (dx, dy)): 운석의 운동량 m·v가 맞은 몸에 들어가고 (DF9 — 덜컹 · 원인 그 운석) ·
+    /// 처음 뚫는 판의 구멍은 운석 지름으로 (그 뒤는 충돌과 같다).
+    /// </summary>
+    public void Rock(Sim sim, int cell, double kg, double joules, double ux, double uy, int dx, int dy, int cause)
+    {
+        if (kg > 0 && joules > 0)
+        {
+            double p = Math.Sqrt(2 * joules * kg);   // m·v
+            EnsureShip();
+            int b = BodyOf(cell);
+            if (b >= 0)
+            {
+                var (wx, wy) = WorldOf(b, L.X(cell) + 0.5, L.Y(cell) + 0.5);
+                double th = Bodies[b].Th, jx = p * (Math.Cos(th) * ux - Math.Sin(th) * uy), jy = p * (Math.Sin(th) * ux + Math.Cos(th) * uy);   // 도면 쪽 → 세상 틀
+                Push(b, wx, wy, jx, jy, cause);
+                RockPx += jx; RockPy += jy; RockL += wx * jy - wy * jx;
+            }
+        }
+        _rockKg = kg;
+        try { Impact(sim, cell, joules, dx, dy, cause); }
+        finally { _rockKg = 0; }
+    }
+    /// <summary>운석이 배의 몸에 넣은 운동량 (N·s · 세상 틀 — 법칙 장부: 몸들의 운동량 = 점화 + 운석 − 기체).</summary>
+    public double RockPx, RockPy, RockL;
+
     /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다 (부딪힌 것의 크기 sizeM — 클수록 뭉툭해 덜 뚫는다).
     /// 첫 벽을 뚫기 전에는 한 줄 · 뚫은 뒤에는 원뿔의 갈래 다섯 (같은 걸음에 같은 칸에 닿은 갈래는 합쳐 셈한다 — 갈래마다 몫이 줄어든다).</summary>
     public void Impact(Sim sim, int cell, double joules, int dx, int dy, int cause, double sizeM = ImpactSizeM)
@@ -214,7 +254,10 @@ public sealed partial class Structure : IEngine
                         continue;
                     }
                     double excess = e - pen;
-                    double area = Math.Min(2.5, 1e-4 * Math.Pow(excess / 1000, 0.8));
+                    // 구멍 넓이: 운석이 처음 뚫는 판은 얇은 판 관통 어림 (구멍 지름 D = 운석 지름 d × (0.45 · V(km/s) · (t/d)^⅔ + 0.9) — DF9 · 5g 20 · 60g 49 · 2kg 230cm² 언저리) ·
+                    //  그 뒤 판 (파편 구름) · 무게를 모르는 것은 남은 에너지로 (1e-4 × kJ^0.8) — 한 칸의 구멍은 2.5m²까지
+                    double area = !cone && _rockKg > 0 ? RockHoleM2(_rockKg, joules, mm) : 1e-4 * Math.Pow(excess / 1000, 0.8);
+                    area = Math.Min(2.5, area);
                     Open(sim, c, Math.Max(F.Hole[c], (float)area), cause, FactKind.WallBreach);
                     if (kind == CellKind.Door && L.DoorAt[c] >= 0) { DoorJam[L.DoorAt[c]] = 1; F.SetDoor(L.DoorAt[c], Math.Max(F.DoorOpen[L.DoorAt[c]], 0.3f)); }
                     AddHeatTo(c, pen);
@@ -231,9 +274,9 @@ public sealed partial class Structure : IEngine
                     // 그 칸의 설비 · 가구가 맞는다 (100J/kg에 부서진다 — 어림)
                     if (L.FurnitureAt[c] >= 0) HitFurniture(sim, L.FurnitureAt[c], e * 0.3 / Math.Max(10, FurnitureKg(L.FurnitureAt[c]) * 100), cause, "파편에");
                     double heat = e * 0.5;
-                    // 아주 큰 충돌은 배 안에서 터진다: 그 몫의 15%가 충격파 (초고속 충돌의 파편 구름 · 증기 — 20MJ 넘게 · 어림:
-                    //  작은 관통은 파편 구름이 그 방을 휩쓰는 데서 그치고(관통 · 열) · kg급 운석부터 방을 넘어서는 충격파가 된다)
-                    if (heat > BlastFromJ) { Blast(sim, c, heat * BlastShare, cause); heat *= 1 - BlastShare; }
+                    // 초고속 충돌은 배 안에서 터진다: 그 열의 15%가 충격파 (파편 구름 · 증기의 팽창 — 문턱 없이 연속 · DF9: 작은 관통은 TNT 50g 아래라 폭풍이 없고 ·
+                    //  kg급 운석부터 방을 넘어서는 충격파가 된다 — 예전 20MJ 문턱의 절벽이 없다)
+                    if (heat * BlastShare >= BlastMinJ) { Blast(sim, c, heat * BlastShare, cause); heat *= 1 - BlastShare; }
                     F.AddSurfaceHeat(c, heat * 0.5);
                     F.AddHeat(c, heat * 0.5);
                     sim.Find<Chemistry>()?.Ignite(c, 0, cause);
