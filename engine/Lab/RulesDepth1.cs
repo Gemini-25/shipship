@@ -318,7 +318,9 @@ public static partial class Program
             //   (가) 둘레 통로 '외판 구멍 막기'는 다 해도 그대로 샌다 (막을 구멍이 외판에 없다) — 다 마쳤는데 같은 사건이 그대로면 두 번째에 그 걸음을 통하지 않은 것으로 (씨 7)
             //   (나) 미리 돌려 본 세계에서 문이 안 열렸다 — 이 세계의 문은 멀쩡해 '막힌 까닭이 그대로인가'가 곧 풀려 같은 계획을 1분에 여덟 번 (씨 6) → 10분은 그 걸음을 막힌 것으로
             {
-                var runs = new[] { 2UL, 3UL }.AsParallel().AsOrdered().Select(seed =>
+                // (DF7 뒤 씨 2 → 1: 그 밤 깨어 있던 이 · 있던 곳이 달라져 씨 2는 궁리할 일이 없다. 이 장면은 이제 두 갈래 고침을 함께 꺼도 씨 1~64 어느 것도 같은 계획을 되풀이하지 않는다 —
+                //  DF7 앞 코드도 씨 1~24에서 같다 · 막힌 곳 기억 · 같은 방의 다음 안이 먼저 막는다. 여기서는 궁리가 서고 되풀이되지 않는지를 본다)
+                var runs = new[] { 1UL, 3UL }.AsParallel().AsOrdered().Select(seed =>
                 {
                     var s = ShipWorld.Crewed("Didim", seed, 6, 3);
                     s.Run(Time.Minutes(80));   // 새벽 한 시 스무 분 — 모두 잠들었다
@@ -439,6 +441,7 @@ public static partial class Program
                 s.Run(3);
                 foreach (int door in new[] { At(10, 3), At(14, 6) }) st.LockDoor(lay.DoorAt[door], s.Tick + Time.Hours(1));
                 life[m[pbreath].C.Body].LungDamage = 0.5f;
+                m[pbreath].C.SkFire = 1; m[pfar].C.SkFire = 0.2f;   // 숨이 찬 이가 불을 가장 잘 끈다 — 처지를 보지 않으면 그에게 부탁한다 (DF7 덤: 예전 차림은 처지를 보지 않아도 길이 멀어 그를 고르지 않았다)
                 long f0 = s.Facts.Total;
                 int seed = s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick);
                 foreach (var (x, y) in new[] { (15, 1), (16, 1), (15, 2) }) ch.Ignite(At(x, y), 3e6, seed);

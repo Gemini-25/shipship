@@ -65,10 +65,12 @@ public sealed partial class Mind
             list[i] = b;
             if (wasWeak && b.Conf >= 0.5f && Urgent(kind)) _fresh.Add(i);
             if (wasWeak && b.Conf >= 0.3f) FlashCue(a, kind, b.Cause);   // ⑧ 그날이 되살아난다
+            if (b.Conf >= 0.5f) NoteCrisis(a, tick, kind, b.Cell, b.Cause, src);   // DF7 위기 뒤: 그 일을 기억한다 (같은 일이면 겪었는지만)
             return wasWeak && b.Conf >= 0.5f;
         }
         var nb = new Belief { Kind = kind, Src = src, Cell = cell, Subject = subject, Conf = Math.Min(1, conf), Seen = tick, Cause = cause, Size = size };
         if (conf >= 0.25f) FlashCue(a, kind, cause);   // ⑧ 그날이 되살아난다
+        if (conf >= 0.5f) NoteCrisis(a, tick, kind, cell, cause, src);   // DF7 위기 뒤: 그 일을 기억한다
         if (list.Count >= MaxBeliefs)
         {
             int weakest = 0;

@@ -320,6 +320,17 @@ public sealed partial class Society : IEngine
         return false;
     }
 
+    /// <summary>그 문 곁 (이웃 칸)이 바깥이거나 기압이 80kPa 아래인가 — 공기가 빠지던 문 (닫은 까닭이 연기 · 열이 아니다).</summary>
+    private static bool AirGone(Sim sim, int cell)
+    {
+        var f = sim.Find<Field>();
+        if (f == null || cell < 0) return false;
+        Span<int> nb = stackalloc int[4];
+        sim.Layout.Neighbors(cell, nb);
+        foreach (int j in nb) if (j >= 0 && (sim.Layout.Kind[j] == CellKind.Outside || sim.Layout.Kind[j] == CellKind.Floor && f.Pressure(j) < 80)) return true;
+        return false;
+    }
+
     /// <summary>불에서 비롯한 일인가: 사슬에 불 마디가 있거나 · 사슬의 어느 마디가 어느 칸 불의 원인이다
     /// (불씨가 이야기 마디로 시작한 불은 사슬에 불 마디가 없다 — 꺼진 뒤 연기 때문에 닫은 문을 '구멍' 이야기로 기억해 "쉬익 소리…"를 말하던 결함).</summary>
     private static bool FromFire(Sim sim, int cause)
@@ -399,8 +410,9 @@ public sealed partial class Society : IEngine
                 {
                     // 함께 위기를 넘겼다: 그 방에 함께 있던 사람끼리 가까워지고 · 서로를 더 믿는다 · 함께 기억한다
                     var here = Near(f.Cell);
-                    // 불 끄기 · 불이 타는 동안 닫은 문은 '불' 이야기 · 아니면 '구멍' (막기 · 공기 때문에 닫은 문)
-                    Topic t = f.Kind == FactKind.Extinguished || FromFire(sim, f.Cause) || (sim.Find<Chemistry>()?.BurningCount ?? 0) > 0 ? Topic.Fire : Topic.Breach;
+                    // 불 끄기 · 불이 타는 동안 닫은 문은 '불' 이야기 · 막기 · 공기가 빠지던 문은 '구멍' · 그 밖에 연기 · 열 때문에 닫은 문도 '불' (DF7 — 예전엔 눌은 음식 연기에 닫은 문을 '쉬익 소리' 구멍 이야기로 기억했다)
+                    Topic t = f.Kind == FactKind.Extinguished || FromFire(sim, f.Cause) || (sim.Find<Chemistry>()?.BurningCount ?? 0) > 0 ? Topic.Fire
+                        : f.Kind == FactKind.Patched || AirGone(sim, f.Cell) ? Topic.Breach : Topic.Fire;
                     int hero = f.Actor >= 0 && f.Actor < N && mind.Agents[f.Actor].IsPerson ? f.Actor : -1;
                     foreach (int i in here)
                     {

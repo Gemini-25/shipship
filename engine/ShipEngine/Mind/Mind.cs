@@ -784,8 +784,11 @@ public sealed partial class Mind : IEngine
         if (asleep) { SleepQuality(a, h); c.Sleepy = (float)Math.Max(0, c.Sleepy - h / 8.0 * 1.6 * (1 - 0.6 * c.SleepLoss)); } // 16시간 깨어 있던 졸림을 5시간 남짓 · 꽉 찬 졸림은 8시간 가까이 — 얕은 잠은 덜 풀린다 (⑦)
         else c.Sleepy = (float)Math.Min(1, c.Sleepy + h / Need("sleep", 16) * TireFactor(a)); // 앓거나 몸무게를 잃으면 빨리 지친다 (⑦)
         int others = CountNear(a, 6);
-        if (others > 0 && !asleep) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) / 1.5);
-        else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra))); // 외향일수록 사람이 빨리 그립다 (6~14시간)
+        // 외로움 (DF7): 자는 동안은 차지도 풀리지도 않는다 · 곁에서 함께 쉬고 · 먹고 · 어울리면 풀리고 (깬 곁사람 둘까지 · 시간에 0.67씩) · 곁에서 말없이 제 일만 하면 조금 (0.2씩) · 말을 나누면 더 (MindTalk) ·
+        //   혼자면 찬다 — 외향일수록 사람이 빨리 그립다 (6~14시간) · 예전엔 자는 동안 시간에 0.1씩 차고 · 말없이 곁에 둘만 있어도 시간에 1.33씩 풀렸다
+        if (asleep) { }
+        else if (others > 0) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) * (Society.Leisure(c.Goal) ? 1 / 1.5 : 0.2));
+        else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra)));
         bool resting = c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.Use; // 가는 중이 아니라 쉬는 · 어울리는 중
         if (resting) c.Bored = (float)Math.Max(0, c.Bored - h);
         else if (!asleep) c.Bored = (float)Math.Min(1, c.Bored + h / Need("fun", 8) * (c.Goal == GoalKind.Work ? 1.5 - c.Diligent : 1) * (0.6 + 0.8 * c.Open)); // 열린 사람은 새것이 빨리 고프다
@@ -801,6 +804,7 @@ public sealed partial class Mind : IEngine
         double ease = asleep || c.Goal is GoalKind.Relax or GoalKind.Socialize ? 0.3 : 0.05;
         c.Stress = (float)Math.Clamp(c.Stress + h * (load - ease), 0, 1);
         RationHunger(a, h, asleep);   // ⑪ 배급: 몫을 다 먹고도 배고프다 — 참는다
+        MoodKinetics(ref c, b.Pain, h);   // DF7 기분: 겪은 감정 · 몸 · 욕구가 며칠 가는 층으로 쌓이고 감정의 바닥이 된다 (MindMood)
     }
 
     private double Need(string k, double dflt) => P.Needs.TryGetValue(k, out var v) ? v : dflt;

@@ -1149,6 +1149,7 @@ public sealed partial class LiveShow
                     if (b.Burn > 0.05f) body.Add($"화상 {b.Burn:0.0}"); if (b.Blunt > 0.05f) body.Add($"타박 {b.Blunt:0.0}");
                     if (b.Infect > 0.05f) body.Add("상처가 곪는다"); if (b.Ill == 2) body.Add("앓는다"); if (b.Hypoxia > 0.05f) body.Add("숨이 가쁘다");
                     var heart = new List<string>();
+                    if (b.Alive != 0 && Mind.MoodWord(a.C) is { Length: > 0 } mood) heart.Add(mood);   // DF7 그날 기분
                     if (a.C.Stress > 0.3f) heart.Add($"긴장 {a.C.Stress:0.0}"); if (a.C.Sad > 0.3f) heart.Add("슬프다"); if (a.C.Fear > 0.3f) heart.Add("두렵다"); if (a.C.Anger > 0.3f) heart.Add("화가 났다");
                     var near = NearBits(mind, so, id);
                     string pondered = b.Alive != 0 ? mind.RecentThought(id, w.Tick, Time.Hours(1)) : "";

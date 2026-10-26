@@ -199,6 +199,7 @@ public sealed partial class Mind
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
         if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
         if (_deciding != null) score *= CouncilBoost(_deciding, g, cell);   // ⑨ 회의에 모이기 · 벌 당번 · 근신
+        if (_deciding != null && _deciding.IsPerson) score *= CrisisDamp(_deciding, g) * (g == GoalKind.Socialize ? 1 + 0.5f * _deciding.C.MoodGood : 1);   // DF7 겪은 이의 쉼 · 들뜬 이는 어울리러 더 간다
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
 
@@ -262,6 +263,7 @@ public sealed partial class Mind
             // 아주 외향적인 이는 외롭지 않아도 빈 시간을 사람 곁에서 보낸다 (어울림이 그의 쉼 — 심심함을 사람과 푼다)
             if (c.Extra > 0.6f && c.Bored > 0.1f && !InWindow(hour, c.ShiftHour, 8) && SomeoneFree(a))
                 Add(GoalKind.Socialize, -1, -1, (Math.Max(0.35f, c.Bored * 1.5f) + 0.1f) * (c.Extra - 0.5f) * 2.5f * (1 - c.Depress));
+            CrisisOptions(a);        // DF7 위기 뒤: 겪은 이 · 말로만 들은 이는 사람 곁을 찾는다
             HeartOptions(a, here, InWindow(hour, c.ShiftHour, 8));   // ⑧ 공황 발작 · 침대에 틀어박힘
             StashOption(a, here);    // 손 비우기 · 돌려놓기 (docs/MIND.md 3단)
             GatherOption(a, here);   // 맡긴 줍기 · 꼼꼼한 이는 보이는 바닥 물건을 줍는다

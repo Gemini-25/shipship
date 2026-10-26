@@ -344,7 +344,7 @@ public sealed partial class Society
                 ref var ca = ref C(a);
                 ca.Joy = Math.Min(1, ca.Joy + 0.3f); ca.Weary = Math.Max(0, ca.Weary - 0.05f); ca.Stress = Math.Max(0, ca.Stress - 0.1f);
                 mind.Eased(a, 0.03f, 0, 0);
-                Remember(sim, a, Topic.Joy, m.Arg, c, 0.4f, m.Cell);   // 좋은 일 (DF2 — 예전엔 '화해'로 적어 무리 사이 일로 읽혔다)
+                Remember(sim, a, Topic.Joy, m.Arg, c, 0.7f, m.Cell);   // 좋은 일 (DF2 — 예전엔 '화해'로 적어 무리 사이 일로 읽혔다) · 무게 있는 기억 (DF7 — 예전 0.4 · 꺼낼 때마다 반으로 줄었다)
             }
             foreach (int a in _attend) foreach (int b in _attend) if (a != b) Warm(sim, a, b, 0.02f, "함께 웃었다");
         }

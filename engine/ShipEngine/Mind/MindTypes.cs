@@ -279,6 +279,15 @@ public struct AgentCore
     public long DeadDocksAt;
     public float ChargeFrom;
     public long ChargeAt;
+    /// <summary>기분 (깊이 고침 DF7 — MIND 14단 '기분' 당김 · MindMood): 감정 아래 며칠 가는 층 — 밝은 몫 · 가라앉은 몫 (0~1) · 오래 높은 심심함 (세 시간에 걸친 평균) ·
+    /// 지난 틱 끝의 기쁨 · 겁 · 슬픔 · 화 (갑자기 솟은 몫 — 겪은 일 — 을 알아본다).</summary>
+    public float MoodGood, MoodBad, BoredLong;
+    public float JoyWas, FearWas, SadWas, AngerWas;
+    /// <summary>위기 뒤 (DF7): 마지막으로 안 위기 — 이야기 갈래 (불 · 구멍) · 안 때 (0: 없음) · 원인 · 칸 · 제 몸으로 겪었나 (1 본 · 들은 소리 · 냄새 / 0 말 · 방송으로만) · 그 이야기를 나눈 수.</summary>
+    public Topic CrisisTopic;
+    public long CrisisAt;
+    public int CrisisCause, CrisisCell;
+    public byte CrisisSaw, CrisisTold;
 }
 
 /// <summary>보관함에 돌려놓은 쓰다 남은 물건 (소화기 물 · 이산화탄소 · 우주복 · 마스크 산소가 덜 찼다) — 꺼낼 때 그 양으로 · 채우기 일감의 대상.</summary>

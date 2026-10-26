@@ -3,7 +3,7 @@ using ShipEngine;
 
 namespace Lab;
 
-/// <summary>깊이 고침 1차 — 평시의 손 (docs/DEPTH_FIX.md DF5 · DF6 · 근거 docs/ENGINE_DEPTH_REVIEW.md §4-3 · §4-7 · §4-10 · §5).</summary>
+/// <summary>깊이 고침 1차 — 평시의 손 · 마음에 남는 것 (docs/DEPTH_FIX.md DF5 · DF6 · DF7 · 근거 docs/ENGINE_DEPTH_REVIEW.md §4-3 · §4-5 · §4-6 · §4-7 · §4-10 · §5).</summary>
 public static partial class Program
 {
     private static void Depth3Rules()
@@ -130,6 +130,76 @@ public static partial class Program
             var w = wasteT.Result;
             Check("오수가 밀리면 막힌 곳을 짚는다: 주컴퓨터가 '오수가 밀린다 ← 물 재생기가 거르는 양이 드는 양에 못 미친다'를 막힌 곳으로 · 샤워 배급을 열고 · 재생기 거르개를 미리 간다 ('마시는 양이 되찾는 양보다 많다'는 오진이다)",
                 w.blk.Contains("물 재생기") && !w.wrong && w.shower > 0 && w.fix, $"막힌 곳 '{w.blk}' · 오진 {w.wrong} · 샤워 배급 {w.shower}분 · 재생기 정비 {w.fix} · 오수 {w.waste:0}L");
+        }
+
+        // ── DF7 마음에 남는 것 (보고서 §4-5 · §4-6 · §5): 자는 동안 외로움이 차지 않는다 · 축하는 그날 기분과 무게 있는 좋은 기억으로 남는다 ──
+        //    (기름불이 난 저녁 · 평시 감정 0의 몫 · 함께 웃은 기억은 '평시 하루'가 같은 하루로 본다)
+        if (Do("마음에 남는 것"))
+        {
+            Console.WriteLine("\n[마음에 남는 것 — 잠 · 외로움 · 축하]");
+            bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
+            var legend = new Dictionary<char, string> { ['m'] = "MealDispenser", ['a'] = "Seat", ['e'] = "Bed" };
+            var lay = Worlds.Ascii(CultureShip, legend);
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            int beds = lay.Room[At(2, 2)], mess = lay.Room[At(14, 2)], lounge = lay.Room[At(24, 2)];
+            lay.Rooms[beds].Name = "침실"; lay.Rooms[mess].Name = "식당"; lay.Rooms[lounge].Name = "휴게실";
+            lay.Rooms[mess].Type = "Lounge"; lay.Rooms[lounge].Type = "Lounge";
+
+            // 잠든 8시간: 외향인 이 (사람이 빨리 그립다)가 제 침대에서 잔다 — 혼자 · 곁 침대 칸에 깬 이가 있어도 외로움이 늘지 않는다 (예전엔 자는 동안 시간에 0.1씩 찼다 · 0.96 → 1.00)
+            (float l0, float l1, bool slept) Sleep(bool company)
+            {
+                var s = Worlds.Full(lay, 4);
+                var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int x = m.AddPerson(s, At(3, 1), bed: At(3, 1));
+                m.SetPersonality(x, 0.5f, 0.6f, 0.85f, 0.5f, 0.4f);
+                int y = company ? m.AddPerson(s, At(5, 1), bed: At(5, 1)) : -1;
+                s.Run(2);
+                m[x].C.Lonely = 0.5f;
+                bool slept = true;
+                for (int k = 0; k < Time.Hours(8); k++)
+                {
+                    ref var c = ref m[x].C;
+                    c.Sleepy = Math.Max(c.Sleepy, 0.7f); c.Hunger = 0; life[c.Body].Asleep = 1;   // 8시간 내리 잔다 (잠 자체는 이 시험의 몫이 아니다)
+                    if (y >= 0) { ref var cy = ref m[y].C; cy.Sleepy = 0; cy.Hunger = 0; cy.Bored = 0; life[cy.Body].Asleep = 0; }
+                    s.Step();
+                    if (life[m[x].C.Body].Asleep == 0) slept = false;
+                }
+                return (0.5f, m[x].C.Lonely, slept);
+            }
+            var withT = Task.Run(() => Sleep(true)); var alone = Sleep(false); var with = withT.Result;
+            Check("잠든 8시간 동안 외로움이 늘지 않는다: 외향인 이가 혼자 자도 · 곁에 깬 이가 있어도 — 외로움은 깨어 있는 동안 차고 말 · 함께 쉼 · 끼니로 풀린다",
+                alone.slept && with.slept && alone.l1 <= alone.l0 + 0.01f && with.l1 <= with.l0 + 0.01f,
+                $"혼자 {alone.l0:0.00} → {alone.l1:0.00} · 곁에 깬 이 {with.l0:0.00} → {with.l1:0.00} (내리 잤다 {alone.slept}/{with.slept})");
+
+            // 축하 뒤: 불이 번졌다 꺼지고 다섯이 다 살았다 → 가장 외향인 이가 부른 축하 자리 — 마친 두 시간 뒤에도 그날 기분이 밝고 (기쁨 0.1 넘게 · 예전엔 시간에 0.25씩 잦아들어 0) ·
+            //   축하는 무게 있는 좋은 기억 (0.5 넘게 — 예전 0.4 · 꺼낼 때마다 반으로)으로 모두에게 남는다
+            {
+                var s = Worlds.Full(lay, 9);
+                var m = s.Get<Mind>(); var soc = s.Get<Society>();
+                var p = new List<int>();
+                for (int i = 0; i < 5; i++) { int a = m.AddPerson(s, At(12 + (i % 4) * 2, 1 + (i / 4) * 2)); m.SetPersonality(a, 0.5f, 0.6f, 0.6f, 0.5f, 0.4f); p.Add(a); }
+                m.SetPersonality(p[1], 0.5f, 0.6f, 0.95f, 0.5f, 0.4f);
+                s.Run(2);
+                foreach (int a in p) m[a].C.Joy = 0;
+                int fire = s.Causes.Add(CauseKind.Fire, "식당 조리대에 불이 붙었다", s.Tick, At(14, 2));
+                s.Facts.Emit(s.Tick, FactKind.Ignition, At(14, 2), 1, fire, -1, -1);
+                s.Facts.Emit(s.Tick, FactKind.FireSpread, At(15, 2), 1, fire, -1, -1);
+                s.Facts.Emit(s.Tick, FactKind.Extinguished, At(15, 2), 1, fire, p[2], -1);
+                s.Run(Time.Minutes(2));
+                long f0 = s.Facts.Total;
+                m.CallGatheringNow(s);
+                void Keep() { foreach (int a in p) { ref var c = ref m[a].C; c.Sleepy = 0; c.Thirst = 0; c.Hunger = 0; c.Bored = 0; s.Get<Life>()[c.Body].Asleep = 0; } }
+                long done = -1;
+                for (int k = 0; k < Time.Minutes(40) && done < 0; k++) { s.Step(); Keep(); if (soc.Celebrations > 0) done = s.Tick; }
+                for (int k = 0; k < Time.Hours(2); k++) { s.Step(); Keep(); }
+                float joyMin = p.Min(a => m[a].C.Joy);
+                float MemW(int a) => soc.Memories.Where(x => x.Owner == a && x.Topic == Topic.Joy).Select(x => soc.MemoryWeight(x, s.Tick)).DefaultIfEmpty(0).Max();
+                float memMin = p.Min(MemW);
+                if (Debug) foreach (int a in p) Console.WriteLine($"    {m.NameOf(a)} 기쁨 {m[a].C.Joy:0.00} · 좋은 기억 {MemW(a):0.00}");
+                Check("축하 뒤 좋은 기억이 남는다: 위기를 넘긴 축하 자리 두 시간 뒤에도 모두 기분이 밝고 (기쁨 0.1 넘게) · 축하가 무게 있는 좋은 기억 (0.5 넘게)으로 남는다",
+                    done > 0 && joyMin >= 0.1f && memMin >= 0.5f,
+                    $"축하 {soc.Celebrations} ({(done > 0 ? Time.Clock(done) : "-")}) · 두 시간 뒤 기쁨 가장 낮은 이 {joyMin:0.00} · 좋은 기억 가장 옅은 이 {memMin:0.00}");
+            }
         }
     }
 }

@@ -11,7 +11,8 @@ public sealed partial class Mind
     private readonly struct TalkOption
     {
         public readonly Topic T; public readonly float W; public readonly int About, Cause, Cell, Speaker;
-        public TalkOption(Topic t, float w, int about, int cause, int cell, int speaker) { T = t; W = w; About = about; Cause = cause; Cell = cell; Speaker = speaker; }
+        public readonly byte Fresh;   // 방금 겪은 일 (DF7): 1 알림 · 2 물음 · 3 함께 (0: 아니다)
+        public TalkOption(Topic t, float w, int about, int cause, int cell, int speaker, int fresh = 0) { T = t; W = w; About = about; Cause = cause; Cell = cell; Speaker = speaker; Fresh = (byte)fresh; }
     }
 
     /// <summary>사회와 같은 갈래의 난수 (틱 · 사람 · 열쇠) — 같은 때 같은 둘이면 같은 값.</summary>
@@ -33,14 +34,17 @@ public sealed partial class Mind
                 if (!b.IsPerson || b.C.Up == 0 || !Society.Leisure(b.C.Goal) || !PersonAwake(j)) continue;
                 if (RoomOf(a.C.Cell) != RoomOf(b.C.Cell) || Dist(a.C.Cell, b.C.Cell) > Society.TalkReach) continue;
                 if (sim.Tick - soc.LastTalk[i * soc.N + j] < Society.TalkRest) continue;
-                // 말을 건다: 분당 약 3% × 외향 × 아는 정도 (어울리러 온 이는 더)
-                float p = 0.03f * (0.5f + Math.Max(a.C.Extra, b.C.Extra)) * (a.C.Goal == GoalKind.Socialize || b.C.Goal == GoalKind.Socialize ? 1.6f : 1) * (0.4f + soc.KnownOf(i, j));
+                // 말을 건다: 분당 약 3% × 외향 × 아는 정도 (어울리러 온 이는 더) × 기분 (들뜬 이는 더 · 둘 다 가라앉았으면 덜 — DF7) × 방금 겪은 일을 아직 못 나눈 이는 더 (DF7)
+                float news = Math.Max(a.C.CrisisTold == 0 ? CrisisFresh(a.C, sim.Tick) : 0, b.C.CrisisTold == 0 ? CrisisFresh(b.C, sim.Tick) : 0);
+                float p = 0.03f * (0.5f + Math.Max(a.C.Extra, b.C.Extra)) * (a.C.Goal == GoalKind.Socialize || b.C.Goal == GoalKind.Socialize ? 1.6f : 1) * (0.4f + soc.KnownOf(i, j)) * MoodTalk(a.C, b.C) * (1 + 3 * news);
                 if (SocRnd(sim, "말 걸기", i, j) >= p) continue;
                 if (KeepsQuiet(sim, i, j)) continue;   // ⑨ 조용한 밤의 규칙 — 말을 삼킨다
                 var o = PickTopic(sim, i, j);
                 int sp = o.Speaker, li = sp == i ? j : i;
                 var end = Reply(sim, o, sp, li);
-                Act(sim, new SocialAct { Kind = SocialActKind.Talk, Actor = sp, Target = li, Other = o.About, Room = RoomOf(o.Cell), Cell = o.Cell, Cause = o.Cause, Topic = o.T, End = end });
+                Act(sim, new SocialAct { Kind = SocialActKind.Talk, Actor = sp, Target = li, Other = o.About, Arg = o.Fresh, Room = RoomOf(o.Cell), Cell = o.Cell, Cause = o.Cause, Topic = o.T, End = end });
+                if (o.Fresh != 0) HearCrisis(sp, li, o.Fresh);   // 방금 겪은 일을 나눴다 — 모르던 이는 안다 (DF7)
+                foreach (int x in new[] { sp, li }) Agents[x].C.Lonely = Math.Max(0, Agents[x].C.Lonely - 0.1f);   // 말을 나누면 외로움이 풀린다 (DF7)
                 HearInTalk(sim, o.T, end, sp, li, o.Cause);   // (라) 거짓말이 말로 옮겨 갔다 — 들은 이가 받는다
                 if (o.T == Topic.Death && o.About >= 0 && o.About < Agents.Count) KnowDeath(sim, Agents[li], Agents[o.About].C.Body, BeliefSource.Told, o.Cause);   // 소문으로 안다 (DF2)
                 NickInTalk(sim, i, j);   // ⑨ 이야기하다 별명이 붙는다
@@ -93,6 +97,7 @@ public sealed partial class Mind
         }
         // 함께 떠올리는 화해는 좋았던 일이다 — 무리 사이를 다시 풀자는 이야기가 아니다 (DF2)
         if (best >= 0) { var m = mems[best]; opts.Add(new(m.Topic == Topic.Peace ? Topic.Joy : m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, ci.Extra >= cj.Extra ? i : j)); }
+        CrisisTopic(sim, i, j, opts);   // 방금 겪은 일 (DF7 — 위기 뒤의 웅성거림)
         // 식량 · 물이 열흘을 못 버틴다 · 배급 중이면 먹을 것 이야기가 잦다 (미네소타 굶주림 실험)
         double food = sim.Book.DaysLeft((int)Res.Food, sim.Tick), water = sim.Book.DaysLeft((int)Res.Water, sim.Tick);
         bool rationed = RationFood > 0 || RationWater > 0;

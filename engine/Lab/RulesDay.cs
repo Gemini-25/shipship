@@ -40,9 +40,40 @@ public static partial class Program
         var dir3off = new Director(day.Layout) { KeepRing = false, DayMinutes = 3, PropShowOn = false };   // 물체 볼거리를 끈 연출 (견줌)
         double dayScreen = -1, dayScreenOff = -1;
         long startTick = day.Tick;
+        // DF7 마음에 남는 것: 깬 이의 감정을 10분마다 떠 본다 (모두 0.05 아래인 몫) · 새벽 한 시 반에 이 하루를 갈라 한쪽에만 주방 기름불을 낸다 (같은 씨 · 같은 때 — 그 뒤 네 시간의 대화 주제 · 기분을 견준다 ·
+        //   새벽 근무 · 밤에 깨어 쉬는 이가 다섯 — 보고서 §4-5의 '새벽 두 시 휴게실')
+        long FireAt = Time.Minutes(90);
+        int feltZero = 0, feltN = 0; double eveFelt = 0; int eveN = 0;
+        Task<(int fireTalks, int talks, int breachTalks, double felt, string first, string topics)>? fireEve = null;
+        static double Felt(Mind fm, Life fl) { double s = 0; int n = 0; foreach (var a in fm.Agents) if (a.IsPerson && a.C.Up != 0 && fl[a.C.Body].Asleep == 0) { s += a.C.Fear + a.C.Sad + a.C.Anger + a.C.Stress - a.C.Joy; n++; } return n > 0 ? s / n : 0; }
+        static string Topics(Society so, long from) => string.Join(" · ", so.Sayings.Where(y => y.Tick >= from).GroupBy(y => y.Topic).Select(g => $"{TalkTable.TopicName(g.Key)} {g.Count()}"));
+        static (int, int, int, double, string, string) FireEvening(Sim s)
+        {
+            var fm = s.Get<Mind>(); var fl = s.Get<Life>(); var fso = s.Get<Society>();
+            var stove = s.Layout.Furniture.First(fu => fu.Type == "Stove");
+            int oil = s.Causes.Add(CauseKind.Setup, "저녁을 짓던 조리대의 기름에 불이 붙었다", s.Tick, stove.Cells[0]);
+            long t0 = s.Tick, f0 = s.Facts.Total;
+            s.Get<Chemistry>().Ignite(stove.Cells[0], 3e6, oil);
+            var shelf = s.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Shelf" && fu.Room == stove.Room);   // 튄 기름이 곁의 선반에도 옮아붙었다 (관찰 장면 '문화'와 같은 불)
+            if (shelf != null) s.Get<Chemistry>().Ignite(shelf.Cells[0], 3e6, s.Causes.Add(CauseKind.Setup, "튄 기름불이 주방 선반에 옮아붙었다", s.Tick, shelf.Cells[0], oil));
+            double sum = 0; int n = 0;
+            for (int k = 0; k < Time.Hours(4); k++) { s.Step(); if (k >= Time.Minutes(30) && k % Time.Minutes(10) == 0) { sum += Felt(fm, fl); n++; } }
+            var talks = fso.Sayings.Where(y => y.Tick >= t0 && y.Topic == Topic.Fire).ToList();
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
+            {
+                foreach (var f in s.Facts.Since(f0).Where(f => f.Kind is FactKind.Ignition or FactKind.Extinguished or FactKind.FireSpread)) Console.WriteLine($"    (불) {Time.Clock(f.Tick)} {FactNames.Of(f.Kind)} {s.Causes.Text(f.Cause)} · {(f.Actor >= 0 && f.Actor < fm.Agents.Count ? fm.NameOf(f.Actor) : "-")}");
+                foreach (var a in fm.Agents.Where(a => a.IsPerson)) Console.WriteLine($"    (불) {fm.NameOf(a.Id)} 위기 {(a.C.CrisisAt > 0 ? Time.Clock(a.C.CrisisAt) : "-")} {a.C.CrisisTopic} 겪음 {a.C.CrisisSaw} 나눔 {a.C.CrisisTold} · 기분 {a.C.MoodGood:0.00}/{a.C.MoodBad:0.00} · 목표 {a.C.Goal} · 잠 {fl[a.C.Body].Asleep}");
+                foreach (var y in fso.Sayings.Where(y => y.Tick >= t0)) Console.WriteLine($"    (불) {Time.Clock(y.Tick)} {fm.NameOf(y.Speaker)} → {fm.NameOf(y.Listener)} {y.Topic}/{y.End} '{s.Causes.Text(y.Line)}'");
+            }
+            return (talks.Count, fso.Sayings.Count(y => y.Tick >= t0), fso.Sayings.Count(y => y.Tick >= t0 && y.Topic == Topic.Breach), n > 0 ? sum / n : 0, talks.Count > 0 ? $"{Time.Clock(talks[0].Tick)} {s.Causes.Text(talks[0].Line)}" : "", Topics(fso, t0));
+        }
         for (int k = 0; k < Time.Hours(24); k++)
         {
             day.Step();
+            if (k % Time.Minutes(10) == 0)
+                foreach (var a in people) if (a.C.Up != 0 && life[a.C.Body].Asleep == 0) { feltN++; if (a.C.Fear < 0.05f && a.C.Sad < 0.05f && a.C.Anger < 0.05f && a.C.Joy < 0.05f && a.C.Stress < 0.05f) feltZero++; }
+            if (k == FireAt) { var fork = day.Clone(); fireEve = Task.Run(() => FireEvening(fork)); }
+            if (k > FireAt && k < FireAt + Time.Hours(4) && k - FireAt >= Time.Minutes(30) && (k - FireAt) % Time.Minutes(10) == 0) { eveFelt += Felt(m, life); eveN++; }
             dir.Observe(day); dir3.Observe(day); dir3off.Observe(day);
             if (day.Tick % Time.TicksPerDay == 0 && dayScreen < 0) { dayScreen = dir3.ScreenSeconds; dayScreenOff = dir3off.ScreenSeconds; }   // 첫 하루 (자정까지 — 하루 예산은 날마다)
             acts.AddRange(m.ActsSince(actCur)); actCur = m.ActsTotal;
@@ -72,7 +103,7 @@ public static partial class Program
                     Console.WriteLine($"    {Time.Clock(day.Tick)} {m.NameOf(a.Id)} 배고픔 {a.C.Hunger:0.00} 목마름 {a.C.Thirst:0.00} 목표 {a.C.Goal} · {m.Thought(a.Id)} · 양분 {life[a.C.Body].Reserve:0.0}");
             }
             if (Debug && k % Time.Hours(1) == 0)
-                Console.WriteLine($"    {Time.Clock(day.Tick)} " + string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)}:{a.C.Goal}@{(m.RoomOf(a.C.Cell) >= 0 ? day.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-")}")));
+                Console.WriteLine($"    {Time.Clock(day.Tick)} " + string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)}:{a.C.Goal}@{(m.RoomOf(a.C.Cell) >= 0 ? day.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-")} 기분 {a.C.MoodGood:0.00}/{a.C.MoodBad:0.00} 감정 겁{a.C.Fear:0.00} 슬{a.C.Sad:0.00} 화{a.C.Anger:0.00} 기{a.C.Joy:0.00} 긴{a.C.Stress:0.00} 외{a.C.Lonely:0.00} 배{a.C.Hunger:0.00} 졸{a.C.Sleepy:0.00} 심{a.C.BoredLong:0.00}")));
         }
 
         Check("하루 3분 (물체 볼거리 PH12): 평시 하루의 화면 시간이 물체 볼거리를 끈 연출의 ±5% — 깨어 움직이는 물체 · 떨어진 물건의 느린 틱도 하루 느린 예산 안 (늦은 조짐은 예산을 넘겨 그대로)",
@@ -137,6 +168,24 @@ public static partial class Program
         Check("평시 하루의 마음: 아무도 우울 · 불안 0.05를 넘지 않고 · 악몽 · 공황 발작 · 되살아남이 없다",
             people.All(a => a.C.Depress < 0.05f && a.C.Anxiety < 0.05f) && m.Nightmares == 0 && m.PanicAttacks == 0 && m.Flashbacks == 0,
             $"우울 많아야 {people.Max(a => a.C.Depress):0.000} · 불안 {people.Max(a => a.C.Anxiety):0.000} · 충격 {people.Max(a => a.C.Shock):0.00} · 악몽 {m.Nightmares} · 발작 {m.PanicAttacks} · 되살아남 {m.Flashbacks}");
+
+        // ── DF7 마음에 남는 것 (보고서 §4-5 · §4-6): 평시의 감정이 늘 0이 아니다 · 기름불이 난 판은 대화 주제와 기분이 다르다 · 함께 웃은 둘은 서로를 좋은 일로 기억한다 ──
+        {
+            Check("평시 감정 0의 몫 ≤ 절반: 깬 이의 감정 (겁 · 슬픔 · 화 · 기쁨 · 긴장)이 모두 0.05 아래인 때가 하루 잰 것의 절반을 넘지 않는다 — 몸 · 욕구 · 겪은 일이 남긴 기분이 감정의 바닥 (예전 85%)",
+                feltN > 0 && feltZero * 2 <= feltN, $"모두 0.05 아래 {feltZero}/{feltN} ({100.0 * feltZero / Math.Max(1, feltN):0}%)");
+            var so = day.Get<Society>();
+            var eve = fireEve!.Result;
+            long eveFrom = startTick + FireAt;
+            int calmFire = so.Sayings.Count(y => y.Tick >= eveFrom && y.Tick < eveFrom + Time.Hours(4) && y.Topic == Topic.Fire);
+            double calm = eveN > 0 ? eveFelt / eveN : 0;
+            Check("기름불이 난 판은 다르다: 같은 하루를 새벽 한 시 반에 갈라 한쪽에만 주방 기름불 — 그 네 시간 이야기의 절반 넘게가 불 이야기 (안 난 쪽은 0 · 연기에 닫은 문을 '구멍' 이야기로 하지 않는다) · 30분 뒤부터 깬 이의 마음 (겁 + 슬픔 + 화 + 긴장 − 기쁨)이 0.03 넘게 무겁다",
+                eve.fireTalks >= 2 && eve.fireTalks * 2 > eve.talks && eve.breachTalks == 0 && calmFire == 0 && eve.felt - calm >= 0.03,
+                $"불 이야기 {eve.fireTalks}/{eve.talks} (처음 '{eve.first}') · 구멍 이야기 {eve.breachTalks} · 안 난 쪽 {calmFire} / 마음 {eve.felt:0.000} vs {calm:0.000} / 주제 — 불: {eve.topics} · 안 남: {Topics(so, eveFrom)}");
+            int laughs = so.Sayings.Count(y => y.End == TalkEnd.Laugh && y.Topic is Topic.Small or Topic.Joy && y.Speaker != y.Listener);
+            int good = so.Memories.Count(x => x.Topic == Topic.Joy && x.About >= 0 && x.About != x.Owner);
+            Check("함께 웃은 둘은 서로를 좋은 일로 기억한다: 평시 하루에 실컷 웃은 대화가 있으면 좋은 일 기억이 남는다 (예전엔 탓 · 다툼 기억뿐)",
+                laughs >= 1 && good >= 1, $"웃은 대화 {laughs} · 좋은 일 기억 {good} · 기억 갈래 {string.Join(" · ", so.Memories.GroupBy(x => x.Topic).Select(g => $"{TalkTable.TopicName(g.Key)} {g.Count()}"))}");
+        }
 
         // ── ⑨ 문화: 보통의 하루에는 금기 · 추모 · 규칙을 어기는 일이 없다 (함께 먹는 때는 하루로는 관습이 되지 않는다 — 사흘이 걸린다) ──
         {
