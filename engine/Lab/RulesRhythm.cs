@@ -117,6 +117,7 @@ public static partial class Program
             m.SetPersonality(maker, 0.1f, 0.95f, 0.3f, 0.5f, 0.3f);
             s.Run(1);
             m[maker].C.SkRepair = 0.6f;
+            m[reader].C.SkRepair = 0.1f; m[player].C.SkRepair = 0.1f;   // 손재주는 만드는 이만 (시드의 손재주가 높으면 셋이 한 작업대를 두고 다투어 몫이 우연에 흔들렸다 — 5단 C2가 문 닫는 때만 바꿔도 깨졌다)
             var who = new[] { reader, player, maker };
             var picks = who.Select(_ => new Dictionary<Hobby, int>()).ToArray();
             var seen = who.Select(_ => new HashSet<long>()).ToArray();

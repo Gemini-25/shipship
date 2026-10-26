@@ -1354,12 +1354,26 @@ public sealed partial class ShipMind : IEngine
         foreach (int d in _roomDoors[x.Room])
         {
             if (F.DoorOpen[d] <= 0 || _st.DoorTarget[d] <= 0) continue;
-            int dc = L.Doors[d].Cell;
-            bool near = false;
-            foreach (var a in _mind.Agents) if (a.C.Up != 0 && (a.C.Cell == dc || a.C.WaitDoor == d || _mind.Dist(a.C.Cell, dc) <= 2 && _mind.Walking(a))) { near = true; break; }
-            if (!near) _st.RequestDoor(d, 0);
+            if (!DoorInUse(d)) { _st.RequestDoor(d, 0); SealDoorRequests++; }
         }
     }
+
+    /// <summary>
+    /// 그 문을 쓰는 중인가 (5단 C3 — 봉쇄 · 파편 대피 · 달력이 같은 잣대): 문 칸 위의 사람 · 로봇 (깨어 있든 아니든 · 멈춘 로봇도) · 문 칸 위의 몸 ·
+    /// 그 문을 기다리는 이 · 곁 2칸에서 걷는 이. 곁에 서 있기만 한 이 (충전 · 일 · 쉼)는 쓰는 중이 아니다. 아는 것: 문 조절기 · 카메라 칸 · 걷는지 (봉쇄와 같은 읽기).
+    /// </summary>
+    private bool DoorInUse(int d)
+    {
+        if (_mind == null) return false;
+        int dc = L.Doors[d].Cell;
+        foreach (var a in _mind.Agents)
+            if (a.C.Cell == dc || a.C.WaitDoor == d || a.C.Up != 0 && _mind.Dist(a.C.Cell, dc) <= 2 && _mind.Walking(a)) return true;
+        if (_life != null) foreach (var b in _life.Bodies) if (b.Cell == dc) return true;
+        return false;
+    }
+
+    /// <summary>봉쇄한 방 문에 닫기를 요청한 수 (셈 — 찍지 않는다).</summary>
+    public long SealDoorRequests;
 
     /// <summary>바깥문 지키기: 열려 있는데(열라는 요청이 남았는데) 곁 3칸에 아무도 없고 · 열어 달라고 기다리는 이도 · 선외에 나간 이도 없으면 닫는다 —
     /// 열린 바깥문은 에어락 안쪽 문틈으로 배 공기를 조금씩 내보낸다 (밤새면 배 하나가 빈다).</summary>
