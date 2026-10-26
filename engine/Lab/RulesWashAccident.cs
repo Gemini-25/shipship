@@ -127,5 +127,31 @@ public static partial class Program
                 tank.ch4 >= 10 && tank.stench == 0 && seal.stench >= 0.004 && bowl.stench >= 0.004 && bowl.o2drop - none.o2drop > 0,
                 $"통 메탄 +{tank.ch4:0.0}ppm · 악취 {tank.stench:0.0000} / 봉함 악취 {seal.stench:0.0000}ppm / 걸린 것 악취 {bowl.stench:0.0000}ppm · 산소 −{(bowl.o2drop - none.o2drop) * 1000:0.00}밀리몰 (오물 없는 맞수보다)");
         }
+
+        // C20 포자 기침 (DF1이 셈을 지었다 — 마시는 포자 = (제 칸 + 방 평균) / 2): 화장실의 다른 칸이 모두 곰팡이 0.8 · 곰팡이 없는 칸에 선 이가 1시간 → 기침 1 넘게 · 증상 기침 ·
+        //     기침 소리의 원인 글에 '곰팡이' (← 그 방에서 가장 짙은 곰팡이 마디 — C20) / 곰팡이 없는 배는 0
+        {
+            (long coughs, bool sym, string why) Spore(bool mold)
+            {
+                var s = Worlds.Full(lay, 3);
+                var life = s.Get<Life>(); var snd = s.Get<Sound>();
+                var toilet = lay.Furniture.First(x => x.Type == "Toilet");
+                int room = lay.Room[toilet.Cells[0]];
+                var cells = lay.Rooms[room].Cells.Where(c => lay.FurnitureAt[c] < 0).ToArray();
+                int stand = cells[cells.Length / 2];
+                if (mold) foreach (int c in lay.Rooms[room].Cells.Where(c => c != stand)) life.Mold[c] = 0.8f;
+                int b = life.AddBody(stand);
+                s.Run(2);
+                long c0 = life.Coughs, log0 = snd.Logged;
+                for (int k = 0; k < (int)Time.Hours(1); k++) { life[b].Cell = stand; s.Step(); }
+                var cough = snd.LogSince(log0).Where(e => e.Kind == SoundKind.Cough && e.Actor == Sound.BodyActor(b)).ToList();
+                string why = cough.Count > 0 && cough[^1].Cause != 0 ? s.Causes.Story(cough[^1].Cause) : "";
+                return (life.Coughs - c0, (Life.Symptoms(life[b]) & Sym.Cough) != 0, why);
+            }
+            var m = Spore(true); var none = Spore(false);
+            Check("화장실 사고 (C20) 포자 기침: 화장실의 다른 칸이 모두 곰팡이 0.8 · 곰팡이 없는 칸에 1시간 — 기침 1 넘게 · 증상 '기침' · 기침 소리의 원인 글에 '곰팡이' / 곰팡이 없는 배는 0",
+                m.coughs >= 1 && m.sym && m.why.Contains("곰팡이") && none.coughs == 0,
+                $"기침 {m.coughs} · 증상 {m.sym} · '{m.why}' / 곰팡이 없음 {none.coughs}");
+        }
     }
 }
