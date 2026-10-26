@@ -50,8 +50,18 @@ public sealed partial class Director
     public string Caption = "";
     public readonly List<Highlight> Highlights = new();
     public readonly List<(long tick, byte[] snap, int len)> Ring = new();   // 찍은 것은 snap의 앞 len 바이트 (칸을 다시 쓴다)
-    /// <summary>빌려 준 고리 칸 (장면 금고가 다른 일꾼에서 압축하는 동안 — 고리가 돌아도 그 칸은 다시 쓰지 않고 새로 잡는다 · 복사 없이 ≤ 1ms).</summary>
-    public readonly System.Collections.Concurrent.ConcurrentDictionary<byte[], byte> Lent = new(ReferenceEqualityComparer.Instance);
+    /// <summary>빌려 준 고리 칸 → 빌린 수 (장면 금고가 다른 일꾼에서 압축하는 동안 — 고리가 돌아도 그 칸은 다시 쓰지 않고 새로 잡는다 · 복사 없이 ≤ 1ms · 같은 칸을 두 장면이 빌리면 둘 다 돌려줄 때까지).</summary>
+    public readonly System.Collections.Concurrent.ConcurrentDictionary<byte[], int> Lent = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>고리 칸을 빌려 준다 (빌린 수 + 1).</summary>
+    public void Lend(byte[] snap) => Lent.AddOrUpdate(snap, 1, (_, n) => n + 1);
+
+    /// <summary>빌린 칸을 돌려받는다 (빌린 수 − 1 — 0이 되어야 고리가 다시 쓴다).</summary>
+    public void GiveBack(byte[] snap)
+    {
+        while (Lent.TryGetValue(snap, out int n))
+            if (n <= 1 ? Lent.TryRemove(new KeyValuePair<byte[], int>(snap, n)) : Lent.TryUpdate(snap, n - 1, n)) return;
+    }
     public bool KeepRing = true;
     public long Switches;
     public double ScreenSeconds;                // 지금까지 흐른 화면 시간

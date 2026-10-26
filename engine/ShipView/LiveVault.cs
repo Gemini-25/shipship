@@ -51,7 +51,7 @@ public sealed class SceneVault
         if (e != null && e.Tick <= ring.tick) return;
         if (e == null) { e = new VaultEntry { H = h }; Scenes.Add(e); }
         e.Day = (int)(Math.Max(0, h.Tick) / Time.TicksPerDay);
-        if (lender != null && PackLater) { lender.Lent[ring.snap] = 0; Put(e, ring.tick, ring.snap, ring.len, lender); return; }
+        if (lender != null && PackLater) { lender.Lend(ring.snap); Put(e, ring.tick, ring.snap, ring.len, lender); return; }
         var raw = new byte[ring.len];
         Buffer.BlockCopy(ring.snap, 0, raw, 0, ring.len);
         Put(e, ring.tick, raw, raw.Length, null);
@@ -77,7 +77,7 @@ public sealed class SceneVault
         {
             var packed = VoyageBundle.Pack(raw, len);
             lock (_gate) if (ReferenceEquals(e.Data, raw)) { e.Data = packed; e.Packed = true; }   // 그사이 다른 찍기로 바뀌었으면 버린다
-            lender?.Lent.TryRemove(raw, out _);
+            lender?.GiveBack(raw);   // 같은 칸을 다른 장면도 빌렸으면 그쪽이 끝날 때까지 빌린 채
         });
     }
 
