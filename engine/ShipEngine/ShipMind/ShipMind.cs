@@ -35,6 +35,7 @@ public struct Incident
     // 막힌 로봇 풀기 (docs/MIND.md 3단): 이 일에서 놓아준 로봇 · 때 (한동안 다시 보내지 않는다 — 다른 로봇이 간다)
     public int Dropped, Dropped2;
     public long DroppedAt, DroppedAt2;
+    public byte Cut;             // 막힌 곳 (DF3): 맡길 몸이 모두 막힌 곳에 끊겼다고 일지에 적었다 (사건마다 한 번)
 }
 
 /// <summary>주컴퓨터가 돌려 본 미래 하나 (안 하나의 결과).</summary>
@@ -662,6 +663,7 @@ public sealed partial class ShipMind : IEngine
         // 소리 단계 S4: 마이크가 들은 큰 소리 — 로봇이 가 볼 때까지 (10분)
         foreach (var x in Incidents) if (x.Active != 0 && x.Kind == IncidentKind.Heard && HeardPending(sim, x)) Mark(IncidentKind.Heard, x.Room);
         // ⑥ 생명 설비 정전 (급전선을 다시 올릴 수 없다 — 연장선)
+        ReadBurns(sim); RestoreLineShed(sim);   // 막힌 곳 (DF3): 탄 연장선 · 짐을 줄인 방
         foreach (var (r, cell, cause) in PowerLostRooms(sim)) { Raise(sim, IncidentKind.PowerLost, r, cell, 1, -1, cause); Mark(IncidentKind.PowerLost, r); }
         // 다시 멀쩡하게 두 번 읽히면 끝
         for (int i = 0; i < Incidents.Count; i++)
@@ -1056,7 +1058,7 @@ public sealed partial class ShipMind : IEngine
     private void AssignRobots(Sim sim, ref Incident x)
     {
         if (_mind == null) return;
-        GoalKind g; int target; bool drone;
+        GoalKind g; int target; bool drone; int arg = 0;
         ReadSnags(sim, ref x);
         switch (x.Kind)
         {
@@ -1086,6 +1088,9 @@ public sealed partial class ShipMind : IEngine
                     else if (robots) return;
                 }
                 int o = OutsideOf(x.Room);
+                // 막힌 곳 (DF3): 같은 방의 앞 사건 · 다른 사건이 막힌 문 — 그 문을 지나야 하는 방법은 해 보지 않고 곧장 다음 안으로
+                InheritCut(sim, ref x, 1, x.Cell, true);
+                if (o >= 0) InheritCut(sim, ref x, 2, o, false);
                 bool outFirst = x.Kind == IncidentKind.Vacuum ? x.Tries % 2 == 0 || EmptyHeld(x.Room) : x.Tries % 2 == 1;
                 byte pick = 0;
                 foreach (byte m in outFirst ? new byte[] { 2, 1 } : new byte[] { 1, 2 })
@@ -1126,7 +1131,9 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.SensorLost: g = GoalKind.Investigate; target = x.Cell; drone = false; break; // 끊긴 자리로 가서 잇는다 (가는 길에 그 방도 본다)
             case IncidentKind.LineCut: g = GoalKind.Investigate; target = x.Cell; drone = false; break;    // 끊긴 전선 · 관 자리로 가서 잇고 죈다
             case IncidentKind.PipeHunt: g = GoalKind.Investigate; target = x.Cell; drone = false; break;   // 새는 관을 따라 칸마다 살핀다
-            case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
+            case IncidentKind.PowerLost:     // ⑥ 옆 방에서 연장선을 끌어온다 — 막힌 곳 (DF3): 탄 연장선의 까닭을 보고 끌어올 방 · 짐 줄이기를 정한다
+                if (!RewireArg(sim, ref x, out arg)) return;
+                g = GoalKind.Rewire; target = x.Room; drone = false; break;
             case IncidentKind.Heard: g = GoalKind.Investigate; target = x.Cell; drone = true; break;     // 소리 단계 S4: 큰 소리가 난 자리로 가서 본다
             case IncidentKind.Hot when x.Subject == 1: g = GoalKind.Investigate; target = x.Cell; drone = true; break;   // 열화상의 뜨거운 자리로 가서 본다 (방 공기가 더운 것은 공조의 몫)
             default: return;
@@ -1136,6 +1143,8 @@ public sealed partial class ShipMind : IEngine
         // 막힌 로봇 풀기: 맡긴 로봇이 그 일을 할 몸이 아니거나 (팔 · 다리) · 막힌 뒤 3분 넘게 다른 것을 하면 이 일에서 놓아주고 다른 로봇을 보낸다 (예전엔 30분 동안 '맡은 이 있음')
         ReleaseStuck(sim, ref x, g, x.RobotA); ReleaseStuck(sim, ref x, g, x.RobotB);
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
+        if (x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum) && NoWayTo(x.Room)) { TellNoWay(sim, ref x); return; }   // 막힌 곳 (DF3): 로봇 둘이 '갈 길이 없다'로 막힌 방 — 더 보내지 않는다 (같은 까닭 두 번이면 다른 길)
+        int goalCell = x.Kind is IncidentKind.Leak or IncidentKind.Vacuum && g == GoalKind.Investigate ? target : x.Cell, cutDoor = -1;
         while (have < need)
         {
             int best = -1, bd = int.MaxValue, bestFrom = -1, cands = 0, bestHand = 0;
@@ -1151,12 +1160,13 @@ public sealed partial class ShipMind : IEngine
                 }
                 if (a.Id == x.RobotA && Busy(x.RobotA) || a.Id == x.RobotB && Busy(x.RobotB)) continue; // 이 사건에 가 있는 로봇 (일을 마쳤으면 다시 보낼 수 있다)
                 if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10) || a.Id == x.Dropped2 && sim.Tick - x.DroppedAt2 < Time.Minutes(10)) continue;   // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다 (둘까지 — A → B → A가 되지 않게)
+                if (CutBy(a.C.Cell, goalCell, Mind.Eva(a)) is int cd && cd >= 0) { if (cutDoor < 0) cutDoor = cd; continue; }   // 막힌 곳 (DF3): 막혀 있는 문을 지나야만 닿는다 — 보내지 않는다
                 int hand = HandCost(a, g);
                 int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + hand + (from >= 0 ? 100000 : 0);   // 길 거리 (벽 너머 직선이 아니라 문을 돌아) + 손에 든 것
                 cands++;
                 if (d < bd) { bd = d; best = a.Id; bestFrom = from; bestHand = hand; }
             }
-            if (best < 0) break;
+            if (best < 0) { if (cutDoor >= 0) TellCut(sim, ref x, cutDoor); break; }
             if (bestFrom >= 0)
             {
                 var y = Incidents[bestFrom];
@@ -1168,7 +1178,7 @@ public sealed partial class ShipMind : IEngine
             var belief = g == GoalKind.Repair && x.Kind == IncidentKind.ElectricFault && _net != null
                 ? new Belief { Kind = BeliefKind.Broken, Cell = _net.Devices[target].Cell, Subject = target, Conf = 1f, Cause = x.Cause }
                 : BeliefOf(x);
-            _mind.Assign(sim, best, g, target, belief, sim.Tick + Time.Minutes(30));
+            _mind.Assign(sim, best, g, target, belief, sim.Tick + Time.Minutes(30), arg);
             if (!Busy(x.RobotA)) x.RobotA = best; else x.RobotB = best;
             x.SentAt = sim.Tick;
             have++;
@@ -1179,7 +1189,7 @@ public sealed partial class ShipMind : IEngine
             sim.Facts.Emit(sim.Tick, FactKind.ComputerAssign, x.Cell, 0, x.Cause, best, (int)x.Kind);
         }
         // 로봇이 모자라면 사람에게 부탁한다 (함장 방침 — 기본은 로봇이 하나도 없을 때 1분 기다린 뒤)
-        if (have < need && Policy.AskPeople != 0 && (Policy.AskPeople == 2 || have == 0)) AskPerson(sim, ref x, g, target);
+        if (have < need && Policy.AskPeople != 0 && (Policy.AskPeople == 2 || have == 0)) AskPerson(sim, ref x, g, target, arg);
     }
 
     /// <summary>
@@ -1237,11 +1247,15 @@ public sealed partial class ShipMind : IEngine
     private void ReadSnags(Sim sim, ref Incident x)
     {
         if (_mind == null) return;
-        foreach (int rb in new[] { x.RobotA, x.RobotB })
+        foreach (int rb in new[] { x.RobotA, x.RobotB, x.Person })
         {
             if (rb < 0 || rb >= _mind.Agents.Count) continue;
+            bool person = rb == x.Person && _mind.Agents[rb].IsPerson;   // 막힌 이는 맡긴 이에게 까닭을 돌려준다 (DF3 — 부탁을 받은 사람도)
             ref var c = ref _mind.Agents[rb].C;
-            if (!Mind.Telling(c.Snag) || c.SnagTick < x.SentAt || c.SnagTick <= x.SnagTick) continue;
+            if (!Mind.Telling(c.Snag) || c.SnagTick < (person ? x.AskedAt : x.SentAt) || c.SnagTick <= x.SnagTick) continue;
+            if (person && (c.SnagGoal != c.AssignedGoal || c.AssignedUntil < c.SnagTick)) continue;   // 부탁받은 일에서 막힌 것만
+            if (Mind.DoorSnag(c.Snag) && c.SnagSubject >= 0 && c.SnagSubject < L.Doors.Count) NoteSpot(1, c.SnagSubject, -1, c.Snag, 0, 0, c.SnagTick);   // 막힌 곳 (DF3): 그 문에 붙여 기억한다
+            else if (c.Snag == SnagKind.NoPath && x.Room >= 0 && x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum)) NoteSpot(4, x.Room, -1, c.Snag, 0, 0, c.SnagTick);   // · 그 방에 갈 길이 없다
             bool again = x.Snag == c.Snag && x.SnagSubject == c.SnagSubject;
             x.Snag = c.Snag; x.SnagGoal = c.SnagGoal; x.SnagCell = c.SnagCell; x.SnagSubject = c.SnagSubject; x.SnagTick = c.SnagTick;
             if (x.Kind is IncidentKind.Vacuum or IncidentKind.Leak && !HasPlan(x.Id))   // 기본 절차서의 방법(안에서 · 바깥에서)이 막혔다 — 까닭과 함께 적는다 (막힐 때 그 로봇이 하던 목표의 대상으로 가른다)
@@ -1625,7 +1639,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w); SaveMood(w); SaveChores(w); SaveParts(w); SaveComms(w); SaveVoyage(w); SaveCalendar(w); SaveWash(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
-        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w); SaveEars(w); SaveThoughts(w);
+        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w); SaveHunt(w); SaveGravity(w); SaveEars(w); SaveThoughts(w); SaveSpots(w);
     }
 
     public void Load(StateReader r)
@@ -1639,6 +1653,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r); LoadMood(r); LoadChores(r); LoadParts(r); LoadComms(r); LoadVoyage(r); LoadCalendar(r); LoadWash(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
-        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r); LoadEars(r); LoadThoughts(r);
+        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r); LoadHunt(r); LoadGravity(r); LoadEars(r); LoadThoughts(r); LoadSpots(r);
     }
 }

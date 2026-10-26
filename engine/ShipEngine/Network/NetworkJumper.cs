@@ -10,6 +10,16 @@ public struct Jumper
     public float Amps;
 }
 
+/// <summary>탄 연장선 하나 (⑥이 남긴다 — 주컴퓨터가 읽어 막힌 곳으로 적는다 · 깊이 고침 DF3).</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
+public struct JumperBurn
+{
+    public long Seq, Tick;
+    public int From, To, Cell;
+    public byte Why;           // 1 정격을 넘게 흘렀다 · 2 깔린 바닥이 젖었다 · 3 피복이 뜨거웠다
+    public float Amps;
+}
+
 /// <summary>
 /// ⑥ 임시 배선 — 연장선 (docs/ENGINE.md ⑥ 바퀴 2). 급전선이 젖거나 타서 다시 올릴 수 없는 방에 옆 방 급전선의 전기를 연장선으로 끌어온다.
 /// 연장선은 바닥 · 문 칸을 따라 깔리고 (4mm² 구리 · 4.6mΩ/m · 정격 32A), 그 방의 짐이 옆 방 급전선에 얹힌다 (옆 방 차단기가 과부하로 떨어질 수 있다).
@@ -23,6 +33,8 @@ public sealed partial class Network
     private readonly List<int[]> _jPath = new();   // 연장선이 지나는 칸 (From 통풍구 → To 통풍구 · 찍지 않는다 — 되살릴 때 다시 찾는다)
     public int JumperSeq;
     public long JumpersLaid, JumperShorts, JumpersPulled;
+    public List<JumperBurn> Burns = new();   // 탄 연장선 (마지막 열여섯)
+    public long BurnSeq;
     private int[] _feed = Array.Empty<int>();       // 틱마다: 방 → 지금 전기를 주는 급전선
     private double[] _roomLoad = Array.Empty<double>();
 
@@ -119,18 +131,18 @@ public sealed partial class Network
             j.Amps = (float)amps;
             // 문틀에 깔린 연장선 — 그 문은 닫히지 않는다
             if (st != null) foreach (int c in path) if (L.Kind[c] == CellKind.Door) st.RequestDoor(L.DoorAt[c], 1);
-            int shortAt = -1; string why = "";
+            int shortAt = -1; string why = ""; byte whyK = 0;
             if (carrying)
             {
                 double w = amps * amps * JumperOhmPerM;
                 if (w > 0.5) foreach (int c in path) F.AddSurfaceHeat(c, w * dt);
                 if (amps > JumperRatingA * 1.5) j.OverSec += (float)dt; else j.OverSec = 0;
-                if (j.OverSec > 60) { shortAt = path[path.Length / 2]; why = $"정격을 넘게 흘러 ({amps:0}A) 피복이 녹았다"; }
+                if (j.OverSec > 60) { shortAt = path[path.Length / 2]; why = $"정격을 넘게 흘러 ({amps:0}A) 피복이 녹았다"; whyK = 1; }
                 if (shortAt < 0)
                     foreach (int c in path)
                     {
-                        if (F.Stored(T.sWater, c) > 20) { shortAt = c; why = "연장선이 깔린 바닥이 젖었다"; break; }
-                        if (F.Tf[c] > 470) { shortAt = c; why = "연장선 피복이 뜨거워 녹았다"; break; }
+                        if (F.Stored(T.sWater, c) > 20) { shortAt = c; why = "연장선이 깔린 바닥이 젖었다"; whyK = 2; break; }
+                        if (F.Tf[c] > 470) { shortAt = c; why = "연장선 피복이 뜨거워 녹았다"; whyK = 3; break; }
                     }
             }
             Jumpers[k] = j;
@@ -143,16 +155,18 @@ public sealed partial class Network
                 if (donor >= 0) { FaultCell[donor] = shortAt; _faultCause[donor] = cause; }
                 Shorts++; JumperShorts++;
                 sim.Facts.Emit(sim.Tick, FactKind.Short, shortAt, 0, cause, other: donor);
+                Burns.Add(new JumperBurn { Seq = ++BurnSeq, Tick = sim.Tick, From = j.From, To = j.To, Cell = shortAt, Why = whyK, Amps = (float)amps });
+                if (Burns.Count > 16) Burns.RemoveAt(0);
                 Unplug(sim, k, "합선으로 타 버렸다", cause);
             }
         }
     }
 
-    private void SaveJumpers(StateWriter w) { w.List(Jumpers); w.I32(JumperSeq); w.I64(JumpersLaid); w.I64(JumperShorts); w.I64(JumpersPulled); }
+    private void SaveJumpers(StateWriter w) { w.List(Jumpers); w.I32(JumperSeq); w.I64(JumpersLaid); w.I64(JumperShorts); w.I64(JumpersPulled); w.List(Burns); w.I64(BurnSeq); }
 
     private void LoadJumpers(StateReader r)
     {
-        Jumpers = r.List<Jumper>(); JumperSeq = r.I32(); JumpersLaid = r.I64(); JumperShorts = r.I64(); JumpersPulled = r.I64();
+        Jumpers = r.List<Jumper>(); JumperSeq = r.I32(); JumpersLaid = r.I64(); JumperShorts = r.I64(); JumpersPulled = r.I64(); Burns = r.List<JumperBurn>(); BurnSeq = r.I64();
         _jPath.Clear();
         foreach (var j in Jumpers) _jPath.Add(JumperPath(j.From, j.To) ?? Array.Empty<int>());
     }
@@ -208,16 +222,26 @@ public sealed partial class Network
 
     public bool IsStripped(int d) => d >= 0 && d < Stripped.Length && Stripped[d] != 0;
 
-    /// <summary>연장선을 끌어올 방: 제 급전선이 살아 있고 · 정격에 여유가 있고 · 길이 닿는 가장 가까운 방 (-1 없음).</summary>
-    public int BestDonorRoom(int room)
+    /// <summary>연장선에 얹히는 짐인가 (원자로 · 보조 발전기 · 전지는 내는 쪽).</summary>
+    public static bool LoadOnJumper(string role) => role is not ("reactor" or "aux" or "battery");
+
+    /// <summary>그 방의 켜 둔 장치가 연장선에 얹을 전류 (A).</summary>
+    public double RoomNeedA(int room)
+    {
+        double needA = 0;
+        foreach (var d in Devices) if (d.Room == room && On[d.Id] != 0 && LoadOnJumper(d.Def.Role)) needA += d.Def.Kw * 1000 / Volts;
+        return needA;
+    }
+
+    /// <summary>연장선을 끌어올 방: 제 급전선이 살아 있고 · 정격에 여유가 있고 · 길이 닿는 가장 가까운 방 (-1 없음 · avoid: 끌어오지 않을 방 — 주컴퓨터가 아는 탄 길).</summary>
+    public int BestDonorRoom(int room, List<int>? avoid = null)
     {
         if (room < 0 || room >= L.Rooms.Count) return -1;
-        double needA = 0;
-        foreach (var d in Devices) if (d.Room == room && On[d.Id] != 0 && d.Def.Role is not ("reactor" or "aux" or "battery")) needA += d.Def.Kw * 1000 / Volts;
+        double needA = RoomNeedA(room);
         int best = -1; double bs = double.MaxValue;
         for (int r = 0; r < L.Rooms.Count; r++)
         {
-            if (r == room || !OwnFeederLive(r) || Vent[r] < 0) continue;
+            if (r == room || !OwnFeederLive(r) || Vent[r] < 0 || avoid != null && avoid.Contains(r)) continue;
             var path = JumperPath(r, room);
             if (path == null || path.Length > 60) continue;
             int f = RoomFeeder[r];

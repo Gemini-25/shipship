@@ -66,12 +66,14 @@ public sealed partial class Mind
         Next(a, t);
     }
 
-    /// <summary>연장선 계획: 옆 방 통풍구로 가서 꽂고 → 그 방 통풍구까지 깔고 잇는다.</summary>
+    /// <summary>연장선 계획: 옆 방 통풍구로 가서 꽂고 → 그 방 통풍구까지 깔고 잇는다 (맡긴 이가 끌어올 방을 정해 주었으면 그 방 — 주컴퓨터가 아는 탄 길을 피한다 · DF3).</summary>
     private bool PlanRewire(Agent a, int room, List<PlanStep> plan)
     {
         if (_net == null || room < 0 || room >= L.Rooms.Count || _net.RoomPowered(room) || _net.Jumpers.Exists(j => j.To == room)) return false;
-        int donor = _net.BestDonorRoom(room);
-        if (donor < 0) return false;
+        ref var c = ref a.C;
+        int given = c.AssignedGoal == GoalKind.Rewire && c.AssignedTarget == room && c.AssignedUntil > _nowTick ? c.AssignedArg - 1 : -1;
+        int donor = given >= 0 ? given : _net.BestDonorRoom(room);
+        if (donor < 0 || donor >= L.Rooms.Count || !_net.OwnFeederLive(donor) || _net.JumperPath(donor, room) == null) return false;
         plan.Add(Go(_net.Vent[donor], 1));
         plan.Add(new PlanStep { Kind = StepKind.Rewire, Target = room, Cell = donor, Arg = 0 });
         plan.Add(Go(_net.Vent[room], 1));

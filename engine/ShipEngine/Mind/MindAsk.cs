@@ -17,7 +17,7 @@ public sealed partial class Mind
     };
 
     /// <summary>주컴퓨터가 그 사람에게 일을 부탁한다 — 받으면 true (그 일이 맡은 일이 된다) · reply는 그 사람의 대답.</summary>
-    public bool Ask(Sim sim, int agent, GoalKind goal, int target, Belief b, long until, bool urgent, out string reply)
+    public bool Ask(Sim sim, int agent, GoalKind goal, int target, Belief b, long until, bool urgent, out string reply, int arg = 0)
     {
         reply = "";
         Bind(sim);   // 복제 세계(주컴퓨터가 앞일을 그려 볼 때)에서 마음 엔진이 아직 한 번도 돌지 않았어도
@@ -42,7 +42,7 @@ public sealed partial class Mind
         string job = JobName(goal);
         if (yes)
         {
-            Assign(sim, agent, goal, target, b, until);
+            Assign(sim, agent, goal, target, b, until, arg);
             AsksAccepted++;
             reply = urgent ? "알았어요, 바로 갈게요" : "알았어요, 제가 갈게요";
         }

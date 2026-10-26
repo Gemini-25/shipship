@@ -7,7 +7,7 @@ namespace ShipEngine;
 public struct Tried
 {
     public int Incident;       // 사건 번호 (Incident.Id)
-    public byte Method;        // 기본 절차서의 방법: 1 안에서 · 2 바깥에서 (0: 계획의 걸음 · 지어내기)
+    public byte Method;        // 기본 절차서의 방법: 1 안에서 · 2 바깥에서 (0: 계획의 걸음 · 지어내기 · 3: 미리 돌려 보니 안 된 계획의 걸음)
     public byte Act;           // 255: 기본 절차서의 방법 · 254: 지어내지 못했다 · 그 밖: 계획의 걸음 (ActKind)
     public int Obj;            // 걸음의 대상 (구조 문 번호 · 방 번호)
     public SnagKind Snag;
@@ -83,6 +83,7 @@ public sealed partial class ShipMind
     {
         long age = _tick - a.Tick;
         if (a.Act == 254) return age < Time.Minutes(30);   // 지어내지 못했다 — 30분 뒤 다시 궁리한다
+        if (a.Method == 3) return age < Time.Minutes(10);  // 미리 돌려 보니 안 됐다 (그 세계의 까닭 — 이 세계의 문 상태로는 모른다)
         switch (a.Snag)
         {
             case SnagKind.DoorJammed: case SnagKind.DoorUnpowered: case SnagKind.DoorHeld: case SnagKind.DoorVacuum: case SnagKind.DoorPressure: case SnagKind.DoorLocked:
@@ -577,7 +578,7 @@ public sealed partial class ShipMind
             case ActKind.Open:
                 // 우주로 트인 쪽 문: 먼저 미리 돌려 본다 (From = 풀이기가 셈한 잃을 공기)
                 if (DoorRooms(st.Obj).Any(r => OpenToSpace(r)) || L.Doors[st.Obj].External)
-                    if (!Rehearse(sim, x, st, out string why)) { FailStep(sim, x.Id, st, rehearsedSnag, st.Obj, why); return false; }
+                    if (!Rehearse(sim, x, st, out string why)) { NoteTried(x.Id, 3, st.Act, st.Obj, rehearsedSnag, st.Obj, _tick); FailStep(sim, x.Id, st, rehearsedSnag, st.Obj, why); return false; }   // 미리 돌려 본 세계의 까닭은 이 세계의 문이 말해 주지 않는다 — 10분은 그 걸음을 막힌 것으로 (DF3: 같은 계획을 세 번 세우지 않는다)
                 _st!.UnlockDoor(st.Obj);
                 _st.RequestDoor(st.Obj, 1);
                 Say(sim, $"계획: {DoorName(st.Obj)}을 연다");
@@ -905,6 +906,7 @@ public sealed partial class ShipMind
             Console.WriteLine($"      ({sim.Seed}) [막힌 걸음] 로봇 방 {RoomName(_mind.RoomOf(ra.C.Cell))} ({L.X(ra.C.Cell)},{L.Y(ra.C.Cell)}) · 목표 {ra.C.Goal}:{ra.C.GoalTarget} · 맡김 {ra.C.AssignedGoal}:{ra.C.AssignedTarget}/{ra.C.AssignedArg} · 막힘 {ra.C.Snag}@{Time.Clock(ra.C.SnagTick)} · 배터리 {ra.C.Battery:0.00} · 계획 {ra.Plan.Count}단계 {ra.C.StepIndex} · 길 {ra.Path.Count}{(Solver.DoorAct((ActKind)st.Act) ? $" · 문 {st.Obj} 칸 {L.Doors[st.Obj].Cell} 열림 {F.DoorOpen[st.Obj]:0.00} 막음 {F.DoorTaped[st.Obj]} 밸브 {F.DoorBleed[st.Obj]} 종류 {L.Doors[st.Obj].Kind} 잠금 {_st!.Locked(st.Obj)}" : "")}");
         }
         NoteTried(id, 0, st.Act, st.Obj, k, subject, _tick);
+        if (Mind.DoorSnag(k) && subject >= 0 && subject < L.Doors.Count && !Imagining) NoteSpot(1, subject, -1, k, 0, 0, _tick);   // 막힌 곳 (DF3): 계획의 걸음이 막힌 문
         var x = Incidents.FirstOrDefault(y => y.Id == id);
         string what = StepName(st);
         int cause = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터의 계획이 막혔다 — {what}: {why}", sim.Tick, x.Cell, x.Cause);
@@ -932,7 +934,8 @@ public sealed partial class ShipMind
         foreach (var s in PlanSteps.Where(s => s.Incident == id && s.Act == (byte)ActKind.Pump && s.State != 0))
             if (_net != null && !Incidents.Any(y => y.Active != 0 && y.Room == s.Obj && y.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Vacuum)) _net.SetDamper(s.Obj, true);
         var robots = PlanSteps.Where(s => s.Incident == id).Select(s => s.Robot).Distinct().ToList();
-        int method = PlanSteps.Where(s => s.Incident == id).Select(s => s.Method).FirstOrDefault();
+        var mine = PlanSteps.Where(s => s.Incident == id).ToList();
+        int method = mine.Select(s => s.Method).FirstOrDefault();
         bool fromManual = PlanSteps.Any(s => s.Incident == id && s.FromManual != 0);
         PlanSteps.RemoveAll(s => s.Incident == id);
         if (method != 0 && !Imagining)
@@ -958,6 +961,7 @@ public sealed partial class ShipMind
         if (!done) return;
         PlansDone++;
         Say(sim, $"계획을 마쳤다 — {RoomName(x.Room)}");
+        if (Incidents.Any(y => y.Id == id && y.Active != 0)) NoEffect(sim, x, mine);   // 막힌 곳 (DF3): 다 했는데 같은 사건이 그대로다
         // 계획의 몸이 된 사람은 곁에서 하며 배운다 (기압)
         if (_mind != null) foreach (int rb in robots) if (rb >= 0 && rb < _mind.Agents.Count && _mind.Agents[rb].IsPerson) _mind.Learn(sim, rb, Domain.Pressure, 0.02f, "주컴퓨터의 계획을 몸으로 하며 배웠다 (임시 에어락)");
     }

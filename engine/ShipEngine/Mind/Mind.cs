@@ -421,7 +421,7 @@ public sealed partial class Mind : IEngine
         var a = Agents[agent];
         if (b.Kind != BeliefKind.None) Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
         a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedUntil = until;
-        if (arg != 0 || a.C.AssignedArg == PlanBound) a.C.AssignedArg = arg;
+        if (arg != 0 || a.C.AssignedArg == PlanBound || goal == GoalKind.Rewire) a.C.AssignedArg = arg;   // 연장선: 끌어올 방 (+1 · 0이면 맡은 이가 고른다 — 앞서 맡은 일의 덧붙임이 남지 않게)
         Jot(a, new Judgment { Tick = sim.Tick, Goal = goal, Target = target, Cell = b.Cell, Method = 255, Held = a.C.Holding, Out = JudgeOut.Assigned, By = -2 });   // 판단 일지 (쓰기만)
         a.Avoid.RemoveAll(v => v.Goal == goal && v.Target == target); // 새로 맡긴 일: '거기는 봤다'를 접고 다시 간다
     }

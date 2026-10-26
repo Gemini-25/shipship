@@ -31,6 +31,7 @@ public sealed partial class ShipMind
             if (item < 0) continue;
             int have = _mind.Stock[dev.Furniture * _mind.ItemCount + item];
             if (have >= mk.Max) { if (_net.On[dev.Id] != 0 && dev.Def.Kw > 3) _net.SetOn(dev.Id, false); continue; }
+            if (_net.On[dev.Id] == 0 && dev.Id < LineShed.Length && LineShed[dev.Id] != 0) continue;   // 연장선 짐을 줄이려고 껐다 (DF3) — 제 급전선이 살아날 때까지
             if (_net.On[dev.Id] == 0 && _net.Demanded + dev.Def.Kw < (_powerFirst.Contains(dev.Id) ? 0.95 : 0.8) * _net.Capacity()) _net.SetOn(dev.Id, true);
         }
     }

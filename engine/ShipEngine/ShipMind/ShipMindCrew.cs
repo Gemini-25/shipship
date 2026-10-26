@@ -19,7 +19,7 @@ public sealed partial class ShipMind
     private static bool PeopleCan(IncidentKind k, GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Repair or GoalKind.Brace or GoalKind.Treat or GoalKind.Surgery or GoalKind.Counsel
         || g == GoalKind.Investigate && k is IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.SensorLost or IncidentKind.LineCut or IncidentKind.PipeHunt;
 
-    private void AskPerson(Sim sim, ref Incident x, GoalKind g, int target)
+    private void AskPerson(Sim sim, ref Incident x, GoalKind g, int target, int arg = 0)
     {
         if (_mind == null || !PeopleCan(x.Kind, g)) return;
         long t = sim.Tick;
@@ -37,6 +37,7 @@ public sealed partial class ShipMind
             if (a.C.AssignedUntil > t && (a.C.AssignedGoal != GoalKind.Idle || a.C.AssignedArg == Mind.PlanBound)) continue;   // 이미 다른 일을 맡았다 (지어낸 계획의 몸이 되어 기다리는 이도)
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
             if (g is GoalKind.Treat or GoalKind.Surgery or GoalKind.Counsel && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
+            if (x.Cell >= 0 && CutBy(a.C.Cell, x.Cell, false) >= 0) continue;   // 막힌 곳 (DF3): 막혀 있는 문을 지나야만 닿는 이에게는 부탁하지 않는다
             float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat or GoalKind.Surgery => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, GoalKind.Counsel => CounselFit(sim, a, x.Subject), _ => a.C.SkSeal };
             int path = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell);   // 길 거리 (벽 너머 직선이 아니라)
             double cost = (g == GoalKind.Counsel ? path * 0.3 + (1 - skill) * 30 : path * (1.5 - skill)) + (b.Asleep != 0 ? 30 : 0);   // 마음 돌봄은 가까운 이보다 맞는 이 (급하지 않다)
@@ -48,7 +49,7 @@ public sealed partial class ShipMind
         // 로봇의 형편대로 말한다: 이 일에 로봇도 간다 (방침 '함께') · 움직이는 로봇이 있되 모두 다른 일 · 아예 없다 (로봇 없는 배에 '모두 바쁩니다'라 하던 것)
         bool robots = _mind.Agents.Any(r => r.C.Kind == AgentKind.Robot && r.C.Up != 0), with = x.RobotA >= 0 || x.RobotB >= 0;
         Say(sim, $"{name}님, {RoomName(x.Room)} {IncidentName(x)} — {Mind.JobName(g)} 주시겠어요? {(with ? "로봇도 함께 갑니다" : robots ? "로봇이 모두 바쁩니다" : "로봇이 없습니다")}{(urgent ? ", 급합니다" : "")}", NoteKind.Ask, -1, x.Id);
-        bool yes = _mind.Ask(sim, best, g, target, BeliefOf(x), t + Time.Minutes(g == GoalKind.Counsel ? 75 : 30), urgent, out string reply);   // 상담은 찾아가서 30분 — 넉넉히
+        bool yes = _mind.Ask(sim, best, g, target, BeliefOf(x), t + Time.Minutes(g == GoalKind.Counsel ? 75 : 30), urgent, out string reply, arg);   // 상담은 찾아가서 30분 — 넉넉히
         x.AskedAt = t; x.Asks++; Asked++;
         if (reply.Length > 0) Say(sim, $"{name}: \"{reply}\"", NoteKind.Ask, -1, x.Id);
         if (yes) { x.Person = best; AskAccepted++; sim.Facts.Emit(t, FactKind.ComputerAssign, x.Cell, 1, x.Cause, best, (int)x.Kind); }

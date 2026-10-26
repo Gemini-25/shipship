@@ -80,13 +80,14 @@ public static partial class Program
                 given && reached && closed, $"맡김 {given} · 닿음 {reached} · 끝남 {closed}");
         }
 
-        // ── 놓아준 로봇 두 칸: 잠긴 방의 쾅 — 막혀 놓아준 로봇에게 10분 안에는 다시 맡기지 않는다 (예전엔 칸이 하나라 A → B → A) ──
+        // ── 놓아준 로봇 두 칸: 문 없는 방의 쾅 — 막혀 놓아준 로봇에게 10분 안에는 다시 맡기지 않는다 (예전엔 칸이 하나라 A → B → A) ──
+        //    (DF3 뒤: 잠긴 문에서 막히면 그 문을 막힌 곳으로 기억해 다른 로봇도 보내지 않는다 — 놓아줌을 보려고 문이 아예 없는 방으로: 막힘은 '갈 길이 없다')
         {
-            var s = Worlds.Full(lay, 34);
-            var m = s.Get<Mind>(); var cm = s.Get<ShipMind>(); var st = s.Get<Structure>();
+            var sealedLay = Worlds.Ascii(Worlds.MindShipComputer.Replace("#..p.b....D", "#..p.b....#").Replace("#####D########D##########", "#####D###################").Replace("#.........#.............#", "#.........#........pb...#"), Worlds.MindLegend);   // 문 없는 방은 제 배전반 · 전지로 (마이크가 듣는다)
+            var s = Worlds.Full(sealedLay, 34);
+            var m = s.Get<Mind>(); var cm = s.Get<ShipMind>();
             int[] rbs = { m.AddRobot(s, At(2, 2), AgentKind.Robot, At(8, 5)), m.AddRobot(s, At(13, 7), AgentKind.Robot, At(3, 7)), m.AddRobot(s, At(21, 8), AgentKind.Robot, At(3, 7)) };
             s.Run(12);
-            foreach (int door in new[] { At(10, 3), At(14, 6) }) st.LockDoor(s.Layout.DoorAt[door], s.Tick + Time.Hours(10));
             int src = At(17, 3);
             s.Get<Sound>().Emit(s, src, 90, SoundKind.Bang, s.Causes.Add(CauseKind.Setup, "잠긴 방 선반에서 공구 상자가 떨어졌다 (시험 차리기)", s.Tick));
             var sent = new List<(int rb, long at)>(); var dropped = new Dictionary<int, long>();

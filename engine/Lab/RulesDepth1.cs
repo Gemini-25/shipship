@@ -281,5 +281,90 @@ public static partial class Program
             Check("이미 아는 시신은 다시 '발견'하지 않는다: 믿음이 흐려진 뒤 다시 봐도 알아챘다 · 외쳐 알렸다가 없다 (보는 것은 그대로 — 믿음은 되살아난다) · 처음 본 때는 외쳤다",
                 again == 0 && stillBelieves && first >= 1, $"다시 본 뒤 사실 {again} · 믿음 {stillBelieves} · 처음 외침 {first}");
         }
+
+        // ── DF3 막힌 곳 (보고서 §4-1 · MIND 8단 당김): 막힘을 사건이 아니라 문 · 방 · 연장선 · 계획에 붙여 기억한다 — 사건 이름이 바뀌어도 이어진다 ──
+        if (Do("막힌 곳"))
+        {
+            Console.WriteLine("\n[막힌 곳 — 같은 까닭으로 같은 곳에 거듭 보내지 않는다]");
+            bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
+            // 기압 차 문: 왼쪽 방 외판에 구멍 · 그 방 침대에 자는 사람 (숨이 막혀 쓰러지고 심장이 멎는다 — 같은 방에 사건이 잇달아 선다) · 로봇 둘은 오른쪽 방
+            {
+                var legend = new Dictionary<char, string> { ['x'] = "OxygenMaskBox", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['h'] = "HeatExchanger" };
+                var lay = Worlds.Ascii(NoAirlockShip, legend);
+                int At(int x, int y) => Worlds.At(lay, x, y);
+                int door = lay.DoorAt[At(11, 2)];
+                var s = Worlds.Full(lay, 3);
+                var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>(); var net = s.Get<Network>(); var life = s.Get<Life>();
+                int p = m.AddPerson(s, At(3, 3), bed: At(3, 3));
+                m.AddRobot(s, At(22, 3), AgentKind.Robot, At(22, 3)); m.AddRobot(s, At(19, 2), AgentKind.Robot, At(19, 2));
+                s.Run(2);
+                net.AirReserve = 2e6;
+                life[m[p].C.Body].Asleep = 1;
+                long f0 = s.Facts.Total;
+                f.SetHole(At(3, 0), 0.02f);
+                s.Run((int)Time.Minutes(25));
+                var bl = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Blocked && x.Other == door && x.Actor >= 0 && !m[x.Actor].IsPerson).ToList();
+                if (Debug)
+                {
+                    foreach (var x in bl) Console.WriteLine($"    {Time.Clock(x.Tick)} {m.NameOf(x.Actor)} {(SnagKind)(int)x.Size} · {s.Causes.Text(x.Cause)}");
+                    foreach (var l in sm.Log) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}");
+                }
+                bool devised = s.Facts.Since(f0).Any(x => x.Kind is FactKind.Devised or FactKind.Decision);
+                Check("같은 기압 문에 두 번 넘게 보내지 않는다: 우주로 트인 방에 사건이 잇달아 서도 (빠졌다 · 쓰러졌다 · 심정지) 그 문에서 막힌 로봇은 둘까지 · 주컴퓨터는 다른 길을 궁리한다",
+                    bl.Count <= 2 && devised, $"그 문에서 막힘 {bl.Count}번 · 궁리 {devised}");
+            }
+
+            // 같은 구멍 막기 계획 (운석 장면 — 디딤호 · 1.5kg 운석이 침실 둘을 뚫는다 · 둘레 통로는 외판이 없고 빠진 침실 둘 쪽으로 샌다): 두 갈래 실패 —
+            //   (가) 둘레 통로 '외판 구멍 막기'는 다 해도 그대로 샌다 (막을 구멍이 외판에 없다) — 다 마쳤는데 같은 사건이 그대로면 두 번째에 그 걸음을 통하지 않은 것으로 (씨 7)
+            //   (나) 미리 돌려 본 세계에서 문이 안 열렸다 — 이 세계의 문은 멀쩡해 '막힌 까닭이 그대로인가'가 곧 풀려 같은 계획을 1분에 여덟 번 (씨 6) → 10분은 그 걸음을 막힌 것으로
+            {
+                var runs = new[] { 7UL, 6UL }.AsParallel().AsOrdered().Select(seed =>
+                {
+                    var s = ShipWorld.Crewed("Didim", seed, 6, 3);
+                    s.Run(Time.Minutes(80));   // 새벽 한 시 스무 분 — 모두 잠들었다
+                    long f0 = s.Facts.Total;
+                    int rock = s.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", s.Tick);
+                    s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, rock);
+                    s.Run(Time.Minutes(15));
+                    var dv = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Devised).Select(x => s.Causes.Text(x.Cause)).ToList();
+                    int most = dv.Count == 0 ? 0 : dv.GroupBy(t => t).Max(g => g.Count());
+                    if (Debug) foreach (var t in dv) Console.WriteLine($"    ({seed}) 궁리: {t}");
+                    return (seed, n: dv.Count, most);
+                }).ToList();
+                Check("같은 구멍 막기 계획을 세 번 세우지 않는다: 다 마쳤는데 그대로 새면 그 걸음은 통하지 않은 것으로 · 미리 돌려 보니 안 된 걸음은 10분 막힌 것으로 (같은 계획 둘까지 — 운석 장면 둘)",
+                    runs.All(r => r.most <= 2 && r.n > 0), string.Join(" / ", runs.Select(r => $"씨 {r.seed}: 궁리 {r.n}번 · 같은 계획 가장 많이 {r.most}번")));
+            }
+
+            // 녹은 연장선: 왼쪽 생명유지실 (산소 발생기 · 대형 냉각 펌프 · 냉각 펌프 둘 — 짐 51A가 연장선 정격 32A의 1.5배를 넘는다) · 제 급전선 길이 젖어 다시 올릴 수 없다
+            //   → 로봇이 오른쪽 방에서 연장선을 끌어온다 → 1분 넘게 넘쳐 피복이 녹는다 (오른쪽 급전선까지 끊긴다) — 같은 짐으로 같은 길을 다시 깔지 않는다 (짐을 줄여서 다시)
+            {
+                const string HeavyShip = @"
+##################
+#p..O..k...#c...b#
+#..W..Uu...D..q..#
+#....u..s..#r...w#
+##################";
+                var lay = Worlds.Ascii(HeavyShip, new Dictionary<char, string>(NetLegend) { ['U'] = "LargeCoolantPump", ['u'] = "CoolantPump" });
+                int At(int x, int y) => Worlds.At(lay, x, y);
+                int left = lay.Room[At(4, 2)], right = lay.Room[At(13, 2)];
+                var s = Worlds.Full(lay, 1);
+                var net = s.Get<Network>(); var m = s.Get<Mind>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>();
+                m.AddRobot(s, At(12, 3), AgentKind.Robot, At(12, 3));
+                s.Run(3);
+                var path = net.Feeders[net.RoomFeeder[left]].Path;
+                var jp = net.JumperPath(right, left)!;
+                f.AddStore(path.Skip(1).First(c => Array.IndexOf(jp, c) < 0), f.T.sWater, 60);
+                long f0 = s.Facts.Total;
+                float maxA = 0;
+                for (int k = 0; k < 120; k++) { s.Run((int)Time.Minutes(0.5)); foreach (var j in net.Jumpers) maxA = Math.Max(maxA, j.Amps); }
+                var facts = s.Facts.Since(f0).ToList();
+                int laid = facts.Count(x => x.Kind == FactKind.Jumper && x.Other == 1);
+                int melted = facts.Count(x => x.Kind == FactKind.Short && s.Causes.Story(x.Cause).Contains("정격을 넘게"));
+                bool lit = net.RoomPowered(left) && net.Jumpers.Count == 1;
+                if (Debug) { Console.WriteLine($"    가장 큰 전류 {maxA:0}A"); foreach (var l in sm.Log.Where(l => !l.text.Contains("작업대가 없다"))) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}"); }
+                Check("녹은 연장선 길을 다시 깔지 않는다: 짐이 넘쳐 녹은 뒤에는 그 방 짐을 줄여 (덜 급한 것을 끄고) 다시 잇는다 — 한 시간에 녹음 하나 · 끝에 그 방은 연장선으로 밝다",
+                    melted <= 1 && laid >= 2 && lit, $"깐 연장선 {laid} · 넘쳐 녹음 {melted} · 끝에 밝음 {lit} · 가장 큰 전류 {maxA:0}A");
+            }
+        }
     }
 }
