@@ -175,6 +175,7 @@ public sealed partial class LiveShow
         int i = (int)(key - KeyHighlight(0));
         if (i < 0 || i >= Dir.Highlights.Count) return false;
         PanelPickKey = key;
+        if (PhotoOnly(Dir.Highlights[i]) is { } only) { ShowPhoto(only.Id); return true; }   // ○ [사진] — 정점 사진을 크게 (V5)
         if (!StartReplay(Dir.Highlights[i])) { Notify(PhotoWhy); return false; }
         ClosePanel();
         return true;
@@ -262,7 +263,14 @@ public sealed partial class LiveShow
     // ── 알림 · 방송 ──
     private PanelKind _noticeLink;
     /// <summary>알림을 눌렀다: 붙은 판을 연다.</summary>
-    public void NoticeGo() { var k = _noticeLink; if (k != PanelKind.None && Panel != k) TogglePanel(k); _noticeLeft = 0; }
+    public void NoticeGo()
+    {
+        var k = _noticeLink;
+        if (k == PanelKind.Record && _noticeAlbum) OpenRecord(2);   // 자막 사진 알림 → 사진첩 (V5)
+        else if (k != PanelKind.None && Panel != k) TogglePanel(k);
+        _noticeLeft = 0;
+    }
+    private bool _noticeAlbum;
     /// <summary>방송 자막을 눌렀다: 주컴퓨터 판의 아침 방송 줄.</summary>
     public void BroadcastGo() { if (Panel != PanelKind.Journal) TogglePanel(PanelKind.Journal); PanelPickKey = -3; }
     /// <summary>안 읽은 일지가 있나 (주컴퓨터 판을 열면 지운다).</summary>

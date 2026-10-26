@@ -74,6 +74,11 @@ void fragment() {
     private VoyageStore _store = null!;
     private bool _saveOn;                                      // 항해를 저장한다 (확인용 띄우기는 --save일 때만)
     private volatile VoyageMeta? _launchResume;                // 이어 볼 항해 (작업 스레드가 받는다)
+    // ── 사진 (docs/OBSERVER.md §4.4 · §11 — V5): 크게 연 사진의 텍스처 · 사진 모드 [찍기]는 띠를 숨긴 장을 찍는다 (두 장 뒤) · 찍은 뒤 저장 (photos/) ──
+    private ImageTexture? _photoTex;
+    private int _photoVer = -1, _photoShotIn = -1;
+    private bool _photoHide;
+    private volatile bool _photoSave;
     private int _chapters = -1; private bool _saveDue;          // 날이 바뀌었다 (장이 하나 지어졌다) — 저장 (일꾼이 셈 중이면 다음 장으로 미룬다)
     private Task? _writing;                                    // 압축 · 쓰기 일꾼 (하나씩 차례로)
     private readonly ManualResetEventSlim _saved = new(false);
@@ -191,6 +196,7 @@ void fragment() {
         _launchShip = ship;
         _shown = null;
         _hs.HelpBlink = 8;
+        _photoVer = -1; _photoHide = false; _photoShotIn = -1;   // 새 배의 사진 판 번호는 다시 1부터
     }
 
     // ───────────────────────── 작업 스레드 ─────────────────────────
@@ -244,7 +250,8 @@ void fragment() {
             if (_chapters >= 0 && chapters > _chapters) _saveDue = true;
             _chapters = chapters;
             if (_saveDue && !(show.Sim.Find<ShipMind>()?.WorkerBusy ?? false)) { _saveDue = false; SaveNow(show, SaveKind.Daily, wait: false); }
-            if (show.EndSaveDue) { show.EndSaveDue = false; SaveNow(show, SaveKind.End, wait: false); }   // 항해가 끝났다 (결산 — card.json에 끝 갈래)
+            if (show.EndSaveDue) { show.EndSaveDue = false; SaveNow(show, SaveKind.End, wait: false); }
+            if (_photoSave && !(show.Sim.Find<ShipMind>()?.WorkerBusy ?? false)) { _photoSave = false; SaveNow(show, SaveKind.Daily, wait: false); }   // 자막 사진 (F12): 곧 photos/에 남긴다   // 항해가 끝났다 (결산 — card.json에 끝 갈래)
             var pic = new Pic { F = show.Render(), Gen = gen };
             var old = Interlocked.Exchange(ref _ready, pic);
             if (old != null) show.Recycle(old.F.Img);            // 메인이 미처 못 가져간 장
@@ -317,6 +324,7 @@ void fragment() {
             _cmds.Enqueue(s => s.Pan(dx, dy));
         }
 
+        if (_photoShotIn > 0 && --_photoShotIn == 0) { TakePhoto(); _photoHide = false; }   // 사진 모드 [찍기]: 띠를 숨긴 장이 그려진 뒤에 찍는다
         var pic = Interlocked.Exchange(ref _ready, null);
         if (pic != null && pic.Gen != _gen) { _show?.Recycle(pic.F.Img); pic = null; } // 바꾸기 전 배의 그림
         if (pic != null)
@@ -455,7 +463,13 @@ void fragment() {
         if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
         if (_ui == "newvoyage" && _runT > 3) { _ui = null; OpenVoyageWindow(); }   // 번호 창 (메뉴 [새 항해 ›])
-        if (_ui != null && _runT > 3) { string ui = _ui; _ui = null; _uiDone = false; _cmds.Enqueue(s => { SetUpUi(s, ui); _uiDone = true; }); }
+        if (_ui == "f12" && _runT > 3 && _shown != null && _firstShown >= 0 && _runT > _firstShown + 1)
+        {
+            // 자막 사진 (V5): 지금 화면을 찍어 사진첩에 넣고 그 사진을 크게 연다 (기록 판 사진첩)
+            _ui = null; _uiDone = false; TakePhoto();
+            _cmds.Enqueue(s => { s.OpenRecord(2); if (s.Photos.Photos.LastOrDefault(p => p.Kind == PhotoKind.Screen) is { } p) s.ShowPhoto(p.Id); _uiDone = true; });
+        }
+        if (_ui != null && _ui != "f12" && _runT > 3) { string ui = _ui; _ui = null; _uiDone = false; _cmds.Enqueue(s => { SetUpUi(s, ui); _uiDone = true; }); }
         if (!_uiDone) _uiReadyT = _runT;
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shown != null && _firstShown < 0) _firstShown = _runT;
@@ -561,6 +575,14 @@ void fragment() {
                 break;
             }
             case "record": s.OpenRecord(sub); break;
+            // 사진 (V5): 사진 모드 · 가장 늦은 정점 사진을 크게 (사진첩)
+            case "photomode": s.SetPhotoMode(true); break;
+            case "photo":
+            {
+                s.OpenRecord(2);
+                if (s.Photos.Photos.Where(p => p.Kind == PhotoKind.Peak).OrderBy(p => p.Tick).LastOrDefault() is { } p) s.ShowPhoto(p.Id);
+                break;
+            }
             case "chapter": if (s.Dir.Chapters.Count > 0) s.DayTurned(s.Dir.Chapters[^1]); break;
             case "end": s.EndVoyage(VoyageEnd.Quit); break;
             case "rewind":
@@ -757,6 +779,13 @@ void fragment() {
             return;
         }
         var f = _shown;   // 관전 그림 자체는 자식 (LiveWorldPic)이 뒤에 그린다
+        if (f.PhotoMode)
+        {
+            // 사진 모드 (V5): 판 · 띠 · 줄을 모두 숨긴다 — 세계 위 풍선과 아래 띠 하나 (찍는 장에는 띠도 숨긴다)
+            DrawBubbles(f, vp);
+            if (!_photoHide) { DrawPhotoBar(f); DrawTip(); }
+            return;
+        }
         if (_cutDip > 0) DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, (float)(0.7 * _cutDip / CutDipSec)));   // 컷 전환
         if (f.Replay.Length > 0) DrawRect(new Rect2(0, 44 * U, vp.X, vp.Y - 44 * U), new Color(0.95f, 0.78f, 0.45f, 0.75f), false, 4);   // 다시보기: 가장자리를 옛 필름 빛으로
         long t = Stopwatch.GetTimestamp();
@@ -780,6 +809,7 @@ void fragment() {
         if (f.Legend.Length > 0) DrawLegend(f);
         if (f.PanelTitle.Length > 0) DrawPanel(f);
         Lap("판");
+        if (f.Photo != null && _hud.Areas.ContainsKey("사진 카드")) DrawPhotoCard(f);   // 크게 연 사진 (V5)
         DrawOpen(f);
         if (_meter) DrawString(_font, new Vector2(vp.X - 340, 120), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장 · 소리 {_mix.Voices}개", HorizontalAlignment.Right, 324, 14, new Color(0.6f, 0.9f, 0.6f));
         if (_hs.Help) DrawHelp(vp);
@@ -1344,6 +1374,76 @@ void fragment() {
         DrawString(_bold, new Vector2(r.Position.X + 8 * U, r.Position.Y + 17 * U), f.InsetTitle, HorizontalAlignment.Left, r.Size.X - 16 * U, Fs(14), new Color(1f, 0.9f, 0.75f));
     }
 
+    // ── 사진 (docs/OBSERVER.md §4.4 · §11 — V5) ──
+
+    /// <summary>판 줄 단추 글 (줄의 Act — ○ 장면은 '사진' · 사진첩 머리는 '폴더 열기').</summary>
+    private static string RowAct(LiveFrame f, long key)
+    {
+        foreach (var r in f.PanelRows) if (r.Key == key && r.Act.Length > 0) return r.Act;
+        return "▶ 다시보기";
+    }
+
+    /// <summary>[찍기] · F12: 사진 모드면 띠를 숨긴 장을 두 장 뒤에 · 아니면 지금 화면을 곧바로.</summary>
+    private void PhotoShot()
+    {
+        if (_shown?.PhotoMode == true) { _photoHide = true; _photoShotIn = 2; }
+        else TakePhoto();
+    }
+
+    /// <summary>자막 사진 (메인 스레드 — 뷰포트 그림): RGBA로 작업 스레드에 넘긴다 (사진첩 · 자막 · 알림) · 그 뒤 저장 (photos/).</summary>
+    private void TakePhoto()
+    {
+        var img = GetViewport().GetTexture().GetImage();
+        if (img == null || img.IsEmpty()) return;
+        if (img.GetFormat() != Image.Format.Rgba8) img.Convert(Image.Format.Rgba8);
+        int w = img.GetWidth(), h = img.GetHeight();
+        var data = img.GetData();
+        _cmds.Enqueue(s => { s.ScreenPhoto(w, h, data); _photoSave = _saveOn; });
+    }
+
+    /// <summary>사진첩 [폴더 열기]: 이 항해의 photos/ (아직 남긴 사진이 없으면 알림만).</summary>
+    private void OpenPhotoFolder()
+    {
+        if (_ships.Length == 0) return;
+        string dir = System.IO.Path.Combine(_store.Root, VoyageMeta.Key(_ships[_shipAt], (long)_seed), VoyageStore.PhotoFolder);
+        if (_saveOn && System.IO.Directory.Exists(dir)) OS.ShellOpen(dir);
+        else { string t = _saveOn ? "아직 남긴 사진이 없다 — 날이 바뀌거나 사진을 찍으면 항해 폴더에 남는다" : "이 띄우기는 저장하지 않는다 — 사진은 사진첩에만 있다"; _cmds.Enqueue(s => s.Notify(t, 5)); }
+    }
+
+    /// <summary>사진 카드: 사진 (비율 그대로) · 테두리 · 자막 (그림 아래 곁에) · [▶ 그 장면] [닫기].</summary>
+    private void DrawPhotoCard(LiveFrame f)
+    {
+        if (f.Photo is { } img && f.PhotoVersion != _photoVer)
+        {
+            var im = Image.CreateFromData(img.W, img.H, false, Image.Format.Rgba8, img.Px);
+            if (_photoTex != null && _photoTex.GetWidth() == img.W && _photoTex.GetHeight() == img.H) _photoTex.Update(im);
+            else _photoTex = ImageTexture.CreateFromImage(im);
+            _photoVer = f.PhotoVersion;
+        }
+        var card = R(_hud.Area("사진 카드"));
+        DrawRect(card, new Color(0.03f, 0.04f, 0.07f, 0.96f));
+        DrawRect(card, new Color(0.95f, 0.85f, 0.6f, 0.9f), false, 1.5f * U);   // 옛 필름 빛 테두리 (다시보기 가장자리와 같은 빛)
+        var pic = R(_hud.Area("사진"));
+        if (_photoTex != null) DrawTextureRect(_photoTex, pic, false);
+        DrawRect(pic, new Color(1, 1, 1, 0.25f), false, 1);
+        var cap = R(_hud.Area("사진 자막"));
+        DrawMultilineString(_font, new Vector2(cap.Position.X, cap.Position.Y + Fs(16) * 0.95f), f.PhotoCaption, HorizontalAlignment.Left, cap.Size.X, Fs(16), 2, new Color(0.92f, 0.93f, 0.98f));
+        foreach (var h in _hud.Hits)
+        {
+            if (h.Act == UiAct.PhotoScene) DrawButton(h, f.PhotoAct, 15);
+            else if (h.Act == UiAct.PhotoClose) DrawButton(h, "닫기", 15);
+        }
+    }
+
+    /// <summary>사진 모드 띠: [찍기] [멈춤 · 계속] [나가기].</summary>
+    private void DrawPhotoBar(LiveFrame f)
+    {
+        var bar = R(_hud.Area("사진 모드 띠"));
+        DrawRect(bar, new Color(0.03f, 0.04f, 0.07f, 0.85f));
+        DrawRect(bar, new Color(0.95f, 0.85f, 0.6f, 0.8f), false, 1.5f * U);
+        foreach (var h in _hud.Hits) DrawButton(h, HudLayout.PhotoModeLabel((int)h.Key, f.Paused), 15);
+    }
+
     private void DrawBroadcast(LiveFrame f)
     {
         var r = R(_hud.Area("방송")); float a = f.BroadcastAlpha;
@@ -1467,6 +1567,12 @@ void fragment() {
                     DrawButton(h, "");
                     DrawArc(c, 8 * U, -Mathf.Pi * 0.3f, Mathf.Pi * 1.4f, 18, col, 2 * U);
                     DrawColoredPolygon(new[] { c + new Vector2(5, -10) * U, c + new Vector2(10, -4) * U, c + new Vector2(3, -3) * U }, col);
+                    break;
+                case UiAct.PhotoMode when h.Key == 6:   // 사진 모드 (V5): 사진기 — 몸 · 렌즈 · 셔터
+                    DrawButton(h, "");
+                    DrawRect(new Rect2(c + new Vector2(-10, -5) * U, new Vector2(20, 13) * U), col, false, 1.5f * U);
+                    DrawRect(new Rect2(c + new Vector2(-4, -8) * U, new Vector2(8, 3) * U), col);
+                    DrawArc(c + new Vector2(0, 1.5f) * U, 4 * U, 0, Mathf.Tau, 16, col, 1.5f * U);
                     break;
             }
         }
@@ -1605,7 +1711,7 @@ void fragment() {
         }
         foreach (var h in _hud.Hits)
         {
-            if (h.Act == UiAct.PanelRowAct) DrawButton(h, "▶ 다시보기", 14);
+            if (h.Act == UiAct.PanelRowAct) DrawButton(h, RowAct(f, h.Key), 14);
             else if (h.Act == UiAct.HandSize) DrawButton(h, LiveShow.HandSizeNames[(int)((h.Key - LiveShow.KeyHandSize(HandKind.None, 0)) % 4)], 14);
         }
         if (_hud.Areas.TryGetValue("막대", out var bf))
@@ -1764,7 +1870,7 @@ void fragment() {
 
     public const string StartScene = "res://scenes/Start.tscn";
 
-    private bool PanelOpen => _shown != null && _shown.PanelTitle.Length > 0;
+    private bool PanelOpen => _shown != null && _shown.PanelTitle.Length > 0 && !_shown.PhotoMode;   // 사진 모드는 판을 숨긴다 (화살표는 카메라)
 
     // ───────────────────────── 손 ─────────────────────────
 
@@ -1807,6 +1913,7 @@ void fragment() {
             case UiAct.HandNow: _cmds.Enqueue(s => s.HandNow()); break;
             case UiAct.DetailOpen: { int id = f?.Selected ?? -1; _cmds.Enqueue(s => s.OpenDetail(DetailKind.Person, id)); break; }   // 로봇이면 OpenDetail이 로봇 자세히로 고친다
             case UiAct.PanelRow: _cmds.Enqueue(s => s.PanelClick(k)); break;
+            case UiAct.PanelRowAct when k == LiveShow.KeyAlbum(0): OpenPhotoFolder(); break;   // 사진첩 머리 [폴더 열기] (V5 — 메인 스레드)
             case UiAct.PanelRowAct: _cmds.Enqueue(s => s.PanelAct(k)); break;
             case UiAct.ChainLines: { bool on = f?.Show != Overlay.Chain; _cmds.Enqueue(s => s.SetChainLines(on)); break; }
             case UiAct.Depart: _cmds.Enqueue(s => s.Depart()); break;
@@ -1835,6 +1942,11 @@ void fragment() {
             case UiAct.Overlay: { var o = (Overlay)k; _cmds.Enqueue(s => s.SetOverlay(o)); _hs.Open = HudOpen.None; break; }
             case UiAct.ReplayLast: _cmds.Enqueue(s => { if (s.Rewinding) s.StopRewind(); else if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
             case UiAct.RewindStop: _cmds.Enqueue(s => s.StopRewind()); break;   // 감기 그만 (V4)
+            // 사진 (V5): 사진 카드 [▶ 그 장면] [닫기] · 사진 모드 [찍기] [나가기] · 보기 묶음 사진기
+            case UiAct.PhotoScene: _cmds.Enqueue(s => s.PhotoScene()); break;
+            case UiAct.PhotoClose: _cmds.Enqueue(s => s.ClosePhoto()); break;
+            case UiAct.Photo: PhotoShot(); break;
+            case UiAct.PhotoMode: { bool on = !(f?.PhotoMode ?? false); _cmds.Enqueue(s => s.SetPhotoMode(on)); break; }
             // 기록 (V3): 장 카드 → 기록 그 장 · 날 띠의 칸 → 그날 · [항해 끝내기] (확인 창) · 결산 카드
             case UiAct.ChapterCard: _cmds.Enqueue(s => s.ChapterCardGo()); break;
             case UiAct.DayCell: _cmds.Enqueue(s => s.DayCellGo(k)); break;
@@ -1878,6 +1990,8 @@ void fragment() {
         switch (_hs.Back(_shown))
         {
             case BackStep.CloseCard: _cmds.Enqueue(s => s.EndWatch()); return true;   // 결산 카드: 그대로 지켜보기
+            case BackStep.ClosePhoto: _cmds.Enqueue(s => s.ClosePhoto()); return true;   // 크게 연 사진 (V5)
+            case BackStep.ClosePhotoMode: _cmds.Enqueue(s => s.SetPhotoMode(false)); return true;   // 사진 모드 나가기
             case BackStep.Disarm: _cmds.Enqueue(s => s.Disarm()); return true;
             case BackStep.CloseDetail: _cmds.Enqueue(s => s.DetailBack()); return true;
             case BackStep.ClosePanel: _cmds.Enqueue(s => s.ClosePanel()); return true;
@@ -2084,6 +2198,8 @@ void fragment() {
             case Godot.Key.G: Do(Hk(UiAct.Tab, 5)); break;
             case Godot.Key.X: Do(Hk(UiAct.Tab, 6)); break;
             case Godot.Key.Y: Do(Hk(UiAct.Tab, 7)); break;
+            case Godot.Key.F12 when k.ShiftPressed: Do(Hk(UiAct.PhotoMode, 6)); break;   // 사진 모드 (V5)
+            case Godot.Key.F12: PhotoShot(); break;   // 자막 사진
             case Godot.Key.O: _cmds.Enqueue(s => s.CycleOverlay()); break;
             case Godot.Key.F3: _meter = !_meter; break;
             case Godot.Key.U: Do(Hk(UiAct.Captions)); break;

@@ -109,6 +109,11 @@ public sealed class LiveFrame
     public DayCell[] Days = Array.Empty<DayCell>();
     public string[] EndCard = Array.Empty<string>();
     public bool Ended;
+    // ── 사진 (docs/OBSERVER.md §4.4 · §11 — V5): 크게 연 사진 (그림 · 판 번호 — 바뀔 때만 오른다 · 자막 · ▶ 그 장면 단추 글 · 켜짐 · 까닭) · 사진 모드 (판 · 띠 숨김) ──
+    public Img? Photo;
+    public int PhotoVersion;
+    public string PhotoCaption = "", PhotoAct = "", PhotoWhy = "";
+    public bool PhotoActOn, PhotoMode;
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -223,6 +228,8 @@ public sealed partial class LiveShow
         if (sim.Find<ShipMind>() is { } jc) jc.NoteOn = true;
         Dir = new Director(sim.Layout) { AheadInBackground = true };   // 미리 보기의 앞선 세계는 다른 코어에서 (결과는 같다) · 하루 목표는 띄우는 쪽이 고른다 (게임 · --live는 3분)
         Painter = new Painter(sim.Layout) { Nudge = Nudge, PropAt = PropDrawn, PropZAt = id => TrackPlay.PropZ(World, id, Math.Clamp(_carry, 0, 1)) };
+        Photos = new PhotoBook(Painter);   // 정점 · 마지막 사진은 화면 화가로 (V5)
+        _photoFacts = sim.Facts.Total; _diedSeen = sim.Facts.CountOf(FactKind.Died);
         if (sim.Find<Structure>() is { } sst) sst.Track ??= new MotionTrack();   // 틱 안 기록 (보기용 — 세계를 바꾸지 않는다 · 연출의 미리 보기 세계는 켜지 않는다)
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
@@ -257,7 +264,7 @@ public sealed partial class LiveShow
     /// <summary>화면 없이 앞으로 감기 (연출은 함께 본다 — 하이라이트 · 다시보기 고리가 쌓인다). 확인 · 화면 사진용.</summary>
     public void FastForward(long ticks)
     {
-        for (long i = 0; i < ticks; i++) { Sim.Step(); LogHands(); Dir.Observe(Sim); Book.Observe(Sim); VaultTick(); }
+        for (long i = 0; i < ticks; i++) { Sim.Step(); LogHands(); Dir.Observe(Sim); Book.Observe(Sim); VaultTick(); PhotoTick(); }
         WatchComputer(0);
         _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
         _chaptersSeen = Dir.Chapters.Count;   // 감은 동안 지난 날의 장 카드도
@@ -314,12 +321,12 @@ public sealed partial class LiveShow
             AL("자세 · 걸음");
             if (_replay != null && _replay.Tick >= _replayEnd) StopReplay();
             if (n > 0) CheckEnd();   // 결산 (산 세계 · 나아간 뒤 — 모두 잃음 · 임무 마침)
-            if (n > 0 && _replay == null) VaultTick();   // 장면 금고 · 0시 세계 (V4)
+            if (n > 0 && _replay == null) { VaultTick(); PhotoTick(); }   // 장면 금고 · 0시 세계 (V4) · 정점 · 마지막 사진 (V5)
         }
         WatchChapters(realSec);   // 날이 바뀌면 장 카드 (V3)
         _anim += realSec;
         if (!Paused) { _rateTicks += n; _rateSec += realSec; if (_rateSec >= 0.5) { Rate = _rateTicks / _rateSec; _rateTicks = 0; _rateSec = 0; } }
-        if (HandCam && _anim - _handAt > HandHoldSec) Follow = true;   // 손이 쉬었다 — 연출이 다시 맡는다
+        if (HandCam && _anim - _handAt > HandHoldSec && !PhotoMode) Follow = true;   // 손이 쉬었다 — 연출이 다시 맡는다 (사진 모드는 손 카메라 그대로)
         // 새 하이라이트 · 같은 사슬에서 커진 하이라이트(죽음이 더해져 제목이 바뀌었다)도 띠를 띄운다
         if (Dir.Highlights.Count > _lastHighlights || Dir.Highlights.Count > 0 && Dir.Highlights[^1].Title != _lastTitle)
         {
@@ -834,6 +841,7 @@ public sealed partial class LiveShow
         var latest = Dir.Highlights.Count > 0 ? Dir.Highlights[^1] : null;
         bool chCard = _cardLeft > 0 && _cardCh != null;
         var rewind = RewindNow();
+        var photo = PhotoNow();
         float sk = D / (float)Painter.T;   // 흔들림은 32도트 자리
         float srcX = Math.Clamp((float)((left - x0) * D) + shx * sk, 0, Math.Max(0, needW - (float)(w * D)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
         float srcY = Math.Clamp((float)((top - y0) * D) + shy * sk, 0, Math.Max(0, needH - (float)(h * D)));
@@ -876,6 +884,9 @@ public sealed partial class LiveShow
             ChapterAlpha = chCard ? (float)Math.Clamp(Math.Min(_cardLeft, _cardFull - _cardLeft + 0.1) / 0.4, 0, 1) : 0, ChapterWeek = chCard && _cardCh!.Week,
             Days = Panel == PanelKind.Record && Detail == DetailKind.Record && DetailSub == 0 ? DayStrip() : Array.Empty<DayCell>(),
             EndCard = EndCard, Ended = Ended != VoyageEnd.None,
+            // 사진 (V5): 크게 연 사진 · 사진 모드
+            Photo = photo, PhotoVersion = _photoVer, PhotoCaption = photo != null ? _photoShown!.Caption : "", PhotoAct = photo != null && _photoShown!.Scene != null ? "▶ 다시보기" : "",
+            PhotoActOn = photo != null && _photoShown!.Scene is { } pscene && CanReplay(pscene), PhotoWhy = PhotoWhy, PhotoMode = PhotoMode,
         };
     }
 
@@ -980,6 +991,7 @@ public sealed partial class LiveShow
             {
                 var list = HighlightsNewest();
                 if (PanelPick < 0 || PanelPick >= list.Count) return false;
+                if (PhotoOnly(list[PanelPick]) is { } only) { ShowPhoto(only.Id); return true; }   // ○ 사진만 — 정점 사진을 크게 (V5)
                 if (!StartReplay(list[PanelPick])) { Notify(PhotoWhy); return false; }
                 ClosePanel();
                 return true;
@@ -1084,7 +1096,8 @@ public sealed partial class LiveShow
 
     private string PanelFootOf() => Detail is DetailKind.Person or DetailKind.Robot ? "줄을 누르면 펼친다 · 휠로 넘기기 · 오른쪽 누르기로 목록 (← → · Esc)"
         : Detail == DetailKind.Computer ? "줄을 누르면 펼친다 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · J)"
-        : Detail == DetailKind.Record ? (DetailSub == 0 ? "장을 누르면 펼친다 · 띠의 칸을 누르면 그날 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)" : "줄을 누르면 고른다 · ▶ 그 장면 다시보기 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)") : Panel switch
+        : Detail == DetailKind.Record ? (DetailSub == 0 ? "장을 누르면 펼친다 · 띠의 칸을 누르면 그날 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)"
+            : DetailSub == 2 ? "사진을 누르면 크게 · ▶ 그 장면 다시보기 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)" : "줄을 누르면 고른다 · ▶ 그 장면 다시보기 · 휠로 넘기기 · 작은 탭은 ← → (↑↓ · Y)") : Panel switch
     {
         PanelKind.Highlights => "줄을 눌러 고르기 · ▶ 다시보기 · 휠로 넘기기 (↑↓ · Enter · L)",
         PanelKind.Route => double.IsNaN(DepartInMin()) ? "항로는 출항 때만 고른다 · 휠로 넘기기 (T)" : "항로를 누르면 그 길로 · 출항 전에만 (↑↓ · Enter · T)",
@@ -1112,7 +1125,7 @@ public sealed partial class LiveShow
                     var (mark, when, can) = WayRow(h);   // ● 고리 · 금고 · ◐ 감아 · ○ 사진만 (V4)
                     bool byHand = h.Root > 0 && h.Root < Sim.Causes.Count && Sim.Causes[h.Root].Kind == CauseKind.Captain;   // 원인 사슬의 뿌리가 함장의 손 (U9)
                     rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(byHand ? "함장의 손 · " : "")}{(h.People ? "사람 이야기 · " : "")}{h.Title}", said.Length > 0 && when.Length > 0 ? said + "\n" + when : said + when, false,
-                        Key: KeyHighlight(hi), Act: "▶ 다시보기", ActOn: can, Why: PhotoWhy, Mark: mark));
+                        Key: KeyHighlight(hi), Act: mark == 3 && Photos.PeakOf(h) != null ? "사진" : "▶ 다시보기", ActOn: can || mark == 3 && Photos.PeakOf(h) != null, Why: PhotoWhy, Mark: mark));   // ○: 정점 사진이 있으면 [사진] (V5)
                 }
                 if (rows.Count == 0) rows.Add(new PanelRow("아직 볼 만한 장면이 없다", "조용한 항해 — 일이 나면 여기에 쌓인다", false, Key: -9));
                 break;
@@ -1257,7 +1270,7 @@ public sealed partial class LiveShow
     private string _notice = ""; private double _noticeLeft;
     /// <summary>잠깐 띄우는 알림 (항로를 골랐다 등) — 남은 초가 0이면 빈 글.</summary>
     public string Notice => _noticeLeft > 0 ? _notice : "";
-    public void Notify(string text, double seconds = 3, PanelKind link = PanelKind.None) { _notice = text; _noticeLeft = seconds; _noticeLink = link; }
+    public void Notify(string text, double seconds = 3, PanelKind link = PanelKind.None) { _notice = text; _noticeLeft = seconds; _noticeLink = link; _noticeAlbum = false; }
     public void TickNotice(double realSec) => _noticeLeft = Math.Max(0, _noticeLeft - realSec);
 
     /// <summary>항로 한 줄: 번호 · 이름 (받아 둔 항로 손이 있으면 그것 — 출항 준비로 멈춘 채 고른 것).</summary>
