@@ -308,18 +308,26 @@ public static partial class Program
                 if (mode == 1) m[r].C.Spares = 0;
                 int cause = s.Causes.Add(CauseKind.Setup, "시험: 조절기가 고장 났다", s.Tick);
                 if (mode != 2) net.BreakThermostat(s, dn, mode is 0 or 1, cause);
-                if (mode == 2) { net.SetOn(dn, false); sm.Shed[dn] = 1; }   // 주컴퓨터가 전력 때문에 꺼 둔 온수기 — 찬물
+                if (mode == 2) sm.ShedDevice(s, dn);   // 주컴퓨터가 전력 때문에 꺼 둔 온수기 — 찬물
                 void Calm(int p) { int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
                 life[m[a].C.Body].Dirt = 0.8f;
                 bool sign = false, said = false, saidFixed = false, noPart = false; int jobs = 0;
                 long bc0 = sm.Broadcasts.Count;
                 for (long t = 0; t < Time.Minutes(40); t++)
                 {
-                    Calm(a); if (mode == 2) { sm.Shed[dn] = 1; net.SetOn(dn, false); }
+                    Calm(a);
                     s.Step();
                     sign |= (m.WashSign[near] & 2) != 0;
                     jobs = Math.Max(jobs, sm.Jobs.Count(j => j.Kind == GoalKind.Maintain && j.Target / 4 == dn));
                     foreach (var (_, text) in sm.Broadcasts) { said |= text.Contains("쓰지 마세요"); saidFixed |= text.Contains("고쳤습니다"); noPart |= text.Contains("부품이 없어"); }
+                }
+                if (mode == 1)   // (라) 검토 고침: 기다리는 동안 그 온수기의 다른 부품 (기계)을 손보고 · 찬물 알림이 하나 더 와도 불은 그대로
+                {
+                    int fixc = s.Causes.Add(CauseKind.Setup, "시험: 기계 부품을 미리 갈았다", s.Tick);
+                    m.WashReports.Add(new WashReport { Tick = s.Tick, Where = dn, Cause = fixc, Who = a, Kind = 2 });
+                    s.Run(30);
+                    s.Facts.Emit(s.Tick, FactKind.Repaired, net.Devices[dn].Cell, (int)Part.Mechanical, fixc, r, dn);
+                    for (long t = 0; t < Time.Minutes(3); t++) { Calm(a); s.Step(); jobs = Math.Max(jobs, sm.Jobs.Count(j => j.Kind == GoalKind.Maintain && j.Target / 4 == dn)); }
                 }
                 bool fixedOk = net.ThermoFault[dn] == 0, off = (m.WashSign[near] & 2) == 0;
                 // 고친 뒤 B가 그 칸에서 씻는다
@@ -339,7 +347,7 @@ public static partial class Program
             Check("화장실 사고 (C25) 조절기 알림 → 갈기: '뜨겁다' 알림에 주컴퓨터가 밸브를 잠그고 사용 금지 불 · '쓰지 마세요' 방송 · 미리 갈기 일감 → 로봇이 갈아 조절기가 새것 · 불 꺼짐 · '고쳤습니다' → 다른 이가 그 칸에서 씻고 데지 않는다",
                 fix.sign && fix.said && fix.jobs >= 1 && fix.fixedOk && fix.off && fix.saidFixed && fix.showersB >= 300 && fix.burnB < 0.02f,
                 $"불 {fix.sign} · 방송 {fix.said} · 일감 {fix.jobs} · 고침 {fix.fixedOk} · 불 꺼짐 {fix.off} · '고쳤습니다' {fix.saidFixed} · B 그 칸 물 {fix.showersB}초치 · 화상 {fix.burnB:0.000}");
-            Check("화장실 사고 (C25) 부품 없음: 갈 부품이 없으면 불은 켜진 채 · '부품이 없어' 방송 · 일감 0",
+            Check("화장실 사고 (C25) 부품 없음: 갈 부품이 없으면 불은 켜진 채 · '부품이 없어' 방송 · 일감 0 · 그 사이 기계 부품을 손보거나 찬물 알림이 와도 불은 그대로 (검토 고침)",
                 none.sign && none.kept && none.noPart && none.jobs == 0, $"불 {none.sign} · 켜진 채 {none.kept} · 방송 {none.noPart} · 일감 {none.jobs}");
             Check("화장실 사고 (C25) 찬물 알림: 주컴퓨터가 전력 때문에 끈 온수기면 일감 0 (불도 없다) · 조절기가 열린 채 굳은 찬물이면 미리 갈기 일감 1 (불은 켜지 않는다)",
                 shed.jobs == 0 && !shed.sign && coldT.jobs >= 1 && !coldT.sign, $"끈 온수기: 일감 {shed.jobs} · 불 {shed.sign} / 조절기: 일감 {coldT.jobs} · 불 {coldT.sign}");
@@ -374,6 +382,31 @@ public static partial class Program
             Check("화장실 사고 (C26) 무중력 샤워 잠금: 씻는 중 중력이 무너지면 주컴퓨터가 1분 안에 샤워 밸브를 잠그고 사용 금지 불 (비트 2) · 방송 · 물수건 / 중력이 돌아오면 비트 2만 꺼진다 (비트 1은 남는다)",
                 broke >= 0 && shut >= 0 && shut - broke <= Time.Minutes(1) && signed && said && wiped >= 1 && after == 2,
                 $"잠금 {(shut >= 0 && broke >= 0 ? Time.ToSeconds(shut - broke) : -1):0}초 · 불 {signed} · 방송 {said} · 물수건 {wiped} · 돌아온 뒤 불 비트 {after}");
+        }
+
+        // C24 검토 고침: 찬물을 느낀 채 끊긴 샤워의 느낌이 다음 샤워에 남지 않는다 — 조절기를 고친 뒤 다시 씻으면 따뜻했다 (그 칸을 6시간 피하지 않는다 · 예전: 끊긴 샤워의 293K가 남아 멀쩡한 칸을 피했다)
+        {
+            var s = Worlds.Full(lay, 5);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            var shower = lay.Furniture.First(x => x.Type == "Shower");
+            int dev = net.Devices.First(d => d.Furniture == shower.Id).Id;
+            int p = m.AddPerson(s, Worlds.At(lay, 2, 1));
+            s.Run(2);
+            void Calm() { int o = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = o; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+            net.BreakThermostat(s, dev, false, s.Causes.Add(CauseKind.Setup, "시험: 조절기가 열린 채 굳었다", s.Tick));
+            life[m[p].C.Body].Dirt = 0.8f;
+            long cold0 = m.ShowersCold;
+            for (long t = 0; t < Time.Minutes(20) && m.ShowersCold == cold0; t++) { Calm(); s.Step(); }
+            m[p].Plan.Clear(); m[p].C.StepIndex = 0;   // 찬물을 느끼자마자 끊겼다 (다른 일)
+            for (long t = 0; t < 5; t++) { Calm(); s.Step(); }
+            net.Repair(dev, Part.Electric);   // 조절기가 고쳐졌다
+            m[p].Avoid.Clear();
+            life[m[p].C.Body].Dirt = 0.8f;
+            long n0 = m.ShowersTaken;
+            for (long t = 0; t < Time.Minutes(30) && m.ShowersTaken == n0; t++) { Calm(); s.Step(); }
+            bool avoided = m[p].Avoid.Any(v => v.Goal == GoalKind.Wash && v.Target == shower.Id && v.Until > s.Tick + Time.Hours(5));
+            Check("화장실 사고 (C24 검토 고침): 찬물을 느낀 채 끊긴 샤워의 느낌이 다음 샤워에 남지 않는다 — 고친 칸에서 다시 씻으면 그 칸을 6시간 피하지 않는다",
+                cold0 < m.ShowersCold && m.ShowersTaken == n0 + 1 && !avoided, $"찬물 느낌 {m.ShowersCold - cold0} · 다시 씻음 {m.ShowersTaken - n0} · 그 칸 피함 {avoided}");
         }
     }
 }

@@ -543,6 +543,7 @@ public sealed partial class Mind
     private void ShowerStart(Agent a, PlanStep st)
     {
         int d = WashDev(st.Target);
+        if (a.Id < _showerFelt.Length) _showerFelt[a.Id] = 0;   // 새 샤워 — 느낌을 새로 (검토 고침: 끊긴 샤워의 느낌이 남았다)
         if (d < 0) return;
         if (!_net!.ValveOpen(d)) _net.SetValve(d, true);   // 물을 튼다
         if (_net.On[d] == 0) _net.SetOn(d, true);         // 온수기를 켠다 (전력을 줄이려 꺼 두었으면 주컴퓨터가 다시 켤 때까지 찬물)
@@ -639,6 +640,7 @@ public sealed partial class Mind
         int d = _showerDev[a.Id] - 1;
         double got = d < _net.ShowerMeter.Length ? Math.Max(0, _net.ShowerMeter[d] - _showerFrom[a.Id]) : 0;
         _showerDev[a.Id] = 0;
+        if (a.Id < _showerFelt.Length) _showerFelt[a.Id] = 0;
         if (a.IsPerson) _life.Rinse(sim, c.Body, got, d);
         if (!_net.ValveOpen(d)) return;
         bool urgent = c.Up == 0 || c.Mode != 0 || c.Goal is GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Investigate or GoalKind.GetSuit or GoalKind.Down;

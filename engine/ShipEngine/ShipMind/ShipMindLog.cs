@@ -6,6 +6,7 @@ public struct Access
 {
     public int Device, Agent;
     public long Tick;
+    public byte Part;   // 손본 부품 (고쳤다 · 미리 갈았다 — 255 그 밖: 떼어 냄 · 몰래 · 실수 · 5단 C25 검토 고침)
 }
 
 /// <summary>
@@ -34,7 +35,7 @@ public sealed partial class ShipMind
             {
                 case FactKind.Repaired or FactKind.Salvaged or FactKind.Sabotage when device && f.Actor >= 0:
                 case FactKind.Mistake when device && f.Actor >= 0 && f.Size >= Network.HandledSize && f.Size < 2:   // 손보다 (상하게 한 것은 기록에 없다 — 열었다는 것만)
-                    Accesses.Add(new Access { Device = f.Other, Agent = f.Actor, Tick = f.Tick });
+                    Accesses.Add(new Access { Device = f.Other, Agent = f.Actor, Tick = f.Tick, Part = f.Kind == FactKind.Repaired ? (byte)f.Size : (byte)255 });
                     break;
                 case FactKind.Short when f.Other >= 0 && f.Other < _net.Feeders.Count && f.Cell >= 0:   // 차단기 보호 장치가 알린 합선 자리
                     if (ShortAt.Length != _net.Feeders.Count) { var old = ShortAt; ShortAt = Enumerable.Repeat(-1, _net.Feeders.Count).ToArray(); Array.Copy(old, ShortAt, Math.Min(old.Length, ShortAt.Length)); }

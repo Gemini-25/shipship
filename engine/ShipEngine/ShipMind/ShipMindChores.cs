@@ -197,8 +197,8 @@ public sealed partial class ShipMind
     private readonly Dictionary<int, double> _litter = new();
     private readonly HashSet<int> _heavy = new();   // 둘이서 들 것이 있는 칸 (찍지 않는다 — 틱마다 다시 센다)
 
-    /// <summary>그 장치의 점검 뚜껑을 그 때 뒤에 열었나 (출입 표).</summary>
-    private bool AccessedSince(int dev, long tick) { foreach (var x in Accesses) if (x.Device == dev && x.Tick > tick) return true; return false; }
+    /// <summary>그 장치의 전기 부품을 그 때 뒤에 손봤나 (출입 표).</summary>
+    private bool AccessedSince(int dev, long tick) { foreach (var x in Accesses) if (x.Device == dev && x.Part == (byte)Part.Electric && x.Tick > tick) return true; return false; }   // 전기 부품을 손본 기록 (조절기 — C25 검토 고침)
 
     private bool Done(in Job j) => j.Kind switch
     {

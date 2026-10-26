@@ -1501,7 +1501,7 @@ public sealed partial class ShipMind : IEngine
             foreach (var d in order)
             {
                 if (gap <= 0) break;
-                _net.SetOn(d.Id, false); Shed[d.Id] = 1; gap -= d.Def.Kw; Sheds++; shed++;
+                _net.SetOn(d.Id, false); Shed[d.Id] = 1; MarkShed(d.Id, t, true); gap -= d.Def.Kw; Sheds++; shed++;
                 sim.Facts.Emit(t, FactKind.LoadShed, d.Cell, (float)d.Def.Kw, 0, -1, d.Id);
             }
             if (shed > 0) Say(sim, "전력이 모자라 덜 중요한 장치를 껐다");   // 끌 것이 없으면 말하지 않는다 (전지가 바닥난 배에서 틱마다 되풀이했다)
@@ -1509,7 +1509,7 @@ public sealed partial class ShipMind : IEngine
         else if (_net.Supplied - _net.Demanded > 5)
         {
             foreach (var d in _net.Devices)
-                if (Shed[d.Id] != 0 && _net.Supplied - _net.Demanded > d.Def.Kw + 2) { _net.SetOn(d.Id, true); Shed[d.Id] = 0; break; } // 하나씩
+                if (Shed[d.Id] != 0 && _net.Supplied - _net.Demanded > d.Def.Kw + 2) { _net.SetOn(d.Id, true); Shed[d.Id] = 0; MarkShed(d.Id, sim.Tick, false); break; } // 하나씩
         }
     }
 

@@ -123,6 +123,8 @@ public sealed partial class ShipMind
             if (fu < 0 || fu >= nf || rp.Tick <= _showerNoteAt[fu]) continue;   // 읽은 알림
             _showerNoteAt[fu] = rp.Tick; _showerNoteKind[fu] = rp.Kind;
             int d = rp.Where, cell = L.Furniture[fu].Cells[0], room = L.Room[cell];
+            bool lit = (mind.WashSign[fu] & 2) != 0 || _showerAwait[fu] is 1 or 3;   // 이미 뜨거움으로 잠가 둔 칸 — 같은 알림은 다시 알리지 않고 · 찬물 알림은 덮지 않는다 (검토 고침)
+            if (lit) continue;
             if (rp.Kind == 1)
             {
                 _net.SetValve(d, false); _net.SetOn(d, false);
@@ -132,7 +134,7 @@ public sealed partial class ShipMind
             }
             else
             {
-                bool mine = d < Shed.Length && Shed[d] != 0 || d < LineShed.Length && LineShed[d] != 0;   // 제가 끈 온수기
+                bool mine = ShedAt(d, rp.Tick) || d < LineShed.Length && LineShed[d] != 0;   // 제가 끈 온수기 (알린 그때 — 검토 고침: 읽는 때가 아니라)
                 bool lamp = false; for (int p = 0; p < 4; p++) lamp |= _net.Broken[d * 4 + p] != 0;   // 고장 등
                 if (mine || lamp || room < 0 || !_net.RoomPowered(room)) { Say(sim, $"{RoomName(room)} 샤워 칸 찬물 알림 — {(mine ? "전력을 아끼려 온수기를 꺼 두었다" : lamp ? "고장 등이 켜져 있다 (고치는 일로)" : "그 방에 전기가 없다")}"); _showerAwait[fu] = 0; continue; }
                 _showerAwait[fu] = 2;   // 찬물 — 불 없이 갈기
@@ -146,7 +148,7 @@ public sealed partial class ShipMind
             if (d < 0) { _showerAwait[fu] = 0; continue; }
             int room = L.Room[L.Furniture[fu].Cells[0]];
             bool done = false;
-            foreach (var x in Accesses) if (x.Device == d && x.Tick > _showerNoteAt[fu]) { done = true; break; }   // 알림 뒤 점검 뚜껑을 열었다 (손본 기록)
+            foreach (var x in Accesses) if (x.Device == d && x.Part == (byte)Part.Electric && x.Tick > _showerNoteAt[fu]) { done = true; break; }   // 알림 뒤 전기 부품을 손본 기록 (검토 고침: 다른 부품 · 몰래 연 것은 아니다)
             if (done)
             {
                 if (_showerAwait[fu] == 1 || (_mind!.WashSign[fu] & 2) != 0) { _mind!.SignWash(fu, 1, false); Broadcast(sim, $"{RoomName(room)} 샤워 칸을 고쳤습니다 — 다시 써도 됩니다"); }
@@ -164,6 +166,18 @@ public sealed partial class ShipMind
             Post(sim, new Job { Kind = GoalKind.Maintain, Target = k, Arg = 1 }, _net!.Devices[d].Cell, person => person.C.SkRepair >= 0.5f);   // Arg 1: 알림으로 (닳음 잣대로 끝내지 않는다)
         }
     }
+
+    /// <summary>장치마다 전력 때문에 끈 때 · 다시 켠 때 (C25 검토 고침 — 찬물 알림을 그때의 제 일로 견준다).</summary>
+    private long[] _shedOn = Array.Empty<long>(), _shedOff = Array.Empty<long>();
+    private void MarkShed(int d, long t, bool on)
+    {
+        if (_shedOn.Length != _net!.Devices.Count) { Array.Resize(ref _shedOn, _net.Devices.Count); Array.Resize(ref _shedOff, _net.Devices.Count); }
+        if (on) _shedOn[d] = t + 1; else _shedOff[d] = t + 1;
+    }
+    /// <summary>요청 (시험 차림): 주컴퓨터가 전력 때문에 그 장치를 끈 것으로 (끄고 · 표시 · 때).</summary>
+    public void ShedDevice(Sim sim, int d) { _net!.SetOn(d, false); Shed[d] = 1; MarkShed(d, sim.Tick, true); }
+    /// <summary>그 때 제가 전력 때문에 꺼 둔 장치였나.</summary>
+    private bool ShedAt(int d, long t) => d < _shedOn.Length && _shedOn[d] != 0 && _shedOn[d] - 1 <= t && (_shedOff[d] < _shedOn[d] || _shedOff[d] - 1 > t);
 
     private void PostCare(Sim sim, int fu, int kind, int cell, Func<Agent, bool> canPerson)
     {
@@ -243,7 +257,7 @@ public sealed partial class ShipMind
             {
                 int c = L.Furniture[fu].Cells[0];
                 if (L.Room[c] != r) continue;
-                bool used = L.Furniture[fu].Type == "Toilet" && (_mind.WashSign[fu] != 0 || !_net!.Working(WashDevice(fu)));   // '사용 금지' · 고장 변기는 빈 것이 아니다
+                bool used = _mind.WashSign[fu] != 0 || L.Furniture[fu].Type == "Toilet" && !_net!.Working(WashDevice(fu));   // 불 켜진 샤워 칸도 빈 것이 아니다 (C23 검토 고침)   // '사용 금지' · 고장 변기는 빈 것이 아니다
                 if (!used) foreach (var a in mind.Agents) if (a.IsPerson && a.C.Up != 0 && a.C.Cell == c) { used = true; break; }
                 if (!used && L.Furniture[fu].Type == "Toilet") toiletsFull = false;
                 if (!used && L.Furniture[fu].Type == "Shower") showersFull = false;
@@ -312,12 +326,12 @@ public sealed partial class ShipMind
     private void SaveWash(StateWriter w)
     {
         w.Tag("주컴퓨터 화장실"); w.Arr(_washCallAt); w.Arr(_washSince); w.Arr(_washCell); w.Arr(_showerIdle); w.I64(ToiletSigns); w.I64(WashCalls); w.I64(WashOrders); w.I64(ShowersCut);
-        w.Tag("주컴퓨터 화장실 (라)(마)"); w.Arr(_showerNoteAt); w.Arr(_showerNoteKind); w.Arr(_showerAwait); w.Arr(_odorStep); w.Arr(_scrubAsk); w.I32(ScrubAt); w.I64(_outbreakAt);
+        w.Tag("주컴퓨터 화장실 (라)(마)"); w.Arr(_showerNoteAt); w.Arr(_showerNoteKind); w.Arr(_showerAwait); w.Arr(_odorStep); w.Arr(_scrubAsk); w.I32(ScrubAt); w.I64(_outbreakAt); w.Arr(_shedOn); w.Arr(_shedOff);
     }
 
     private void LoadWash(StateReader r)
     {
         r.Tag("주컴퓨터 화장실"); _washCallAt = r.Arr<long>(); _washSince = r.Arr<long>(); _washCell = r.Arr<int>(); _showerIdle = r.Arr<byte>(); ToiletSigns = r.I64(); WashCalls = r.I64(); WashOrders = r.I64(); ShowersCut = r.I64();
-        r.Tag("주컴퓨터 화장실 (라)(마)"); _showerNoteAt = r.Arr<long>(); _showerNoteKind = r.Arr<byte>(); _showerAwait = r.Arr<byte>(); _odorStep = r.Arr<byte>(); _scrubAsk = r.Arr<byte>(); ScrubAt = r.I32(); _outbreakAt = r.I64();
+        r.Tag("주컴퓨터 화장실 (라)(마)"); _showerNoteAt = r.Arr<long>(); _showerNoteKind = r.Arr<byte>(); _showerAwait = r.Arr<byte>(); _odorStep = r.Arr<byte>(); _scrubAsk = r.Arr<byte>(); ScrubAt = r.I32(); _outbreakAt = r.I64(); _shedOn = r.Arr<long>(); _shedOff = r.Arr<long>();
     }
 }
