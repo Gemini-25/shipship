@@ -377,7 +377,7 @@ public sealed partial class Life : IEngine
         Ears(sim, dt);        // 소리 단계 S3: 큰 소리가 귀를 먹먹하게 한다
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
-        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); WasteRot(sim, dt * 25); }
+        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); WasteRot(sim, dt * 25); GermStep(dt * 25); }
         if (sim.Tick % 25 == 3) Spread(sim, dt * 5);   // 옮는 병 (1분마다)
         if (st != null) StampAirLoss(sim, st, sim.Tick % 25 == 7);
     }
@@ -943,6 +943,7 @@ public sealed partial class Life : IEngine
         {
             if (k < 0 || k >= L.N) continue;
             if ((what & MopKind.Mold) != 0) { Mold[k] = 0; MoldCause[k] = 0; }
+            if ((what & MopKind.Germ) != 0 && L.FurnitureAt[k] >= 0) { WashArrays(); SurfGerm[L.FurnitureAt[k]] = 0; SurfCause[L.FurnitureAt[k]] = 0; }   // 소독 (5단 C21 — 그 칸 설비 겉면)
             if ((what & MopKind.Water) == 0 || _net == null) continue;
             double w = F.Stored(T.sWater, k);
             if (w > 0) { double got = F.TakeStore(k, T.sWater, w); _net.WasteWater += got; wiped += got; }
@@ -972,4 +973,4 @@ public sealed partial class Life : IEngine
 
 /// <summary>닦는 갈래 (Life.Mop — 겹쳐 쓴다).</summary>
 [Flags]
-public enum MopKind : byte { None = 0, Mold = 1, Water = 2 }
+public enum MopKind : byte { None = 0, Mold = 1, Water = 2, Germ = 4 }

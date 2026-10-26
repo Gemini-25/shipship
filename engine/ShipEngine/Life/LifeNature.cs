@@ -8,7 +8,7 @@ namespace ShipEngine;
 public sealed partial class Life
 {
     /// <summary>식량 상자 하나에 감기 바이러스가 묻어 있을 몫 (포장 · 싣는 동안) — 세계마다 (시험이 바꾼다 · 찍지 않는다).</summary>
-    public double CrateColdChance = 0.01;
+    public double CrateColdChance = 0.01, CrateGutChance = 0.005;   // 상자에 감기 바이러스 · 장염 균이 묻어 있을 몫 (기능 확인용 기본값)
     /// <summary>출항 때 누군가 고향에서 옮은 감기를 잠복한 채 탈 몫.</summary>
     public double BoardColdChance = 0.15;
     /// <summary>열어 본 식량 상자 수 (상자마다 시드의 난수 하나).</summary>
@@ -19,6 +19,12 @@ public sealed partial class Life
     {
         long n = CratesOpened++;
         if (body < 0 || body >= Bodies.Count || this[body].Alive == 0) return;
+        if (Rng.Unit(sim.Seed, Rng.Key("상자 장염"), n, 0) < CrateGutChance)   // 상자에 장염 균이 묻어 있었다 — 연 이의 손에 (먹을 때 옮는다 — 5단 C21)
+        {
+            ref var b = ref this[body];
+            b.HandGerm += 1;
+            if (b.Gut == 0) b.GutCause = sim.Causes.Add(CauseKind.Biology, $"{Ko.I(name)} 연 식량 상자에 장염 균이 묻어 있었다", sim.Tick, cell, 0, 0, actor);
+        }
         if (Rng.Unit(sim.Seed, Rng.Key("상자 감기"), n, 0) >= CrateColdChance) return;
         int c0 = sim.Causes.Add(CauseKind.Biology, "식량 상자 하나에 감기 바이러스가 묻어 있었다", sim.Tick, cell);
         int c1 = sim.Causes.Add(CauseKind.Biology, $"{Ko.I(name)} 그 상자를 열다 감기가 옮았다", sim.Tick, cell, c0, 0, actor);

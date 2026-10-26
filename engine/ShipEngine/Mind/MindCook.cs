@@ -95,6 +95,7 @@ public sealed partial class Mind
             c.CookOn = d + 1;
             if (_net.On[d] == 0) _net.SetOn(d, true);
             _net.FillPan(sim, d);
+            if (a.IsPerson) _life?.Touch(c.Body, _net.Devices[d].Furniture);   // 조리대 · 냄비를 만진다 (5단 C21 — 월드가 맞바꾼다)
         }
         if (done && a.IsPerson) _life?.HandlePan(sim, c.Body, d, c.Sleepy, Math.Clamp(c.Stress, 0, 1), c.Careful, a.Id, NameOf(a.Id));   // 냄비를 내린다 (월드가 쏟음을 셈한다 — 5단 C10)
         if (done) { Cooked++; if (a.IsPerson) a.C.SkCook = Math.Min(1, a.C.SkCook + 0.003f * Practice(a.C, "조리") * UseSkill(a, 4, sim.Tick)); FinishCook(sim, a, false); }

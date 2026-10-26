@@ -269,7 +269,7 @@ public sealed partial class Mind
                 double got = 0, meal = Math.Min(MealMol, FoodLeft(a.Id));   // ⑪ 배급: 오늘 몫 안에서만
                 foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, meal - got)); if (got >= meal) break; }
                 if (got <= 0 && RationFood > 0 && meal < 0.05) Refused++;
-                if (got > 0) { CountAte(a, got); _life!.Eat(c.Body, got); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
+                if (got > 0) { CountAte(a, got); _life!.EatBy(sim, c.Body, got, st.Target); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
                 break;
             }
             case UseKind.Pilfer when a.IsPerson: PilferDone(sim, a, st); break;

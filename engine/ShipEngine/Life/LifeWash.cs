@@ -73,6 +73,7 @@ public sealed partial class Life
         if (stool > 0) { b.Bowel = 0; SewageKg += stool; }
         Voids++; Flushes[toilet]++;
         Grime[toilet] = Math.Min(1, Grime[toilet] + (stool > 0 ? 0.06f : 0.03f));
+        ToiletGerms(sim, body, toilet, cell);   // 손 · 겉면 장염 균 (5단 C21 — 변기는 월드가 스스로 만진다)
         int fan = ToiletDev(toilet);
         if (fan < 0 || _net!.Working(fan)) sim.Find<Sound>()?.Emit(sim, cell, FlushDb, SoundKind.Flush, 0, Sound.BodyActor(body));   // 쉬익 — 흡입 팬이 돌면 (망 없는 시험 배도) · 낸 이는 그 몸 (5단 C7)
         if (Clogged[toilet] != 0)
@@ -113,7 +114,7 @@ public sealed partial class Life
     }
 
     /// <summary>변기를 닦는다 (월드): 때가 없어지고 · 조절기에 닦은 때의 물 내린 수를 적는다.</summary>
-    public void Scrub(int toilet) { WashArrays(); Grime[toilet] = 0; ScrubbedAt[toilet] = Flushes[toilet]; }
+    public void Scrub(int toilet) { WashArrays(); Grime[toilet] = 0; ScrubbedAt[toilet] = Flushes[toilet]; SurfGerm[toilet] = 0; SurfCause[toilet] = 0; }   // 닦으면 겉면 균도 (5단 C21)
 
     /// <summary>오물 통을 들어낸다 (곁의 빈 통으로 바꿔 끼운다 — 변기는 바로 다시 쓸 수 있다): 든 무게 (kg).</summary>
     public double LiftTank(int toilet) { WashArrays(); double kg = Tank[toilet]; Tank[toilet] = 0; WasteCarried += kg; return kg; }
@@ -214,6 +215,7 @@ public sealed partial class Life
         ref var b = ref this[body];
         b.Dirt = (float)Math.Max(0, b.Dirt - water / ShowerMol);
         if (water >= 200) { b.Wet = 0; Showers++; }
+        if (water > 0) b.HandGerm *= (float)HandWashKeep;   // 물로 씻으면 손의 균이 거의 다 씻긴다 (5단 C21)
         double steam = waterK > 305 ? water * 0.01 : 0;   // 따뜻한 물의 1%가 김으로 (8L면 80mL)
         if (steam > 0 && cell >= 0) { F.AddGas(cell, T.gH2O, steam, waterK); F.AddHeat(cell, water * 75.3 * (waterK - F.Temp(cell)) * 0.15); }
         if (_net != null) _net.WasteWater += water - steam;
@@ -235,6 +237,7 @@ public sealed partial class Life
     /// <summary>손을 씻는다 (⑧의 요청 — 세면대): 물탱크에서 want몰을 꺼내 씻고 · 물이 나왔으면 세면대 칸에서 쏴 (낸 이는 그 몸 — 5단 C7).</summary>
     public double HandWash(Sim sim, int body, double want, int cell)
     {
+        if (cell >= 0 && L.FurnitureAt[cell] >= 0) Touch(body, L.FurnitureAt[cell]);   // 수도꼭지를 만지고 씻는다
         double got = WashFromTap(sim, body, want, 300, cell);
         if (got > 0 && cell >= 0) sim.Find<Sound>()?.Emit(sim, cell, FaucetDb, SoundKind.Faucet, 0, Sound.BodyActor(body));
         return got;
@@ -261,6 +264,7 @@ public sealed partial class Life
     {
         _net ??= sim.Find<Network>();
         if (_net == null || device < 0 || device >= _net.Devices.Count) { Rinse(body, water); return; }
+        Touch(body, _net.Devices[device].Furniture);   // 샤워 칸 손잡이를 만진다 (5단 C21)
         Rinse(sim, body, water, _net.ShowerWaterK(device), device < _net.ThermoCause.Length ? _net.ThermoCause[device] : 0);
     }
 
@@ -269,6 +273,7 @@ public sealed partial class Life
         ref var b = ref this[body];
         b.Dirt = (float)Math.Max(0, b.Dirt - water / ShowerMol);
         if (water >= 200) { b.Wet = 0; Showers++; }
+        if (water > 0) b.HandGerm *= (float)HandWashKeep;
     }
 
     /// <summary>물수건으로 닦는다 (물 없이 — 샤워를 못 쓸 때 · 제 침대에서): 더러움이 반으로 · 지린 옷은 갈아입는다.</summary>

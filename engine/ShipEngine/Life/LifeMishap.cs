@@ -82,6 +82,7 @@ public sealed partial class Life
     {
         _net ??= sim.Find<Network>();
         if (body < 0 || body >= Bodies.Count || want <= 0) return (0, 0, 0);
+        Touch(body, furniture);   // 꼭지 · 컵을 만진다 (5단 C21)
         double got = _net != null ? Math.Min(Math.Max(0, _net.WaterTank), want) : want;
         if (_net != null) _net.WaterTank -= got;
         ref var b = ref this[body];
