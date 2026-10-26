@@ -481,6 +481,7 @@ public sealed partial class Mind
             if (b.Seen == t || b.Conf <= 0) continue;
             if (b.Kind is not (BeliefKind.Fire or BeliefKind.Smoke or BeliefKind.Injured or BeliefKind.Dead or BeliefKind.Water or BeliefKind.Spark
                 or BeliefKind.Bang or BeliefKind.Help or BeliefKind.Breach or BeliefKind.Vacuum)) continue;
+            if (b.Kind == BeliefKind.Water && b.Src != BeliefSource.Saw) continue;   // 고인 물: 본 것만 봐서 지운다 — 100몰 아래 물기는 보이지 않으니 들은 것 · 느낀 것은 반감기로 잊는다 (5단 C13)
             if (!Visible(a, b.Cell, room, radius)) continue;
             b.Conf = 0;
             a.Beliefs[i] = b;

@@ -920,14 +920,18 @@ public sealed partial class Mind
                 int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 에어락으로 나가 외판을 걷는다", t, n, c.GoalCause, 0, a.Id);
                 sim.Facts.Emit(t, FactKind.WentOutside, n, 0, cause, a.Id);
             }
-            c.MoveBudget -= L.FurnitureAt[n] >= 0 ? 1.5f : 1f;
+            // 조심 걸음 (5단 C13): 고인 물로 믿는 곳 (둘레 두 칸)은 천천히 (걸음 값 1.6배) · 발을 조심해 디딘다 — 달아나는 · 대피하는 · 공황 중이면 아니다 (아는 것: 제 믿음)
+            bool wary = a.IsPerson && c.Mode == 0 && c.Goal is not (GoalKind.Flee or GoalKind.Evacuate or GoalKind.Panic) && Believes(a, BeliefKind.Water, n, 2) >= 0.3f;   // 고인 물 믿음은 그 둘레 두 칸 (같은 갈래 믿음은 3칸 안이면 하나로 합친다 — 웅덩이 하나)
+            c.MoveBudget -= (L.FurnitureAt[n] >= 0 ? 1.5f : 1f) * (wary ? 1.6f : 1f);
             CloseBehind(sim, a);
             // 젖은 바닥 (5단 C12): 든 칸의 발 디딤은 월드가 셈한다 (요청 — 기어가는 이는 미끄러지지 않는다) · 미끄러졌으면 업던 이 · 든 것을 놓고 멈춘다
             if (a.IsPerson && _life != null && !SmokeBad(a, n))
             {
                 int vb = c.Carrying;
-                if (_life.Footing(sim, c.Body, n, c.Speed, vb >= 0 || c.Holding != 255, false, c.Sleepy, a.Id, NameOf(a.Id), vb) != 0)
+                if (_life.Footing(sim, c.Body, n, wary ? c.Speed / 1.6 : c.Speed, vb >= 0 || c.Holding != 255, wary, c.Sleepy, a.Id, NameOf(a.Id), vb) != 0)
                 {
+                    Learn(a, t, BeliefKind.Water, n, -1, 0.9f, BeliefSource.Felt);   // 미끄러져 안다 — 그 칸은 고인 물 (다음엔 조심한다 · C13)
+                    c.Careful = Math.Min(1, c.Careful + 0.1f);
                     if (vb >= 0) DropCarried(sim, a, false);
                     Fallen(a, t);
                     return;

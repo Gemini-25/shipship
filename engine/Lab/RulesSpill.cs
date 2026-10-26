@@ -106,6 +106,49 @@ public static partial class Program
                 $"마심 {c3.drinks} · 집음 {c3.took} · 빈손 {c3.empty} · 탁자 {c3.onTable} · 컵 {c3.n0}→{c3.n1} (장부 {c3.flow:+0;-0;0}) · 컵에 남은 물 {c3.w1:0.00}몰");
         }
 
+        // (C13) 조심 걸음: 복도 가운데 여섯 줄에 60몰 (100몰 아래 — 보이지 않는다) · 미끄러짐 몫 0.5 · 오른쪽 끝의 여섯이 목말라 왼쪽 배식기로 그 칸을 지난다 · 셋에게만 그 칸 믿음 (들은 것)
+        //     모르는 셋 미끄러짐 ≥ 2 · 아는 셋은 절반 이하 · 아는 셋은 그 칸에서 더 오래 (조심해 느리게 — 1.3배 넘게) · 미끄러진 이는 그 칸을 느낀 것으로 배운다 · 아는 이의 믿음은 그 칸을 지난 뒤에도 남는다
+        {
+            var lay = Worlds.Ascii("\n####################\n#m.................#\n#pb.................#\n####################".Replace("#pb.................#", "#pb................#"), new Dictionary<char, string> { ['m'] = "MealDispenser", ['p'] = "PowerPanel", ['b'] = "Battery" });
+            int[] wet = Enumerable.Range(5, 6).SelectMany(x => new[] { Worlds.At(lay, x, 1), Worlds.At(lay, x, 2) }).ToArray();   // 가운데 여섯 줄 (빠르기를 틱 단위로 잴 만큼)
+            (int slipKnow, int slipNot, double dKnow, double dNot, bool learned, bool kept, int nSlipped) Run(ulong seed, bool slippery)
+            {
+                var s = Worlds.Full(lay, seed);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>();
+                var ps = new[] { (16, 1), (16, 2), (17, 1), (17, 2), (18, 1), (18, 2) }.Select(q => m.AddPerson(s, Worlds.At(lay, q.Item1, q.Item2))).ToArray();
+                s.Run(2);
+                int spillCause = s.Causes.Add(CauseKind.Setup, "시험: 복도에 물이 고였다", s.Tick);
+                foreach (int c in wet) f.AddStore(c, f.T.sWater, 60, spillCause);
+                life.FloorSlipChance = slippery ? 0.5 : 0; life.FloorSlipMax = slippery ? 0.5 : 0;   // 미끄러지지 않는 판은 빠르기만 잰다
+                var knows = new[] { ps[0], ps[3], ps[4] };
+                var not = ps.Where(p => !knows.Contains(p)).ToArray();
+                foreach (int p in knows) foreach (int x in new[] { 5, 10 }) m.Learn(m[p], s.Tick, BeliefKind.Water, Worlds.At(lay, x, 1), -1, 0.8f, BeliefSource.Heard);   // 들은 웅덩이 둘 (두 끝 — 믿음 하나가 둘레 두 칸)
+                long fact0 = s.Facts.Total;
+                var tIn = ps.ToDictionary(p => p, _ => -1L); var tOut = ps.ToDictionary(p => p, _ => -1L);   // 젖은 칸 앞 (x 11) → 지나 (x 4) 걸린 틱
+                for (int k = 0; k < (int)Time.Minutes(10); k++)
+                {
+                    foreach (int p in ps) { ref var c = ref m[p].C; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; c.Hunger = 0; c.Unfit = 0; c.Thirst = c.DrankAt > 0 ? 0 : 1; }
+                    s.Step();
+                    foreach (int p in ps) { int x = lay.X(m[p].C.Cell) - 1; if (tIn[p] < 0 && x <= 11) tIn[p] = s.Tick; if (tOut[p] < 0 && x <= 4) tOut[p] = s.Tick; }
+                }
+                var fell = s.Facts.Since(fact0).Where(x => x.Kind == FactKind.Fell).ToList();
+                bool Fell(int p) => fell.Any(x => x.Actor == p || x.Actor == m[p].C.Body);
+                int Slips(IEnumerable<int> who) => fell.Count(x => who.Any(p => x.Actor == p || x.Actor == m[p].C.Body));
+                double Dwell(IEnumerable<int> who) { var d = who.Where(p => tIn[p] >= 0 && tOut[p] >= 0).Select(p => (double)(tOut[p] - tIn[p])).ToList(); return d.Count == 0 ? 0 : d.Average(); }
+                var slipped = not.Where(Fell).ToList();
+                bool learned = slipped.Count > 0 && slipped.All(p => m[p].Beliefs.Any(b => b.Kind == BeliefKind.Water && b.Src == BeliefSource.Felt && b.Conf > 0.5f && Array.IndexOf(wet, b.Cell) >= 0));
+                bool kept = knows.All(p => wet.Any(c => m.Believes(m[p], BeliefKind.Water, c, 2) >= 0.3f));
+                return (Slips(knows), Slips(not), Dwell(knows.Where(p => !Fell(p))), Dwell(not.Where(p => !Fell(p))), learned, kept, slipped.Count);
+            }
+            var runs = new[] { 11UL, 12UL, 13UL }.Select(x => Run(x, true)).ToList();
+            var calm = Run(11, false);   // 빠르기: 아무도 넘어지지 않는 판에서 그 칸에 머문 틱 / 들어섬
+            int sk = runs.Sum(r => r.slipKnow), sn = runs.Sum(r => r.slipNot);
+            double dk = calm.dKnow, dn = calm.dNot;
+            Check("조심 걸음 (C13): 보이지 않는 고인 물 · 미끄러짐 몫 0.5 · 씨 셋 — 모르는 이 ≥ 2번 · 아는 이는 절반 이하 · 아는 이는 그 칸을 1.3배 넘게 오래 걸려 지난다 (조심해 느리게) · 미끄러진 이는 그 칸을 느낀 것으로 배우고 · 아는 이의 믿음은 그 칸을 지나고도 남는다",
+                sn >= 2 && sk * 2 <= sn && dk >= 1.3 * dn && runs.All(r => r.nSlipped == 0 || r.learned) && runs.Any(r => r.nSlipped > 0) && runs.All(r => r.kept),
+                $"미끄러짐 모름 {sn} · 앎 {sk} · 미끄러지지 않는 판 젖은 칸을 지난 틱 앎 {dk:0.00} · 모름 {dn:0.00} · 배움 {string.Join("/", runs.Select(r => $"{r.learned}({r.nSlipped})"))} · 믿음 남음 {string.Join("/", runs.Select(r => r.kept))}");
+        }
+
         // (C11) 쏟은 이: 컵을 한 번 쏟으면 (그 뒤 몫 0) — 성실 1.0인 이는 5분 안에 닦아 바닥 물 < 2몰 · 오수가 는다 · 성실 0.0인 이는 10분 뒤에도 쏟은 몫의 80% 넘게 남는다 (예전: 아무도 닦지 않았다)
         {
             (double spilled, double at5, double at10, double waste, float careful) Spill(float consc)
@@ -184,7 +227,7 @@ public static partial class Program
                 $"받은 물 {took:0.0}몰 · 그날 몫에서 빠진 {today:0.0} · 칸 밖 쏟음 {off.spilled:0.0} (장부 {(offOk ? "그대로" : "적힘")})");
         }
 
-        // (다) C12 젖은 바닥 미끄러짐: 복도 한 줄 — 지린 물 (400몰)이 고인 칸을 B가 목말라 지나가면 (몫 1) 넘어진다 — 사실 '넘어졌다' 하나 · 원인 '미끄러져' ← '지렸다' · 타박 · Slips 1 · Falls 0
+        // (다) C12 젖은 바닥 미끄러짐: 복도 한 줄 — 지린 물 (90몰 — 보이지 않는다)이 고인 칸을 B가 목말라 지나가면 (몫 1) 넘어진다 — 사실 '넘어졌다' 하나 · 원인 '미끄러져' ← '지렸다' · 타박 · Slips 1 · Falls 0
         //     같은 차림 무중력 칸 · 로봇은 미끄러지지 않는다
         {
             var lay = Worlds.Ascii("\n##############\n#m..........e#\n##############", new Dictionary<char, string> { ['m'] = "MealDispenser", ['e'] = "Bed" });
@@ -195,7 +238,7 @@ public static partial class Program
                 int wet = Worlds.At(lay, 6, 1);
                 int b = robot ? m.AddRobot(s, Worlds.At(lay, 11, 1)) : m.AddPerson(s, Worlds.At(lay, 11, 1));
                 s.Run(2);
-                f.AddStore(wet, f.T.sWater, 400, s.Causes.Add(CauseKind.Biology, "참지 못하고 옷에 지렸다 (방광이 찼다)", s.Tick, wet));   // A가 그 칸에서 지렸다 (C8 원인)
+                f.AddStore(wet, f.T.sWater, 90, s.Causes.Add(CauseKind.Biology, "참지 못하고 옷에 지렸다 (방광이 찼다)", s.Tick, wet));   // A가 그 칸에서 지렸다 (C8 원인) — 100몰 아래 (보이지 않는 물기 · C13 뒤: 보이는 물은 조심해 디딘다 — 아래 '조심 걸음')
                 if (zeroG) for (int c = 0; c < lay.N; c++) f.Grav[c] = 0.1f;
                 life.FloorSlipChance = 1; life.FloorSlipMax = 1;
                 float blunt0 = robot ? 0 : life[m[b].C.Body].Blunt;
