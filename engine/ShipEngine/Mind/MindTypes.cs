@@ -124,7 +124,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery, Counsel, Queue, Toilet, Shower, Hands, Bag, Wipe }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat, Cpr, Surgery, Counsel, Queue, Toilet, Shower, Hands, Bag, Wipe, Mop }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep

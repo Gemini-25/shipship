@@ -36,6 +36,33 @@ public static partial class Program
                 $"마심 {m.Drinks - d0} · 장부 마셨다 {bookDrunk:0.0} · 쏟았다 {bookSpill:0.0}몰 · 바닥 물 +{floor:0.00} · 사실 {(fact.Kind == FactKind.Spilled ? $"{fact.Size:0.0}몰 몸 {fact.Actor}" : "없음")} · '{why}'");
         }
 
+        // (C11) 쏟은 이: 컵을 한 번 쏟으면 (그 뒤 몫 0) — 성실 1.0인 이는 5분 안에 닦아 바닥 물 < 2몰 · 오수가 는다 · 성실 0.0인 이는 10분 뒤에도 쏟은 몫의 80% 넘게 남는다 (예전: 아무도 닦지 않았다)
+        {
+            (double spilled, double at5, double at10, double waste, float careful) Spill(float consc)
+            {
+                var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+                var s = Worlds.Full(lay, 1);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>(); var net = s.Get<Network>();
+                int p = m.AddPerson(s, Worlds.At(lay, 3, 7));
+                m.SetPersonality(p, 0.5f, consc, 0.5f, 0.5f, 0.3f);
+                s.Run(2);
+                life.CupFumble = 1;
+                double Floor() { double w = 0; for (int c = 0; c < lay.N; c++) w += f.Stored(f.T.sWater, c); return w; }
+                void Calm(bool thirsty) { ref var c = ref m[p].C; c.Thirst = thirsty ? 1 : 0; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; }
+                long d0 = m.Drinks; double floor0 = Floor(), spill0 = s.Book.Of(Res.Water, Flow.Spilled);
+                for (int k = 0; k < (int)Time.Minutes(20) && m.Drinks == d0; k++) { Calm(true); s.Step(); }
+                life.CupFumble = 0;
+                float careful = m[p].C.Careful;   // 쏟은 그 틱 (조심은 시간이 지나며 잦아든다)
+                double spilled = spill0 - s.Book.Of(Res.Water, Flow.Spilled), waste0 = net.WasteWater, at5 = 0;
+                for (int k = 0; k < (int)Time.Minutes(10); k++) { Calm(false); s.Step(); if (k == (int)Time.Minutes(5)) at5 = Floor() - floor0; }
+                return (spilled, at5, Floor() - floor0, net.WasteWater - waste0, careful);
+            }
+            var hi = Spill(1f); var lo = Spill(0f);
+            Check("쏟은 이 (C11): 컵을 쏟으면 성실한 이 (1.0)는 5분 안에 닦아 바닥 물 < 2몰 · 오수가 는다 · 성실하지 않은 이 (0.0)는 10분 뒤에도 쏟은 몫의 80% 넘게 남는다 · 둘 다 조심 +0.1",
+                hi.spilled > 2 && hi.at5 < 2 && hi.waste > 0 && lo.spilled > 2 && lo.at10 > 0.8 * lo.spilled && hi.careful >= 0.099f && lo.careful >= 0.099f,
+                $"성실: 쏟음 {hi.spilled:0.0}몰 · 5분 뒤 바닥 {hi.at5:0.0} · 오수 +{hi.waste:0.0} · 조심 {hi.careful:0.000} / 안 성실: 쏟음 {lo.spilled:0.0} · 10분 뒤 바닥 {lo.at10:0.0} · 조심 {lo.careful:0.000}");
+        }
+
         // (나) 냄비: 몫 1 · 80℃ 냄비를 쏟으면 냄비 물이 바닥으로 (몫만큼 · 물의 합은 같다) · 쏟은 이가 덴다 (원인 '냄비를 쏟았다') — 30℃ 냄비는 데지 않는다
         {
             var legend = Worlds.MindLegend; legend['k'] = "Stove";

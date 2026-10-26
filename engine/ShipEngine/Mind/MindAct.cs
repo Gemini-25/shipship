@@ -308,6 +308,7 @@ public sealed partial class Mind
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)
                 var (got, spilled, _) = _life!.Drink(sim, c.Body, st.Target, want, c.Sleepy, Math.Clamp(c.Stress, 0, 1), c.Careful, a.Id, NameOf(a.Id));   // 월드 요청 (5단 C10 — 탱크에서 빼고 · 쏟음을 셈한다)
                 CountDrank(a, got + spilled);   // ⑪ 배급: 받은 물 (쏟은 것도 — 제가 쏟은 것을 안다)
+                if (spilled > 0) AfterSpill(sim, a, c.Cell, false);   // 쏟은 이가 닦거나 그냥 간다 (5단 C11)
                 WaterDrunk += got;
                 c.DrankAt = t; Drinks++;
                 break;
@@ -320,6 +321,7 @@ public sealed partial class Mind
                 c.Playing = 0;
                 break;
             case UseKind.Toilet or UseKind.Bag or UseKind.Shower or UseKind.Hands or UseKind.Wipe when a.IsPerson: WashDone(sim, a, st, use); break;
+            case UseKind.Mop when a.IsPerson: MopSpill(st.Cell); break;
             case UseKind.Exercise when a.IsPerson:
                 // 땀 흘리고 나면 개운하다: 지루함 · 긴장이 풀린다 (운동과 기분 연구)
                 c.Unfit = 0; c.ExercisedAt = t; Exercised++;
@@ -571,6 +573,35 @@ public sealed partial class Mind
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, part, cause, a.Id, dev);
         HandsOn(sim, a, dev, (Part)part, cause);
         JobDone(a, t);
+    }
+
+    /// <summary>셈 (찍지 않는다 — 관찰): 쏟고 닦은 · 그냥 간 수 (5단 C11).</summary>
+    public long SpillsMopped, SpillsLeft;
+
+    /// <summary>
+    /// 제 손의 결과 (월드가 돌려준 쏟음 — 5단 C11): 쏟을 때마다 조심 +0.1 · 데었으면 제 몸이 먼저 (닦지 않는다) ·
+    /// 급한 일이 없으면 0.2 + 0.8 × 성실 몫으로 바로 다음 걸음에 3분 닦는다 (일감판 밖) · 아니면 그냥 간다. 아는 것: 제가 쏟은 것 · 제 성실 · 급한 일.
+    /// </summary>
+    private void AfterSpill(Sim sim, Agent a, int cell, bool burnt)
+    {
+        ref var c = ref a.C;
+        c.Careful = Math.Min(1, c.Careful + 0.1f);
+        bool urgent = burnt || c.Up == 0 || c.Mode != 0 || CrisisWork(c.Goal) || Urge(a) > 0.8f;
+        if (urgent || cell < 0 || Rng.Unit(sim.Seed, Rng.Key("쏟고 닦기"), a.Id, sim.Tick) >= 0.2 + 0.8 * c.Consc) { SpillsLeft++; return; }
+        a.Plan.Insert(Math.Min(c.StepIndex + 1, a.Plan.Count), Use(UseKind.Mop, Time.Minutes(3), cell, -1));
+        SpillsMopped++;
+    }
+
+    /// <summary>쏟은 자리를 닦는다 (둘레 3×3 바닥 물 → 오수 — 닦는 것은 ⑦에 요청).</summary>
+    private void MopSpill(int cell)
+    {
+        if (cell < 0 || cell >= L.N || _life == null) return;
+        Span<int> around = stackalloc int[9];
+        int n = 0, x0 = L.X(cell), y0 = L.Y(cell);
+        for (int y = Math.Max(0, y0 - 1); y <= Math.Min(L.H - 1, y0 + 1); y++)
+            for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++)
+                around[n++] = L.Index(x, y);
+        _life.Mop(around[..n], MopKind.Water);
     }
 
     /// <summary>혼자 세울 수 있는 무게 (kg — 로봇 팔 · 사람 · PH13).</summary>

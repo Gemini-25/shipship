@@ -107,15 +107,15 @@ public sealed partial class Life
 
     /// <summary>
     /// ⑧의 요청 (5단 C10): 그 몸이 조리대 (device)의 냄비를 내린다 — 놓칠 몫 = 냄비 0.003 × (1 + 졸림)(1 + 서두름)(1 + 흔들림) × (1 − 0.5 × 조심)이면
-    /// 냄비 물 40~100%를 ⑥에 쏟게 하고 (바닥 · 겉면 열) · 330K 넘는 냄비면 쏟은 이가 덴다.
+    /// 냄비 물 40~100%를 ⑥에 쏟게 하고 (바닥 · 겉면 열) · 330K 넘는 냄비면 쏟은 이가 덴다 — (쏟은 몰 · 원인 · 데었나)를 돌려준다 (제 손의 결과 — 5단 C11).
     /// </summary>
-    public void HandlePan(Sim sim, int body, int device, float sleepy, float hasty, float careful, int actor, string name)
+    public (double spilled, int cause, bool scalded) HandlePan(Sim sim, int body, int device, float sleepy, float hasty, float careful, int actor, string name)
     {
         _net ??= sim.Find<Network>();
-        if (_net == null || body < 0 || body >= Bodies.Count || device < 0 || device >= _net.Devices.Count || _net.PanWater[device] <= 0) return;
+        if (_net == null || body < 0 || body >= Bodies.Count || device < 0 || device >= _net.Devices.Count || _net.PanWater[device] <= 0) return (0, 0, false);
         ref var b = ref this[body];
         double odds = PanFumble * MishapOdds(b, sleepy, hasty) * (1 - 0.5 * Math.Clamp(careful, 0, 1));
-        if (Rng.Unit(sim.Seed, Rng.Key("냄비 쏟음"), sim.Tick, body) >= odds) return;
+        if (Rng.Unit(sim.Seed, Rng.Key("냄비 쏟음"), sim.Tick, body) >= odds) return (0, 0, false);
         double share = 0.4 + 0.6 * Rng.Unit(sim.Seed, Rng.Key("냄비 쏟은 몫"), sim.Tick, body);
         string why = MishapWhy(b, sleepy);
         var dev = _net.Devices[device];
@@ -124,6 +124,7 @@ public sealed partial class Life
         sim.Facts.Emit(sim.Tick, FactKind.Spilled, dev.Cell, (float)mol, cause, actor: body, other: dev.Furniture);   // 설비는 가구 번호 (컵과 같게)
         Spills++;
         if (panK > 330) Scald(sim, body, (float)Math.Min(0.3, (panK - 330) / 150), cause);   // 뜨거운 물이 손 · 발에 (80℃ 0.15)
+        return (mol, cause, panK > 330);
     }
 
     /// <summary>젖은 바닥 미끄러짐 (5단 C12 — 기능 확인용 기본값): 바탕 몫 · 걸음당 상한 (셈은 <see cref="Slips"/>).</summary>
