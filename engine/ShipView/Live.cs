@@ -72,6 +72,10 @@ public sealed class LiveFrame
     public string DetailLine = "";
     /// <summary>방마다 도면 상자 (칸 — x0 · y0 · x1 · y1) — 판 줄의 작은 그림 (상상 그림)이 방 자리를 그린다.</summary>
     public float[] RoomBoxes = Array.Empty<float>();
+    /// <summary>두 곳 나눠 보기 (U9): 구석 작은 창의 그림 (바뀔 때만 판 번호가 오른다) · 제목 · 그 자리 (없으면 빈 제목).</summary>
+    public Img? Inset;
+    public int InsetVersion;
+    public string InsetTitle = "";
     /// <summary>자세히 머리의 얼굴 (사람 줄 얼굴 그림의 칸 · -1 없음) · 그 이를 따라가는 중인가.</summary>
     public int DetailFace = -1;
     public bool DetailFollow;
@@ -791,6 +795,7 @@ public sealed partial class LiveShow
         _drawnWorld = World; _drawnTick = World.Tick;
         var img = D == Painter.T ? Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse) : Painter.FrameFar(World, x0, y0, wc, hc, (int)(_anim * AnimFps), D, reuse);
         if (D == Painter.T) Painter.Prebake(World);   // 넓게 볼 때 첫 장에 굽기가 몰리지 않게 (장마다 덩어리 하나)
+        InsetStep();   // 두 곳 나눠 보기 (U9 — 구석 작은 창 · 0.2초마다 한 장)
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         var (shx, shy) = Shake();
         var prows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows();
@@ -837,7 +842,7 @@ public sealed partial class LiveShow
             StoryIsChain = ChainNow().Count > 0, Spots = spots,
             Bubbles = Bubbles(), SpeechOn = SpeechBubbles, ThoughtsOn = ThoughtBubbles,
             Detail = Panel == PanelKind.None ? DetailKind.None : Detail, DetailId = DetailId, DetailSub = DetailSub, DetailTabs = Panel == PanelKind.None ? Array.Empty<string>() : DetailTabsOf(Detail),
-            RoomBoxes = RoomBoxes(), DetailLine = Panel == PanelKind.None ? "" : DetailLineNow(), DetailFace = Panel == PanelKind.None ? -1 : DetailFaceNow(), DetailFollow = Detail is DetailKind.Person or DetailKind.Robot && Selected == DetailId && FollowSelected,
+            RoomBoxes = RoomBoxes(), Inset = _insetCell >= 0 ? _insetImg : null, InsetVersion = _insetVer, InsetTitle = _insetTitle, DetailLine = Panel == PanelKind.None ? "" : DetailLineNow(), DetailFace = Panel == PanelKind.None ? -1 : DetailFaceNow(), DetailFollow = Detail is DetailKind.Person or DetailKind.Robot && Selected == DetailId && FollowSelected,
             Armed = Armed, ArmedSize = ArmedSize, Aim = HandAimNow(), HandWaiting = Sim.Find<Hand>()?.Waiting.Count ?? 0, HandMarks = HandMarksNow(), CanHand = HandBlocked().Length == 0, HandWhy = HandBlocked(),
             HandSizes = Panel == PanelKind.Hand ? HandSizes() : Array.Empty<byte>(),
             CardIs = cardIs, Look = cardIs == CardKind.Thing ? Look : default, LookHandOk = lookHand.kind != HandKind.None, LookHandWhy = cardIs == CardKind.Thing ? lookHand.why : "",
@@ -1075,7 +1080,8 @@ public sealed partial class LiveShow
                     string said = h.Line.Length > 0 ? h.Line : story.Length > 0 && story != h.Title ? story : "";
                     bool can = CanReplay(h);
                     string when = can ? "" : "한 시간 넘게 지나 다시 볼 수 없다";
-                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(h.People ? "사람 이야기 · " : "")}{h.Title}", said.Length > 0 && when.Length > 0 ? said + "\n" + when : said + when, can,
+                    bool byHand = h.Root > 0 && h.Root < Sim.Causes.Count && Sim.Causes[h.Root].Kind == CauseKind.Captain;   // 원인 사슬의 뿌리가 함장의 손 (U9)
+                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(byHand ? "함장의 손 · " : "")}{(h.People ? "사람 이야기 · " : "")}{h.Title}", said.Length > 0 && when.Length > 0 ? said + "\n" + when : said + when, can,
                         Key: KeyHighlight(hi), Act: "▶ 다시보기", ActOn: can, Why: "한 시간 넘게 지나 다시 볼 수 없다 (한 시간 안의 것만)"));
                 }
                 if (rows.Count == 0) rows.Add(new PanelRow("아직 볼 만한 장면이 없다", "조용한 항해 — 일이 나면 여기에 쌓인다", false, Key: -9));

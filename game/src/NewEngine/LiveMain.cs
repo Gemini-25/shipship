@@ -466,6 +466,30 @@ void fragment() {
             }
             case "robots": if (s.Panel != PanelKind.Robots) s.TogglePanel(PanelKind.Robots); break;
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
+            case "scenes":
+            {
+                // 장면 판 (U9): 침대에 큰 불씨 (함장의 손) → 1분 남짓 앞으로 → 장면 판 — 줄 머리 '함장의 손 · '
+                var L = s.Sim.Layout;
+                var bed = L.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                if (bed == null) break;
+                s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Fire, Cell = bed.Cells[0], Size = 2 });
+                s.FastForward(80);
+                if (s.Panel != PanelKind.Highlights) s.TogglePanel(PanelKind.Highlights);
+                break;
+            }
+            case "inset":
+            {
+                // 두 곳 나눠 보기 (U9): 첫 사람을 따라가고 · 그에게서 가장 먼 침대에 큰 불씨 (함장의 손) — 연출이 그 불을 보는 동안 구석 작은 창
+                var L = s.Sim.Layout;
+                if (mind == null) break;
+                var pa = mind.Agents.FirstOrDefault(a => a.IsPerson);
+                if (pa == null) break;
+                var far = L.Furniture.Where(fu => fu.Type == "Bed" && fu.Cells.Length > 0).OrderByDescending(fu => Math.Abs(L.X(fu.Cells[0]) - L.X(pa.C.Cell)) + Math.Abs(L.Y(fu.Cells[0]) - L.Y(pa.C.Cell))).FirstOrDefault();
+                if (far == null) break;
+                s.SelectAgent(pa.Id);
+                s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Fire, Cell = far.Cells[0], Size = 2 });
+                break;
+            }
             case "computer-breach":
             {
                 // 외판 구멍 (U8): 사람이 가장 많은 방에 닿은 외판에 큰 구멍을 낸다 (함장의 손) — 주컴퓨터가 봉쇄를 그려 보고 · 5분 뒤 장부가 실제와 맞댄다 · 주컴퓨터 자세히 '예측'
@@ -641,6 +665,7 @@ void fragment() {
         DrawTalk(f); Lap("말 창");
         DrawStory(f); Lap("아래 줄");
         if (f.Broadcast.Length > 0 && f.BroadcastAlpha > 0.05f) DrawBroadcast(f);
+        if (_hud.Areas.ContainsKey("구석 창")) DrawInset(f);
         DrawCaptions(f);
         DrawCrew(f); Lap("사람 줄");
         DrawViewGroup(f); Lap("보기");
@@ -695,6 +720,16 @@ void fragment() {
         {
             var c = px(m.X, m.Y);
             if (m.Waiting) DrawCircle(c, 5 * U, new Color(Amber, 0.35f + 0.65f * blink));
+            else if (m.Done)
+            {
+                // 일으킨 칸 고리 (U9): 손이 실제로 일어난 칸 — 두 겹이 1초마다 퍼지며 3초에 걸쳐 옅어진다
+                float fade = Math.Max(0, 1 - m.Age / (float)LiveShow.DoneRingSec);
+                for (int q = 0; q < 2; q++)
+                {
+                    float ph = (m.Age + q * 0.5f) % 1f;
+                    DrawArc(c, cellPx * (0.45f + ph * 0.9f), 0, Mathf.Tau, 40, new Color(Amber, fade * (1 - ph)), 2 * U);
+                }
+            }
             else DrawArc(c, cellPx * (0.3f + m.Age * 2.4f), 0, Mathf.Tau, 40, new Color(Amber, Math.Max(0, 1 - m.Age / 0.5f)), 3 * U);
         }
         if (_hs.HandDrag != 0)
@@ -1098,6 +1133,35 @@ void fragment() {
         if (hit != null && Hovered(hit)) DrawRect(r, new Color(0.6f, 0.75f, 1f, 0.5f), false, 1);
     }
 
+    // 두 곳 나눠 보기 (U9): 구석 작은 창 — 그림은 판 번호가 바뀔 때만 텍스처로 옮긴다
+    private ImageTexture? _insetTex;
+    private int _insetVer = -1;
+
+    private void DrawInset(LiveFrame f)
+    {
+        if (f.Inset is { } img && f.InsetVersion != _insetVer)
+        {
+            var im = Image.CreateFromData(img.W, img.H, false, Image.Format.Rgba8, img.Px);
+            if (_insetTex != null && _insetTex.GetWidth() == img.W && _insetTex.GetHeight() == img.H) _insetTex.Update(im);
+            else _insetTex = ImageTexture.CreateFromImage(im);
+            _insetVer = f.InsetVersion;
+        }
+        var r = R(_hud.Area("구석 창"));
+        DrawRect(r, new Color(0.02f, 0.03f, 0.06f, 0.92f));
+        float th = 24 * U;
+        if (_insetTex != null)
+        {
+            var pic = new Rect2(r.Position.X + 3 * U, r.Position.Y + th, r.Size.X - 6 * U, r.Size.Y - th - 3 * U);
+            float sc = Math.Min(pic.Size.X / _insetTex.GetWidth(), pic.Size.Y / _insetTex.GetHeight());
+            var size = new Vector2(_insetTex.GetWidth() * sc, _insetTex.GetHeight() * sc);
+            DrawTextureRect(_insetTex, new Rect2(pic.Position + (pic.Size - size) / 2, size), false);
+        }
+        var hit = _hud.Hits.FirstOrDefault(h => h.Act == UiAct.Inset);
+        bool hover = hit != null && Hovered(hit);
+        DrawRect(r, hover ? new Color(1f, 0.85f, 0.45f) : new Color(1f, 0.55f, 0.35f, 0.9f), false, hover ? 2.5f : 1.5f);
+        DrawString(_bold, new Vector2(r.Position.X + 8 * U, r.Position.Y + 17 * U), f.InsetTitle, HorizontalAlignment.Left, r.Size.X - 16 * U, Fs(14), new Color(1f, 0.9f, 0.75f));
+    }
+
     private void DrawBroadcast(LiveFrame f)
     {
         var r = R(_hud.Area("방송")); float a = f.BroadcastAlpha;
@@ -1430,23 +1494,7 @@ void fragment() {
         DrawRect(a, new Color(0.45f, 0.6f, 0.85f, 0.9f), false, 1.5f);
         DrawString(_bold, a.Position + new Vector2(24, 36) * U, "도움말", HorizontalAlignment.Left, -1, Fs(20), Ink);
         foreach (var h in _hud.Hits) if (h.Act == UiAct.Help && h.Key == 1) { DrawButton(h, ""); DrawCross(R(h.R).GetCenter(), 7 * U, Ink); }
-        string[] lines =
-        {
-            "빠르기 단추   멈춤 · 하루 24분 · 10분 · 3분 · 1분 · 최대 · 실시간 — 일이 나면 연출이 늦춘다 (스페이스 · 1~6)",
-            "고정 빠르기 단추   ×1 · ×10 · ×60 · ×600 · ×3600 — 늦추지 않는다 (Shift + 1~5)",
-            "끌기 · 가운데 단추 끌기   카메라 옮기기 (W A S D · 화살표)",
-            "휠 · 두 번 누르기   커서 쪽으로 확대 / 축소 · 판 위에서는 넘기기 (+ −)",
-            "사람 · 로봇 누르기 · 사람 줄 · 로봇 칩 누르기   생각 · 몸 보기 · 따라가기 — 로봇은 하는 일 · 맡은 까닭 · 최근 판단 (카드의 × 로 놓기 · Esc)",
-            "주컴퓨터 말 창 (오른쪽 위)   주컴퓨터가 방금 한 말 세 줄 — 누르면 주컴퓨터 판 (J)",
-            "오른쪽 누르기   뒤로 — 펼친 목록 → 판 → 고른 이 (Esc)",
-            "판 탭   장면 (L) · 항로 (T) · 주컴퓨터 (J) · 사슬 (C) · 사람 (P) — 줄을 눌러 고른다",
-            "오른쪽 아래   연출 따라가기 (F) · 배 전체 (Tab) · 축소 · 확대 · 겹쳐 보기 (O) · 방금 장면 다시보기 (B)",
-            "겹쳐 보기   공기 · 열 · 연기 · 사슬 선 · 선과 관",
-            "위 오른쪽   소리 (M) · 소리 자막 (U) · 도움말 (H) · 메뉴 — 말풍선 (K) · 속마음 풍선: 끔 · 고른 이 · 화면 안 셋 (I)",
-            "메뉴   배 바꾸기 (N 두 번) · 같은 배로 새 항해 (R 두 번) · 처음 화면 (Esc 두 번)",
-            "띠 · 알림 누르기   그 자리 · 그 판으로",
-            $"항로   출항 전에만 여덟 항로 가운데 고른다 · 지금 항로: {_shown?.Route}",
-        };
+        string[] lines = Hud.HelpLines(_shown?.Route ?? "");   // 줄은 화면 엔진에 (시험이 글자를 본다)
         float y = a.Position.Y + 72 * U;
         foreach (var l in lines)
         {
@@ -1523,6 +1571,7 @@ void fragment() {
             case UiAct.Depart: _cmds.Enqueue(s => s.Depart()); break;
             case UiAct.CardFollow: _cmds.Enqueue(s => s.FollowAgain()); break;
             case UiAct.CardClose: _cmds.Enqueue(s => s.Release()); break;
+            case UiAct.Inset: _cmds.Enqueue(s => s.InsetGo()); break;   // 두 곳 나눠 보기: 그리로 (연출을 따라간다)
             case UiAct.CardName: _cmds.Enqueue(s => s.CardGo()); break;
             case UiAct.LookHand: _cmds.Enqueue(s => s.HandFrom()); break;
             case UiAct.Crew: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }

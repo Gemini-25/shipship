@@ -66,6 +66,7 @@ public static partial class Program
         f.BroadcastAlpha = 1; f.Replaying = true; f.Replay = "식당 불 · 컷 2/5 정점"; f.Show = Overlay.Air; f.Legend = "공기";
         f.Captions = new[] { new ShipView.Audio.SoundCaption { Text = "쾅", Dir = "←", Count = 1, Left = 2 }, new ShipView.Audio.SoundCaption { Text = "경보", Dir = "", Count = 1, Left = 2 } };
         f.Story = "[불 · 화학 → 사람] 침대 밑에서 불씨가 튀었다"; f.StoryIsChain = true;
+        f.InsetTitle = "식당 — 결정적 순간 · 누르면 그리로";   // 두 곳 나눠 보기 (U9 — 자리가 모자라면 띄우지 않는다)
         return f;
     }
 

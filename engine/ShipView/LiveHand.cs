@@ -6,7 +6,7 @@ namespace ShipView;
 public readonly record struct HandAim(bool Ok, int Cell, double X, double Y, double Dx, double Dy, string Label, string Why, int Obj = 0);
 
 /// <summary>세계 위 손 표: 누른 칸에 퍼지는 호박색 고리 (나이 0~0.5초) · 기다리는 손은 깜빡이는 점.</summary>
-public readonly record struct HandMark(double X, double Y, float Age, bool Waiting);
+public readonly record struct HandMark(double X, double Y, float Age, bool Waiting, bool Done = false);
 
 /// <summary>
 /// 함장의 손 — 화면 쪽 (docs/UI2.md §2.3 · §2.8 · §6.2 — U3): 사고 판 줄 · 크기 칩 · 겨눔 · 겨눔 미리 보기 (<see cref="Hand.Why"/>와 같은 판정) · 세계를 누르면 받아 두기 ·
@@ -22,6 +22,9 @@ public sealed partial class LiveShow
     private Overlay _showBeforeArm; private bool _armedLines;
     private double _hoverX = double.NaN, _hoverY;
     private readonly List<(int cell, double at)> _handRings = new();
+    /// <summary>일으킨 칸 고리 (U9): 받아 둔 손이 실제로 일어난 칸 · 화면 때 — 3초.</summary>
+    private readonly List<(int cell, double at)> _doneRings = new();
+    public const double DoneRingSec = 3;
     private int _handSeenSeq;   // 산 세계 한 손 장부에서 본 마지막 차례 (헛손 알림 — 개수로 세면 장부가 가득 찬 뒤로는 늘지 않는다)
 
     public static readonly string[] HandSizeNames = { "작게", "보통", "크게" };
@@ -231,7 +234,11 @@ public sealed partial class LiveShow
         int i = h.Done.Count;
         while (i > 0 && h.Done[i - 1].Seq > _handSeenSeq) i--;   // 장부는 차례가 오르는 줄 — 본 것 다음부터
         for (; i < h.Done.Count; i++)
-            if (h.Done[i].Cause == 0) Notify($"그사이 대상이 바뀌어 일으키지 못했다 — {HandName(h.Done[i].Kind)}", 4, PanelKind.Hand);
+        {
+            if (h.Done[i].Cause == 0) { Notify($"그사이 대상이 바뀌어 일으키지 못했다 — {HandName(h.Done[i].Kind)}", 4, PanelKind.Hand); continue; }
+            int cell = h.Done[i].Cell >= 0 ? h.Done[i].Cell : Sim.Causes[h.Done[i].Cause].Cell;   // 일으킨 칸 (밀어 던지기 · 겨누지 않는 갈래는 원인 마디의 칸)
+            if (cell >= 0) { _doneRings.Add((cell, _anim)); if (_doneRings.Count > 8) _doneRings.RemoveAt(0); }
+        }
         _handSeenSeq = last;
     }
 
@@ -246,6 +253,13 @@ public sealed partial class LiveShow
             if (age > 0.5 || _replay != null) continue;
             var (x, y) = CellDrawn(cell);
             o.Add(new HandMark(x, y, (float)age, false));
+        }
+        foreach (var (cell, at) in _doneRings)
+        {
+            double age = _anim - at;
+            if (age > DoneRingSec || _replay != null) continue;
+            var (x, y) = CellDrawn(cell);
+            o.Add(new HandMark(x, y, (float)age, false, true));
         }
         if (h != null && _replay == null)
             foreach (var w in h.Waiting)

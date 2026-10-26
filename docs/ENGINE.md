@@ -1817,6 +1817,11 @@
 
 ### 새 화면 2단계 — 관전 장면 (`engine/ShipView/Live.cs` + 게임의 새 엔진 판 `game/src/NewEngine/LiveMain.cs`)
 화면의 속(세계 돌리기 · 연출 따르기 · 그리기)은 순수 C#(`LiveShow`)이고, Godot 장면은 그 그림을 띄우고 글만 쓰는 얇은 껍데기다.
+- **사고 · 살펴보기 · 자세한 판 · 예측 장부 (docs/UI2.md — 함장 요청 10-25 · U1~U9 ✔)**: 탭 일곱 (장면 · 항로 · 주컴퓨터 · 사슬 · 사람 · 로봇 · 사고) ·
+  함장의 손 (`Outside/Hand.cs` — 바깥에서 오는 입력 · 월드 길만 · 다음 틱 맨 처음 · 장부에 찍혀 다시보기 · 저장이 같은 틱에 같은 손) · 사고 판 · 겨눔 · 일으킨 칸 고리 /
+  물건 살펴보기 (`LiveLook.cs` — 누르기 차례 · 카드 · 테두리) / 자세한 판 (`LiveDetail.cs` 사람 · 로봇 · `LiveComputer.cs` 주컴퓨터 — 아는 것과 참을 나란히) /
+  예측 장부 (`LiveForecast.cs` — 주컴퓨터의 화면용 예측 고리를 관객이 실제와 맞댄다 · 상상 그림 둘 → 실제) / 두 곳 나눠 보기 (`LiveInset.cs` — 따라가는 동안 다른 곳의 위험을 구석 작은 창에).
+  손 말고는 모두 화면 값이다 — 세계 · 결정론 · 지문은 그대로 (`Lab --fingerprint` 같음 · 규칙 '살펴보기' V4 · '예측 장부' F5가 쌍둥이 세계의 찍기 바이트로 본다).
 - **기존 판 · 새 엔진 판** (함장 요청 — 둘이 구분되지 않아 엔진이 잘 만들어졌는지 볼 수 없었다): 게임(`game/project.godot`)을 켜면 처음 화면(`scenes/Start.tscn`)에서 고른다 —
   1 기존 판(옛 게임 `scenes/Main.tscn` 그대로) · 2 새 엔진 판(`scenes/NewEngine.tscn` — 세계 `engine/ShipEngine` · 배 `engine/data/ships` 일곱 척 · 연출과 그리기 `engine/ShipView`).
   새 엔진 판은 옛 게임의 코어 · 배 · 화면을 하나도 쓰지 않는다 (도트 그림만 같다) · 위 줄 오른쪽에 늘 '새 엔진 판' 표 · Esc는 처음 화면으로.

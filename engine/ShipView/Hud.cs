@@ -17,7 +17,7 @@ public enum UiAct
 {
     Pause, Speed, FixedMenu, Fixed, Sound, Captions, Help, Menu, MenuShip, ShipPick, MenuRestart, MenuStart, Tab, PanelClose, PanelRow, PanelRowAct, PanelBar, ChainLines, Depart,
     CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts, Robot, RobotMore, Talk,
-    DetailTab, DetailBack, DetailFollow, DetailOpen, HandSize, HandCancel, HandNow, LookHand,
+    DetailTab, DetailBack, DetailFollow, DetailOpen, HandSize, HandCancel, HandNow, LookHand, Inset,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -119,6 +119,29 @@ public sealed class Hud
 
     /// <summary>화면 글자가 모두 Pretendard에 있나 (없는 글자 ✕ ▾ ✔ ≡는 도형으로 그린다).</summary>
     public static readonly string Missing = "✕▾✔≡";
+
+    /// <summary>도움말 창의 줄 (UI.md §6.3 · docs/UI2.md U9 — 메인이 그리고 시험이 글자를 본다).</summary>
+    public static string[] HelpLines(string route) => new[]
+    {
+        "빠르기 단추   멈춤 · 하루 24분 · 10분 · 3분 · 1분 · 최대 · 실시간 — 일이 나면 연출이 늦춘다 (스페이스 · 1~6)",
+        "고정 빠르기 단추   ×1 · ×10 · ×60 · ×600 · ×3600 — 늦추지 않는다 (Shift + 1~5)",
+        "끌기 · 가운데 단추 끌기   카메라 옮기기 (W A S D · 화살표)",
+        "휠 · 두 번 누르기   커서 쪽으로 확대 / 축소 · 판 위에서는 넘기기 (+ −)",
+        "사람 · 로봇 누르기 · 사람 줄 · 로봇 칩 누르기   생각 · 몸 보기 · 따라가기 — 로봇은 하는 일 · 맡은 까닭 · 최근 판단 (카드의 × 로 놓기 · Esc)",
+        "주컴퓨터 말 창 (오른쪽 위)   주컴퓨터가 방금 한 말 세 줄 — 누르면 주컴퓨터 판 (J)",
+        "오른쪽 누르기   뒤로 — 펼친 목록 → 판 → 고른 이 (Esc)",
+        "판 탭   장면 (L) · 항로 (T) · 주컴퓨터 (J) · 사슬 (C) · 사람 (P) · 로봇 (G) · 사고 (X) — 줄을 눌러 고른다",
+        "사고 탭   줄을 누르고 배 위를 누르면 일어난다 — 되돌릴 수 없다 (다시보기로 볼 수는 있다) · 오른쪽 누르기로 그만두기 (X)",
+        "물건 누르기   기체 · 배선 말고 무엇이든 — 왼쪽 카드에 이름 · 풀이 · 상태 (살펴보기) · 카드의 [사고 ›]로 그 자리에 겨눈다",
+        "사람 · 로봇 · 주컴퓨터 판   자세히 — 몸 · 마음 · 하는 일 · 아는 것 · 일지 · 주컴퓨터는 예측과 맞음 몫까지 (P · G · J)",
+        "구석 작은 창   따라가는 동안 다른 곳에 위험이 나면 그 자리를 작게 보인다 — 누르면 그리로",
+        "오른쪽 아래   연출 따라가기 (F) · 배 전체 (Tab) · 축소 · 확대 · 겹쳐 보기 (O) · 방금 장면 다시보기 (B)",
+        "겹쳐 보기   공기 · 열 · 연기 · 사슬 선 · 선과 관",
+        "위 오른쪽   소리 (M) · 소리 자막 (U) · 도움말 (H) · 메뉴 — 말풍선 (K) · 속마음 풍선: 끔 · 고른 이 · 화면 안 셋 (I)",
+        "메뉴   배 바꾸기 (N 두 번) · 같은 배로 새 항해 (R 두 번) · 처음 화면 (Esc 두 번)",
+        "띠 · 알림 누르기   그 자리 · 그 판으로",
+        $"항로   출항 전에만 여덟 항로 가운데 고른다 · 지금 항로: {route}",
+    };
 }
 
 /// <summary>메인 스레드만의 화면 상태 (세계 아님): 펼친 목록 · 창 · 판 넘김 · 누른 손잡이 · 올림.</summary>
@@ -416,13 +439,27 @@ public static class HudLayout
             else h.Blocks.Add(("알림", r));
         }
 
+        // ── 두 곳 나눠 보기 (U9 · docs/OBSERVER.md §8-12): 가운데 칸 왼쪽 아래 (아래 묶음 위) — 자리가 모자라면 띄우지 않는다 ──
+        float castL = colL;
+        if (f.InsetTitle.Length > 0)
+        {
+            float iw = Math.Min(320, colR - colL), ih = iw * 0.6f + 26;
+            var r = new RectF(colL, lowTop - ih, iw, ih);
+            if (iw >= 200 && r.Y >= cy + 8)
+            {
+                h.Areas["구석 창"] = r; h.Blocks.Add(("구석 창", r));
+                h.Hits.Add(new UiHit(r, UiAct.Inset, 0, false, true, "그리로 — 연출을 따라간다"));
+                castL = r.Right + 8;   // 방송 자막은 그 오른쪽에
+            }
+        }
+
         // ── 방송 자막 (가운데 아래 · 아래 끝 = 사람 줄 위 − 8) ──
         if (f.Broadcast.Length > 0 && f.BroadcastAlpha > 0.05f)
         {
             float lowR = (f.Panel != PanelKind.None ? panelLeft : view.X) - Side;
-            float bw = Math.Min(980, Math.Max(200, lowR - colL));
+            float bw = Math.Min(980, Math.Max(200, lowR - castL));
             float th = Th(f.Broadcast, 17, bw - 40, 3);
-            float bx = Math.Clamp(W / 2 - bw / 2, colL, Math.Max(colL, lowR - bw));
+            float bx = Math.Clamp(W / 2 - bw / 2, castL, Math.Max(castL, lowR - bw));
             var r = new RectF(bx, lowTop - (th + 22), bw, th + 22);
             h.Areas["방송"] = r;
             h.Hits.Add(new UiHit(r, UiAct.Broadcast, 0, false, true, "주컴퓨터 판에서 보기 (J)"));
@@ -459,7 +496,7 @@ public static class HudLayout
         }
         if (s.Help)
         {
-            float hw = Math.Min(760, W - 64), hh = Math.Min(H - 160, 560);
+            float hw = Math.Min(860, W - 64), hh = Math.Min(H - 96, 760);   // 줄 열여덟 (U9 — 사고 · 살펴보기 · 자세히 · 구석 작은 창)
             var r = new RectF(W / 2 - hw / 2, H / 2 - hh / 2, hw, hh);
             h.Areas["창 도움말"] = r;
             h.Hits.Insert(0, new UiHit(new RectF(r.Right - 8 - 32, r.Y + 8, 32, 32), UiAct.Help, 1, false, true, "닫기 (H · Esc · 오른쪽 누르기)"));
