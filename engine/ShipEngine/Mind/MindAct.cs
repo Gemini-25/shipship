@@ -677,9 +677,9 @@ public sealed partial class Mind
         ref var c = ref a.C;
         float hasty = Math.Clamp(c.Stress, 0, 1);
         string name = NameOf(a.Id);
-        _net.Handled(sim, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause);
         int cell = _net.Devices[dev].Cell;
-        _life?.WorkHazard(sim, c.Body, cell, F.Temp(cell), c.SkRepair, c.Sleepy, hasty, a.Id, name, _net.Devices[dev].Name, workCause);
+        if (_life != null) _life.HandsOn(sim, _net, c.Body, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause, cell, F.Temp(cell), _net.Devices[dev].Name);   // 몸의 흔들림은 ⑦이 셈한다 (C9)
+        else _net.Handled(sim, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause);
     }
 
     /// <summary>에어락이 쓰이는 중인가: 문 너머 방이 에어락(바깥문이 있는 방)이고 — 그 안에서 남이 나가려고 바깥문 밸브로 비우는 중이거나 바깥문을 기다린다

@@ -17,17 +17,17 @@ public sealed partial class Network
     /// ⑧의 요청: 사람이 장치의 한 부품을 손봤다 (고침 · 미리 갈기) — 솜씨(0~1) · 졸림(0~1) · 서두름(0~1)으로 다른 부품을 상하게 했는지 계산한다.
     /// 상하게 했으면 그 원인 마디 (아니면 0).
     /// </summary>
-    public int Handled(Sim sim, int device, Part worked, float skill, float sleepy, float hasty, int actor, string name, int workCause)
+    public int Handled(Sim sim, int device, Part worked, float skill, float sleepy, float hasty, int actor, string name, int workCause, double unsteady = 0, string why = "")
     {
         if (device < 0 || device >= Devices.Count) return 0;
-        double p = HandledChance * Math.Max(0.1, 1.4 - skill) * (1 + 1.5 * sleepy) * (1 + hasty);
+        double p = HandledChance * Math.Max(0.1, 1.4 - skill) * (1 + 1.5 * sleepy) * (1 + hasty) * (1 + unsteady);   // 흔들림 (C9 — ⑦이 셈해 넘긴다)
         if (Rng.Unit(_seed, Rng.Key("손보다 상함"), sim.Tick, device * 4 + (int)worked) >= p) return 0;
         var dev = Devices[device];
         var parts = Enum.GetValues<Part>().Where(q => q != worked && dev.Life(q) > 0 && !IsBroken(device, q)).ToList();
         if (parts.Count == 0) return 0;
         var part = parts[(int)(Rng.Unit(_seed, Rng.Key("상한 부품"), sim.Tick, device) * parts.Count) % parts.Count];
         double hours = 2 + 8 * Rng.Unit(_seed, Rng.Key("상한 부품 시간"), sim.Tick, device);
-        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(name)} {Ko.Eul(dev.Name)} 손보다 {Device.PartName(part)} 부품을 상하게 했다", sim.Tick, dev.Cell, workCause, 0, actor);
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(name)} {(why.Length > 0 ? why + " " : "")}{Ko.Eul(dev.Name)} 손보다 {Device.PartName(part)} 부품을 상하게 했다", sim.Tick, dev.Cell, workCause, 0, actor);
         AgeLeft(device, part, hours, cause);
         Mishandled++;
         sim.Facts.Emit(sim.Tick, FactKind.Mistake, dev.Cell, HandledSize, cause, actor, device);

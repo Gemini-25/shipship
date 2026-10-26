@@ -90,6 +90,25 @@ public static partial class Program
             }
         }
 
+        // ── 5단 C9 흔들림: 약 기운에 손이 무디다 — 같은 몸 둘 (하나만 진통제 기운 1) · 공구 미끄러질 몫 1로 한 번씩 ──
+        if (Do("일상 물리 — 흔들림"))
+        {
+            Console.WriteLine("\n[일상 물리 — 흔들림 (C9)]");
+            var lay = Worlds.Ascii(Worlds.Symmetric);
+            var s = new Sim(new SimSetup(lay, 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); }));
+            s.Get<Field>().FillAir();
+            var life = s.Get<Life>();
+            int clear = life.AddBody(Worlds.At(lay, 3, 2)), drugged = life.AddBody(Worlds.At(lay, 7, 2));
+            life[drugged].Opioid = 40;   // 진통제 기운 1 (약 기운 = 남은 양 / 40)
+            double r = Life.MishapOdds(life[drugged], 0, 0) / Life.MishapOdds(life[clear], 0, 0);
+            life.SlipChance = 1; life.ScaldChance = 0;
+            int c1 = life.WorkHazard(s, clear, life[clear].Cell, 293, 0.4f, 0, 0, -1, "김하늘", "냉각 펌프", 0, life.Unsteady(clear), Life.MishapWhy(life[clear], 0));
+            int c2 = life.WorkHazard(s, drugged, life[drugged].Cell, 293, 0.4f, 0, 0, -1, "이도윤", "냉각 펌프", 0, life.Unsteady(drugged), Life.MishapWhy(life[drugged], 0));
+            string t1 = c1 != 0 ? s.Causes.Text(c1) : "", t2 = c2 != 0 ? s.Causes.Text(c2) : "";
+            Check("흔들림 (C9): 같은 몸 둘 가운데 진통제 기운 1인 몸은 손이 미끄러질 몫이 1.9배 넘고 · 미끄러진 원인 글에 '약 기운에'가 붙는다 (맑은 몸에는 없다)",
+                r >= 1.9 && t2.Contains("약 기운에") && t1.Length > 0 && !t1.Contains("약 기운"), $"몫 비 {r:0.00} · 맑은 몸 '{t1}' · 약 기운 '{t2}'");
+        }
+
         // ── PH12 물체 볼거리: 카메라 안에서 컵이 깨지면 그 틱들을 천천히 (화면 1초에 1틱) — 하루 느린 예산 안 ──
         if (Do("물체 볼거리"))
         {

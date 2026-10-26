@@ -48,17 +48,18 @@ public sealed partial class Life
     public long WorkInjuries;
 
     /// <summary>⑧의 요청: 사람이 장치를 손봤다 (cell — 장치 칸 · hotK — 그 칸 온도) — 다쳤으면 그 원인 마디 (아니면 0).</summary>
-    public int WorkHazard(Sim sim, int body, int cell, double hotK, float skill, float sleepy, float hasty, int actor, string name, string device, int workCause)
+    public int WorkHazard(Sim sim, int body, int cell, double hotK, float skill, float sleepy, float hasty, int actor, string name, string device, int workCause, double unsteady = 0, string why = "")
     {
         if (body < 0 || body >= Bodies.Count || this[body].Alive == 0) return 0;
-        double k = Math.Max(0.1, 1.4 - skill) * (1 + sleepy) * (1 + hasty);
+        double k = Math.Max(0.1, 1.4 - skill) * (1 + sleepy) * (1 + hasty) * (1 + unsteady);   // 흔들림 (C9 — 약 기운 · 아픔 · 숨 · 메스꺼움 · 떨림)
         bool hot = hotK > 333;
         double u = Rng.Unit(sim.Seed, Rng.Key("일하다 다침"), sim.Tick, body);
         double scald = hot ? ScaldChance * k : 0, slip = SlipChance * k;
         if (u >= scald + slip) return 0;
         bool burn = u < scald;
         float size = (float)(burn ? 0.2 + 0.25 * Math.Min(1, (hotK - 333) / 60) : 0.3 + 0.2 * Rng.Unit(sim.Seed, Rng.Key("다친 크기"), sim.Tick, body));
-        int cause = sim.Causes.Add(CauseKind.Person, burn ? $"{Ko.I(name)} {Ko.Eul(device)} 손보다 뜨거운 관에 팔을 데었다" : $"{Ko.I(name)} {Ko.Eul(device)} 손보다 공구가 미끄러져 손을 다쳤다", sim.Tick, cell, workCause, 0, actor);
+        string w = why.Length > 0 ? why + " " : "";
+        int cause = sim.Causes.Add(CauseKind.Person, burn ? $"{Ko.I(name)} {w}{Ko.Eul(device)} 손보다 뜨거운 관에 팔을 데었다" : $"{Ko.I(name)} {w}{Ko.Eul(device)} 손보다 공구가 미끄러져 손을 다쳤다", sim.Tick, cell, workCause, 0, actor);
         if (burn) Scald(sim, body, size, cause); else Strike(sim, body, size, 0.12f, cause);
         WorkInjuries++;
         return cause;
