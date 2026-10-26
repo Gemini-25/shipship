@@ -197,6 +197,21 @@ public sealed partial class Mind
         if (a.IsPerson) c.Anger = Math.Min(1, c.Anger + 0.05f);
     }
 
+    /// <summary>
+    /// 누워 45분을 잠들지 못했다 (DF10 검토): 일어나 까닭을 남기고 (막힘 · 원인 마디 '…에서 막혔다 — 추워서 잠들지 못한다') —
+    /// 추위 · 더위 · 숨참 · 냄새면 그 방 (제 몸이 느낀 방)을 한나절 (12시간) 잠자리로 고르지 않는다 (곧장 다른 방의 빈 침대 · 자리로 — <see cref="RestPlace"/> · 다음 밤에 한 번 다시 누워 본다 — 그사이 데워졌을 수 있다) ·
+    /// 아픔이면 방을 바꿔도 소용없다 — 그 잠자리에 한 시간은 다시 눕지 않는다 (그사이 주컴퓨터가 아픈 이를 보고 진통제를 가져간다 · 지치면 곯아떨어진다).
+    /// </summary>
+    private void Sleepless(Sim sim, Agent a, SnagKind why)
+    {
+        ref var c = ref a.C;
+        int room = RoomOf(c.Cell), target = c.GoalTarget;
+        Fail(sim, a, SnagText(why), why, c.Cell);
+        for (int i = a.Avoid.Count - 1; i >= 0; i--) if (a.Avoid[i].Goal == GoalKind.Sleep && a.Avoid[i].Target == target) a.Avoid.RemoveAt(i);   // 5분을 기다리지 않는다
+        if (why == SnagKind.SleepPain) AvoidFor(a, GoalKind.Sleep, target, sim.Tick + Time.Hours(1));
+        else if (room >= 0) AvoidFor(a, GoalKind.Sleep, RestlessKey(room), sim.Tick + Time.Hours(12));
+    }
+
     private double ItemCharge(byte item)
     {
         var d = P.Items[ItemNames[item]];
@@ -234,8 +249,14 @@ public sealed partial class Mind
         long t = sim.Tick;
         var use = (UseKind)st.Arg;
         // 잠이 든다: 몸이 깨울 것 (추위 · 더위 · 숨참 · 찌르는 기체 · 아픔)이 있으면 누워 뒤척인다 — 가라앉으면 그때 든다 (DF10 · 보고서 §4-15:
-        // 예전엔 누운 틱에 잠들고 다음 감각에 다시 깼다 — 추운 침실 두 시간 '깼다' 1,000건 · 새뜰호 열흘 16만 건)
-        if (use == UseKind.Sleep && a.IsPerson && _life![c.Body].Asleep == 0 && (t <= c.StepStart || c.SleptAt < c.StepStart) && !BodyRouses(a, c.Cell)) { _life[c.Body].Asleep = 1; c.SleptAt = t; }
+        // 예전엔 누운 틱에 잠들고 다음 감각에 다시 깼다 — 추운 침실 두 시간 '깼다' 1,000건 · 새뜰호 열흘 16만 건) · 졸림 0.95 넘게 지쳤으면 추위 · 더위 · 아픔을 이기고 곯아떨어진다 ·
+        // 45분을 뒤척여도 잠들지 못하면 일어나 다른 자리를 찾는다 (DF10 검토 — 예전엔 열 시간을 누운 채 채우고 다음 잠도 그 침대였다)
+        if (use == UseKind.Sleep && a.IsPerson && _life![c.Body].Asleep == 0 && (t <= c.StepStart || c.SleptAt < c.StepStart))
+        {
+            var why = RouseWhy(a, c.Cell);
+            if (why == SnagKind.None || c.Sleepy >= ExhaustSleepy && Bearable(why)) { _life[c.Body].Asleep = 1; c.SleptAt = t; }
+            else if (t - c.StepStart >= Time.Minutes(45) && !IsMedBedCell(c.Cell) && !Sheltering(a)) { Sleepless(sim, a, why); return; }   // 치료 침대 · 대피실에서는 누운 채 기다린다
+        }
         Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
         if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }

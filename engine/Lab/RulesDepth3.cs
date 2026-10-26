@@ -275,5 +275,80 @@ public static partial class Program
                 woke <= 2 && slept && life[m[p].C.Body].Alive != 0,
                 $"깸 {woke} · 잠자리에 누워 깨어 있던 {lying * Time.SecondsPerTick / 60:0}분 · 데운 뒤 잠 {slept} · {m.Thought(p)}");
         }
+
+        // ── DF10 검토 고침: 잠 못 드는 방 — 누워 45분을 잠들지 못하면 일어나 까닭 (추위 · 더위 · 숨참 · 냄새 · 아픔)을 남기고 다른 방의 빈 침대 · 자리로 (1순위가 안 되면 2순위) ·
+        //    진통제가 아픔을 덜면 잠든다 · 졸림이 0.95를 넘게 지치면 추위 · 더위 · 아픔을 이기고 곯아떨어진다 (얕게 — 0.8 아래로 풀리면 깬다)
+        //    (DF10 직후엔 추운 방에서 잠도 다른 길도 없었다 — 침실만 9℃인 서른 시간에 잠 0시간 · 누워 깬 채 25.6시간 · 졸림 1) ──
+        if (Do("잠 못 드는 방"))
+        {
+            Console.WriteLine("\n[잠 못 드는 방 — 추운 침실을 떠나 옆 방에서 잔다 · 진통제 · 지쳐 곯아떨어짐]");
+            var lay = Worlds.Ascii(CultureShip, new Dictionary<char, string> { ['m'] = "MealDispenser", ['a'] = "Seat", ['e'] = "Bed" });
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            int beds = lay.Room[At(2, 2)], mess = lay.Room[At(14, 2)], lounge = lay.Room[At(24, 2)];
+            lay.Rooms[beds].Name = "침실"; lay.Rooms[mess].Name = "식당"; lay.Rooms[lounge].Name = "휴게실";
+            lay.Rooms[mess].Type = "Lounge"; lay.Rooms[lounge].Type = "Lounge";
+            (Sim s, Mind m, Life life, int p) World()
+            {
+                var s = Worlds.Full(lay, 3); var m = s.Get<Mind>();
+                int p = m.AddPerson(s, At(3, 1), bed: At(3, 1));
+                s.Run(2);
+                return (s, m, s.Get<Life>(), p);
+            }
+            // 침실을 9℃로 붙든다 (난방이 그 방만 꺼졌다) · 배고픔 · 목마름 · 볼일은 비운다 (잠 말고 다른 일로 깨지 않게) · pain: 아픔을 붙든다
+            void Hold(Sim s, Mind m, Life life, int p, double k, float pain = 0)
+            {
+                var f = s.Get<Field>();
+                if (k > 0) foreach (int c in s.Layout.Rooms[beds].Cells) { double gc = f.GasC(c); if (gc > 50) f.AddHeat(c, gc * (k - f.Temp(c))); }
+                ref var z = ref m[p].C; z.Hunger = 0; z.Thirst = 0;
+                ref var b = ref life[z.Body]; b.Bladder = 0; b.Bowel = 0;
+                if (pain > 0) b.Pain = pain;
+            }
+            int Woke(Sim s, int p, ref long cur) { int n = 0; foreach (var x in s.Facts.Since(cur)) if (x.Kind == FactKind.Woke && x.Actor == p) n++; cur = s.Facts.Total; return n; }
+
+            // ① 침실만 9℃ · 여덟 시간 · 졸림 0.7 (억지로 올리지 않는다): 제 침대에 누웠다가 일어나 '추워서 잠들지 못한다' → 옆 방 바닥에서 잔다
+            {
+                var (s, m, life, p) = World();
+                m[p].C.Sleepy = 0.7f;
+                int woke = 0; long cur = s.Facts.Total, asleepBed = 0, asleepElse = 0;
+                for (long k = 0; k < Time.Hours(8); k++)
+                {
+                    Hold(s, m, life, p, 282.15); s.Step();
+                    woke += Woke(s, p, ref cur);
+                    if (life[m[p].C.Body].Asleep != 0) { if (s.Layout.Room[m[p].C.Cell] == beds) asleepBed++; else asleepElse++; }
+                }
+                var why = s.Facts.Since(0).Where(x => x.Kind == FactKind.Blocked && x.Actor == p).Select(x => s.Causes.Text(x.Cause)).ToList();
+                double hElse = asleepElse * Time.SecondsPerTick / 3600.0, hBed = asleepBed * Time.SecondsPerTick / 3600.0;
+                Check("침실만 9℃인 여덟 시간: 누워 잠들지 못하면 일어나 '추워서 잠들지 못한다'를 남기고 옆 방으로 옮겨 네 시간 넘게 잔다 (깸 3 아래 — DF10 직후 잠 0시간)",
+                    hElse >= 4 && woke <= 3 && why.Any(w => w.Contains("추워서")) && life[m[p].C.Body].Alive != 0,
+                    $"옆 방 잠 {hElse:0.0}h · 침실 잠 {hBed:0.0}h · 깸 {woke} · 졸림 {m[p].C.Sleepy:0.00} · 막힘 {(why.Count > 0 ? why[0] : "없음")} · 지금 {s.Layout.Rooms[s.Layout.Room[m[p].C.Cell]].Name}");
+            }
+            // ② 따뜻한 침실 · 아픔 0.8을 붙든 이: 잠들지 못하다가 진통제 10mg을 맞으면 (아픔이 덜어지면) 한 시간 안에 잠든다
+            {
+                var (s, m, life, p) = World();
+                m[p].C.Sleepy = 0.7f;
+                bool before = false, after = false;
+                for (long k = 0; k < Time.Minutes(20); k++) { Hold(s, m, life, p, 0, 0.8f); s.Step(); before |= life[m[p].C.Body].Asleep != 0; }
+                bool lying = m[p].C.Goal == GoalKind.Sleep;
+                life.Give(s, m[p].C.Body, Drug.Opioid, 10, 0);
+                for (long k = 0; k < Time.Hours(1) && !after; k++) { Hold(s, m, life, p, 0, 0.8f); s.Step(); after = life[m[p].C.Body].Asleep != 0; }
+                Check("아픔 0.8: 누워도 잠들지 못한다 → 진통제 10mg을 맞으면 한 시간 안에 잠든다 (몸이 느끼는 아픔 — 약이 던 만큼)",
+                    !before && lying && after, $"맞기 전 잠 {before} · 누워 있었나 {lying} · 맞은 뒤 잠 {after} · 느끼는 아픔 {Life.FeltPain(life[m[p].C.Body]):0.00}");
+            }
+            // ③ 침실만 9℃ · 졸림 0.97로 지친 이: 누우면 추위를 이기고 곯아떨어진다 (얕게 — 졸림이 풀리면 추위에 깬다 · 그 뒤엔 옆 방으로)
+            {
+                var (s, m, life, p) = World();
+                m[p].C.Sleepy = 0.97f;
+                int woke = 0; long cur = s.Facts.Total, dozed = -1, asleep = 0;
+                for (long k = 0; k < Time.Hours(3); k++)
+                {
+                    Hold(s, m, life, p, 282.15); s.Step();
+                    woke += Woke(s, p, ref cur);
+                    if (life[m[p].C.Body].Asleep != 0) { asleep++; if (dozed < 0 && s.Layout.Room[m[p].C.Cell] == beds) dozed = k; }
+                }
+                Check("졸림 0.97로 지친 이는 9℃ 침실에서도 10분 안에 곯아떨어진다 · 세 시간에 한 시간 넘게 자고 깸 2 아래",
+                    dozed >= 0 && dozed < Time.Minutes(10) && asleep * Time.SecondsPerTick >= 3600 && woke <= 2,
+                    $"곯아떨어진 때 {(dozed < 0 ? "-" : $"{dozed * Time.SecondsPerTick / 60:0}분")} · 잠 {asleep * Time.SecondsPerTick / 3600.0:0.0}h · 깸 {woke} · 졸림 {m[p].C.Sleepy:0.00}");
+            }
+        }
     }
 }

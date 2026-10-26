@@ -221,8 +221,9 @@ public sealed partial class Mind
             if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
             {
                 int regenBed = _life![c.Body].Regen > 0 ? (IsMedBedCell(here) ? here : NearestFree(a, _medBeds)) : -1;   // ⑦ (라-2) 재생 젤이 든 동안은 치료 침대에서 잔다
+                int lie = Sheltering(a) ? bedCell : RestPlace(a, bedCell);   // 잠들지 못한 방이면 다른 방의 빈 침대 · 자리 (없으면 지쳤을 때만 — DF10 검토)
                 if (regenBed >= 0) Add(GoalKind.Sleep, regenBed, regenBed, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0) + 0.2f);
-                else Add(GoalKind.Sleep, c.Bed, bedCell, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
+                else if (lie >= 0) Add(GoalKind.Sleep, c.Bed, lie, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
             }
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
@@ -502,6 +503,9 @@ public sealed partial class Mind
                 bool torn = c.Bed >= 0 && _st != null && L.FurnitureAt[c.Bed] >= 0 && !_st.Usable(L.FurnitureAt[c.Bed]);   // 뜯긴 침대에는 눕지 않는다 (PH10 — 빈 침대 · 없으면 바닥)
                 int bed = c.Bed >= 0 && !Taken(a, c.Bed) && !shunned && !torn ? c.Bed : NearestFree(a, _beds);
                 if (shunned && !torn) { if (bed >= 0) BedsShunned++; else if (!Taken(a, c.Bed)) bed = c.Bed; }
+                int lie = RestPlace(a, bed >= 0 ? bed : here);   // 잠들지 못한 방 (DF10 검토) — 다른 방의 빈 침대 · 쉬는 방 바닥 · 없으면 지쳤을 때만 그 자리
+                if (lie < 0) return false;
+                if (lie != (bed >= 0 ? bed : here)) { plan.Add(Go(lie)); plan.Add(Use(UseKind.Sleep, Time.Hours(10))); return true; }
                 int airy = ZeroGSleepSpot(c, bed >= 0 ? bed : here);   // 무중력에서 날숨에 깬 적이 있으면 통풍구 앞에 침낭을 묶고 잔다
                 if (airy >= 0) { plan.Add(Go(airy)); plan.Add(Use(UseKind.Sleep, Time.Hours(10))); return true; }
                 if (bed >= 0) plan.Add(Go(bed));
@@ -992,6 +996,60 @@ public sealed partial class Mind
             if (b.Kind == BeliefKind.Leak && b.Conf >= 0.5f && L.Kind[b.Cell] != CellKind.Door) return true;
         }
         return false;
+    }
+
+    /// <summary>잠들지 못한 방의 열쇠 — 피함 목록 (잠)의 대상에 칸이 아닌 음수로 그 방을 적는다 (DF10 검토).</summary>
+    private static int RestlessKey(int room) => -2 - room;
+
+    /// <summary>누워 잠들지 못한 방인가 (추위 · 더위 · 숨참 · 냄새 — 제 몸이 느낀 방 · 한나절).</summary>
+    private bool RestlessRoom(Agent a, int room)
+    {
+        if (room < 0) return false;
+        foreach (var v in a.Avoid) if (v.Goal == GoalKind.Sleep && v.Target == RestlessKey(room)) return true;
+        return false;
+    }
+
+    /// <summary>잘 만한 방인가 (아는 것으로만): 잠들지 못한 방 · 위험하다고 믿는 방 · 춥다 · 덥다고 몸으로 느낀 방이 아니다.</summary>
+    private bool SleepRoomOk(Agent a, int room)
+    {
+        if (room < 0 || RestlessRoom(a, room) || BelievedRoomBad(a, room)) return false;
+        foreach (var b in a.Beliefs) if (b.Kind is BeliefKind.Cold or BeliefKind.Hot && b.Conf >= 0.3f && InRoom(b.Cell, room)) return false;
+        return true;
+    }
+
+    /// <summary>바닥에 누울 만한 쉬는 방 (숙소 · 휴게실 · 식당 · 의무실 · 체육실 · 교실 · 예배실 · 관측실 · 쓰임을 정하지 않은 방 — 씻는 방 · 에어락 · 복도 · 기계실 · 주방 · 창고는 아니다).</summary>
+    private static bool RestRoom(string type) => type is "Quarters" or "Lounge" or "Mess" or "Medbay" or "Gym" or "School" or "Chapel" or "Observatory" or "Room";
+
+    /// <summary>
+    /// 어디서 잘까 (DF10 검토 — 1순위가 안 되면 2순위 · 그것도 안 되면 대체): 그 자리가 잠들지 못한 방이 아니면 그 자리 ·
+    /// 그 방이면 잘 만한 다른 방의 빈 침대 (가까운 것 · 꺼리는 방은 멀게) · 없으면 잘 만한 쉬는 방의 바닥 (문 칸 · 문 곁 · 남의 자리가 아닌 곳) ·
+    /// 그것도 없으면 지쳤을 때만 (졸림 0.95) 그 자리 — 추위 · 더위를 이기고 곯아떨어진다 · 아니면 −1 (지금은 눕지 않는다).
+    /// </summary>
+    private int RestPlace(Agent a, int at)
+    {
+        if (at < 0 || !RestlessRoom(a, RoomOf(at))) return at;
+        int best = -1, bd = int.MaxValue;
+        foreach (int fu in _beds)
+        {
+            int cell = L.Furniture[fu].Cells[0];
+            if (!SleepRoomOk(a, RoomOf(cell)) || Taken(a, cell) || BedTaboo(cell) || _st != null && !_st.Usable(fu)) continue;
+            bool used = false;
+            foreach (var o in Agents) if (o != a && o.C.Cell == cell && o.C.Goal is GoalKind.Relax or GoalKind.Socialize or GoalKind.Sleep) { used = true; break; }
+            if (used) continue;
+            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell));
+            if (d < bd) { bd = d; best = cell; }
+        }
+        if (best >= 0) return best;
+        int room = -1;
+        for (int r = 0; r < L.Rooms.Count; r++)
+        {
+            var cells = L.Rooms[r].Cells;
+            if (cells.Length == 0 || !RestRoom(L.Rooms[r].Type) || !SleepRoomOk(a, r)) continue;
+            int d = Manhattan(a.C.Cell, cells[cells.Length / 2]) + (int)(60 * DreadAt(a, cells[cells.Length / 2]));
+            if (d < bd) { bd = d; room = r; }
+        }
+        if (room >= 0) return StandSpot(a, room, L.Rooms[room].Cells[L.Rooms[room].Cells.Length / 2]);
+        return a.C.Sleepy >= ExhaustSleepy ? at : -1;
     }
 
     private bool Taken(Agent a, int cell)
