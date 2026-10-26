@@ -390,7 +390,7 @@ public sealed partial class Mind
                     break;
                 }
                 case BeliefKind.LeftOn when !drone: SwitchOption(a, b, df, caution); break;   // DF5 보면 끈다
-                case BeliefKind.Dead when !drone: LayOutOption(a, b, df, caution); break;     // DF5 시신 수습
+                case BeliefKind.Dead when !drone: LayOutOption(sim, a, b, df, caution); break;     // DF5 시신 수습
                 case BeliefKind.Bang or BeliefKind.Strain or BeliefKind.Leak or BeliefKind.SmokeSmell or BeliefKind.Help or BeliefKind.Spark:
                 {
                     if (b.Src == BeliefSource.Saw && b.Kind != BeliefKind.Spark) break; // 이미 본 자리

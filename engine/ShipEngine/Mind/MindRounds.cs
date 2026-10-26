@@ -9,7 +9,8 @@ namespace ShipEngine;
 /// <para>보면 끈다 — 켜 둔 채 곁에 쓰는 이가 없는 조리대 · 오븐을 본 사람 · 로봇은 가서 끈다 (손이 닿는 두 칸 안이면 하던 일 그대로 손을 뻗어). 성실할수록 · 배의 규칙('떠날 땐 끈다')을 아는 이 · 조리사가 먼저
 /// (사람은 로봇이 가는 것을 보면 맡긴다). 끈 일은 켜 둔 이의 원인에 잇는다 — 켜 둔 이는 남이 끈 것을 알고 조심이 오른다 (⑧ 요리 · 배우기).</para>
 /// <para>수습 — 숨진 이를 덮어 쉴 곳(추모실 · 의무실 · 식량 창고 — 없으면 그 자리)에 뉜다. 주컴퓨터가 로봇에게 먼저 맡기고 · 돌던 로봇이 보면 스스로 ·
-/// 곁에 사람이 있으면 (가슴을 누르거나 · 슬퍼하는 동안) 기다린다 · 배에 움직이는 로봇이 없으면 사람이 한다. 덮는 것은 ⑦에 요청한다.</para>
+/// 곁에 사람이 있으면 (가슴을 누르거나 · 슬퍼하는 동안) 기다린다 · 사람은 그 몸으로 가는 로봇이 보이지 않고 숨진 지 한 시간이 지나도 덮이지 않았으면 (배에 로봇이 없으면 곧장) 나선다
+/// (켜진 로봇이 팔 · 다리를 못 써도 — 사람은 아는 것만 본다). 덮는 것은 ⑦에 요청한다.</para>
 /// </summary>
 public sealed partial class Mind
 {
@@ -156,8 +157,8 @@ public sealed partial class Mind
     private void SeeStove(Sim sim, Agent a, long t, int x, int dev)
     {
         if (_net!.On[dev] == 0 || a.C.CookOn == dev + 1 || Attended(x, a.Id)) { Forget(a, BeliefKind.LeftOn, dev); return; }
-        // 손이 닿는 곳(두 칸)이면 하던 일을 두고 가지 않고 손을 뻗어 끈다 (곁에서 일하던 조리사 — 하던 일이 끄러 가기보다 앞서 끝내 눌어 연기가 났다)
-        if (a.C.Up != 0 && a.C.Mode == 0 && Dist(a.C.Cell, x) <= 2 && (!a.IsPerson || !IsSleeping(a)) && HandsOk(a)) { SwitchNow(sim, a, dev); return; }
+        // 손이 닿는 곳(두 칸)이면 하던 일을 두고 가지 않고 손을 뻗어 끈다 (곁에서 일하던 조리사 — 하던 일이 끄러 가기보다 앞서 끝내 눌어 연기가 났다) · 드론은 손이 없다 (본 것으로 남긴다)
+        if (a.C.Up != 0 && a.C.Mode == 0 && a.C.Kind != AgentKind.Drone && Dist(a.C.Cell, x) <= 2 && (!a.IsPerson || !IsSleeping(a)) && HandsOk(a)) { SwitchNow(sim, a, dev); return; }
         Learn(a, t, BeliefKind.LeftOn, x, dev, 1, BeliefSource.Saw, _net.OnCause[dev]);
     }
 
@@ -224,23 +225,37 @@ public sealed partial class Mind
         return _restRoom;
     }
 
-    private bool AnyRobotUp()
+    /// <summary>숨진 지 이만큼은 사람이 로봇 · 주컴퓨터에 맡겨 둔다 (주컴퓨터가 10분 뒤 로봇에게 맡기고 · 돌던 로봇은 한 시간에 한 바퀴) — 그 뒤에도 덮이지 않았으면 사람이 나선다.</summary>
+    public const double LayOutWaitHours = 1;
+
+    /// <summary>
+    /// 사람이 시신 수습을 로봇에게 맡기고 물러나나 (아는 것만 — 배의 로봇이 켜져 있는지 · 팔이 성한지는 모른다):
+    /// 그 몸으로 가는 로봇이 보인다 (일감 표시 — 팔 · 다리를 못 쓰는 로봇은 그 일을 고르지 않는다) · 또는 숨진 지 한 시간이 안 됐고 배에 로봇이 있다.
+    /// </summary>
+    /// <param name="since">숨진 지 (그 죽음을 안 마디의 때부터 · 모르면 −1)</param>
+    private bool LeaveToRobot(Agent a, int body, long since)
     {
-        foreach (var o in Agents) if (o.C.Kind == AgentKind.Robot && o.C.Up != 0) return true;
+        bool mine = a.C.Goal == GoalKind.LayOut && a.C.GoalTarget == body;
+        if (!mine && _claims.TryGetValue(ClaimKey(GoalKind.LayOut, body), out var v) && v.robot) return true;
+        if (since < 0 || since >= Time.Hours(LayOutWaitHours)) return false;   // 언제인지 모르거나 한 시간이 지났다
+        foreach (var o in Agents) if (o.C.Kind == AgentKind.Robot) return true;   // 배의 로봇 (태운 명단 — 지금 상태는 모른다)
         return false;
     }
 
-    /// <summary>숨진 이를 본 이의 선택지: 덮이지 않았고 · 누가 옮기는 중이 아니고 · 곁에 사람이 없으면 — 로봇이 먼저 (사람은 배에 움직이는 로봇이 없을 때).</summary>
-    private void LayOutOption(Agent a, in Belief b, float df, float caution)
+    /// <summary>숨진 이를 본 이의 선택지: 덮이지 않았고 · 누가 옮기는 중이 아니고 · 곁에 사람이 없으면 — 로봇이 먼저 (사람은 가는 로봇이 보이지 않고 숨진 지 한 시간이 지났을 때 · 배에 로봇이 없으면 곧장).
+    /// 사람은 덮이지 않은 채 오래 놓일수록 더 나선다 (기다린 뒤 한 시간마다 한 몫 — 세 몫까지).</summary>
+    private void LayOutOption(Sim sim, Agent a, in Belief b, float df, float caution)
     {
         if (_life == null || b.Subject < 0 || b.Subject >= _life.Bodies.Count) return;
         var body = _life.Bodies[b.Subject];
         if (body.Alive != 0 || body.Shroud != 0 || body.Cell < 0) return;
         int va = AgentOfBody(b.Subject);
         if (va >= 0 && Agents[va].C.CarriedBy >= 0 && Agents[va].C.CarriedBy != a.Id) return;
-        if (a.IsPerson ? AnyRobotUp() : Attended(body.Cell, a.Id)) return;   // 로봇은 곁의 사람이 (누르거나 · 슬퍼하는 동안) 물러날 때까지 기다린다
+        long since = b.Cause > 0 && b.Cause < sim.Causes.Count ? sim.Tick - sim.Causes[b.Cause].Tick : -1;
+        if (a.IsPerson ? LeaveToRobot(a, b.Subject, since) : Attended(body.Cell, a.Id)) return;   // 로봇은 곁의 사람이 (누르거나 · 슬퍼하는 동안) 물러날 때까지 기다린다
+        float late = since < 0 ? 0 : (float)Math.Clamp((since - Time.Hours(LayOutWaitHours)) / (double)Time.Hours(1), 0, 2);
         ref var c = ref a.C;
-        float s = a.IsPerson ? b.Conf * (0.3f + 0.5f * c.Kindness + 0.5f * c.SkMedic) * caution : b.Conf * 1.5f;
+        float s = a.IsPerson ? b.Conf * (0.3f + 0.5f * c.Kindness + 0.5f * c.SkMedic) * caution * (1 + late) : b.Conf * 1.5f;
         Add(GoalKind.LayOut, b.Subject, body.Cell, s * df * ClaimFactor(a, GoalKind.LayOut, b.Subject, 1), b.Cause);
     }
 

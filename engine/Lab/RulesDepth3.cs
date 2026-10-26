@@ -44,20 +44,58 @@ public static partial class Program
                 if (Debug) Console.WriteLine($"    {(computer ? "주컴퓨터" : "멈춤")} · 꺼짐 {(offAt >= 0 ? Time.ToSeconds(offAt) / 60 : -1):0}분 · \"{how}\" · {string.Join(" / ", sm.Log.Where(l => l.text.Contains(oven.Name)).Select(l => l.text).Take(3))}");
                 return (offAt, sw.Kind == FactKind.Switched ? sw.Actor : -9, how, sw.Kind == FactKind.Switched ? s.Causes.Story(sw.Cause) : "");
             }
+            // 드론은 손이 없다: 주컴퓨터를 끈 디딤호 — 주방 문을 잠그고 (사람 · 로봇은 밖) 켜진 오븐 두 칸 안에 드론 하나만 → 드론은 끄지 않고 켜 둔 것을 알기만 한다
+            //    (예전엔 감각의 '손이 닿으면 곧장 끈다'가 드론을 거르지 않아 드론이 오븐을 껐다 — 선택지는 드론을 뺐다)
+            var droneT = Task.Run(() =>
+            {
+                var s = ShipWorld.Crewed("Didim", 9, 6, 2);
+                var net = s.Get<Network>(); var m = s.Get<Mind>(); var st = s.Get<Structure>(); var L = s.Layout;
+                net.SetOn(net.Devices.First(d => d.Type == "MainComputer").Id, false);
+                s.Run(5);
+                var oven = net.Devices.First(d => d.Type == "Oven" && L.Rooms[L.Room[d.Cell]].Type == "Galley");
+                int galley = L.Room[oven.Cell];
+                for (int d = 0; d < L.Doors.Count; d++)
+                {
+                    Span<int> nb = stackalloc int[4];
+                    L.Neighbors(L.Doors[d].Cell, nb);
+                    foreach (int j in nb) if (j >= 0 && L.Room[j] == galley) { st.LockDoor(d, s.Tick + Time.Hours(2)); break; }
+                }
+                int mess = L.Rooms.First(r => r.Type == "Mess").Cells.First(c => L.Kind[c] == CellKind.Floor && L.FurnitureAt[c] < 0);
+                foreach (var a in m.Agents.Where(a => a.IsPerson && L.Room[a.C.Cell] == galley)) { a.C.Cell = mess; s.Get<Life>().Move(a.C.Body, mess); a.Plan.Clear(); a.Path.Clear(); }
+                int spot = L.Rooms[galley].Cells.Where(c => L.Kind[c] == CellKind.Floor && L.FurnitureAt[c] < 0 && m.Dist(c, oven.Cell) <= 2).OrderBy(c => m.Dist(c, oven.Cell)).ThenBy(c => c).First();
+                int drone = m.AddRobot(s, spot, AgentKind.Drone);
+                bool alone = m.Agents.All(a => a.Id == drone || L.Room[a.C.Cell] != galley);
+                net.SetOn(oven.Id, true);
+                long f0 = s.Facts.Total;
+                s.Run(60);
+                bool byDrone = s.Facts.Since(f0).Any(x => x.Kind == FactKind.Switched && x.Other == oven.Id && x.Actor == drone);
+                bool knows = m[drone].Beliefs.Any(b => b.Kind == BeliefKind.LeftOn && b.Subject == oven.Id);
+                return (alone, byDrone, knows, on: net.On[oven.Id] != 0);
+            });
             var aloneT = Task.Run(() => Oven(false)); var watched = Oven(true); var alone = aloneT.Result;
+            var dr = droneT.Result;
+            Check("드론은 켜진 오븐을 끄지 않는다: 손이 없는 드론은 오븐 곁(두 칸)에 혼자 있어도 끄지 않고 켜 둔 것을 알기만 한다 (예전엔 감각의 '손이 닿으면 곧장 끈다'가 드론을 거르지 않아 드론이 껐다)",
+                dr.alone && !dr.byDrone && dr.knows && dr.on, $"주방에 드론만 {dr.alone} · 드론이 끔 {dr.byDrone} · 켜 둔 것을 앎 {dr.knows} · 오븐 켜짐 {dr.on}");
             Check("켜진 오븐이 쓰는 이 없이 1시간 넘게 켜져 있지 않다: 주방을 아무도 못 보면 주컴퓨터가 쓰는 이 없이 15분 켜진 오븐을 끈다 (경보 문턱 아래도) · 주컴퓨터가 멈췄으면 지나다 본 사람 · 로봇이 끈다 — 원인 사슬은 켜 둔 이에게 잇는다",
                 watched.offAt >= 0 && watched.offAt <= Time.Minutes(20) && watched.by == -1 && watched.how.Contains("쓰는 이 없이") && watched.story.Contains("켜 둔 채")
                 && alone.offAt >= 0 && alone.by >= 0 && alone.story.Contains("켜 둔 채"),
                 $"주컴퓨터 {(watched.offAt >= 0 ? $"{Time.ToSeconds(watched.offAt) / 60:0}분" : "1시간 넘게 켜짐")} '{watched.how}' / 멈춤 {(alone.offAt >= 0 ? $"{Time.ToSeconds(alone.offAt) / 60:0}분" : "1시간 넘게 켜짐")} (끈 이 {alone.by}) '{alone.how}'");
 
             // 숨진 이: 디딤호 6명 · 로봇 2 — 30분 뒤 한 사람이 그 자리에서 숨졌다 (주컴퓨터가 돌 때 · 멈췄을 때) → 6시간 안에 덮여 쉴 곳(추모실 · 의무실)으로 옮겨진다 · 먼저 로봇
-            (bool moved, bool covered, string room, string by, double hours) Corpse(bool computer)
+            //    · 주컴퓨터가 멈추고 두 로봇의 팔이 꺾였으면 (켜져 있지만 손일을 못 한다) 식당에서 숨진 이를 본 사람이 나선다
+            (bool moved, bool covered, string room, string by, double hours) Corpse(bool computer, bool noArms = false)
             {
                 var s = ShipWorld.Crewed("Didim", 4, 6, 2);
                 var net = s.Get<Network>(); var m = s.Get<Mind>(); var life = s.Get<Life>();
                 if (!computer) net.SetOn(net.Devices.First(d => d.Type == "MainComputer").Id, false);   // 주컴퓨터를 끈 배
+                if (noArms) foreach (var a in m.Agents.Where(a => a.C.Kind == AgentKind.Robot)) net.Robot(a.C.Mech).Arms = 0.9f;   // 두 로봇의 팔이 꺾였다 (켜져 있지만 손일을 못 한다)
                 s.Run(Time.Minutes(30));
                 var dead = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Asleep == 0 && s.Layout.Room[a.C.Cell] >= 0 && s.Layout.Rooms[s.Layout.Room[a.C.Cell]].Type is not ("Medbay" or "Chapel")).OrderBy(a => a.Id).First();
+                if (noArms)   // 사람들이 오가는 식당에서 쓰러졌다 (사람이 그 몸을 본다)
+                {
+                    int mess = s.Layout.Rooms.First(r => r.Type == "Mess").Cells.First(c => s.Layout.Kind[c] == CellKind.Floor && s.Layout.FurnitureAt[c] < 0);
+                    dead.C.Cell = mess; life.Move(dead.C.Body, mess); dead.Plan.Clear(); dead.Path.Clear();
+                }
                 int body = dead.C.Body, at = life[body].Cell;
                 int why = s.Causes.Add(CauseKind.Setup, $"{m.NameOf(dead.Id)}의 심장이 멎었다 — 타고난 심장병", s.Tick, at);
                 { ref var b = ref life[body]; b.Alive = 0; b.Conscious = 0; b.DiedAt = s.Tick; b.DeathCause = why; }
@@ -70,11 +108,14 @@ public static partial class Program
                 return (life[body].Cell != at, life[body].Shroud != 0, r >= 0 ? s.Layout.Rooms[r].Type : "-",
                     laid.Kind == FactKind.LaidOut && laid.Actor >= 0 ? (m.Agents[laid.Actor].IsPerson ? "사람" : "로봇") : "-", doneAt >= 0 ? Time.ToSeconds(doneAt) / 3600 : -1);
             }
-            var cAloneT = Task.Run(() => Corpse(false)); var cWatched = Corpse(true); var cAlone = cAloneT.Result;
+            var cAloneT = Task.Run(() => Corpse(false)); var cArmsT = Task.Run(() => Corpse(false, noArms: true)); var cWatched = Corpse(true); var cAlone = cAloneT.Result; var cArms = cArmsT.Result;
             Check("시신이 6시간 넘게 그 자리에 있지 않다: 숨진 이를 로봇이 먼저 수습해 덮고 의무실로 옮긴다 (주컴퓨터가 맡기고 · 멈췄으면 돌던 로봇이 보고 스스로)",
                 cWatched.moved && cWatched.covered && cWatched.room is "Medbay" or "Chapel" && cWatched.by == "로봇"
                 && cAlone.moved && cAlone.covered && cAlone.room is "Medbay" or "Chapel",
                 $"주컴퓨터: 옮김 {cWatched.moved} · 덮음 {cWatched.covered} · {cWatched.room} · {cWatched.by} · {cWatched.hours:0.0}시간 / 멈춤: 옮김 {cAlone.moved} · 덮음 {cAlone.covered} · {cAlone.room} · {cAlone.by} · {cAlone.hours:0.0}시간");
+            Check("로봇이 수습하지 못하면 사람이 한다: 주컴퓨터가 멈추고 두 로봇의 팔이 꺾인 배 (켜져 있지만 손일을 못 한다) — 식당에서 숨진 이를 6시간 안에 사람이 덮어 의무실로 옮긴다 (예전엔 사람이 배에 켜진 로봇이 있다는 것만 보고 물러나 아무도 수습하지 않았다)",
+                cArms.moved && cArms.covered && cArms.room is "Medbay" or "Chapel" && cArms.by == "사람",
+                $"옮김 {cArms.moved} · 덮음 {cArms.covered} · {cArms.room} · {cArms.by} · {cArms.hours:0.0}시간");
         }
 
         // ── DF6 물 · 맡은 일 자료 (보고서 §4-3 · §5): 오수가 밀리면 주컴퓨터가 막힌 곳(처리량)을 짚고 샤워 배급 · 재생기 정비를 낸다 · 새뜰호 농부가 재배 선반에서 일하고 거둔다 ──
