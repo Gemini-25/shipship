@@ -132,4 +132,37 @@ public static partial class Program
             full.v > 1 && full.v <= sound && light.v > 1 && light.v <= sound,
             $"가장 빠른 물체 — 온전 {full.v:0.0}m/s · 가벼운 셈 {light.v:0.0}m/s · 가장 센 돌풍 {Math.Max(full.air, light.air):0}m/s · 소리 빠르기 {sound:0}m/s");
     }
+
+    /// <summary>
+    /// 법칙 — 짝 닿음의 팔은 제 껍질까지 (떨어져 다가오는 짝도): 제 돎은 제 겉에 받은 충격량으로만 — |I·Δω| ≤ r·m·|Δv| (r 꼴의 가장 먼 겉).
+    /// 무중력 · 공기 없는 방에서 200m/s로 날아온 컵 · 접시 · 책이 비스듬히 식량 상자에 맞는다 (예전: 떨어진 짝의 팔을 두 물체 가운데 점까지 잡아 마찰 충격량이 수 m 팔로 돌렸다).
+    /// </summary>
+    private static void PairArmLaws()
+    {
+        if (!Do("짝 닿음 팔 법칙")) return;
+        Console.WriteLine("\n[짝 닿음 팔 — 제 껍질까지]");
+        double worst = 0; string at = "";
+        int hits = 0;
+        foreach (var (name, dy, vy) in new[] { ("컵", 0.10, 0.0), ("컵", 0.18, 40.0), ("접시", 0.2, -60.0), ("책", 0.15, 90.0), ("컵", -0.12, -120.0), ("접시", -0.25, 150.0), ("책", 0.0, -150.0), ("컵", 0.3, 180.0) })
+        {
+            var s = PropWorld(0);
+            var st = s.Get<Structure>();
+            st.Breakage = false;
+            double y0 = 5 - vy * (3.0 / 200) / 2;   // 옆 빠르기가 있어도 3m 앞 상자 언저리에서 만나게
+            int id = Slide(s, name, 3.0, y0, 200, vy);
+            Slide(s, "식량 상자", 6.0, y0 + vy * (3.0 / 200) + dy, 0, 0);
+            var p0 = st.Props[st.IndexOf(id)];
+            var fm = st.PropForm(p0);
+            double r = fm.Shape.Hit.reach, m = fm.Mass, I = fm.I;
+            s.Step();
+            var p1 = st.Props[st.IndexOf(id)];
+            double dv = Math.Sqrt((p1.Vx - p0.Vx) * (p1.Vx - p0.Vx) + (p1.Vy - p0.Vy) * (p1.Vy - p0.Vy)), dl = I * Math.Abs(p1.W - p0.W);
+            if (dv > 1) hits++;
+            double ratio = dl / Math.Max(1e-9, r * m * dv);
+            if (ratio > worst) { worst = ratio; at = $"{name} 비낌 {dy:0.00}m · 옆 {vy:0}m/s — I·Δω {dl:0.000} · r·m·Δv {r * m * dv:0.000} (Δω {p1.W - p0.W:0.0}rad/s · Δv {dv:0.0}m/s)"; }
+        }
+        Check("짝 닿음 팔: 무중력 · 공기 없는 방에서 200m/s (옆 빠르기 −150 ~ 180m/s)로 날아온 컵 · 접시 · 책이 3m 앞 식량 상자에 비스듬히 맞는다 — 제 돎의 바뀜이 제 겉에 받은 충격량의 몫을 넘지 않는다 (|I·Δω| ≤ r·m·|Δv|)",
+            hits >= 5 && worst <= 1.0001,
+            $"맞음 {hits} · 가장 큰 몫 {worst:0.000} ({at})");
+    }
 }

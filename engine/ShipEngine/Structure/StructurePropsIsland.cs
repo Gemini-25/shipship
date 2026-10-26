@@ -743,7 +743,9 @@ public sealed partial class Structure
                 double mu = Math.Sqrt(ma.Mu * mb.Mu), e = Math.Min(ma.Rest, mb.Rest);
                 for (int c = 0; c < npt; c++)
                 {
-                    double rax = cpx[c] - a.X, ray = cpy[c] - a.Y, rbx = cpx[c] - b.X, rby = cpy[c] - b.Y;
+                    // 팔은 제 껍질 위 점까지: 맞은 점은 두 껍질 점의 가운데이니 떨어진 만큼 (sep/2) 법선 (B → A)을 따라 저마다의 껍질로 (예전: 10m 떨어져 빠르게 다가오는 짝도
+                    // 가운데 점을 팔로 써 4cm 컵에 9m 팔 — 한 잔걸음에 300rad/s · 수백 m/s로 튀었다)
+                    double hs = Math.Max(0, csep[c]) * 0.5, rax = cpx[c] + nx * hs - a.X, ray = cpy[c] + ny * hs - a.Y, rbx = cpx[c] - nx * hs - b.X, rby = cpy[c] - ny * hs - b.Y;
                     double rna = rax * ny - ray * nx, rnb = rbx * ny - rby * nx, rta = rax * nx + ray * ny, rtb = rbx * nx + rby * ny;
                     _icStage[nStage++] = new IslandContact { A = ka, B = kb, Rx = rax, Ry = ray, Qx = rbx, Qy = rby, Nx = nx, Ny = ny, Sep = csep[c], Mu = mu, E = e, Cell = -1, Cap = double.PositiveInfinity,
                         Kn = 1 / ra.M + 1 / rb.M + rna * rna / ra.In + rnb * rnb / rb.In, Kt = 1 / ra.M + 1 / rb.M + rta * rta / ra.In + rtb * rtb / rb.In,

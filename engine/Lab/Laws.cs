@@ -569,6 +569,7 @@ public static partial class Program
         Physics2Laws();   // 물리 세계 뒤 커밋 (LawsPhysics2.cs — docs/PHYSICS.md PH11~)
         BodyPropLaws();   // 몸 물체 (PH14)
         WindCapLaws();    // 바람 끌림은 공기 빠르기를 넘지 않는다
+        PairArmLaws();    // 짝 닿음의 팔은 제 껍질까지
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>
