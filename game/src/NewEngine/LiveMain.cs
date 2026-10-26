@@ -234,7 +234,7 @@ void fragment() {
                 else
                 {
                     if (resume != null) _show.Notify(why.Length > 0 ? why : VoyageStore.BrokenText, 8);
-                    if (!_noHold) _show.HoldForDeparture();      // 출항 준비 (docs/UI.md 4 — 추천 A): 멈춘 채 항로 판 · 항로를 누르거나 [이대로 출항]
+                    if (!_noHold) _show.HoldForDeparture();      // 출항 준비 (docs/UI.md 4 · OBSERVER.md §6.1): 멈춘 채 출항 소개 (사람들 · ☆) · [항로 ›] · [이대로 출항]
                 }
                 last = clock.Elapsed.TotalSeconds;
             }
@@ -575,6 +575,28 @@ void fragment() {
                 break;
             }
             case "record": s.OpenRecord(sub); break;
+            // 내 사람 (V6): 첫 사람에 ☆ · 그 곁에 작은 폭발 (함장의 손 — 월드 길) → '☆ … 다쳤다' 알림 · 사람 판에 그 이
+            case "star":
+            {
+                int p0 = First(true);
+                if (p0 < 0 || mind == null) break;
+                s.ToggleStar(p0);
+                s.OpenDetail(DetailKind.Person, p0); s.SetDetailSub(sub);
+                s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Blast, Cell = mind.Agents[p0].C.Cell, Size = 2 });
+                s.SetFixed(2);   // ×60 — 숨이 막혀 쓰러지는 데까지 (화면 사진이 1.5초 뒤)
+                break;
+            }
+            // 지나온 길 (V6): 침대 불씨 (함장의 손) → 세 시간 → 지나온 일이 가장 많은 사람의 자세히 일곱째 작은 탭
+            case "path":
+            {
+                if (mind == null) break;
+                var bed = s.Sim.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                if (bed != null) { s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Fire, Cell = bed.Cells[0], Size = 2 }); s.FastForward(Time.Hours(3)); }
+                int best = First(true), most = -1;
+                foreach (var a in mind.Agents) if (a.IsPerson && (s.Dir.People.Find(a.Id)?.Path.Count ?? 0) > most) { most = s.Dir.People.Find(a.Id)?.Path.Count ?? 0; best = a.Id; }
+                s.OpenDetail(DetailKind.Person, best); s.SetDetailSub(6);
+                break;
+            }
             // 사진 (V5): 사진 모드 · 가장 늦은 정점 사진을 크게 (사진첩)
             case "photomode": s.SetPhotoMode(true); break;
             case "photo":
@@ -1156,7 +1178,8 @@ void fragment() {
         float w = box.Size.X, cy = box.Position.Y + 28 * U;
         foreach (var h in _hud.Hits)
         {
-            if (h.Act == UiAct.CardFollow) DrawButton(h, "따라가기", 14);
+            if (h.Act == UiAct.Star && _hud.Area("카드").Contains(h.R.X + 1, h.R.Y + 1)) DrawStar(h);   // 사람 카드의 ☆ (V6)
+            else if (h.Act == UiAct.CardFollow) DrawButton(h, "따라가기", 14);
             else if (h.Act == UiAct.LookHand)
             {
                 // [사고 ›]: 호박색 테두리 · 맞는 갈래가 없으면 옅게 (풀이 글이 까닭)
@@ -1624,11 +1647,13 @@ void fragment() {
             var r = R(ho);
             DrawRect(r, new Color(0.06f, 0.12f, 0.18f, 0.95f));
             string t = double.IsNaN(f.DepartIn) ? "출항 준비" : $"출항까지 {HoursMin(f.DepartIn)}";
-            DrawString(_font, new Vector2(r.Position.X + 10 * U, r.Position.Y + r.Size.Y / 2 + Fs(15) * 0.36f), t, HorizontalAlignment.Left, r.Size.X - 290 * U, Fs(15), Ink);
+            float btns = 290 * U;
+            foreach (var h in _hud.Hits) if (h.R.Y >= ho.Y && h.R.Bottom <= ho.Bottom + 1 && h.Act is UiAct.Depart or UiAct.Recrew or UiAct.RouteTab) btns = Math.Max(btns, r.End.X - R(h.R).Position.X + 10 * U);
+            DrawString(_font, new Vector2(r.Position.X + 10 * U, r.Position.Y + r.Size.Y / 2 + Fs(15) * 0.36f), t, HorizontalAlignment.Left, Math.Max(10, r.Size.X - btns), Fs(15), Ink);
             foreach (var h in _hud.Hits)
             {
                 if (h.R.Y < ho.Y || h.R.Bottom > ho.Bottom + 1) continue;
-                if (h.Act == UiAct.Depart) DrawButton(h, "이대로 출항"); else if (h.Act == UiAct.Recrew) DrawButton(h, "다른 사람들로");
+                if (h.Act == UiAct.Depart) DrawButton(h, "이대로 출항"); else if (h.Act == UiAct.Recrew) DrawButton(h, "다른 사람들로"); else if (h.Act == UiAct.RouteTab) DrawButton(h, "항로 ›");   // 출항 소개 (V6)
             }
         }
         if (_hud.Areas.TryGetValue("날 띠", out var dsr))
@@ -1742,8 +1767,24 @@ void fragment() {
         }
         float right = box.End.X - 40 * U;
         foreach (var h in _hud.Hits) if (h.Act is UiAct.DetailFollow or UiAct.DetailBack && h.R.Y < _hud.Area("판").Y + 56) right = Math.Min(right, R(h.R).Position.X);
+        var head = _hud.Area("자세히 머리");
+        foreach (var h in _hud.Hits) if (h.Act == UiAct.Star && head.Contains(h.R.X + 1, h.R.Y + 1)) { right = Math.Min(right, R(h.R).Position.X); DrawStar(h); }   // 자세히 머리의 ☆ (V6)
         DrawString(_bold, new Vector2(x, y + 28 * U), f.PanelTitle, HorizontalAlignment.Left, Math.Max(10, right - x - 8 * U), Fs(20), new Color(0.9f, 0.94f, 1f));
         DrawString(_font, new Vector2(x, y + 49 * U), f.DetailLine, HorizontalAlignment.Left, Math.Max(10, box.End.X - x - 16 * U), Fs(15), InkDim);
+    }
+
+    /// <summary>☆ 단추 (V6 — 도형): 켜면 채운 노란 별 · 끄면 테두리만.</summary>
+    private void DrawStar(UiHit h)
+    {
+        DrawButton(h, "");
+        var c = R(h.R).GetCenter();
+        float ro = 9 * U, ri = 4 * U;
+        var pts = new Vector2[10];
+        for (int i = 0; i < 10; i++) { float a = -Mathf.Pi / 2 + i * Mathf.Pi / 5, rr = i % 2 == 0 ? ro : ri; pts[i] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rr; }
+        var col = h.On ? new Color(1f, 0.82f, 0.3f) : new Color(0.8f, 0.85f, 0.93f);
+        if (h.On) DrawColoredPolygon(pts, col);
+        var loop = new Vector2[11]; Array.Copy(pts, loop, 10); loop[10] = pts[0];
+        DrawPolyline(loop, col, 1.5f * U);
     }
 
     /// <summary>펼친 목록 (고정 빠르기 · 겹쳐 보기 · 메뉴 · 배 바꾸기).</summary>
@@ -1943,6 +1984,7 @@ void fragment() {
             case UiAct.ReplayLast: _cmds.Enqueue(s => { if (s.Rewinding) s.StopRewind(); else if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
             case UiAct.RewindStop: _cmds.Enqueue(s => s.StopRewind()); break;   // 감기 그만 (V4)
             // 사진 (V5): 사진 카드 [▶ 그 장면] [닫기] · 사진 모드 [찍기] [나가기] · 보기 묶음 사진기
+            case UiAct.Star: { int id = (int)k; _cmds.Enqueue(s => s.ToggleStar(id)); break; }   // ☆ 눈여겨보기 (V6)
             case UiAct.PhotoScene: _cmds.Enqueue(s => s.PhotoScene()); break;
             case UiAct.PhotoClose: _cmds.Enqueue(s => s.ClosePhoto()); break;
             case UiAct.Photo: PhotoShot(); break;

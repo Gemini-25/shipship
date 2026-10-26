@@ -71,14 +71,15 @@ public static partial class Program
             var near = DetailOf(show, 4);
             if (!Has(near, "짝 " + mind.NameOf(other.Id)) || !Has(near, "앙금") || !Has(near, "쓰러진 짝을 업고 나왔다")) bad.Add("사람 사이: " + string.Join(" | ", near.Select(r => r.Main + "/" + r.Sub)));
             var past = DetailOf(show, 6);
-            if (past.Length == 0 || !past[0].Main.StartsWith("곧")) bad.Add("지나온 길 자리 없음");
+            // 바뀜 V6: 자리 ('곧 —') → 지나온 길 (맨 위 달라진 것 · 아니면 '이름의 항해 — 한 일')
+            if (past.Length == 0 || !(past[0].Main.StartsWith(mind.NameOf(pid) + "의 항해") || past[0].Main.Contains("단단해졌다") || past[0].Main.Contains("자랐다") || past[0].Main.Contains("겁이"))) bad.Add("지나온 길 머리 없음: " + (past.Length > 0 ? past[0].Main : ""));
             foreach (var (tab, rows) in new[] { ("몸", body), ("마음", mindRows), ("하는 일", doing), ("아는 것", knows), ("사람 사이", near), ("지나온 길", past) }) Lint(tab, rows);
             var sw = System.Diagnostics.Stopwatch.StartNew(); int built = 0;
             for (int k = 0; k < 7; k++) { show.SetDetailSub(k); for (int r = 0; r < 20; r++) built += show.PanelRows().Length; }
             double rowsUs = sw.Elapsed.TotalMilliseconds * 1000 / 140;
             st.DoorJam[door] = 0;
             if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var (tab, rows) in new[] { ("몸", body), ("마음", mindRows), ("하는 일", doing), ("아는 것", knows), ("사람 사이", near) }) Console.WriteLine($"    [{tab}]\n      " + string.Join("\n      ", rows.Select(r => r.Main + (r.Sub.Length > 0 ? " / " + r.Sub.Replace("\n", " ⏎ ") : "") + (r.Bars != null ? " [" + string.Join(" ", r.Bars.Select(x => $"{x.Name}{x.Value:0.0}")) + "]" : ""))));
-            Check("자세한 판 D1 사람: 작은 탭 일곱 (지나온 길 자리) · 몸 (핏속 산소 · 체온 · 다친 원인) · 마음 (감정 막대 · 속말 · 마음 건강) · 하는 일 (계획 ▶ · 맡은 일 · 막힘) · 아는 것 (믿음 · 어떻게 · 확신 · 지금 실제 — 불은 이미 아니다 · 끼인 문은 맞다 / 누가 어떻게 아나 아홉 갈래 · 분야 앎 · 솜씨) · 사람 사이 (짝 · 앙금 · 기억) · 개발 말 0",
+            Check("자세한 판 D1 사람: 작은 탭 일곱 (지나온 길 — V6) · 몸 (핏속 산소 · 체온 · 다친 원인) · 마음 (감정 막대 · 속말 · 마음 건강) · 하는 일 (계획 ▶ · 맡은 일 · 막힘) · 아는 것 (믿음 · 어떻게 · 확신 · 지금 실제 — 불은 이미 아니다 · 끼인 문은 맞다 / 누가 어떻게 아나 아홉 갈래 · 분야 앎 · 솜씨) · 사람 사이 (짝 · 앙금 · 기억) · 개발 말 0",
                 tabs && bad.Count == 0, bad.Count > 0 ? string.Join(" / ", bad.Take(4)) : $"줄 짓기 탭마다 {rowsUs:0}µs (줄 {built / 140.0:0})");
         }
 

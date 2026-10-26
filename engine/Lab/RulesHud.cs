@@ -334,14 +334,17 @@ public static partial class Program
             Check("마우스 상태 띠 짧은 값 (결함 5): 1366×768 · 탭 일곱이면 띠가 탭 왼쪽을 넘어 칸마다 짧은 값 (여섯 칸 모두 자르지 않고) · 전체 값은 풀이 글로 · 3840×1080 넓은 창은 긴 값 그대로",
                 shortOn && whole == f.Vitals.Length && tipFull && wideLong, $"짧은 값 {shortOn} · 자르지 않은 칸 {whole}/{f.Vitals.Length} · 풀이 글 {tipFull} · 넓은 창 긴 값 {wideLong}");
         }
-        // 6: 출항 준비 — 멈춘 채 항로 판 · 항로를 누르면 고르기만 (아직 멈춤) · 빠르기 단추로 떠난다 · 떠난 뒤엔 못 고른다
+        // 6: 출항 준비 — 멈춘 채 출항 소개 (바뀜 V6: [사람들]이 먼저 — 판 아래 [항로 ›]) → 항로 판 · 항로를 누르면 고르기만 (아직 멈춤) · 빠르기 단추로 떠난다 · 떠난 뒤엔 못 고른다
         {
             var show = LiveShow.Crewed("Didim", 18);
             show.FrameBudget = 1000;
             show.HoldForDeparture();
             long t0 = show.Sim.Tick;
             for (int i = 0; i < 30; i++) show.Advance(1 / 60.0);
-            bool still = show.Sim.Tick == t0 && show.Holding && show.Panel == PanelKind.Route;
+            bool intro = show.Sim.Tick == t0 && show.Holding && show.Panel == PanelKind.People && show.Intro;
+            show.TogglePanel(PanelKind.Route);   // 출항 줄의 [항로 ›]
+            for (int i = 0; i < 30; i++) show.Advance(1 / 60.0);
+            bool still = intro && show.Sim.Tick == t0 && show.Holding && show.Panel == PanelKind.Route;
             bool picked = show.PanelClick(8) && show.RouteShown == 8 && show.Sim.Get<Outside>().Route != 8 && show.Holding && show.RouteLine().Contains("출항 때");   // 멈춘 채 고른 항로는 함장의 손으로 받아 둔다 (U3 — 다시보기에 남게)
             show.SetSpeed(2);
             bool gone = !show.Holding && !show.Paused && show.Panel == PanelKind.None;
@@ -355,7 +358,7 @@ public static partial class Program
             show.TogglePanel(PanelKind.Route);
             bool clicked = show.PanelClick(2);
             bool locked = !clicked && show.Notice.Contains("이미 떠났다");
-            Check("마우스 출항 준비: 띄우면 세계가 멈춘 채 항로 판 (틱 그대로) · 항로를 누르면 고르기만 (아직 멈춤 — 바뀜 U3: 고른 항로는 함장의 손으로 받아 두어 '출항 때'로 보이고 떠나는 첫 틱에 바뀐다) · 빠르기 단추로 떠난다 · 출발 점화가 시작된 뒤엔 항로를 못 고르고 까닭을 알린다 (예전엔 점화 중에도 받아 항해를 다시 짰다)",
+            Check("마우스 출항 준비: 띄우면 세계가 멈춘 채 출항 소개 → [항로 ›] 항로 판 (틱 그대로) · 항로를 누르면 고르기만 (아직 멈춤 — 바뀜 U3: 고른 항로는 함장의 손으로 받아 두어 '출항 때'로 보이고 떠나는 첫 틱에 바뀐다) · 빠르기 단추로 떠난다 · 출발 점화가 시작된 뒤엔 항로를 못 고르고 까닭을 알린다 (예전엔 점화 중에도 받아 항해를 다시 짰다)",
                 still && picked && gone && locked, $"멈춤 {still} · 항로 8 고름 {picked} · 떠남 {gone} (출발까지 {left:0}분) · 떠난 뒤 {locked}");
         }
         // 8 · 13: 커서 쪽 확대 (그 칸이 화면의 같은 자리에 남는다) · 올림과 누름이 같은 사람

@@ -26,6 +26,8 @@ public enum UiAct
     RewindStop,
     // 사진 (docs/OBSERVER.md §4.4 · §11 — V5): 사진 카드 [▶ 그 장면] [닫기] · 사진 모드 [찍기] [나가기] (보기 묶음 · 메뉴 · Shift+F12)
     PhotoScene, PhotoClose, Photo, PhotoMode,
+    // 내 사람 (docs/OBSERVER.md §6.2 — V6): ☆ 눈여겨보기 (사람 카드 · 자세히 머리 — 열쇠는 사람 번호)
+    Star,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -416,7 +418,9 @@ public static class HudLayout
             h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28, leftY + 6, 28, 28), UiAct.CardClose, 0, false, true, "놓기 (Esc · 오른쪽 누르기)"));
             if (thing) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.LookHand, 0, false, f.LookHandOk, "이것에 사고를 일으킨다 — 사고 판이 열리고 겨눈다", f.LookHandWhy));
             else h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.CardFollow, 0, f.FollowSelected, true, f.FollowSelected ? "따라가는 중" : "다시 따라가기"));
-            h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8, 30), UiAct.CardName, 0, false, true, "그 자리로"));
+            bool star = !thing && f.Selected >= 0 && f.Crew.Any(c => c.Id == f.Selected);   // 사람 카드의 ☆ (V6 — 로봇은 없다)
+            if (star) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80 - 6 - 32, leftY + 6, 32, 28), UiAct.Star, f.Selected, f.Stars.Contains(f.Selected), true, StarTip(f.Stars.Contains(f.Selected))));
+            h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8 - (star ? 38 : 0), 30), UiAct.CardName, 0, false, true, "그 자리로"));
             h.Blocks.Add(("카드", card));
             leftY = card.Bottom + 8;
         }
@@ -496,7 +500,7 @@ public static class HudLayout
             h.Blocks.Add(("결산 카드", r));
             cy = r.Bottom + 8;
         }
-        if (f.Holding && f.Panel != PanelKind.Route)
+        if (f.Holding && !HoldRow(f))   // 판에 출항 줄이 있으면 (항로 판 · 출항 소개) 띠는 없다
         {
             var r = Center(720, 44);
             h.Areas["출항 띠"] = r;
@@ -630,6 +634,11 @@ public static class HudLayout
             h.Modal = true;
         }
     }
+
+    /// <summary>판에 출항 줄이 있나: 출항 준비 중 항로 판 · 출항 소개 (사람 판의 목록 — V6).</summary>
+    public static bool HoldRow(LiveFrame f) => f.Holding && (f.Panel == PanelKind.Route || f.Panel == PanelKind.People && f.Detail == DetailKind.None);
+    /// <summary>☆ 단추의 풀이 글.</summary>
+    public static string StarTip(bool on) => on ? "눈여겨보는 중 — 누르면 끈다" : "눈여겨보기 — 일이 나면 알리고 조용할 때 먼저 비춘다";
 
     /// <summary>보기 묶음 단추 수 (따라가기 · 전체 · 축소 · 확대 · 겹쳐 보기 · 다시보기 · 사진 모드 — V5).</summary>
     public const int ViewCount = 7;
@@ -856,7 +865,8 @@ public static class HudLayout
         }
         bool aimRow = f.Panel == PanelKind.Hand && (f.Armed != HandKind.None || f.HandWaiting > 0);   // 겨눔 줄 (겨누는 중 · 기다리는 손)
         bool strip = f.Detail == DetailKind.Record && f.DetailSub == 0 && f.Days.Length > 0;   // 지나온 날 띠 (기록 '날마다' — docs/OBSERVER.md §5.3)
-        float top = box0.Y + (detail ? 92 : 50) + (f.Holding && f.Panel == PanelKind.Route || aimRow ? 52 : 0) + (strip ? 40 : 0);
+        bool holdRow = HoldRow(f);   // 출항 줄 (항로 판 · 출항 소개 — V6)
+        float top = box0.Y + (detail ? 92 : 50) + (holdRow || aimRow ? 52 : 0) + (strip ? 40 : 0);
         float room = box0.Bottom - 34 - top;
         int total = f.PanelRows.Length;
         h.PanelTotal = total;
@@ -898,11 +908,16 @@ public static class HudLayout
                 var back = new RectF(box.Right - 40 - 6 - 72, box.Y + 10, 72, 28);
                 h.Hits.Add(new UiHit(back, UiAct.DetailBack, 0, false, true, "목록으로 (오른쪽 누르기 · ←)"));
                 h.Hits.Add(new UiHit(new RectF(back.X - 6 - 96, box.Y + 10, 96, 28), UiAct.DetailFollow, 0, f.DetailFollow, true, f.DetailFollow ? "따라가는 중" : "따라가기"));
+                if (f.Detail == DetailKind.Person && f.DetailId >= 0)   // 자세히 머리의 ☆ (V6)
+                    h.Hits.Add(new UiHit(new RectF(back.X - 6 - 96 - 6 - 36, box.Y + 10, 36, 28), UiAct.Star, f.DetailId, f.Stars.Contains(f.DetailId), true, StarTip(f.Stars.Contains(f.DetailId))));
             }
             float sx = box.X + 12;
+            // 작은 탭은 한 줄 (사람 일곱 — 좁은 판 · 큰 글이면 여백부터 줄인다: 64 · 24 → 44 · 12)
+            float natural = f.DetailTabs.Sum(t => Math.Max(64, tw(t, 15, false) + 24)) + 6 * Math.Max(0, f.DetailTabs.Length - 1);
+            bool tight = natural > box.W - 24;
             for (int i = 0; i < f.DetailTabs.Length; i++)
             {
-                float w = Math.Max(64, tw(f.DetailTabs[i], 15, false) + 24);
+                float w = tight ? Math.Max(44, tw(f.DetailTabs[i], 15, false) + 12) : Math.Max(64, tw(f.DetailTabs[i], 15, false) + 24);
                 var r = new RectF(sx, box.Y + 56, w, 30);
                 h.Hits.Add(new UiHit(r, UiAct.DetailTab, i, i == f.DetailSub, true, $"{f.DetailTabs[i]} (← →)"));
                 sx += w + 6;
@@ -921,12 +936,14 @@ public static class HudLayout
             }
         }
         if (strip) LayoutDays(f, h, new RectF(box.X + 12, box.Y + 92, box.W - 24, 32));
-        if (f.Holding && f.Panel == PanelKind.Route)
+        if (holdRow)
         {
             var hold = new RectF(box.X + 8, box.Y + 50, box.W - 16, 44);
             h.Areas["출항 줄"] = hold;
             h.Hits.Add(new UiHit(new RectF(hold.Right - 4 - 132, hold.Y + 4, 132, 36), UiAct.Depart, 0, false, true, "이대로 출항 (스페이스)"));
             h.Hits.Add(new UiHit(new RectF(hold.Right - 4 - 132 - 6 - 132, hold.Y + 4, 132, 36), UiAct.Recrew, 0, false, true, "새 번호로 다른 사람들을 태운다 (출항 전에만)"));
+            if (f.Panel == PanelKind.People)   // 출항 소개: [항로 ›]도 (V6)
+                h.Hits.Add(new UiHit(new RectF(hold.Right - 4 - 132 - 6 - 132 - 6 - 96, hold.Y + 4, 96, 36), UiAct.RouteTab, 0, false, true, "항로 고르기 (T)"));
         }
         float y = top;
         for (int i = s.PanelFirst; i < last; i++)

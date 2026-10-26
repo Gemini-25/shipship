@@ -114,6 +114,8 @@ public sealed class LiveFrame
     public int PhotoVersion;
     public string PhotoCaption = "", PhotoAct = "", PhotoWhy = "";
     public bool PhotoActOn, PhotoMode;
+    /// <summary>☆ 눈여겨보는 이 (마음 번호 — V6): 사람 카드 · 자세히 머리의 ☆를 채운다.</summary>
+    public int[] Stars = Array.Empty<int>();
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -230,6 +232,7 @@ public sealed partial class LiveShow
         Painter = new Painter(sim.Layout) { Nudge = Nudge, PropAt = PropDrawn, PropZAt = id => TrackPlay.PropZ(World, id, Math.Clamp(_carry, 0, 1)) };
         Photos = new PhotoBook(Painter);   // 정점 · 마지막 사진은 화면 화가로 (V5)
         _photoFacts = sim.Facts.Total; _diedSeen = sim.Facts.CountOf(FactKind.Died);
+        _starFacts = sim.Facts.Total;   // ☆ 알림은 띄운 뒤의 사실만 (V6)
         if (sim.Find<Structure>() is { } sst) sst.Track ??= new MotionTrack();   // 틱 안 기록 (보기용 — 세계를 바꾸지 않는다 · 연출의 미리 보기 세계는 켜지 않는다)
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
@@ -265,6 +268,7 @@ public sealed partial class LiveShow
     public void FastForward(long ticks)
     {
         for (long i = 0; i < ticks; i++) { Sim.Step(); LogHands(); Dir.Observe(Sim); Book.Observe(Sim); VaultTick(); PhotoTick(); }
+        _starFacts = Sim.Facts.Total;   // 감은 동안의 ☆ 일은 알리지 않는다
         WatchComputer(0);
         _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
         _chaptersSeen = Dir.Chapters.Count;   // 감은 동안 지난 날의 장 카드도
@@ -321,7 +325,7 @@ public sealed partial class LiveShow
             AL("자세 · 걸음");
             if (_replay != null && _replay.Tick >= _replayEnd) StopReplay();
             if (n > 0) CheckEnd();   // 결산 (산 세계 · 나아간 뒤 — 모두 잃음 · 임무 마침)
-            if (n > 0 && _replay == null) { VaultTick(); PhotoTick(); }   // 장면 금고 · 0시 세계 (V4) · 정점 · 마지막 사진 (V5)
+            if (n > 0 && _replay == null) { VaultTick(); PhotoTick(); WatchStars(); }   // 장면 금고 · 0시 세계 (V4) · 정점 · 마지막 사진 (V5) · ☆ 알림 (V6)
         }
         WatchChapters(realSec);   // 날이 바뀌면 장 카드 (V3)
         _anim += realSec;
@@ -887,6 +891,7 @@ public sealed partial class LiveShow
             // 사진 (V5): 크게 연 사진 · 사진 모드
             Photo = photo, PhotoVersion = _photoVer, PhotoCaption = photo != null ? _photoShown!.Caption : "", PhotoAct = photo != null && _photoShown!.Scene != null ? "▶ 다시보기" : "",
             PhotoActOn = photo != null && _photoShown!.Scene is { } pscene && CanReplay(pscene), PhotoWhy = PhotoWhy, PhotoMode = PhotoMode,
+            Stars = Dir.Starred,   // ☆ (V6 — 켜고 끌 때만 새 배열)
         };
     }
 
@@ -934,7 +939,7 @@ public sealed partial class LiveShow
     /// <summary>자세한 판 (docs/UI2.md §4): 사람 · 로봇 · 주컴퓨터 하나 · 작은 탭 번호.</summary>
     public DetailKind Detail;
     public int DetailId = -1, DetailSub;
-    public static readonly string[] PersonTabs = { "몸", "마음", "하는 일", "아는 것", "사람 사이", "일지", "지나온 길" };   // 지나온 길은 자리만 (docs/OBSERVER_REVIEW.md §4)
+    public static readonly string[] PersonTabs = { "몸", "마음", "하는 일", "아는 것", "사람 사이", "일지", "지나온 길" };   // 지나온 길 (V6 — 사람 일 장부 · LiveWatch.cs)
     public static readonly string[] RobotTabs = { "몸", "하는 일", "아는 것", "일지" };
     public static readonly string[] ComputerTabs = { "지금", "예측", "아는 것", "일감", "말 기록", "몸 · 방침" };
 
@@ -1088,7 +1093,7 @@ public sealed partial class LiveShow
         PanelKind.Route => "항로 — 위험도는 항로만",
         PanelKind.Journal => "주컴퓨터",
         PanelKind.Chain => "사슬 — 지금 장면은 어디서 시작됐나",
-        PanelKind.People => "사람",
+        PanelKind.People => Intro ? IntroTitle : "사람",   // 출항 소개 (V6)
         PanelKind.Robots => "로봇 · 드론",
         PanelKind.Hand => "사고 일으키기",
         _ => "",
@@ -1103,7 +1108,7 @@ public sealed partial class LiveShow
         PanelKind.Route => double.IsNaN(DepartInMin()) ? "항로는 출항 때만 고른다 · 휠로 넘기기 (T)" : "항로를 누르면 그 길로 · 출항 전에만 (↑↓ · Enter · T)",
         PanelKind.Journal => "줄을 누르면 펼친다 · 휠로 넘기기 (↑↓ · J)",
         PanelKind.Chain => "마디를 누르면 그 자리로 · 위 단추로 사슬 선 (↑↓ · Enter · O · C)",
-        PanelKind.People => "사람을 누르면 자세히 · 따라간다 · 휠로 넘기기 (↑↓ · → · Enter · P)",
+        PanelKind.People => Intro ? IntroFoot : "사람을 누르면 자세히 · 따라간다 · 휠로 넘기기 (↑↓ · → · Enter · P)",
         PanelKind.Robots => "로봇을 누르면 자세히 · 따라간다 · 휠로 넘기기 (↑↓ · → · Enter · G)",
         PanelKind.Hand => "줄을 누르면 겨눈다 · 배 위를 누르면 일어난다 (X)",
         _ => "",
@@ -1168,6 +1173,7 @@ public sealed partial class LiveShow
                 }
                 break;
             }
+            case PanelKind.People when Intro: IntroRows(rows); break;   // 출항 소개 (V6)
             case PanelKind.People:
             {
                 var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>(); var so = w.Find<Society>();
@@ -1270,7 +1276,7 @@ public sealed partial class LiveShow
     private string _notice = ""; private double _noticeLeft;
     /// <summary>잠깐 띄우는 알림 (항로를 골랐다 등) — 남은 초가 0이면 빈 글.</summary>
     public string Notice => _noticeLeft > 0 ? _notice : "";
-    public void Notify(string text, double seconds = 3, PanelKind link = PanelKind.None) { _notice = text; _noticeLeft = seconds; _noticeLink = link; _noticeAlbum = false; }
+    public void Notify(string text, double seconds = 3, PanelKind link = PanelKind.None) { _notice = text; _noticeLeft = seconds; _noticeLink = link; _noticeAlbum = false; _noticeAgent = -1; }
     public void TickNotice(double realSec) => _noticeLeft = Math.Max(0, _noticeLeft - realSec);
 
     /// <summary>항로 한 줄: 번호 · 이름 (받아 둔 항로 손이 있으면 그것 — 출항 준비로 멈춘 채 고른 것).</summary>

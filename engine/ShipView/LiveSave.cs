@@ -423,7 +423,7 @@ public sealed partial class LiveShow
     public void ResumeGo() { ResumeCard = Array.Empty<string>(); Paused = false; }
 
     /// <summary>화면 마디 판: 2 — 끝난 항해 (결산 · V3 — 판 1도 읽는다).</summary>
-    public const int ScreenVersion = 2;
+    public const int ScreenVersion = 3;   // 3: ☆ 눈여겨보는 이 (V6)
 
     /// <summary>산 세계가 한 틱 돈 뒤: 한 손 장부의 새 손 (받은 차례가 더 큰 것)을 항해 손 기록에 옮긴다.</summary>
     private void LogHands()
@@ -464,7 +464,7 @@ public sealed partial class LiveShow
         return b;
     }
 
-    /// <summary>화면 마디: 고른 빠르기 · 하루 목표 · 따라 보기 하루 · 주컴퓨터 말 기록 512 · 판단 일지 32칸 (찍지 않는 화면 고리 — 이어 본 뒤에도 비지 않게).</summary>
+    /// <summary>화면 마디: 고른 빠르기 · 하루 목표 · 따라 보기 하루 · 주컴퓨터 말 기록 512 · 판단 일지 32칸 (찍지 않는 화면 고리 — 이어 본 뒤에도 비지 않게) · 끝 갈래 · ☆ (V6).</summary>
     private byte[] SaveScreen()
     {
         var w = new StateWriter(1 << 16);
@@ -491,6 +491,7 @@ public sealed partial class LiveShow
                 }
             }
         w.Byte((byte)Ended);
+        w.I32(Stars.Count); foreach (int id in Stars) w.I32(id);   // ☆ (V6)
         w.Tag("화면 끝");
         return w.ToArray();
     }
@@ -525,6 +526,12 @@ public sealed partial class LiveShow
             ring?.Rebase(jAdded);
         }
         if (ver >= 2) Ended = (VoyageEnd)r.Byte();
+        if (ver >= 3)
+        {
+            Stars.Clear();
+            for (int i = 0, n = r.I32(); i < n; i++) Stars.Add(r.I32());
+            Dir.Starred = Stars.ToArray();   // 연출의 일상 비춤도 (카메라만)
+        }
         r.Tag("화면 끝");
     }
 

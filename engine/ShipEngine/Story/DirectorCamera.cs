@@ -23,6 +23,11 @@ public sealed partial class Director
     public int Pulls, CrossCuts, AirWarnings;
     public long DailyCuts;
     public const double DailyHoldSec = 15;                        // 조용할 때 한 방에 (화면 초)
+    /// <summary>☆ 눈여겨보는 이 (마음 번호 — 화면이 넣는다 · V6): 일상 비춤만 읽는다 (그 방을 먼저 · 더 오래). 관심 · 하이라이트 문턱에는 넣지 않는다 (카메라만).</summary>
+    public int[] Starred = Array.Empty<int>();
+    /// <summary>별 단 이가 있는 방: 한 방에 25초 (화면) · 고를 때 그만큼 더 오래 안 본 것으로 친다 (먼저 · 자주 — 다른 방도 돈다).</summary>
+    public const double StarHoldSec = 25, StarFirstSec = 45;
+    private int[] _roomStar = Array.Empty<int>();
     private int _dailyRoom = -1;
     private double _dailyAt, _cutAt;
     private int[] _roomAwake = Array.Empty<int>(), _roomAll = Array.Empty<int>();
@@ -88,7 +93,9 @@ public sealed partial class Director
         int n = L.Rooms.Count;
         if (mind == null || life == null || n == 0) { if (FocusCell < 0) FocusCell = L.Index(L.W / 2, L.H / 2); return; }
         if (_roomAll.Length != n) RoomsInit(n);
-        Array.Clear(_roomAwake); Array.Clear(_roomAll);
+        if (_roomStar.Length != n) _roomStar = new int[n];
+        Array.Clear(_roomAwake); Array.Clear(_roomAll); Array.Clear(_roomStar);
+        int starAt = -1;   // 비출 별 단 이의 칸 (방마다 하나 — 고른 방의 것)
         bool anyAwake = false;
         foreach (var a in mind.Agents)
         {
@@ -99,22 +106,36 @@ public sealed partial class Director
             if (r < 0 || r >= n) continue;
             _roomAll[r]++;
             if (b.Asleep == 0) { _roomAwake[r]++; anyAwake = true; }
+            if (Starred.Length > 0 && Array.IndexOf(Starred, a.Id) >= 0) _roomStar[r]++;
         }
         int[] count = anyAwake ? _roomAwake : _roomAll;
-        bool keep = _dailyRoom >= 0 && _dailyRoom < n && count[_dailyRoom] > 0 && ScreenSeconds - _dailyAt < DailyHoldSec;
+        bool Open(int r) => count[r] > 0 || _roomStar[r] > 0;   // 별 단 이의 방은 자도 비춘다
+        double Shown(int r) => (_roomShown[r] <= double.MinValue / 2 ? -1e12 : _roomShown[r]) - (_roomStar[r] > 0 ? StarFirstSec : 0);
+        bool keep = _dailyRoom >= 0 && _dailyRoom < n && Open(_dailyRoom) && ScreenSeconds - _dailyAt < (_roomStar[_dailyRoom] > 0 ? StarHoldSec : DailyHoldSec);
         if (!keep)
         {
             int pick = -1;
             for (int r = 0; r < n; r++)
             {
-                if (count[r] == 0) continue;
-                if (pick < 0 || _roomShown[r] < _roomShown[pick] || _roomShown[r] == _roomShown[pick] && count[r] > count[pick]) pick = r;
+                if (!Open(r)) continue;
+                if (pick < 0 || Shown(r) < Shown(pick) || Shown(r) == Shown(pick) && count[r] > count[pick]) pick = r;
             }
             if (pick < 0) { if (FocusCell < 0) FocusCell = L.Index(L.W / 2, L.H / 2); _dailyRoom = -1; return; }
             if (pick != _dailyRoom) { DailyCuts++; _dailyRoom = pick; }
             _dailyAt = ScreenSeconds;
         }
         _roomShown[_dailyRoom] = ScreenSeconds;
+        if (_roomStar[_dailyRoom] > 0)
+            foreach (int id in Starred)
+                if (id >= 0 && id < mind.Agents.Count && mind.Agents[id].C.Cell >= 0 && L.Room[mind.Agents[id].C.Cell] == _dailyRoom) { starAt = mind.Agents[id].C.Cell; break; }
+        if (starAt >= 0)
+        {
+            // 별 단 이의 방: 그 이에게 (방 넓이만큼 확대)
+            FocusCell = starAt;
+            var (qx0, qy0, qx1, qy1) = _roomBox[_dailyRoom];
+            Zoom = Math.Clamp(Math.Max(qx1 - qx0 + 1, (qy1 - qy0 + 1) * 2) + 6, 14, 40);
+            return;
+        }
         // 그 방 사람들 가운데쯤에 선 사람
         double sx = 0, sy = 0; int k = 0;
         foreach (var a in mind.Agents)

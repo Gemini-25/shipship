@@ -10,7 +10,7 @@ namespace ShipEngine;
 public sealed partial class Director
 {
     /// <summary>연출 기록 판 (세계 판과 따로 — 연출의 상태가 바뀌면 올린다): 2 — 장의 분위기 · 잃은 이 · 사람 일 장부 (V3 · 판 1도 읽는다 — 없는 것은 빈 채로).</summary>
-    public const int RecordVersion = 2;
+    public const int RecordVersion = 3;   // 3: 사람 일 장부의 지나온 길 (V6 — 판 2도 읽는다)
 
     /// <summary>연출 기록을 쓴다 (작업 스레드 · 틱 사이 — 미리 보기의 다른 코어 몫을 기다려 받은 뒤).</summary>
     public void SaveRecord(StateWriter w)
@@ -186,7 +186,7 @@ public sealed partial class Director
         _dayMoods.Clear(); for (int i = 0, n = r.I32(); i < n; i++) _dayMoods.Add(r.Str() ?? "");
         _episodePeak = r.I32(); _omenRun = r.I32(); _episodePeakAt = r.I64();
         _dayCast.Clear(); for (int i = 0, n = r.I32(); i < n; i++) _dayCast[r.I32()] = r.F32();
-        if (ver >= 2) { _dayMood = r.I32(); People.Load(r); } else { _dayMood = 0; People.Clear(); }
+        if (ver >= 2) { _dayMood = r.I32(); People.Load(r, ver >= 3); } else { _dayMood = 0; People.Clear(); }
 
         // 미리 보기
         Foresights = r.I32(); Predicted = r.I32(); ForeCuts = r.I32(); Resyncs = r.I32(); AheadSteps = r.I64();
