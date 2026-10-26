@@ -58,7 +58,6 @@ public sealed partial class Mind
     /// </summary>
     private int RefugeSpot(Agent a, int c0, Func<int, bool> ok)
     {
-        if (Environment.GetEnvironmentVariable("RS_DEBUG") != null) Console.WriteLine($"RS a{a.Id} c0=({L.X(c0)-1},{L.Y(c0)-1}) k{StandKindAt(c0)} goal {a.C.Goal}");
         if (c0 < 0 || StandKindAt(c0) == 0) return c0;
         int room = L.Room[c0];
         if (room < 0) return c0;
@@ -104,8 +103,8 @@ public sealed partial class Mind
 
     /// <summary>
     /// 줄 서는 자리 (5단 C5): 설비와 같은 방의 가구 없는 바닥 — 차례 ① 거리 1 · 표 0~1 ② 거리 2 · 표 0 ③ 거리 1 · 표 2 (문 칸은 고르지 않는다) ·
-    /// 같은 차례 안에서 300 × 표 + 100 × (그 방에 있을 때 보이는 남이 서 있다) + 내 칸까지 맨해튼 거리가 가장 낮은 칸 · 없으면 -1 (예전대로 설비 곁 1칸까지).
-    /// 아는 것: 도면 · 같은 방일 때 눈에 보이는 남의 칸.
+    /// 같은 차례 안에서 300 × 표 + 100 × (그 방에 있을 때 보이는 남이 서 있다 · 같은 설비를 기다리러 남이 가는 칸) + 내 칸까지 맨해튼 거리가 가장 낮은 칸 · 없으면 -1 (예전대로 설비 곁 1칸까지).
+    /// 아는 것: 도면 · 같은 방일 때 눈에 보이는 남의 칸 · 남의 계획 첫 걸음 (StandSpot과 같은 감각 읽기).
     /// </summary>
     private int QueueSpot(Agent a, int fu)
     {
@@ -130,8 +129,12 @@ public sealed partial class Mind
                     bool fits = tier switch { 0 => d == 1 && k <= 1, 1 => d == 2 && k == 0, _ => d == 1 && k == 2 };
                     if (!fits) continue;
                     int score = 300 * k + Manhattan(here, j);
-                    if (inRoom && Visible(a, j, room, 12))
-                        foreach (var o in Agents) if (o != a && o.C.Cell == j) { score += 100; break; }
+                    foreach (var o in Agents)
+                    {
+                        if (o == a) continue;
+                        if (inRoom && o.C.Cell == j && Visible(a, j, room, 12)) { score += 100; break; }
+                        if (o.C.GoalTarget == fu && o.C.StepIndex <= 1 && o.Plan.Count > 1 && o.Plan[0].Kind == StepKind.GoTo && o.Plan[0].Cell == j) { score += 100; break; }   // 남이 가는 줄 자리 (같은 설비 — StandSpot의 '남의 계획'과 같은 읽기)
+                    }
                     if (score < bs) { bs = score; best = j; }
                 }
             if (best >= 0) return best;

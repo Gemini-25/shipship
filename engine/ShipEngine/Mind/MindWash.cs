@@ -176,9 +176,9 @@ public sealed partial class Mind
         bool work = InWindow(hour, c.ShiftHour, 8);
         bool keep = KeepsShowerRule(a);   // (다) 샤워 배급을 지키는 이는 이틀에 한 번
         bool fresh = c.ShoweredAt > 0 && _nowTick - c.ShoweredAt < (keep ? ShowerRuleGap : Time.Hours(8));
-        if (_showers.Length == 0)   // 샤워 칸이 없는 배: 몹시 더러워지면 빈 시간에 그 자리에서 물수건으로
+        if (_showers.Length == 0)   // 샤워 칸이 없는 배: 몹시 더러워지면 빈 시간에 · 지렸으면 일하는 때에도 그 자리에서 물수건으로 (지린 이는 늘 씻는다 — 5단 C6)
         {
-            if (dirt > 0.6f && !work && c.Up != 0) { _life.Wipe(c.Body); Wipes++; }
+            if ((dirt > 0.6f && !work || b.Wet != 0) && c.Up != 0) { _life.Wipe(c.Body); Wipes++; }
         }
         else if ((dirt > 0.35f || b.Wet != 0) && (!work || dirt > 0.85f || b.Wet != 0) && (!fresh || b.Wet != 0))   // 지린 이는 늘 씻는다 (배급 중에도 · 방금 씻었어도)
         {

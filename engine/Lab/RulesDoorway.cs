@@ -126,6 +126,12 @@ public static partial class Program
             Check("문 칸 (C3) 파편 대피: 해치 대각선 독에서 충전하는 로봇이 있어도 12분 뒤 열어 둔 해치가 닫힌다 · 로봇은 독에 그대로 · 사람 둘은 대피실",
                 f.DoorOpen[hatch] < 0.01f && m[r].C.Cell == WAt(12, 1) && gathered,
                 $"해치 열림 {f.DoorOpen[hatch]:0.00} · 로봇 칸 ({wlay.X(m[r].C.Cell)},{wlay.Y(m[r].C.Cell)}) · 모임 {gathered}");
+            // 검토 고침: 곁에서 문을 여는 걸음 (궁리가 세운 '문 연다')은 쓰는 중 — 주컴퓨터가 같은 틱마다 닫지 않아 열린다 (예전: 걷는 걸음만 보아 여닫기가 엇갈려 1분 반 뒤 '문이 열리지 않는다') — 이 판에서는 고치기 전에도 열린다 (폭풍이 지나 닫기 고리가 멈춘 뒤) · 지키는 시험
+            m[r].Plan.Clear(); m[r].Plan.Add(new PlanStep { Kind = StepKind.Door, Cell = WAt(11, 2), Arg = 1 }); m[r].C.StepIndex = 0; m[r].C.StepStart = s.Tick;
+            float most = 0;
+            for (int k = 0; k < 60; k++) { net.Robot(m[r].C.Mech).Battery = Math.Min(net.Robot(m[r].C.Mech).Battery, 0.3f); s.Step(); most = Math.Max(most, f.DoorOpen[hatch]); }
+            Check("문 칸 (C3 검토) 파편 대피: 해치 곁에서 문을 여는 걸음은 쓰는 중 — 1분 안에 해치가 다 열린다",
+                most >= 0.9f, $"1분 동안 가장 열림 {most:0.00} · 로봇 실패 '{m[r].LastFail}'");
         }
 
         // (마) C3 봉쇄: 불난 방의 문 칸에 몸이 누워 있으면 그 문은 쓰는 중 — 몸이 있는 동안 주컴퓨터의 닫기 요청이 하나를 넘지 않는다 (예전: 10틱마다 되풀이)
@@ -202,6 +208,32 @@ public static partial class Program
             Check("문 칸 (C5) 줄 서는 자리: 문 대각선의 변기 — 줄 선 동안 기다리는 이의 칸이 문 칸 · 문 곁이 아니다 · 그동안 문 닫기를 요청하면 1분 안에 닫힌다 · 앞사람이 나온 뒤 쓰고 지림 0",
                 queued >= 65 && nearDoor == 0 && shut >= 0 && shut <= 0.01f && m.Toilets == 2 && life.Soilings == 0,
                 $"줄 {queued}틱 · 문 곁 {nearDoor}틱 (가장 나쁜 표 {worst}) · 1분 뒤 문 열림 {shut:0.00} · 비움 {m.Toilets} · 지림 {life.Soilings}");
+        }
+
+        // (아) C5 검토: 밖에서 오는 둘이 같은 변기를 기다리면 줄 자리가 겹치지 않는다 (남이 가는 줄 자리는 멀게 친다 — 이 판에서는 고치기 전에도 걸으며 비켜 겹치지 않았다 · 지키는 시험)
+        {
+            var wl = Worlds.Ascii(WashShip, new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery" });
+            int WAt(int x, int y) => Worlds.At(wl, x, y);
+            var s = Worlds.Full(wl, 5);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            int pa = m.AddPerson(s, WAt(11, 2)), pb = m.AddPerson(s, WAt(2, 2)), pc = m.AddPerson(s, WAt(2, 1));
+            s.Run(2);
+            var toilets = wl.Furniture.Where(x => x.Type == "Toilet").OrderBy(x => x.Cells[0] % wl.W).ToList();
+            net.Broken[net.Devices.First(d => d.Furniture == toilets[1].Id).Id * 4 + (int)Part.Mechanical] = 1;
+            int seat = toilets[0].Cells[0];
+            void Calm(int p) { int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+            life[m[pa].C.Body].Bowel = Life.BowelMax * 0.75;
+            for (long t = 0; t < Time.Minutes(10) && m[pa].C.Cell != seat; t++) { Calm(pa); Calm(pb); Calm(pc); s.Step(); }
+            life[m[pb].C.Body].Bladder = Life.BladderMax * 0.8; life[m[pc].C.Body].Bladder = Life.BladderMax * 0.8;
+            bool Queuing(int p) { var a = m[p]; return a.C.Goal == GoalKind.Toilet && a.C.StepIndex == 1 && a.C.StepIndex < a.Plan.Count && a.Plan[1].Kind == StepKind.Use && (UseKind)a.Plan[1].Arg == UseKind.Queue; }
+            int both = 0, shared = 0;
+            for (long t = 0; t < Time.Minutes(30) && m.Toilets < 3; t++)
+            {
+                Calm(pa); Calm(pb); Calm(pc); s.Step();
+                if (Queuing(pb) && Queuing(pc)) { both++; if (m[pb].C.Cell == m[pc].C.Cell) shared++; }
+            }
+            Check("문 칸 (C5 검토) 줄 자리: 밖에서 오는 둘이 같은 변기를 기다리면 줄 자리가 겹치지 않는다 · 셋 다 쓰고 지림 0",
+                both > 0 && shared == 0 && m.Toilets == 3 && life.Soilings == 0, $"둘이 함께 줄 {both}틱 · 같은 칸 {shared}틱 · 비움 {m.Toilets} · 지림 {life.Soilings}");
         }
     }
 }

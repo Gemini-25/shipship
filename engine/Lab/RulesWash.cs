@@ -153,5 +153,21 @@ public static partial class Program
             int hi = Washes(0.95f), lo = Washes(0.05f);
             Check("손 씻기: 성실한 이는 변기 뒤에 거의 늘 손을 씻고 · 덜 성실한 이는 가끔 (네 번 볼일)", hi >= 3 && lo < hi, $"성실 0.95 → {hi}번 · 0.05 → {lo}번");
         }
+
+        // ── (C6) 샤워 칸 없는 배에서 지린 이: 일하는 때에도 그 자리에서 물수건으로 닦는다 (지린 이는 늘 씻는다) — 예전: 빈 시간 · 몹시 더러울 때만이라 젖은 채 냄새가 끝없이 남았다 ──
+        {
+            var cl = Worlds.Ascii(CultureShip, new Dictionary<char, string> { ['m'] = "MealDispenser", ['a'] = "Seat", ['e'] = "Bed" });
+            var s = Worlds.Full(cl, 5);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int v = m.AddPerson(s, Worlds.At(cl, 12, 2));
+            s.Run(2);
+            void Work() { ref var c = ref m[v].C; c.ShiftHour = (int)Time.HourOfDay(s.Tick); c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Bored = 0; }   // 지금이 일하는 때
+            ref var b = ref life[m[v].C.Body];
+            b.Wet = 1; b.Dirt = 0.3f;
+            long w0 = m.Wipes; long took = -1;
+            for (long t = 0; t < Time.Minutes(30) && took < 0; t++) { Work(); s.Step(); if (life[m[v].C.Body].Wet == 0) took = t; }
+            Check("(C6) 샤워 칸 없는 배: 지린 이는 일하는 때에도 30분 안에 그 자리에서 물수건으로 닦는다 (젖은 옷 · 냄새가 남지 않는다)",
+                took >= 0 && m.Wipes > w0, $"물수건 {m.Wipes - w0} · 마른 때 {(took >= 0 ? $"{took}틱" : "없음")} · 더러움 {life[m[v].C.Body].Dirt:0.00}");
+        }
     }
 }

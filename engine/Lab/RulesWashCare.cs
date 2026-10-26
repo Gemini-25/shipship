@@ -292,10 +292,11 @@ public static partial class Program
         // ── 줄 안내: 변기 하나인 화장실에 넷이 몰리면 — 다른 화장실에 빈 변기가 있으면 뒤에 온 이를 그리로 보내고 (그 사람은 옮겨 간다) ·
         //    없으면 온 차례를 알린다 (차례를 들은 이는 더 오래 기다린다 — 아무도 돌아서지 않고 지리지 않는다) ──
         {
-            (long calls, long orders, long moved, int farUsed, long gaveUp, long soiled, string said) Run(bool farToilet)
+            (long calls, long orders, long moved, int farUsed, long gaveUp, long soiled, string said) Run(bool farToilet, bool boxed = false)
             {
                 string art = WashCareShip.Replace("#e....r#T..T", "#e....r#T...");
                 if (!farToilet) art = art.Replace("#T.........#", "#..........#");
+                if (boxed) art = art.Replace("#e....r#T...", "#e....r#Tk..").Replace("#......D....", "#......Dkk..");   // 변기 곁 한 칸이 모두 세면대 — 줄 자리는 두 칸 떨어진 바닥 (5단 C5 검토)
                 var l = Worlds.Ascii(art, legend);
                 var s = Worlds.Full(l, 13);
                 var m = s.Get<Mind>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
@@ -308,11 +309,13 @@ public static partial class Program
                 if (Debug) Console.WriteLine($"    변기 {string.Join(",", t.Select(x => $"{x}@{l.X(l.Furniture[x].Cells[0])}:{life.Flushes[x]}"))} · 옮김 {m.WashMoved}");
                 return (sm.WashCalls, sm.WashOrders, m.WashMoved, farToilet ? life.Flushes[t[1]] : 0, m.QueueGaveUp, life.Soilings, Said(s));
             }
-            var a = Run(true); var b = Run(false);
+            var a = Run(true); var b = Run(false); var c = Run(true, true);
             if (Debug) Console.WriteLine($"    {a.said}\n    {b.said}");
             Check("줄 안내: 변기 하나인 화장실에 넷이 몰리면 다른 화장실의 빈 변기로 뒤에 온 이를 보낸다 (옮겨 가 거기서 본다) · 빈 곳이 없으면 차례를 알린다 (아무도 돌아서지 않고 지리지 않는다)",
                 a.calls >= 1 && a.moved >= 1 && a.farUsed >= 1 && a.said.Contains("비어 있는 곳으로") && b.orders >= 1 && b.calls == 0 && b.said.Contains("차례를 알립니다") && b.gaveUp == 0 && b.soiled == 0,
                 $"빈 곳 안내 {a.calls} · 옮긴 이 {a.moved} · 먼 변기 {a.farUsed} / 차례 안내 {b.orders} · 돌아섬 {b.gaveUp} · 지림 {b.soiled}");
+            Check("줄 안내 (C5 검토): 변기 곁 한 칸이 모두 세면대라 두 칸 떨어진 바닥에 줄을 서도 주컴퓨터는 줄로 보고 빈 변기로 보낸다",
+                c.calls >= 1 && c.moved >= 1 && c.farUsed >= 1 && c.soiled == 0, $"빈 곳 안내 {c.calls} · 옮긴 이 {c.moved} · 먼 변기 {c.farUsed} · 지림 {c.soiled}");
         }
     }
 }

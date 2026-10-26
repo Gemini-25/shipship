@@ -829,7 +829,8 @@ public sealed partial class Mind : IEngine
     // ───────────────────────── 칸 도우미 ─────────────────────────
 
     /// <summary>걷는 중인가 (지금 단계가 칸으로 가기).</summary>
-    public bool Walking(Agent a) => a.C.StepIndex < a.Plan.Count && a.Plan[a.C.StepIndex].Kind == StepKind.GoTo;
+    /// <summary>걷거나 문을 다루는 걸음인가 (주컴퓨터가 '그 문을 쓰는 중'으로 읽는다 — 곁에서 문을 여는 이도 쓰는 중 · 5단 C3 검토).</summary>
+    public bool Walking(Agent a) => a.C.StepIndex < a.Plan.Count && a.Plan[a.C.StepIndex].Kind is StepKind.GoTo or StepKind.Door;
     public int Dist(int a, int b) => Math.Max(Math.Abs(L.X(a) - L.X(b)), Math.Abs(L.Y(a) - L.Y(b)));
     private int Manhattan(int a, int b) => Math.Abs(L.X(a) - L.X(b)) + Math.Abs(L.Y(a) - L.Y(b));
 

@@ -918,7 +918,6 @@ public sealed partial class Mind
         }
     }
 
-    /// <summary>내가 연 문을 지나면 다시 닫는다 (배의 규칙). 공기 때문에 도망치는 중이면 지나자마자 — 뒤에 오는 사람이 있어도 (착한 사람은 기다린다).</summary>
     /// <summary>지금 걷는 중이거나 문을 다루는 걸음인가 (서서 하는 일이 아니다 — 연 문은 걸음이 챙긴다).</summary>
     private bool OnTheMove(Agent a)
     {
@@ -928,6 +927,7 @@ public sealed partial class Mind
         return k == StepKind.Door || k == StepKind.GoTo && a.PathIdx < a.Path.Count;
     }
 
+    /// <summary>내가 연 문을 지나면 다시 닫는다 (배의 규칙). 공기 때문에 도망치는 중이면 지나자마자 — 뒤에 오는 사람이 있어도 (착한 사람은 기다린다).</summary>
     private void CloseBehind(Sim sim, Agent a, int minDist = 2)
     {
         ref var c = ref a.C;

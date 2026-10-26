@@ -147,7 +147,7 @@ public sealed partial class ShipMind
             foreach (int fu in fix) if (L.Room[L.Furniture[fu].Cells[0]] == r) here++;
             if (here == 0) continue;
             var waiting = new List<int>();
-            // 기다리는 이: 누가 쓰고 있는 변기 · 샤워 칸 바로 곁에 1분 넘게 가만히 서 있다 (지나가는 이 · 손 씻는 이는 아니다)
+            // 기다리는 이: 누가 쓰고 있는 변기 · 샤워 칸 곁 (같은 방 두 칸 안 — 사람은 문 곁을 비켜 두 칸 떨어져 줄을 서기도 한다 · 5단 C5)에 1분 넘게 가만히 서 있다 (지나가는 이 · 손 씻는 이는 아니다)
             foreach (var a in mind.Agents)
             {
                 if (!a.IsPerson || a.C.Up == 0 || !still[a.Id] || !InOrAtDoor(a.C.Cell, r) || OnFixture(a.C.Cell)) continue;
@@ -155,7 +155,7 @@ public sealed partial class ShipMind
                 foreach (int fu in fix)
                 {
                     int c = L.Furniture[fu].Cells[0];
-                    if (L.Room[c] != r || Math.Max(Math.Abs(L.X(c) - L.X(a.C.Cell)), Math.Abs(L.Y(c) - L.Y(a.C.Cell))) > 1) continue;
+                    if (L.Room[c] != r || Math.Max(Math.Abs(L.X(c) - L.X(a.C.Cell)), Math.Abs(L.Y(c) - L.Y(a.C.Cell))) > 2) continue;
                     foreach (var o in mind.Agents) if (o != a && o.IsPerson && o.C.Up != 0 && o.C.Cell == c) { beside = true; break; }   // 쓰는 이는 사람 (설비 곁을 도는 로봇이 아니다 — DF5)
                     if (beside) break;
                 }
