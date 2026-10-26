@@ -96,7 +96,16 @@ public sealed partial class Mind
             for (int q = 0; q < mems.Count; q++) if (mems[q].Owner == j && mems[q].Cause == m.Cause && mems[q].Topic == m.Topic) { best = k; bw = w; break; }
         }
         // 함께 떠올리는 화해는 좋았던 일이다 — 무리 사이를 다시 풀자는 이야기가 아니다 (DF2)
-        if (best >= 0) { var m = mems[best]; opts.Add(new(m.Topic == Topic.Peace ? Topic.Joy : m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, ci.Extra >= cj.Extra ? i : j)); }
+        if (best >= 0)
+        {
+            var m = mems[best];
+            // 갓 겪은 위기의 기억은 아직 지난 일이 아니다 — 방금 겪은 일로 함께 이야기한다 (DF7 검토: 함께 끈 불을 몇 분 만에 '그날 이후로…'라 했다) ·
+            //   둘 다 그 일을 기억한다 (함께 넘겼거나 이미 듣고 물었다 — 다시 묻지 않는다) · 제 몸으로 겪은 이가 꺼내고 · 그 일이 난 곳 (문을 닫은 곳이 아니라)
+            bool atI = CrisisMemory(ci, m, sim.Tick);
+            if (atI || CrisisMemory(cj, m, sim.Tick))
+                opts.Add(new(m.Topic, 2.2f * bw, -1, m.Cause, atI ? ci.CrisisCell : cj.CrisisCell, ci.CrisisSaw != cj.CrisisSaw ? (ci.CrisisSaw != 0 ? i : j) : ci.Extra >= cj.Extra ? i : j, 3));
+            else opts.Add(new(m.Topic == Topic.Peace ? Topic.Joy : m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, ci.Extra >= cj.Extra ? i : j));
+        }
         CrisisTopic(sim, i, j, opts);   // 방금 겪은 일 (DF7 — 위기 뒤의 웅성거림)
         // 식량 · 물이 열흘을 못 버틴다 · 배급 중이면 먹을 것 이야기가 잦다 (미네소타 굶주림 실험)
         double food = sim.Book.DaysLeft((int)Res.Food, sim.Tick), water = sim.Book.DaysLeft((int)Res.Water, sim.Tick);

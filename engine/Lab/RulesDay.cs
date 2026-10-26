@@ -44,10 +44,10 @@ public static partial class Program
         //   새벽 근무 · 밤에 깨어 쉬는 이가 다섯 — 보고서 §4-5의 '새벽 두 시 휴게실')
         long FireAt = Time.Minutes(90);
         int feltZero = 0, feltN = 0; double eveFelt = 0; int eveN = 0;
-        Task<(int fireTalks, int talks, int breachTalks, double felt, string first, string topics)>? fireEve = null;
+        Task<(int fireTalks, int talks, int breachTalks, double felt, string first, string topics, int recall, string recallFirst)>? fireEve = null;
         static double Felt(Mind fm, Life fl) { double s = 0; int n = 0; foreach (var a in fm.Agents) if (a.IsPerson && a.C.Up != 0 && fl[a.C.Body].Asleep == 0) { s += a.C.Fear + a.C.Sad + a.C.Anger + a.C.Stress - a.C.Joy; n++; } return n > 0 ? s / n : 0; }
         static string Topics(Society so, long from) => string.Join(" · ", so.Sayings.Where(y => y.Tick >= from).GroupBy(y => y.Topic).Select(g => $"{TalkTable.TopicName(g.Key)} {g.Count()}"));
-        static (int, int, int, double, string, string) FireEvening(Sim s)
+        static (int, int, int, double, string, string, int, string) FireEvening(Sim s)
         {
             var fm = s.Get<Mind>(); var fl = s.Get<Life>(); var fso = s.Get<Society>();
             var stove = s.Layout.Furniture.First(fu => fu.Type == "Stove");
@@ -65,7 +65,12 @@ public static partial class Program
                 foreach (var a in fm.Agents.Where(a => a.IsPerson)) Console.WriteLine($"    (불) {fm.NameOf(a.Id)} 위기 {(a.C.CrisisAt > 0 ? Time.Clock(a.C.CrisisAt) : "-")} {a.C.CrisisTopic} 겪음 {a.C.CrisisSaw} 나눔 {a.C.CrisisTold} · 기분 {a.C.MoodGood:0.00}/{a.C.MoodBad:0.00} · 목표 {a.C.Goal} · 잠 {fl[a.C.Body].Asleep}");
                 foreach (var y in fso.Sayings.Where(y => y.Tick >= t0)) Console.WriteLine($"    (불) {Time.Clock(y.Tick)} {fm.NameOf(y.Speaker)} → {fm.NameOf(y.Listener)} {y.Topic}/{y.End} '{s.Causes.Text(y.Line)}'");
             }
-            return (talks.Count, fso.Sayings.Count(y => y.Tick >= t0), fso.Sayings.Count(y => y.Tick >= t0 && y.Topic == Topic.Breach), n > 0 ? sum / n : 0, talks.Count > 0 ? $"{Time.Clock(talks[0].Tick)} {s.Causes.Text(talks[0].Line)}" : "", Topics(fso, t0));
+            // 지난 일을 떠올리는 줄 ('불/맞장구' · '불/칭찬' — "그날 이후로 불꽃만 봐도 움찔해.")이 불이 난 두 시간 안에 나왔나 (DF7 검토: 꺼지고 몇 분 만에 방금 일을 '그날'로 말했다)
+            var past = TalkTable.Load().Lines.Where(kv => kv.Key is "불/맞장구" or "불/칭찬").SelectMany(kv => kv.Value)
+                .Select(l => new System.Text.RegularExpressions.Regex("^" + string.Join(".*", System.Text.RegularExpressions.Regex.Split(l, @"\{[^}]*\}").Select(System.Text.RegularExpressions.Regex.Escape)) + "$")).ToList();
+            var recall = talks.Where(y => y.Tick < t0 + Time.Hours(2) && past.Any(rx => rx.IsMatch(s.Causes.Text(y.Line)))).ToList();
+            return (talks.Count, fso.Sayings.Count(y => y.Tick >= t0), fso.Sayings.Count(y => y.Tick >= t0 && y.Topic == Topic.Breach), n > 0 ? sum / n : 0, talks.Count > 0 ? $"{Time.Clock(talks[0].Tick)} {s.Causes.Text(talks[0].Line)}" : "", Topics(fso, t0),
+                recall.Count, recall.Count > 0 ? $"{Time.Clock(recall[0].Tick)} {s.Causes.Text(recall[0].Line)}" : "");
         }
         long ResumeAt = Time.Hours(22); Task<Chapter?>? resumed = null;
         for (int k = 0; k < Time.Hours(24); k++)
@@ -191,6 +196,8 @@ public static partial class Program
             Check("기름불이 난 판은 다르다: 같은 하루를 새벽 한 시 반에 갈라 한쪽에만 주방 기름불 — 그 네 시간 이야기의 절반 넘게가 불 이야기 (안 난 쪽은 0 · 연기에 닫은 문을 '구멍' 이야기로 하지 않는다) · 30분 뒤부터 깬 이의 마음 (겁 + 슬픔 + 화 + 긴장 − 기쁨)이 0.03 넘게 무겁다",
                 eve.fireTalks >= 2 && eve.fireTalks * 2 > eve.talks && eve.breachTalks == 0 && calmFire == 0 && eve.felt - calm >= 0.03,
                 $"불 이야기 {eve.fireTalks}/{eve.talks} (처음 '{eve.first}') · 구멍 이야기 {eve.breachTalks} · 안 난 쪽 {calmFire} / 마음 {eve.felt:0.000} vs {calm:0.000} / 주제 — 불: {eve.topics} · 안 남: {Topics(so, eveFrom)}");
+            Check("불이 난 두 시간은 '방금 일'이다: 기름불 판 첫 두 시간의 불 이야기에 지난 일을 떠올리는 줄 ('그날 이후로 불꽃만 봐도 움찔해.' · '그날 정말 고마웠어.')이 없다 — 함께 끈 불의 기억도 여섯 시간은 방금 겪은 일로 이야기한다",
+                eve.fireTalks >= 2 && eve.recall == 0, $"지난 일 줄 {eve.recall} (처음 '{eve.recallFirst}') · 불 이야기 {eve.fireTalks}");
             int laughs = so.Sayings.Count(y => y.End == TalkEnd.Laugh && y.Topic is Topic.Small or Topic.Joy && y.Speaker != y.Listener);
             int good = so.Memories.Count(x => x.Topic == Topic.Joy && x.About >= 0 && x.About != x.Owner);
             Check("함께 웃은 둘은 서로를 좋은 일로 기억한다: 평시 하루에 실컷 웃은 대화가 있으면 좋은 일 기억이 남는다 (예전엔 탓 · 다툼 기억뿐)",

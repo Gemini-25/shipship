@@ -101,6 +101,10 @@ public sealed partial class Mind
     /// <summary>둘이 같은 위기를 아는가 (같은 갈래 · 두 시간 안에 알았다).</summary>
     private static bool SameCrisis(in AgentCore x, in AgentCore y) => x.CrisisAt > 0 && y.CrisisAt > 0 && x.CrisisTopic == y.CrisisTopic && Math.Abs(x.CrisisAt - y.CrisisAt) < Time.Hours(2);
 
+    /// <summary>그 기억이 제가 아는 갓 일어난 위기의 것인가 (여섯 시간 안에 생긴 같은 갈래의 기억 · 같은 원인이거나 그 위기를 안 지 두 시간 안).</summary>
+    private static bool CrisisMemory(in AgentCore c, in Memory m, long now) =>
+        now - m.Tick < Time.Hours(CrisisTalkH) && CrisisFresh(c, now) > 0 && m.Topic == c.CrisisTopic && (m.Cause != 0 && m.Cause == c.CrisisCause || Math.Abs(m.Tick - c.CrisisAt) < Time.Hours(2));
+
     /// <summary>
     /// 방금 겪은 일 이야기의 거리 (PickTopic): 둘 중 갓 일어난 위기를 아는 이가 있으면 — 모르는 이에게는 알리고 (1) · 말로만 들은 이는 겪은 이에게 묻고 (2) · 둘 다 겪었으면 함께 이야기한다 (3).
     /// 무게 = 6 × 갓 일어난 몫 ÷ (1 + 나눈 수) × (1 + 겁 + 가라앉은 기분).
