@@ -348,14 +348,16 @@ public sealed partial class Mind
             {
                 if (i >= a.Beliefs.Count) continue;
                 var b = a.Beliefs[i];
-                if (b.Src is BeliefSource.Saw or BeliefSource.Felt or BeliefSource.Smelled)
+                // 죽음은 처음 안 때만 소식이다 (본 · 들은 · 방송) — 이미 아는 시신은 다시 '발견'하지 않는다 · 슬픔은 행동 '알게 됐다'로 (DF2)
+                bool news = b.Kind != BeliefKind.Dead || b.Subject < 0 || KnowDeath(sim, a, b.Subject, b.Src, b.Cause);
+                if (news && b.Src is BeliefSource.Saw or BeliefSource.Felt or BeliefSource.Smelled)
                 {
                     sim.Facts.Emit(t, FactKind.Noticed, b.Cell, b.Conf, b.Cause, a.Id, (int)b.Kind);
                     if (b.Kind is BeliefKind.Fire or BeliefKind.Vacuum or BeliefKind.Breach) c.Fear = Math.Max(c.Fear, person ? 0.5f + 0.4f * (1 - c.Brave) : 0);
-                    if (b.Kind == BeliefKind.Dead && person) { c.Fear = Math.Max(c.Fear, 0.6f); c.Sad = Math.Min(1, c.Sad + 0.3f); }
+                    if (b.Kind == BeliefKind.Dead && person) c.Fear = Math.Max(c.Fear, 0.6f);
                 }
                 if (person && c.Up != 0) HeartOnFresh(sim, a, b);   // ⑧ 곁에서 본 죽음 · 그날이 되살아났다
-                if (b.Conf > bc) { bc = b.Conf; best = i; }
+                if (news && b.Conf > bc) { bc = b.Conf; best = i; }
             }
             if (best >= 0 && (person ? c.Up != 0 : true) && t - c.LastShout >= 10 && a.Beliefs[best].Src != BeliefSource.Told)
                 Shout(sim, a, a.Beliefs[best]);

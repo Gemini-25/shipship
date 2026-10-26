@@ -42,6 +42,7 @@ public sealed partial class Mind
                 var end = Reply(sim, o, sp, li);
                 Act(sim, new SocialAct { Kind = SocialActKind.Talk, Actor = sp, Target = li, Other = o.About, Room = RoomOf(o.Cell), Cell = o.Cell, Cause = o.Cause, Topic = o.T, End = end });
                 HearInTalk(sim, o.T, end, sp, li, o.Cause);   // (라) 거짓말이 말로 옮겨 갔다 — 들은 이가 받는다
+                if (o.T == Topic.Death && o.About >= 0 && o.About < Agents.Count) KnowDeath(sim, Agents[li], Agents[o.About].C.Body, BeliefSource.Told, o.Cause);   // 소문으로 안다 (DF2)
                 NickInTalk(sim, i, j);   // ⑨ 이야기하다 별명이 붙는다
             }
         }
@@ -90,7 +91,8 @@ public sealed partial class Mind
             if (w <= bw) continue;
             for (int q = 0; q < mems.Count; q++) if (mems[q].Owner == j && mems[q].Cause == m.Cause && mems[q].Topic == m.Topic) { best = k; bw = w; break; }
         }
-        if (best >= 0) { var m = mems[best]; opts.Add(new(m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, ci.Extra >= cj.Extra ? i : j)); }
+        // 함께 떠올리는 화해는 좋았던 일이다 — 무리 사이를 다시 풀자는 이야기가 아니다 (DF2)
+        if (best >= 0) { var m = mems[best]; opts.Add(new(m.Topic == Topic.Peace ? Topic.Joy : m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, ci.Extra >= cj.Extra ? i : j)); }
         // 식량 · 물이 열흘을 못 버틴다 · 배급 중이면 먹을 것 이야기가 잦다 (미네소타 굶주림 실험)
         double food = sim.Book.DaysLeft((int)Res.Food, sim.Tick), water = sim.Book.DaysLeft((int)Res.Water, sim.Tick);
         bool rationed = RationFood > 0 || RationWater > 0;
@@ -117,7 +119,9 @@ public sealed partial class Mind
             {
                 // 사과하나: 다정하고 · 덜 불안하고 · a를 아끼고 · 실제로 제 탓일수록 (그는 제가 한 일을 안다) · 지친 이는 덜 숙인다
                 bool guilty = o.Cause != 0 && soc.Culprit(sim, o.Cause, -1) == b;
-                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, soc.BondOf(b, a)) + soc.DebtOf(b, a)) * (guilty ? 1.2f : 0.5f) * (1 - 0.4f * cb.Weary);
+                // 같은 일로 거듭 다툰 이는 (제가 기억하는 다툼만큼) 숙인다 — 끝없이 맞서지 않는다 (DF2: 예전엔 사과가 늘 7분의 1 · 앙금만 쌓였다)
+                int fought = Math.Min(4, soc.MemoryCount(b, Topic.Fight, a));
+                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, soc.BondOf(b, a)) + soc.DebtOf(b, a)) * (guilty ? 1.2f : 0.5f) * (1 - 0.4f * cb.Weary) * (1 + 0.5f * fought);
                 return r < p ? TalkEnd.Apology : TalkEnd.Argue;
             }
             case Topic.Gossip:
@@ -146,6 +150,8 @@ public sealed partial class Mind
                 return o.About == b && o.T is Topic.Fire or Topic.Breach or Topic.Rescue ? TalkEnd.Praise : TalkEnd.Agree;
             case Topic.Shortage:
                 return TalkEnd.Worry;
+            case Topic.Joy:
+                return r < 0.3f + 0.6f * cb.Extra ? TalkEnd.Laugh : TalkEnd.Agree;
             default:
             {
                 // 잡담 · 일: 성격이 맞으면 웃고 · 거친 둘은 부딪친다 (⑧ 고립의 피로 — 같은 얼굴 · 같은 말에 지친 둘은 더 부딪친다)

@@ -25,6 +25,7 @@ public sealed partial class Mind
     public long Shocks, Nightmares, Flashbacks, PanicAttacks, Depressions, Anxieties, Hardened, Fearful, Grew, SleepPills, Counsels;
     private long _heartCursor;
     private readonly HashSet<long> _deathSeen = new();   // 사람 × 몸 — 그 죽음을 곁에서 본 충격은 한 번
+    private readonly HashSet<long> _deathKnown = new();  // 사람 · 로봇 × 몸 — 그 죽음을 안다 (본 · 들은 · 방송 · 소문 — 믿음이 흐려져도 남는다 · DF2 · MIND 14단 '아는 소식' 당김)
     private readonly List<(int agent, int cause)> _flashQ = new();   // 이번 틱 새로 믿게 된 위험 중 외상의 그 일과 같은 갈래 (믿음을 얻은 곳에서 — 감각 · 말 · 방송)
 
     /// <summary>
@@ -116,6 +117,22 @@ public sealed partial class Mind
             if (kind != ShockKind.None) c.ShockKind = kind;
         }
         if (c.Trauma >= 0.3f) c.TraumaHigh = 1;
+    }
+
+    /// <summary>그 죽음을 아는가 (본 · 들은 · 방송 · 소문으로 — 제 앎).</summary>
+    public bool KnowsDeath(int agent, int body) => _deathKnown.Contains((long)agent << 32 | (uint)body);
+
+    /// <summary>
+    /// 죽음을 알게 됐다 (DF2 — 소식은 들은 이만): 처음이면 사람은 행동 '알게 됐다'를 남긴다 (사회가 정 · 원망 · 슬픔의 결과를 셈한다) · 이미 알면 아무것도 하지 않는다 (다시 '발견'하지 않는다).
+    /// 처음 안 것이면 참.
+    /// </summary>
+    private bool KnowDeath(Sim sim, Agent a, int body, BeliefSource src, int cause)
+    {
+        if (body < 0 || !_deathKnown.Add((long)a.Id << 32 | (uint)body)) return false;
+        int dead = AgentOfBody(body);
+        if (a.IsPerson && dead >= 0 && dead != a.Id)
+            Act(sim, new SocialAct { Kind = SocialActKind.LearnDeath, Actor = a.Id, Target = dead, Other = (int)src, Room = RoomOf(a.C.Cell), Cell = a.C.Cell, Cause = cause });
+        return true;
     }
 
     /// <summary>새로 본 것: 곁에서 본 죽음은 충격 (한 번 · 가까웠으면 더).</summary>
@@ -398,12 +415,13 @@ public sealed partial class Mind
     private void SaveHeart(StateWriter w)
     {
         w.I64(Shocks); w.I64(Nightmares); w.I64(Flashbacks); w.I64(PanicAttacks); w.I64(Depressions); w.I64(Anxieties); w.I64(Hardened); w.I64(Fearful); w.I64(Grew); w.I64(SleepPills); w.I64(Counsels);
-        w.I64(_heartCursor); w.Arr(_deathSeen.OrderBy(x => x).ToArray());
+        w.I64(_heartCursor); w.Arr(_deathSeen.OrderBy(x => x).ToArray()); w.Arr(_deathKnown.OrderBy(x => x).ToArray());
     }
 
     private void LoadHeart(StateReader r)
     {
         Shocks = r.I64(); Nightmares = r.I64(); Flashbacks = r.I64(); PanicAttacks = r.I64(); Depressions = r.I64(); Anxieties = r.I64(); Hardened = r.I64(); Fearful = r.I64(); Grew = r.I64(); SleepPills = r.I64(); Counsels = r.I64();
         _heartCursor = r.I64(); _deathSeen.Clear(); foreach (long v in r.Arr<long>()) _deathSeen.Add(v);
+        _deathKnown.Clear(); foreach (long v in r.Arr<long>()) _deathKnown.Add(v);
     }
 }

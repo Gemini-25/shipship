@@ -519,7 +519,7 @@ public sealed partial class Mind : IEngine
         F.RebuildNow();
         t = Lap("준비:장 다시", t);
         IndexBodies();
-        HearCall();     // 판단 이관 (가): 새 모임의 부름을 듣고 저마다 갈지 정한다
+        HearCall(sim);  // 판단 이관 (가): 새 모임의 부름을 듣고 저마다 갈지 정한다
         Drag(sim, dt);  // ③ 국소 현상 — 감압 돌풍에 끌려가는 사람 · 구멍에 빨려 붙은 몸과 물건
         t = Lap("준비:끌림", t);
         foreach (var a in Agents) UpdateUp(sim, a);

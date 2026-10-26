@@ -69,8 +69,8 @@ public sealed partial class Mind
 
     // ───────────────────────── 1분마다 ─────────────────────────
 
-    /// <summary>부름을 들은 이가 저마다 갈지 정한다 (새 모임을 처음 본 틱에 — 사회가 부름을 받아 연 다음 틱).</summary>
-    private void HearCall()
+    /// <summary>부름을 들은 이가 저마다 갈지 정한다 (새 모임을 처음 본 틱에 — 사회가 부름을 받아 연 다음 틱) · 추모의 부름을 들은 깬 이는 그 죽음을 안다 (DF2).</summary>
+    private void HearCall(Sim sim)
     {
         if (_soc == null) return;
         var m = _soc.Meeting;
@@ -81,6 +81,7 @@ public sealed partial class Mind
         foreach (int a in Living())
         {
             ref var c = ref Agents[a].C;
+            if (m.Kind == CouncilKind.Memorial && m.Subject >= 0 && m.Subject < Agents.Count && PersonAwake(a)) KnowDeath(sim, Agents[a], Agents[m.Subject].C.Body, BeliefSource.Told, m.Cause);
             float interest = m.Kind switch
             {
                 CouncilKind.Trial => _soc.GrudgeOf(a, m.Subject) + Math.Max(0, _soc.BondOf(a, m.Subject)) + 0.3f * Math.Max(0, _soc.BondOf(a, m.Caller)),
@@ -250,9 +251,12 @@ public sealed partial class Mind
             if (sim.Tick - at < Time.Hours(Society.MournAfterHours) && !_callNow) continue;
             var people = Living().Where(PersonAwake).ToList();
             if (people.Count < 2) continue;
+            // 부르는 이는 그 죽음을 아는 이 가운데서 (DF2 — 모르는 이가 추모를 부르지 않는다)
+            var knowing = people.Where(j => KnowsDeath(j, Agents[dead].C.Body)).ToList();
+            if (knowing.Count == 0) continue;
             int caller = -1; float bb = 0.2f;
-            foreach (int j in people) if (soc.BondOf(j, dead) > bb) { bb = soc.BondOf(j, dead); caller = j; }
-            if (caller < 0) caller = soc.Rep >= 0 && people.Contains(soc.Rep) ? soc.Rep : people.OrderByDescending(j => Agents[j].C.Extra).ThenBy(j => j).First();
+            foreach (int j in knowing) if (soc.BondOf(j, dead) > bb) { bb = soc.BondOf(j, dead); caller = j; }
+            if (caller < 0) caller = soc.Rep >= 0 && knowing.Contains(soc.Rep) ? soc.Rep : knowing.OrderByDescending(j => Agents[j].C.Extra).ThenBy(j => j).First();
             string? why = Call(sim, CouncilKind.Memorial, caller, dead, -1, $"{Ko.I(NameOf(caller))} 사람들을 식당으로 불렀다 — {Ko.Eul(NameOf(dead))} 기리자", cause);
             if (why == null) return true;
             if (!why.Contains("자고") && !soc.MournDeferred(dead))

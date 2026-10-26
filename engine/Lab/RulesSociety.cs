@@ -44,14 +44,16 @@ public static partial class Program
                 $"구해진 이→구한 이 {so.BondOf(v, r):0.00} · 구한 이→구해진 이 {so.BondOf(r, v):0.00} · 본 사람 {so.BondOf(w, r):0.00}");
         }
 
-        // ── 죽음: 친구는 깊이 슬퍼하고(일손을 놓는다) · 모르는 사이는 조금 ──
+        // ── 죽음: 친구는 깊이 슬퍼하고(일손을 놓는다) · 모르는 사이는 조금 — 그 죽음을 본 이가 (소식은 본 · 들은 이만 — DF2: 같은 방에서 숨지고 둘이 본다) ──
         {
             var s = Worlds.Full(lay, 5);
             var m = s.Get<Mind>(); var so = s.Get<Society>(); var life = s.Get<Life>();
-            int dead = m.AddPerson(s, At(3, 2)), friend = m.AddPerson(s, At(15, 2)), other = m.AddPerson(s, At(18, 2));
+            int dead = m.AddPerson(s, At(16, 2)), friend = m.AddPerson(s, At(15, 2)), other = m.AddPerson(s, At(18, 2));
             s.Run(2);
             so.Bond[friend * so.N + dead] = 0.8f;
-            s.Facts.Emit(s.Tick, FactKind.Died, At(3, 2), 0, s.Causes.Add(CauseKind.Setup, "숨이 멎었다", s.Tick), m[dead].C.Body);
+            life[m[dead].C.Body].Blunt = 2f;
+            int body = m[dead].C.Body;
+            for (int k = 0; k < Time.Minutes(1) && !(m.KnowsDeath(friend, body) && m.KnowsDeath(other, body)); k++) s.Step();
             s.Run(2);
             var g = s.Facts.Since(0).Where(f => f.Kind == FactKind.Grieved).ToList();
             Check("죽음: 친구는 깊이 슬퍼한다 ('잃었다'가 남는다) · 모르는 사이는 조금", so.GriefOf(friend) >= 0.8f && so.GriefOf(other) is > 0.1f and < 0.3f && g.Count == 1 && g[0].Actor == friend,

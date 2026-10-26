@@ -110,20 +110,8 @@ public sealed partial class Society
             switch (f.Kind)
             {
                 case FactKind.Died:
-                {
-                    int dead = mind.AgentOfBody(f.Actor);
-                    if (dead < 0) break;
-                    _mourn.Add((dead, f.Tick, f.Cause));
-                    _feastFrom = -1;   // 누가 숨졌다 — 축하는 없다
-                    int bed = C(dead).Bed;
-                    if (bed >= 0)
-                    {
-                        mind.TabooBed(bed, f.Tick + Time.Days(BedTabooDays));
-                        BedTaboos++;
-                        Culture(sim, CultureEvent.BedTaboo, $"숨진 {mind.NameOf(dead)}의 침대엔 아무도 눕지 않는다 — 이레 동안", bed, f.Cause, dead, mind.RoomOf(bed));
-                    }
+                    if (mind.AgentOfBody(f.Actor) >= 0) _feastFrom = -1;   // 누가 숨졌다 — 축하는 없다 (금기 · 추모는 누가 그 죽음을 안 뒤에 — DeathKnown)
                     break;
-                }
                 case FactKind.Ignition or FactKind.FireSpread or FactKind.WallBreach or FactKind.RegionVented or FactKind.Arrest or FactKind.Collapsed:
                 {
                     if (_feastFrom < 0) { _feastFrom = f.Tick; _feastCause = f.Cause; _feastWeight = 0; _feastNews = 0; _feastHero = -1; }
@@ -297,6 +285,19 @@ public sealed partial class Society
         }
     }
 
+    /// <summary>누가 그 죽음을 처음 알았다 (DF2): 숨진 이의 침대엔 아무도 눕지 않는다 (이레) · 추모를 기다린다 (부르는 이는 그 죽음을 아는 이 — MindGatherings).</summary>
+    private void DeathKnown(Sim sim, int dead, int cause)
+    {
+        var mind = _mind!;
+        CultureArrays();
+        _mourn.Add((dead, sim.Tick, cause));
+        int bed = C(dead).Bed;
+        if (bed < 0) return;
+        mind.TabooBed(bed, sim.Tick + Time.Days(BedTabooDays));
+        BedTaboos++;
+        Culture(sim, CultureEvent.BedTaboo, $"숨진 {mind.NameOf(dead)}의 침대엔 아무도 눕지 않는다 — 이레 동안", bed, cause, dead, mind.RoomOf(bed));
+    }
+
     // ───────────────────────── 추모 · 축하 (모임) ─────────────────────────
 
     // ───────────────────────── 판단 엔진이 읽는 것 (안건이 될 사실) ─────────────────────────
@@ -343,7 +344,7 @@ public sealed partial class Society
                 ref var ca = ref C(a);
                 ca.Joy = Math.Min(1, ca.Joy + 0.3f); ca.Weary = Math.Max(0, ca.Weary - 0.05f); ca.Stress = Math.Max(0, ca.Stress - 0.1f);
                 mind.Eased(a, 0.03f, 0, 0);
-                Remember(sim, a, Topic.Peace, m.Arg, c, 0.4f, m.Cell);
+                Remember(sim, a, Topic.Joy, m.Arg, c, 0.4f, m.Cell);   // 좋은 일 (DF2 — 예전엔 '화해'로 적어 무리 사이 일로 읽혔다)
             }
             foreach (int a in _attend) foreach (int b in _attend) if (a != b) Warm(sim, a, b, 0.02f, "함께 웃었다");
         }
@@ -410,6 +411,7 @@ public sealed partial class Society
         w.I64(_askQuiet); w.I64(_askStove); w.I64(_cultureCursor);
         w.Byte((byte)(ShowerRule ? 1 : 0)); w.I64(_askShower);
         w.I32(_showerLog.Count); foreach (var (t, a, u, c) in _showerLog) { w.I64(t); w.I32(a); w.I32(u); w.I32(c); }
+        w.Arr(_deathNews.OrderBy(x => x).ToArray());   // DF2 — 누가 처음 안 죽음
     }
 
     private void LoadCulture(StateReader r)
@@ -425,5 +427,6 @@ public sealed partial class Society
         _askQuiet = r.I64(); _askStove = r.I64(); _cultureCursor = r.I64();
         ShowerRule = r.Byte() != 0; _askShower = r.I64();
         _showerLog.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int a = r.I32(); int u = r.I32(); int c = r.I32(); _showerLog.Add((t, a, u, c)); }
+        _deathNews.Clear(); foreach (int x in r.Arr<int>()) _deathNews.Add(x);
     }
 }

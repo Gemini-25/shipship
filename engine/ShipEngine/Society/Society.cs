@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>⑨ 이야깃거리 — 사람이 기억하는 일 · 대화의 주제.</summary>
-public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart, Peace, Troubled }
+public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart, Peace, Troubled, Joy }   // Joy: 좋은 일 (축하 · 함께 웃은 일 — 깊이 고침 DF2: 예전엔 축하를 '화해'로 적었다)
 
 /// <summary>⑨ 대화의 끝 — 어떻게 흘러갔나.</summary>
 public enum TalkEnd : byte { Agree, Laugh, Awkward, Friction, Praise, Comfort, Apology, Argue, Spread, Defend, Worry, Accept, Reject }
@@ -59,6 +59,7 @@ public sealed partial class Society : IEngine
     public int Offset => 0;
 
     public const int TogetherEvery = 25;          // 1분마다 함께 있음을 센다
+    public const double GrudgeHalfDays = 14;      // 앙금이 흐려지는 빠르기 (반감 — 새 일 · 다툼이 없을 때)
     public const float FriendAt = 0.5f, CloseAt = 0.8f, GrudgeAt = 0.3f;
     public const int MemoriesEach = 12;
     public const double MemoryDays = 5;           // 기억이 흐려지는 빠르기 (e로 줄어드는 날)
@@ -199,6 +200,9 @@ public sealed partial class Society : IEngine
         var ag = _mind!.Agents;
         double decay = Math.Exp(-dt * 0.6931 / 86400);  // 슬픔은 하루 반감
         for (int i = 0; i < N; i++) Grief[i] = (float)(Grief[i] * decay);
+        // 앙금은 새 일이 없으면 천천히 흐려진다 (두 주 반감 — DF2: 예전엔 줄어드는 길이 사과 · 판결뿐이라 따질 때마다 쌓이기만 했다)
+        float fade = (float)Math.Exp(-dt * 0.6931 / (GrudgeHalfDays * 86400));
+        for (int k = 0; k < N * N; k++) Grudge[k] *= fade;
         for (int i = 0; i < N; i++)
         {
             var a = ag[i];
@@ -487,28 +491,8 @@ public sealed partial class Society : IEngine
                 {
                     int dead = mind.AgentOfBody(f.Actor);
                     if (dead < 0) break;
-                    int x = Culprit(sim, f.Cause, dead);
-                    var witnesses = Near(f.Cell, dead);
-                    // 슬픔: 배에 함께 탄 사람 0.15 + 정 · 모두가 기억한다 · 탓할 사람이 있으면 (본 사람과 가까웠던 이가) 그를 원망한다
-                    for (int i = 0; i < N; i++)
-                    {
-                        var p = mind.Agents[i];
-                        if (i == dead || !p.IsPerson || _life![p.C.Body].Alive == 0) continue;
-                        float bond = Math.Max(0, BondOf(i, dead));
-                        float g = Math.Clamp(0.15f + bond, 0, 1);
-                        if (g > Grief[i]) Grief[i] = g;
-                        p.C.Sad = Math.Max(p.C.Sad, g);
-                        p.C.Stress = Math.Min(1, p.C.Stress + g * 0.5f);
-                        Remember(sim, i, Topic.Death, dead, f.Cause, 0.4f + bond, f.Cell);
-                        if (x >= 0 && x != i && (witnesses.Contains(i) || bond > 0.3f)) Blame(sim, i, x, 0.4f + bond, f.Cause, f.Cell);
-                        if (BondOf(i, dead) >= FriendAt * 0.6f)
-                        {
-                            Griefs++;
-                            int c = sim.Causes.Add(CauseKind.Society, $"{Ko.I(mind.NameOf(i))} {Ko.Eul(mind.NameOf(dead))} 잃었다", sim.Tick, p.C.Cell, f.Cause, 0, i);
-                            sim.Facts.Emit(sim.Tick, FactKind.Grieved, p.C.Cell, g, c, i, dead);
-                        }
-                    }
-                    // 사람이 있는 채 봉쇄된 방에서 30분 안에 죽었다 → 주컴퓨터를 덜 믿는다 (정이 깊을수록 더)
+                    // 슬픔 · 기억 · 원망은 그 죽음을 알게 된 이에게만 (행동 '알게 됐다' — 본 · 들은 · 방송 · 소문: LearnedDeath · DF2) — 세상은 '죽었다'만 남긴다
+                    // 사람이 있는 채 봉쇄된 방에서 30분 안에 죽었다 → 주컴퓨터를 덜 믿는다 (정이 깊을수록 더 — 아직 모두에게 · MIND 14단에서 '들은 이만'으로)
                     int room = mind.RoomOf(f.Cell);
                     foreach (var (tick, sroom, scause) in _sealedIn)
                     {
@@ -530,6 +514,37 @@ public sealed partial class Society : IEngine
         }
         _cursor = sim.Facts.Total;
     }
+
+    /// <summary>
+    /// 그 죽음을 알게 됐다 (마음의 행동 — 본 · 들은 · 방송 · 소문 · DF2): 슬픔 0.15 + 정 · 그 일을 기억한다 · 탓할 사람이 있으면 (곁에서 본 이 · 가까웠던 이가) 원망한다 ·
+    /// 가까웠던 이는 '잃었다'. 그 죽음을 처음 안 이가 생기면 숨진 이의 침대 금기 · 추모를 기다린다 (예전: 숨진 그 틱에 배의 모두가 · 금기는 1분 뒤).
+    /// </summary>
+    private void LearnedDeath(Sim sim, in SocialAct act)
+    {
+        var mind = _mind!;
+        int i = act.Actor, dead = act.Target;
+        if (i < 0 || i >= N || dead < 0 || dead >= N || i == dead || !Person(i)) return;
+        var p = mind.Agents[i];
+        float bond = Math.Max(0, BondOf(i, dead));
+        float g = Math.Clamp(0.15f + bond, 0, 1);
+        if (g > Grief[i]) Grief[i] = g;
+        p.C.Sad = Math.Max(p.C.Sad, g);
+        p.C.Stress = Math.Min(1, p.C.Stress + g * 0.5f);
+        int deadCell = mind.Agents[dead].C.Cell;
+        Remember(sim, i, Topic.Death, dead, act.Cause, 0.4f + bond, deadCell);
+        int x = Culprit(sim, act.Cause, dead);
+        bool saw = act.Other == (int)BeliefSource.Saw;
+        if (x >= 0 && x != i && (saw || bond > 0.3f)) Blame(sim, i, x, 0.4f + bond, act.Cause, deadCell);
+        if (BondOf(i, dead) >= FriendAt * 0.6f)
+        {
+            Griefs++;
+            int c = sim.Causes.Add(CauseKind.Society, $"{Ko.I(mind.NameOf(i))} {Ko.Eul(mind.NameOf(dead))} 잃었다", sim.Tick, p.C.Cell, act.Cause, 0, i);
+            sim.Facts.Emit(sim.Tick, FactKind.Grieved, p.C.Cell, g, c, i, dead);
+        }
+        if (_deathNews.Add(dead)) DeathKnown(sim, dead, act.Cause);
+    }
+
+    private readonly HashSet<int> _deathNews = new();   // 누가 그 죽음을 처음 알았다 (숨진 이 — 금기 · 추모는 그 뒤에)
 
     // 같은 일을 두 번 셈하지 않게: 사람마다 '함께 넘긴 위기'로 이미 친 원인 (최근 8개 · 찍기에 들어간다)
     private readonly Dictionary<int, int[]> _sharedSeen = new();

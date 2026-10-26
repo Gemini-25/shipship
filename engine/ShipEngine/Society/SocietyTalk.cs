@@ -10,7 +10,7 @@ public sealed class TalkTable
     public static string TopicName(Topic t) => t switch
     {
         Topic.Small => "잡담", Topic.Work => "일", Topic.Fire => "불", Topic.Breach => "구멍", Topic.Rescue => "구조", Topic.Hurt => "다침",
-        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", Topic.Peace => "화해", Topic.Troubled => "속마음", _ => "잡담",
+        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", Topic.Peace => "화해", Topic.Troubled => "속마음", Topic.Joy => "좋은 일", _ => "잡담",
     };
 
     public static string EndName(TalkEnd e) => e switch
@@ -76,6 +76,14 @@ public sealed partial class Society
             }
     }
 
+    /// <summary>그 사람이 기억하는 그 일 (갈래 · 사람)의 수 — 같은 일로 거듭 다툰 것 (판단이 읽는다 — 제 기억).</summary>
+    public int MemoryCount(int owner, Topic t, int about)
+    {
+        int n = 0;
+        foreach (var m in Memories) if (m.Owner == owner && m.Topic == t && m.About == about) n++;
+        return n;
+    }
+
     public int MemoryCause(int owner, Topic t, int about)
     {
         foreach (var m in Memories) if (m.Owner == owner && m.Topic == t && m.About == about) return m.Cause;
@@ -112,7 +120,8 @@ public sealed partial class Society
                 else
                 {
                     Arguments++;
-                    Add(Grudge, a, b, 0.15f); Add(Grudge, b, a, 0.1f);
+                    // 이미 깊은 앙금에는 덜 보탠다 (남은 몫만큼 — DF2: 예전엔 다툴 때마다 +0.15로 사흘에 1.00)
+                    Add(Grudge, a, b, 0.15f * (1 - GrudgeOf(a, b))); Add(Grudge, b, a, 0.1f * (1 - GrudgeOf(b, a)));
                     Warm(sim, a, b, -0.1f); Warm(sim, b, a, -0.1f);
                     ca.Anger = Math.Min(1, ca.Anger + 0.3f * (0.5f + ca.Neuro)); cb.Anger = Math.Min(1, cb.Anger + 0.25f * (0.5f + cb.Neuro));
                     ca.Stress = Math.Min(1, ca.Stress + 0.05f); cb.Stress = Math.Min(1, cb.Stress + 0.05f);
@@ -177,6 +186,12 @@ public sealed partial class Society
             {
                 int g1 = BandIdOf(a), g2 = BandIdOf(b);
                 string n1 = BandName(g1), n2 = BandName(g2);
+                if (g1 < 0 || g2 < 0 || g1 == g2)   // 두 무리가 아니다 — 무리 사이 일로 셈하지 않는다 (DF2: 무리 없는 배의 모든 쌍에 원한이 번지던 결함)
+                {
+                    Warm(sim, a, b, 0.02f); Warm(sim, b, a, 0.02f);
+                    Say(sim, a, b, o, TalkEnd.Agree, Pick(sim, "잡담/맞장구", a));
+                    break;
+                }
                 if (end == TalkEnd.Accept)   // 받아들였다
                 {
                     // 두 무리 사람들 사이의 원한이 크게 준다 (지도자가 제 사람들을 달랜다)
@@ -192,8 +207,8 @@ public sealed partial class Society
                 else
                 {
                     Arguments++;
-                    // 맞섰다: 지도자 사이 원한이 깊어지고 · 두 무리 사람들에게 번진다
-                    Add(Grudge, a, b, 0.15f); Add(Grudge, b, a, 0.15f);
+                    // 맞섰다: 지도자 사이 원한이 깊어지고 · 두 무리 사람들에게 번진다 (이미 깊은 앙금에는 덜)
+                    Add(Grudge, a, b, 0.15f * (1 - GrudgeOf(a, b))); Add(Grudge, b, a, 0.15f * (1 - GrudgeOf(b, a)));
                     for (int x = 0; x < N; x++) for (int y = 0; y < N; y++)
                         if (x != y && (BandIdOf(x) == g1 && BandIdOf(y) == g2 || BandIdOf(x) == g2 && BandIdOf(y) == g1)) Add(Grudge, x, y, 0.05f);
                     ca.Anger = Math.Min(1, ca.Anger + 0.3f); cb.Anger = Math.Min(1, cb.Anger + 0.3f);
@@ -238,6 +253,12 @@ public sealed partial class Society
                 Say(sim, a, b, o, end, Pick(sim, _talk!.Lines.ContainsKey(key) ? key : $"{TalkTable.TopicName(o.T)}/맞장구", a));
                 break;
             }
+            case Topic.Joy:
+                // 좋은 일 (축하 · 함께 웃은 날)을 떠올린다: 함께 웃고 · 가까워진다
+                Warm(sim, a, b, 0.03f); Warm(sim, b, a, 0.03f);
+                ca.Joy = Math.Min(1, ca.Joy + 0.05f); cb.Joy = Math.Min(1, cb.Joy + 0.05f);
+                Say(sim, a, b, o, end, Pick(sim, "좋은 일/웃음", a));
+                break;
             case Topic.Shortage:
                 ca.Stress = Math.Min(1, ca.Stress + 0.05f); cb.Stress = Math.Min(1, cb.Stress + 0.05f);
                 Warm(sim, a, b, 0.01f);

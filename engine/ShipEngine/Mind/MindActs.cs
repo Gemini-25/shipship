@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>판단 엔진이 한 사회적 행동의 갈래 (월드 엔진 ⑨가 같은 틱에 그 결과를 계산한다).</summary>
-public enum SocialActKind : byte { None, CallMeeting, Speak, CallOff, DeferMemorial, Talk, KeepQuiet, Nickname, TakeSide, Mediate, Attack, Strike, HitBack, StopFight, BreakUp, Sabotage, Confess, KeepSecret, TellLie, HearLie, AskLog, Conceal }
+public enum SocialActKind : byte { None, CallMeeting, Speak, CallOff, DeferMemorial, Talk, KeepQuiet, Nickname, TakeSide, Mediate, Attack, Strike, HitBack, StopFight, BreakUp, Sabotage, Confess, KeepSecret, TellLie, HearLie, AskLog, Conceal, LearnDeath }
 
 /// <summary>
 /// 사람 하나가 한 사회적 행동 — 부르기 · 말하기 · 미루기. 마음(판단 엔진)이 정해 적고 · 사회(월드 엔진)는 읽어서 결과만 계산한다
