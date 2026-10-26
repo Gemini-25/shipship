@@ -58,7 +58,7 @@ public sealed partial class Mind
             bool same = subject >= 0 ? b.Subject == subject : b.Subject < 0 && Dist(b.Cell, cell) <= 3;
             if (!same) continue;
             bool wasWeak = b.Conf < 0.3f;
-            if (conf >= b.Conf || src == BeliefSource.Saw) { b.Cell = cell; b.Src = src; }
+            if (conf >= b.Conf || src == BeliefSource.Saw) { b.Cell = cell; if (!(kind == BeliefKind.Water && b.Src == BeliefSource.Saw)) b.Src = src; }   // 본 고인 물은 미끄러져도 '본 것' — 마르면 봐서 지운다 (C13 검토 고침)
             b.Conf = Math.Max(b.Conf, conf);
             b.Seen = tick;
             if (cause != 0) b.Cause = cause;

@@ -112,7 +112,7 @@ public sealed partial class Mind
             // 손 비우기 (docs/MIND.md 3단): 일상의 일 앞에서 든 것을 먼저 — 꼼꼼한 이는 제자리에 · 덤벙대는 이(성실 0.35 아래)는 그 자리에 내려놓는다
             var pre = new List<PlanStep>();
             int h = a.C.Cell;
-            FreeHands(a, ref h, pre, a.IsPerson && a.C.Consc < 0.35f);
+            FreeHands(a, ref h, pre, a.IsPerson && (a.C.Consc < 0.35f || CrisisWork(o.Goal)));   // 위기 일 앞에서는 그 자리에 (컵 — 검토 고침)
             plan.InsertRange(0, pre);
         }
         // 일상의 걸음이 방금 빠져나온 위험한 방으로 들어가면 하지 않는다 (침대 · 밥 · 일터를 그 안에서 고른 계획)
@@ -542,6 +542,14 @@ public sealed partial class Mind
                 int src = Nearest(here, _water, f => _net == null || _net.WaterAt(f));   // 물관이 끊긴 자리에선 물이 안 나온다
                 if (src < 0) return false;
                 int cell = L.Furniture[src].Cells[0];
+                if (a.C.Holding == iCup)   // 이미 든 컵으로 마시고 가까운 탁자 · 선반에 (검토 고침 — 내려놓고 다른 컵을 가지러 갔다)
+                {
+                    plan.Add(Go(cell, 1));
+                    plan.Add(Use(UseKind.Drink, Time.Minutes(1), cell, src));
+                    int shelf = CupShelf(cell);
+                    if (shelf >= 0) { int sc = L.Furniture[shelf].Cells[0]; plan.Add(Go(sc, 1)); plan.Add(new PlanStep { Kind = StepKind.CupBack, Cell = sc, Value = -1, Target = shelf }); }
+                    return true;
+                }
                 int cup = CupFor(a, here, cell);   // 탁자 · 선반 위 컵을 집어 마시고 제자리에 (5단 C10b — 없거나 멀면 예전 길)
                 if (cup >= 0)
                 {

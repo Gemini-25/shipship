@@ -309,7 +309,7 @@ public sealed partial class Mind
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)
                 var (got, spilled, _) = _life!.Drink(sim, c.Body, st.Target, want, c.Sleepy, Math.Clamp(c.Stress, 0, 1), c.Careful, a.Id, NameOf(a.Id));   // 월드 요청 (5단 C10 — 탱크에서 빼고 · 쏟음을 셈한다)
                 CountDrank(a, got + spilled);   // ⑪ 배급: 받은 물 (쏟은 것도 — 제가 쏟은 것을 안다)
-                if (spilled > 0 && c.Holding == iCup) { DropHeld(a, true); Laid++; }   // 든 컵을 놓친다 — 손 높이에서 떨어진다 (5단 C10b · 유리 — 세게 떨어지면 깨지고 담긴 물은 바닥으로)
+                if (spilled > 0 && c.Holding == iCup) { DropHeld(a, true); Laid++; DropCupSteps(a); }   // 둘 컵이 없다 — 되돌아가는 걸음을 뺀다 (검토 고침)   // 든 컵을 놓친다 — 손 높이에서 떨어진다 (5단 C10b · 유리 — 세게 떨어지면 깨지고 담긴 물은 바닥으로)
                 if (spilled > 0) AfterSpill(sim, a, c.Cell, false);   // 쏟은 이가 닦거나 그냥 간다 (5단 C11)
                 WaterDrunk += got;
                 c.DrankAt = t; Drinks++;

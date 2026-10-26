@@ -95,6 +95,7 @@ public sealed partial class Mind
     {
         byte item = a.C.Holding;
         if (item == 255) return false;
+        if (item == iCup) return g != GoalKind.Drink;   // 컵은 마실 때만 든다 (검토 고침: 컵을 든 채 구급 상자 · 제세동기를 못 들었다)
         return g switch
         {
             GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize or GoalKind.Toilet or GoalKind.Wash
@@ -138,6 +139,7 @@ public sealed partial class Mind
             if (x.Kind != 0 || (x.Flags & Structure.DecorFlag) != 0 || x.State == 5) continue;   // 우주로 나간 것 (PH11) · 꾸밈 (제자리가 있다 — 탁자 위 컵 · 선반 위 책 · PH9)은 줍지 않는다
             int xc = book.CellOf(x); byte xi = (byte)x.What;
             if (xi == iWaste || x.PlugAt != 0 || HomesOf(xi).Length == 0 && !IsFood(xi) && xi != iCup) continue;   // 바닥 컵은 탁자 · 선반으로 (5단 C10b)
+            if (xi == iCup && !assigned && CupShelf(here) < 0) continue;   // 둘 자리가 없으면 줍지 않는다 (검토 고침 — 줍고 놓는 고리)
             bool mine = assigned && x.Id == c.AssignedTarget;   // 맡긴 그 물체 (일감 대상은 물체 Id)
             if (!mine && (room < 0 || RoomOf(xc) != room)) continue;   // 제 눈에 보이는 것 (같은 방)
             int d = mine ? -1 : PathDist(here, xc);
@@ -368,10 +370,17 @@ public sealed partial class Mind
     private void DropCupSteps(Agent a)
     {
         for (int i = a.Plan.Count - 1; i > a.C.StepIndex; i--)
-            if (a.Plan[i].Kind == StepKind.CupBack) { a.Plan.RemoveAt(i); if (i - 1 > a.C.StepIndex && a.Plan[i - 1].Kind == StepKind.GoTo) a.Plan.RemoveAt(i - 1); }
+        {
+            if (i >= a.Plan.Count || a.Plan[i].Kind != StepKind.CupBack) continue;
+            a.Plan.RemoveAt(i);
+            if (i - 1 > a.C.StepIndex && a.Plan[i - 1].Kind == StepKind.GoTo) { a.Plan.RemoveAt(i - 1); i--; }
+        }
     }
 
-    /// <summary>컵을 두는 가구 (탁자 · 선반 — 설비 표 꾸밈에 컵이 있는 것) 가운데 길이 가장 가까운 것 (−1 없음).</summary>
+    /// <summary>
+    /// 컵을 두는 가구 (탁자 · 선반 — 그 방 갈래의 설비 표 꾸밈에 컵이 있는 것) 가운데 빈 자리가 있는 것 · 길이 가장 가까운 것 (−1 없음 — 검토 고침: 꽉 찬 선반에 두려다 바닥에 놓고 다시 줍는 고리).
+    /// 빈 자리는 도면 위 놓인 것 (눈 · 늘 보는 자리)으로 안다.
+    /// </summary>
     private int CupShelf(int from)
     {
         int best = -1, bd = int.MaxValue;
@@ -379,9 +388,11 @@ public sealed partial class Mind
         {
             if (fu.Cells.Length == 0) continue;
             var e = T.Equip(fu.Type);
-            if (e.Decor == null || !e.Decor.Values.Any(l => Array.IndexOf(l, "컵") >= 0)) continue;
+            string rt = fu.Room >= 0 && fu.Room < L.Rooms.Count ? L.Rooms[fu.Room].Type : "";
+            if (e.Decor == null || !(e.Decor.TryGetValue(rt, out var list) || e.Decor.TryGetValue("_", out list)) || Array.IndexOf(list, "컵") < 0) continue;   // 그 방에 컵을 두는 가구 (꾸밀 때와 같은 표)
             int d = PathDist(from, fu.Cells[0]);
-            if (d < bd) { bd = d; best = fu.Id; }
+            if (d >= bd || _st == null || _st.ReturnDecorOn(iCup, 0, fu.Id, L.X(fu.Cells[0]) + 0.5, L.Y(fu.Cells[0]) + 0.5, 0, 0, add: false) < 0) continue;
+            bd = d; best = fu.Id;
         }
         return best;
     }

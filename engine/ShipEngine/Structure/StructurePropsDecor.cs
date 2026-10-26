@@ -27,7 +27,7 @@ public sealed partial class Structure
     /// 요청 (⑧ — 5단 C10b 컵을 제자리에): 그 자리 (x, y)에 꾸밈 하나를 다시 놓는다 — 발자국 (가운데 · 껍질 표본)이 모두 가구 furniture의 같은 윗면 위 ·
     /// 그 높이에서 막히지 않고 (벽 · 다른 가구 기둥) · 놓인 다른 물체와 겹치지 않으면 놓임 · 잠듦 · 꾸밈 표시로. 새 물체 Id (못 놓으면 −1 — 부른 이가 곁에 내려놓는다).
     /// </summary>
-    public int ReturnDecor(int item, float liquid, double x, double y, int furniture, int cause, int tag)
+    public int ReturnDecor(int item, float liquid, double x, double y, int furniture, int cause, int tag, bool add = true)
     {
         if (item < 0 || x < 0 || y < 0 || x >= L.W || y >= L.H) return -1;
         int c = L.Index((int)x, (int)y);
@@ -64,6 +64,7 @@ public sealed partial class Structure
             double r = reach + SamplesOf(PropForm(q)).reach + DotForm.Dot;
             if ((q.X - x) * (q.X - x) + (q.Y - y) * (q.Y - y) < r * r && Math.Abs(q.Z - top) < 0.3) return -1;   // 그 자리에 다른 것이 놓였다
         }
+        if (!add) return 0;   // 놓을 수 있나만 (자리 찾기)
         p.Id = NextPropId++; p.X = x; p.Y = y; p.Z = (float)top; p.On = on; p.Liquid = Math.Max(0, liquid);
         p.G = F.Grav[c]; p.Flags |= DecorFlag; p.Asleep = 1; p.Since = _now; p.Cause = cause; p.Dropper = tag >= 0 ? tag + 1 : tag;
         Props.Add(p);
@@ -71,9 +72,9 @@ public sealed partial class Structure
     }
 
     /// <summary>
-    /// 요청 (⑧ — 5단 C10b): 가구 furniture 윗면의 빈 자리에 꾸밈 하나를 놓는다 — 칸마다 3 × 3 자리를 (nearX, nearY)에서 가까운 차례로 <see cref="ReturnDecor"/>. 새 Id (자리가 없으면 −1).
+    /// 요청 (⑧ — 5단 C10b): 가구 furniture 윗면의 빈 자리에 꾸밈 하나를 놓는다 — 칸마다 3 × 3 자리를 (nearX, nearY)에서 가까운 차례로 <see cref="ReturnDecor"/>. 새 Id (자리가 없으면 −1) · add 거짓이면 놓지 않고 자리가 있나만 (0).
     /// </summary>
-    public int ReturnDecorOn(int item, float liquid, int furniture, double nearX, double nearY, int cause, int tag)
+    public int ReturnDecorOn(int item, float liquid, int furniture, double nearX, double nearY, int cause, int tag, bool add = true)
     {
         if (furniture < 0 || furniture >= L.Furniture.Count || item < 0) return -1;
         var p = new Prop { Kind = 0, What = (short)item };
@@ -88,7 +89,7 @@ public sealed partial class Structure
                     spots.Add(((x - nearX) * (x - nearX) + (y - nearY) * (y - nearY), x, y));
                 }
         spots.Sort((a, b) => a.d != b.d ? a.d.CompareTo(b.d) : a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
-        foreach (var (_, x, y) in spots) { int id = ReturnDecor(item, liquid, x, y, furniture, cause, tag); if (id >= 0) return id; }
+        foreach (var (_, x, y) in spots) { int id = ReturnDecor(item, liquid, x, y, furniture, cause, tag, add); if (id >= 0) return id; }
         return -1;
     }
 

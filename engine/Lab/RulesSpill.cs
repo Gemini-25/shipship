@@ -101,6 +101,44 @@ public static partial class Program
                 Check("컵 (C10b) (라): 바닥에 놓인 컵은 꼼꼼한 이가 주워 탁자 빈 자리에 꾸밈으로 둔다 (담긴 물과 함께)",
                     ok, $"컵 {cups.Count} · {(cups.Count > 0 ? $"받침 {cups[0].On} (탁자 {table + 1}) · 꾸밈 {(cups[0].Flags & Structure.DecorFlag) != 0} · 물 {cups[0].Liquid:0.0}" : "")} · 손 {m[p].C.Holding}");
             }
+            // (마) 검토 고침: 탁자에 빈 자리가 없으면 바닥 컵을 줍지 않는다 (예전: 꽉 찬 탁자에 두려다 곁에 내려놓고 다시 줍는 고리)
+            {
+                var lay = Worlds.Ascii(CupShip, new Dictionary<char, string> { ['t'] = "Table", ['m'] = "MealDispenser" });
+                lay.Rooms[lay.Room[Worlds.At(lay, 1, 1)]].Type = "Mess";
+                var s = Worlds.Full(lay, 3);
+                var m = s.Get<Mind>(); var st = s.Get<Structure>();
+                int cupItem = m.ItemNames.ToList().IndexOf("컵"), plate = m.ItemNames.ToList().IndexOf("접시");
+                int table = lay.Furniture.First(x => x.Type == "Table").Id;
+                int filled = 0;
+                while (st.ReturnDecorOn(plate, 0, table, Worlds.At(lay, 3, 2) % lay.W + 0.5, Worlds.At(lay, 3, 2) / lay.W + 0.5, 0, 0) >= 0 && filled < 50) filled++;   // 탁자를 접시로 채운다
+                st.PutItem(cupItem, 0, Worlds.At(lay, 5, 3), 0, 2);
+                int p = m.AddPerson(s, Worlds.At(lay, 1, 1));
+                m.SetPersonality(p, 0.5f, 0.95f, 0.5f, 0.5f, 0.3f);
+                s.Run(2);
+                long g0 = m.Gathered, l0 = m.Laid;
+                for (int k = 0; k < (int)Time.Minutes(10); k++) { ref var c = ref m[p].C; c.Thirst = 0; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; s.Step(); }
+                Check("컵 (C10b 검토) (마): 탁자에 빈 자리가 없으면 꼼꼼한 이도 바닥 컵을 줍지 않는다 (줍고 내려놓는 고리가 없다)",
+                    filled > 0 && m.Gathered == g0 && m.Laid == l0 && m[p].C.Holding == 255, $"접시 {filled} · 주움 {m.Gathered - g0} · 내려놓음 {m.Laid - l0} · 손 {m[p].C.Holding}");
+            }
+            // (바) 검토 고침: 이미 컵을 든 이는 그 컵으로 마시고 탁자에 둔다 (예전: 든 컵을 두고 탁자의 다른 컵을 가지러 갔다)
+            {
+                var lay = Worlds.Ascii(CupShip.Replace("#..t...m..#", "#..tt..m..#"), new Dictionary<char, string> { ['t'] = "Table", ['m'] = "MealDispenser" });
+                lay.Rooms[lay.Room[Worlds.At(lay, 1, 1)]].Type = "Mess";
+                var s = Worlds.Full(lay, 3);
+                var m = s.Get<Mind>(); var st = s.Get<Structure>();
+                int cupItem = m.ItemNames.ToList().IndexOf("컵");
+                int id = st.PutItem(cupItem, 0, Worlds.At(lay, 3, 2), 0, 5);
+                { int i = st.IndexOf(id); var pr = st.Props[i]; pr.Flags |= Structure.DecorFlag; pr.Asleep = 1; st.Props[i] = pr; }
+                int p = m.AddPerson(s, Worlds.At(lay, 1, 1));
+                s.Run(2);
+                { ref var c = ref m[p].C; c.Holding = (byte)cupItem; c.HoldCharge = 3; c.HeldSince = s.Tick; }
+                long d0 = m.Drinks, t0 = m.CupsTaken;
+                for (int k = 0; k < (int)Time.Minutes(20) && m.Drinks == d0; k++) { ref var c = ref m[p].C; c.Thirst = 1; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; s.Step(); }
+                for (int k = 0; k < (int)Time.Minutes(3); k++) { ref var c = ref m[p].C; c.Thirst = 0; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; s.Step(); }
+                int onTable = st.Props.Count(x => x.Kind == 0 && x.What == cupItem && (x.Flags & Structure.DecorFlag) != 0 && x.State == 0 && x.On > 0);
+                Check("컵 (C10b 검토) (바): 이미 컵을 든 이는 그 컵으로 마시고 탁자에 둔다 — 탁자의 다른 컵을 집지 않는다",
+                    m.Drinks == d0 + 1 && m.CupsTaken == t0 && onTable == 2 && m[p].C.Holding == 255, $"마심 {m.Drinks - d0} · 집음 {m.CupsTaken - t0} · 탁자 컵 {onTable} · 손 {m[p].C.Holding}");
+            }
             Check("컵 (C10b) (다): 몫 1로 쏟으면 든 컵이 손에서 떨어진다 — 손이 빈다 · 탁자 꾸밈으로 돌아가지 않는다 · 물건 수 = 처음 + 장부 흐름",
                 c3.drinks == 1 && c3.took && c3.empty && !c3.onTable && Math.Abs(c3.n1 - c3.n0 - c3.flow) < 1e-9,
                 $"마심 {c3.drinks} · 집음 {c3.took} · 빈손 {c3.empty} · 탁자 {c3.onTable} · 컵 {c3.n0}→{c3.n1} (장부 {c3.flow:+0;-0;0}) · 컵에 남은 물 {c3.w1:0.00}몰");
@@ -147,6 +185,21 @@ public static partial class Program
             Check("조심 걸음 (C13): 보이지 않는 고인 물 · 미끄러짐 몫 0.5 · 씨 셋 — 모르는 이 ≥ 2번 · 아는 이는 절반 이하 · 아는 이는 그 칸을 1.3배 넘게 오래 걸려 지난다 (조심해 느리게) · 미끄러진 이는 그 칸을 느낀 것으로 배우고 · 아는 이의 믿음은 그 칸을 지나고도 남는다",
                 sn >= 2 && sk * 2 <= sn && dk >= 1.3 * dn && runs.All(r => r.nSlipped == 0 || r.learned) && runs.Any(r => r.nSlipped > 0) && runs.All(r => r.kept),
                 $"미끄러짐 모름 {sn} · 앎 {sk} · 미끄러지지 않는 판 젖은 칸을 지난 틱 앎 {dk:0.00} · 모름 {dn:0.00} · 배움 {string.Join("/", runs.Select(r => $"{r.learned}({r.nSlipped})"))} · 믿음 남음 {string.Join("/", runs.Select(r => r.kept))}");
+        }
+
+        // (C13 검토) 본 고인 물은 그 자리에서 미끄러져도 '본 것'으로 남는다 — 마르면 봐서 지운다 (예전: 느낌으로 바뀌어 닦은 뒤에도 반감기 동안 조심해 걸었다)
+        {
+            var lay = Worlds.Ascii("\n##########\n#........#\n##########", new Dictionary<char, string>());
+            var s = Worlds.Full(lay, 2);
+            var m = s.Get<Mind>();
+            int p = m.AddPerson(s, Worlds.At(lay, 1, 1)), cell = Worlds.At(lay, 5, 1);
+            s.Run(1);
+            m.Learn(m[p], s.Tick, BeliefKind.Water, cell, -1, 0.9f, BeliefSource.Saw);
+            m.Learn(m[p], s.Tick, BeliefKind.Water, cell, -1, 0.95f, BeliefSource.Felt);   // 그 자리에서 미끄러졌다
+            var b = m[p].Beliefs.First(x => x.Kind == BeliefKind.Water);
+            s.Run(3);   // 물이 없는 칸을 본다
+            float after = m.Believes(m[p], BeliefKind.Water, cell, 0);
+            Check("조심 걸음 (C13 검토): 본 고인 물은 그 자리에서 미끄러져도 '본 것' — 마른 칸을 보면 지운다", b.Src == BeliefSource.Saw && after < 0.05f, $"출처 {b.Src} · 본 뒤 믿음 {after:0.00}");
         }
 
         // (C15) 주컴퓨터 청소는 보이는 방만: 오른쪽 위 방에 고인 물 50몰 — 그 방 차단기가 내려가 (전기 없는 카메라) 보지 못하면 청소 일감 0 · 보이면 1 (예전: 카메라 없이 바닥 물을 읽었다)
