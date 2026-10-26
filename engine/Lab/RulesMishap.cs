@@ -44,7 +44,7 @@ public static partial class Program
             var lay = Worlds.Ascii(WashShip, new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery" });
             var s = Worlds.Full(lay, 7);
             var f = s.Get<Field>();
-            int src = Worlds.At(lay, 11, 1), old = Worlds.At(lay, 12, 1), dry = Worlds.At(lay, 10, 1);
+            int src = Worlds.At(lay, 4, 1), old = Worlds.At(lay, 5, 1), dry = Worlds.At(lay, 3, 1);   // 침실 (막 55몰 — 화장실 바닥은 C14부터 배수구 쪽으로 기울어 막이 5몰)
             int leak = s.Causes.Add(CauseKind.Leak, "샌 물관 — 이음매가 헐거웠다", s.Tick, src);
             f.AddStore(src, f.T.sWater, 400, leak);
             f.AddStore(old, f.T.sWater, 120);   // 원인을 모르는 물 (원인 없이 고인)

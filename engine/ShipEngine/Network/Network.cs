@@ -936,6 +936,7 @@ public sealed partial class Network : IEngine
                     break;
                 case "appliance" when dev.Type == "Shower":
                     ShowerStep(sim, d, kw, dt);   // 샤워 칸: 틀어 두면 물이 흐르고 · 열은 물과 함께 배수구로 (NetworkShower)
+                    ShowerDrain(d, dt);           // 바닥 배수구 (5단 C14 — 젖는 방 바닥에 고인 물이 오수로)
                     break;
                 default:
                     // 전기는 결국 열 — 장치가 차지한 칸에 고루 (긴 재배 선반의 전등 열이 한 칸에 몰리지 않게)

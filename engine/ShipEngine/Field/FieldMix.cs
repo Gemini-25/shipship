@@ -312,6 +312,43 @@ public sealed partial class Field
     /// <summary>이보다 적게 남은 물 칸은 마른 것으로 본다 — 원인을 지운다 (몰 · 5단 C8).</summary>
     public const double DryMol = 5;
     private int[] _wc2 = Array.Empty<int>();
+    /// <summary>바닥 액체 막 (몰/칸 — 1mm ≈ 물 55몰 · 표면 장력) · 젖는 방 (샤워 칸이 있는 방 — 바닥이 배수구 쪽으로 기울었다)의 막 (5단 C14).</summary>
+    public const double FilmMol = 55, SlopeFilmMol = 5;
+    private byte[]? _slope;   // 칸마다 젖는 방 바닥이냐 (도면에서 한 번 — 찍지 않는다)
+    private int[] _down = Array.Empty<int>();   // 젖는 방 바닥에서 배수구 쪽 한 칸 (배수구 칸 · 그 밖은 −1 — 도면에서 한 번)
+    /// <summary>젖는 방 바닥의 기울기 몫: 막 넘는 물의 이만큼이 한 번 셈에 배수구 쪽 이웃으로 흐른다 (1g · 어림).</summary>
+    public const double SlopeShare = 0.1;
+    /// <summary>그 칸 바닥의 막 (몰): 젖는 방 5 · 그 밖 55.</summary>
+    public double FilmAt(int i)
+    {
+        if (_slope == null) BuildSlope();
+        return _slope![i] != 0 ? SlopeFilmMol : FilmMol;
+    }
+
+    /// <summary>젖는 방 (샤워 칸이 있는 방) 바닥: 칸마다 막 5몰 · 배수구 (샤워 칸 칸)에서 방 안 바닥 칸으로 넓이 우선으로 퍼져 나가며 한 칸 가까운 이웃 (같으면 먼저 닿은 차례)을 기울기로 둔다.</summary>
+    private void BuildSlope()
+    {
+        _slope = new byte[Cells];
+        _down = new int[Cells]; Array.Fill(_down, -1);
+        var rooms = new HashSet<int>();
+        var q = new Queue<int>();
+        var seen = new bool[Cells];
+        foreach (var fu in L.Furniture)
+            if (fu.Type == "Shower")
+                foreach (int c in fu.Cells) if (L.Room[c] >= 0) { rooms.Add(L.Room[c]); if (!seen[c]) { seen[c] = true; q.Enqueue(c); } }
+        for (int c = 0; c < Cells; c++) if (L.Room[c] >= 0 && rooms.Contains(L.Room[c])) _slope[c] = 1;
+        Span<int> nb = stackalloc int[4];
+        while (q.Count > 0)
+        {
+            int c = q.Dequeue();
+            L.Neighbors(c, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0 || seen[j] || _slope[j] == 0 || L.Room[j] != L.Room[c]) continue;
+                seen[j] = true; _down[j] = c; q.Enqueue(j);
+            }
+        }
+    }
 
     /// <summary>
     /// 고인 액체는 바닥을 따라 낮은 쪽으로 퍼진다 (1mm ≈ 물 55몰보다 얇으면 멈춘다 — 표면 장력).
@@ -327,11 +364,11 @@ public sealed partial class Field
             if (liq.Phase != MatterPhase.Liquid) continue;
             int s = liq.Store;
             bool water = s == T.sWater;
-            const double Film = 55;
             // 막보다 두꺼운 칸이 하나도 없으면 아무것도 흐르지 않는다 (아래 셈의 d가 모든 칸에서 0) — 이웃을 보지 않고 아래 셈과 같은 값만 쓴다 (0 아래 · −0은 +0 · 원인은 마르면 지운다)
+            // 막은 칸마다 (젖는 방 5 · 그 밖 55 — 5단 C14): 나가는 몫은 내주는 칸의 막으로 잰다 (두 칸이 같은 몫을 주고받는다)
             int b0 = s * Cells;
             bool flows = false;
-            for (int i = 0; i < Cells; i++) if (!(Store[b0 + i] <= Film)) { flows = true; break; }   // NaN도 흐르는 쪽으로 (아래 셈 그대로)
+            for (int i = 0; i < Cells; i++) if (!(Store[b0 + i] <= FilmAt(i))) { flows = true; break; }   // NaN도 흐르는 쪽으로 (아래 셈 그대로)
             if (!flows)
             {
                 for (int i = 0; i < Cells; i++)
@@ -356,7 +393,7 @@ public sealed partial class Field
                         if (water) _wc2[i] = v < DryMol ? 0 : WetCause[i];
                         if (RegionOf[i] < 0 && L.Kind[i] != CellKind.Floor) continue;
                         L.Neighbors(i, nb);
-                        double d = 0, most = 0;
+                        double d = 0, most = 0, fi = FilmAt(i);
                         int from = -1;
                         foreach (int j in nb)
                         {
@@ -364,10 +401,24 @@ public sealed partial class Field
                             double vj = Store[s * Cells + j];
                             double kg = 0.2 * SpreadG(Math.Min(Grav[i], Grav[j]));   // 액체를 낮은 쪽으로 미는 것은 중력이다 — 무중력이면 퍼지지 않는다
                             if (kg <= 0) continue;
-                            if (v > vj && v > Film) d -= kg * (v - Math.Max(vj, Film)) * 0.5;
-                            if (vj > v && vj > Film)
+                            double fj = FilmAt(j);
+                            if (v > vj && v > fi) d -= kg * (v - Math.Max(vj, fi)) * 0.5;
+                            if (vj > v && vj > fj)
                             {
-                                double give = kg * (vj - Math.Max(v, Film)) * 0.5;
+                                double give = kg * (vj - Math.Max(v, fj)) * 0.5;
+                                d += give;
+                                if (water && WetCause[j] != 0 && (give > most || give == most && j < from)) { most = give; from = j; }
+                            }
+                        }
+                        if (_down.Length == Cells)   // 젖는 방 바닥의 기울기 (5단 C14): 막 넘는 몫이 배수구 쪽으로 — 내 몫이 나가고 · 나를 내리막으로 둔 이웃의 몫이 들어온다
+                        {
+                            if (_down[i] >= 0 && v > fi) d -= SlopeShare * SpreadG(Math.Min(Grav[i], Grav[_down[i]])) * (v - fi);
+                            foreach (int j in nb)
+                            {
+                                if (j < 0 || _down[j] != i) continue;
+                                double vj = Store[s * Cells + j], fj = FilmAt(j);
+                                if (vj <= fj) continue;
+                                double give = SlopeShare * SpreadG(Math.Min(Grav[i], Grav[j])) * (vj - fj);
                                 d += give;
                                 if (water && WetCause[j] != 0 && (give > most || give == most && j < from)) { most = give; from = j; }
                             }

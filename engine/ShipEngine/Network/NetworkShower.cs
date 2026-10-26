@@ -40,6 +40,22 @@ public sealed partial class Network
         if (hot) HeatInto(dev, kw * 1000 * 0.15 * dt);   // 데운 물의 열은 거의 다 배수구로 — 칸에는 김 · 젖은 벽으로 15%
     }
 
+    /// <summary>배수구가 빼는 빠르기 (몰/초 — 0.5L/s).</summary>
+    public const double DrainFlow = 27.75;
+    /// <summary>배수구에 빠진 물 (몰 누계 — 셈 · 찍지 않는다).</summary>
+    public double Drained;
+
+    /// <summary>샤워 칸 칸 = 바닥 배수구 (5단 C14): 0.3g 이상이고 그 칸이 끊기지 않았으면 그 칸 바닥 물을 초당 0.5L까지 오수로 (물 재생기가 되돌린다 · 공급 관 조건은 없다).</summary>
+    private void ShowerDrain(int d, double dt)
+    {
+        int c = Devices[d].Cell;
+        if (c < 0 || F.Grav[c] < Field.LowG || F.Severed[c] != 0) return;
+        double have = F.Stored(T.sWater, c);
+        if (have <= 0) return;
+        double took = F.TakeStore(c, T.sWater, Math.Min(have, DrainFlow * dt));
+        WasteWater += took; Drained += took;
+    }
+
     private void SaveShower(StateWriter w) { w.Tag("샤워"); w.Arr(ShowerMeter); w.Arr(ShowerValve); w.Tag("조절기"); w.Arr(ThermoFault); w.Arr(ThermoCause); w.Arr(ShowerFloatCause); }
     private void LoadShower(StateReader r) { r.Tag("샤워"); ShowerMeter = r.Arr<double>(); ShowerValve = r.Arr<byte>(); r.Tag("조절기"); ThermoFault = r.Arr<byte>(); ThermoCause = r.Arr<int>(); ShowerFloatCause = r.Arr<int>(); }
 }

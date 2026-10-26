@@ -2,7 +2,7 @@ using ShipEngine;
 
 namespace Lab;
 
-/// <summary>일상 물리 — 쏟음 (5단 C10 — docs/STAGE5.md): 마시기는 월드 요청 하나 (물탱크에서 빼고 · 쏟음을 셈한다) · 냄비 쏟음 · 젖은 바닥 미끄러짐 (C12).</summary>
+/// <summary>일상 물리 — 쏟음 (5단 C10 — docs/STAGE5.md): 마시기는 월드 요청 하나 (물탱크에서 빼고 · 쏟음을 셈한다) · 냄비 쏟음 · 젖은 바닥 미끄러짐 (C12) · 젖는 방 바닥 · 배수구 (C14).</summary>
 public static partial class Program
 {
     private static void SpillRules()
@@ -91,6 +91,32 @@ public static partial class Program
             Check("미끄러짐 (C12): 복도에서 지린 물이 고인 칸을 B가 목말라 지나가면 (몫 1) 미끄러져 넘어진다 — 사실 '넘어졌다' 하나 · 원인 '젖은 바닥에 미끄러져' ← '지렸다' · 타박 · 미끄러짐 1 · 넘어짐 (점화 · 덜컹) 0 / 무중력 칸 · 로봇은 0",
                 one.fell == 1 && one.story.Contains("젖은 바닥에 미끄러져") && one.story.Contains("지렸다") && one.blunt > 0 && one.slips == 1 && one.falls == 0 && low.slips == 0 && low.fell == 0 && bot.slips == 0,
                 $"넘어짐 사실 {one.fell} · '{one.story}' · 타박 +{one.blunt:0.00} · 미끄러짐 {one.slips} · 넘어짐 셈 {one.falls} / 무중력 {low.slips} · 로봇 {bot.slips}");
+        }
+
+        // (라) C14 배수구: 화장실 (샤워 칸이 있는 방) 변기 칸에 1500몰 · 30분 — 젖는 방 바닥은 배수구 쪽으로 기울어 (막 5몰) 샤워 칸 배수구로 오수가 1200몰 넘게 늘고 ·
+        //     화장실 바닥 물 합은 처음의 20% 아래 · 물의 합은 그대로 / 무중력이면 배수구가 빼지 않는다
+        {
+            var legend = new Dictionary<char, string> { ['e'] = "Bed", ['p'] = "PowerPanel", ['b'] = "Battery", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['o'] = "Composter" };
+            var lay = Worlds.Ascii(WashCareShip.Replace('c', '.').Replace('r', '.'), legend);
+            (double waste, double floor0, double floor1, double sum0, double sum1) Drain(bool zeroG)
+            {
+                var s = Worlds.Full(lay, 3);
+                var net = s.Get<Network>(); var f = s.Get<Field>();
+                s.Run(2);
+                if (zeroG) for (int c = 0; c < lay.N; c++) f.Grav[c] = 0.1f;
+                var toilet = lay.Furniture.Where(x => x.Type == "Toilet").OrderBy(x => lay.X(x.Cells[0])).First();
+                int tc = toilet.Cells[0], room = lay.Room[tc];
+                double Floor() { double w = 0; for (int c = 0; c < lay.N; c++) if (lay.Room[c] == room) w += f.Stored(f.T.sWater, c); return w; }
+                double Sum() { double w = net.WaterTank + net.WasteWater + f.Total(f.T.gH2O); for (int c = 0; c < lay.N; c++) w += f.Stored(f.T.sWater, c) + f.Drops[f.T.sWater * lay.N + c]; foreach (var d in net.Devices) w += net.PanWater[d.Id]; return w; }
+                f.AddStore(tc, f.T.sWater, 1500, s.Causes.Add(CauseKind.Setup, "시험: 변기 칸에 물이 쏟아졌다", s.Tick, tc));
+                double waste0 = net.WasteWater, floor0 = Floor(), sum0 = Sum();
+                s.Run(Time.Minutes(30));
+                return (net.WasteWater - waste0, floor0, Floor(), sum0, Sum());
+            }
+            var g1 = Drain(false); var g0 = Drain(true);
+            Check("배수구 (C14): 화장실 변기 칸에 1500몰 · 30분 — 젖는 방 바닥이 배수구 쪽으로 기울어 샤워 칸 배수구로 오수 +1200몰 넘게 · 화장실 바닥 물이 처음의 20% 아래 · 물의 합 그대로 / 무중력이면 배수구가 빼지 않는다",
+                g1.waste >= 1200 && g1.floor1 <= 0.2 * g1.floor0 && Math.Abs(g1.sum1 - g1.sum0) < 1e-6 * g1.sum0 && g0.waste < 1,
+                $"오수 +{g1.waste:0} · 화장실 바닥 {g1.floor0:0} → {g1.floor1:0} · 합 {g1.sum0:0.000} → {g1.sum1:0.000} / 무중력 오수 +{g0.waste:0.0}");
         }
     }
 }
