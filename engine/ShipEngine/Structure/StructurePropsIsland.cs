@@ -88,7 +88,7 @@ public sealed partial class Structure
 
     /// <summary>물체끼리 닿을 수 있나 (물건 · 조각 (PH8) · 놓임 · 미끄러짐 · 넘어짐 · 떨어짐 · 떠 있음 — 우주 · 막음 · 낌은 빼고).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private static bool Collides(in Prop p) => p.Kind is 0 or 1 or 2 or 3 && p.State is 0 or 1 or 2 or 3 or 4;
+    private static bool Collides(in Prop p) => p.Kind is 0 or 1 or 2 or 3 or 4 && p.State is 0 or 1 or 2 or 3 or 4;
 
     /// <summary>물건 꼴 (표의 물건마다 누움 다섯)의 가장 먼 꼭짓점 — 표의 순수 함수 (칸 통을 훑는 넓이 · 표마다 한 번 — 새 세계 · 복제가 다시 세지 않는다).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]

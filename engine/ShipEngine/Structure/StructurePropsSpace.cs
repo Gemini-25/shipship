@@ -149,7 +149,7 @@ public sealed partial class Structure
             p.X = x0; p.Y = y0;   // 칸 밖 (지난 자리)으로 — 충격량도 그 자리에서 (각운동량 장부가 맞게 · PH15)
             Push(b, p.X, p.Y, gjx, gjy, p.Cause);
             Bounces++;
-            if (eHit >= PlateHitJ && L.Kind[c] == CellKind.Wall)
+            if (p.Kind == 4 && eHit >= PlateHitJ && L.Kind[c] == CellKind.Wall)   // 금 · 구멍을 내는 것은 판 조각만 (검토 고침 — 물건 · 몸은 튀기만)
             {
                 int hc = sim.Causes.Add(CauseKind.Impact, $"날아온 {p.Kg:0.#}kg {Ko.I(PropName(p))} 부딪혔다 ({-vn:0.0}m/s)", sim.Tick, c, p.Cause);
                 _flyHits.Add((c, eHit, (int)-nx, (int)-ny, hc, Math.Cbrt(p.Kg / 7850.0)));   // 날기가 끝난 뒤 (판 조각이 늘어 목록이 바뀐다) · 들어온 쪽에서 칸 안으로 · 크기: 같은 무게 강철 정육면체의 한 변

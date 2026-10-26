@@ -81,7 +81,7 @@ public sealed partial class LiveShow
     private bool PropSpot(Structure st, in Prop p, out double x, out double y, out double th, out double rise, out DotForm fm)
     {
         x = y = th = rise = 0; fm = null!;
-        if (p.Kind is not (0 or 1 or 2 or 3) || p.State == 5) return false;
+        if (p.Kind is not (0 or 1 or 2 or 3 or 4) || p.State == 5) return false;
         var (px, py, pth) = DrawnProp(p.Id);
         if (double.IsNaN(px)) return false;
         fm = p.Piece > 0 ? st.PieceLook(p) : st.PropForm(p);
@@ -133,7 +133,7 @@ public sealed partial class LiveShow
             for (int b = 0; b < bx.Length; b++) (bx[b], by[b]) = b == 0 || nb <= 1 ? (x, y) : IntoBody(st, b, x, y);
             foreach (var p in st.Props)
             {
-                if (p.Kind is not (0 or 1 or 2 or 3) || p.State == 5) continue;
+                if (p.Kind is not (0 or 1 or 2 or 3 or 4) || p.State == 5) continue;
                 int b = nb > 1 ? Math.Max(0, st.BodyOf(st.CellOf(p))) : 0;
                 if (b >= bx.Length) continue;
                 double qx = bx[b], qy = by[b];

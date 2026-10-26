@@ -1077,7 +1077,7 @@ public sealed partial class Painter
     private DotForm PropLook(Tables t, in Prop p)
     {
         if (p.Piece > 0 && _pst != null) return _pst.PieceLook(p);   // 조각은 원래 꼴을 그 가면으로 자른 것 (PH8)
-        if (p.Kind is 1 or 3 && _pst != null) return _pst.PropForm(p);   // 뜯긴 가구 · 날아간 문짝은 그 꼴 그대로 (PH10)
+        if (p.Kind is 1 or 3 or 4 && _pst != null) return _pst.PropForm(p);   // 뜯긴 가구 · 날아간 문짝 · 판 조각은 그 꼴 그대로 (PH10 · PH15)
         _itemNames ??= t.People.Items.Keys.ToArray();
         return DotForge.Make(t, p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default", lie: p.Pose);
     }

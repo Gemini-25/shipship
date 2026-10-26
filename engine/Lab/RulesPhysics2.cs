@@ -357,6 +357,38 @@ public static partial class Program
                 Check("판 조각 (다) 운석과 배의 자세: 배가 90° 돌아 있으면 세상 틀 +y로 오는 운석은 도면 왼쪽 외판 (왼쪽이 우주인 칸)을 맞는다",
                     hit >= 0 && left && !top, hit >= 0 ? $"맞은 칸 ({lay.X(hit)},{lay.Y(hit)}) · 왼쪽이 우주 {left} · 위가 우주 {top}" : "맞음 없음");
             }
+            // (라) 검토 고침: 같은 줄로 0.6m 사이를 두고 들어온 30kg 판 조각 둘은 서로 부딪혀 포개지지 않는다 (예전: 판 조각은 물체끼리 닿지 않아 한 자리에 겹쳤다)
+            {
+                var s = PropWorld(1);
+                var st = s.Get<Structure>(); var f = s.Get<Field>(); var L = s.Layout;
+                st.EnsureBody();
+                f.SetHole(L.Index(1, 4), 2.5f);
+                s.Step();
+                int a = st.ThrowPlate(s, -3, 4.5, 6, 0, 30, 0), b = st.ThrowPlate(s, -3.6, 4.5, 6, 0, 30, 0);
+                s.Run(6);
+                int ia = st.IndexOf(a), ib = st.IndexOf(b);
+                var pa = ia >= 0 ? st.Props[ia] : default; var pb = ib >= 0 ? st.Props[ib] : default;
+                double d = Math.Sqrt((pa.X - pb.X) * (pa.X - pb.X) + (pa.Y - pb.Y) * (pa.Y - pb.Y));
+                Check("판 조각 (라) 검토 고침: 같은 줄로 0.6m 사이를 두고 큰 구멍에 든 30kg 판 조각 둘은 서로 부딪혀 한 자리에 포개지지 않는다 (가운데 사이 0.2m 넘게 · 둘 다 배 안 바닥에)",
+                    ia >= 0 && ib >= 0 && pa.Host == 0 && pb.Host == 0 && d > 0.2,
+                    $"판 1 ({pa.X:0.00},{pa.Y:0.00}) 몸 {pa.Host} · 판 2 ({pb.X:0.00},{pb.Y:0.00}) 몸 {pb.Host} · 사이 {d:0.00}m");
+            }
+            // (마) 검토 고침: 우주를 나는 13kg 식량 상자가 8m/s로 외판에 맞아도 (416J) ④ 충격 길 (금 · 구멍 · 쾅)은 판 조각만 — 상자는 튈 뿐 (예전: 상자도 충격 · '판 조각 맞음'으로 셌다)
+            {
+                var s = PropWorld(1);
+                var st = s.Get<Structure>(); var L = s.Layout;
+                st.EnsureBody();
+                int id = Slide(s, "식량 상자", 6.5, 3.5, 0, 0);
+                s.Step();
+                int i = st.IndexOf(id); var p = st.Props[i];
+                p.State = 5; p.Host = -1; p.X = 6.5; p.Y = -4; p.Vx = 0; p.Vy = 8; p.Asleep = 0; st.Props[i] = p;
+                long imp0 = st.Impacts, b0 = st.Bounces;
+                s.Run(2);
+                int roof = L.Index(6, 1);
+                Check("판 조각 (마) 검토 고침: 우주를 나는 13kg 식량 상자가 8m/s로 외판에 맞으면 튀기만 한다 — 충격 · 판 조각 맞음으로 세지 않는다 · 외판 원인이 비어 있다",
+                    st.Impacts == imp0 && st.PlateHits == 0 && st.DamageCause[roof] == 0 && st.Bounces > b0,
+                    $"충격 +{st.Impacts - imp0} · 판 조각 맞음 {st.PlateHits} · 튐 +{st.Bounces - b0} · 외판 원인 {(st.DamageCause[roof] != 0 ? s.Causes.Story(st.DamageCause[roof]) : "-")}");
+            }
         }
 }
 }
