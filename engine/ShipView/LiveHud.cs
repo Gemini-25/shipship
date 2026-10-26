@@ -43,21 +43,21 @@ public sealed partial class LiveShow
     // ── 출항 준비 (docs/UI.md 4 — 추천 A): 띄우면 세계는 멈춘 채 항로 판이 열린다 · 항로를 누르면 고르기만 · [이대로 출항] · 멈춤 · 빠르기로 떠난다 ──
     public bool Holding;
 
+    /// <summary>출항 준비: 멈춘 채 [사람들] (출항 소개 — docs/OBSERVER.md §6.1 · V6)이 먼저 열린다 — 판 아래 [이대로 출항] [항로 ›] [다른 사람들로].</summary>
     public void HoldForDeparture()
     {
         if (double.IsNaN(DepartInMin())) return;
         Holding = Paused = true;
-        Panel = PanelKind.Route;
-        var o = Sim.Find<Outside>();
-        PanelPick = o != null ? Math.Max(0, o.Route - 1) : 0;
-        PanelPickKey = o?.Route ?? 0;
+        Panel = PanelKind.People; Detail = DetailKind.None; DetailId = -1; DetailSub = 0;
+        var rows = PanelRows();
+        PanelPick = 0; PanelPickKey = rows.Length > 0 ? rows[0].Key : 0;
     }
 
     public void Depart()
     {
         bool was = Holding;
         Holding = Paused = false;
-        if (was && Panel == PanelKind.Route) Panel = PanelKind.None;
+        if (was && (Panel == PanelKind.Route || Panel == PanelKind.People && Detail == DetailKind.None)) ClosePanel();   // 항로 판 · 출항 소개는 떠나면 닫는다
     }
 
     /// <summary>출발 점화까지 게임 분 (떠났으면 NaN).</summary>
@@ -171,10 +171,12 @@ public sealed partial class LiveShow
     public bool PanelAct(long key)
     {
         if (Detail == DetailKind.Record) return RecordAct(key);   // 기록 판의 ▶ (장면 · 묘비 · 결산)
+        if (Intro && key >= KeyPerson(0) && key < KeyPerson(0) + (1L << 32)) { ToggleStar((int)(key - KeyPerson(0))); return true; }   // 출항 소개의 ☆ (V6)
         if (Panel != PanelKind.Highlights || key < KeyHighlight(0)) return false;
         int i = (int)(key - KeyHighlight(0));
         if (i < 0 || i >= Dir.Highlights.Count) return false;
         PanelPickKey = key;
+        if (PhotoOnly(Dir.Highlights[i]) is { } only) { ShowPhoto(only.Id); return true; }   // ○ [사진] — 정점 사진을 크게 (V5)
         if (!StartReplay(Dir.Highlights[i])) { Notify(PhotoWhy); return false; }
         ClosePanel();
         return true;
@@ -262,7 +264,15 @@ public sealed partial class LiveShow
     // ── 알림 · 방송 ──
     private PanelKind _noticeLink;
     /// <summary>알림을 눌렀다: 붙은 판을 연다.</summary>
-    public void NoticeGo() { var k = _noticeLink; if (k != PanelKind.None && Panel != k) TogglePanel(k); _noticeLeft = 0; }
+    public void NoticeGo()
+    {
+        var k = _noticeLink;
+        if (_noticeAgent >= 0) SelectAgent(_noticeAgent);   // ☆ 알림 → 그 이를 따라간다 (V6)
+        else if (k == PanelKind.Record && _noticeAlbum) OpenRecord(2);   // 자막 사진 알림 → 사진첩 (V5)
+        else if (k != PanelKind.None && Panel != k) TogglePanel(k);
+        _noticeLeft = 0;
+    }
+    private bool _noticeAlbum;
     /// <summary>방송 자막을 눌렀다: 주컴퓨터 판의 아침 방송 줄.</summary>
     public void BroadcastGo() { if (Panel != PanelKind.Journal) TogglePanel(PanelKind.Journal); PanelPickKey = -3; }
     /// <summary>안 읽은 일지가 있나 (주컴퓨터 판을 열면 지운다).</summary>

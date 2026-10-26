@@ -121,7 +121,7 @@ public sealed partial class LiveShow
     {
         if (DetailSub == 0) NowChapter();
         int sig = HashCode.Combine(DetailSub, Dir.Chapters.Count, PanelPickKey, _recordShut, Dir.Highlights.Count, Dir.Ring.Count > 0 ? Dir.Ring[0].tick : -1, _nowVer,
-            HashCode.Combine((int)Ended, Sim.Facts.CountOf(FactKind.Died), Dir.People.Logs.Count, Dir.People.MournSeen, DetailSub == 3 ? Sim.Tick / 25 : 0, Vault.Scenes.Count, Vault.DayWorlds.Count));
+            HashCode.Combine((int)Ended, Sim.Facts.CountOf(FactKind.Died), Dir.People.Logs.Count, Dir.People.MournSeen, DetailSub == 3 ? Sim.Tick / 25 : 0, Vault.Scenes.Count, Vault.DayWorlds.Count, Photos.Version));
         if (sig != _recSig || _recRows.Length == 0)
         {
             var l = new List<PanelRow>();
@@ -129,7 +129,7 @@ public sealed partial class LiveShow
             {
                 case 0: DayRows(l); break;
                 case 1: TombRows(l); break;
-                case 2: l.Add(new PanelRow("사진첩은 아직 비어 있다", "", false, Key: -1)); break;
+                case 2: AlbumRows(l); break;
                 default: VoyageRows(l); break;
             }
             _recRows = l.ToArray(); _recSig = sig;
@@ -137,12 +137,22 @@ public sealed partial class LiveShow
         rows.AddRange(_recRows);
     }
 
+    /// <summary>장 펼침의 정점 사진 줄 (마디 번호 — 장면 1~5 · 주인공 16~ 사이).</summary>
+    private const int DayPhotoPart = 8;
+    /// <summary>그날 가장 큰 장면 (무게 순 — 사진이 있는 첫 장면)의 정점 사진.</summary>
+    private Photo? DayPhoto(Chapter c) { foreach (var h in c.Scenes) if (Photos.PeakOf(h) is { } p) return p; return null; }
+
     private bool Opened(long head) => PanelPickKey >> 8 == head >> 8 && PanelPickKey != _recordShut;
 
     private string AgentName(int a) { var m = Sim.Find<Mind>(); return m != null && a >= 0 && a < m.Agents.Count ? m.NameOf(a) : "누군가"; }
     private string RoleOf(int a) { var m = Sim.Find<Mind>(); return m != null && a >= 0 && a < m.Agents.Count && m.Agents[a].IsPerson && m.Agents[a].C.Role < m.RoleNames.Length ? m.RoleNames[m.Agents[a].C.Role] : ""; }
-    /// <summary>장면 줄: 표 (● 고리 · 금고 · ◐ 감아 · ○ 사진만 — 도형으로 그린다) · 때 · 제목 · ▶.</summary>
-    private PanelRow SceneRow(Highlight h, long key) { var (mark, sub, can) = WayRow(h); return new PanelRow($"{HourMin(h.Tick)}  {h.Title}", sub, false, Key: key, Act: "▶ 다시보기", ActOn: can, Why: PhotoWhy, Mark: mark); }
+    /// <summary>장면 줄: 표 (● 고리 · 금고 · ◐ 감아 · ○ 사진만 — 도형으로 그린다) · 때 · 제목 · ▶ (○는 정점 사진이 있으면 [사진] — V5).</summary>
+    private PanelRow SceneRow(Highlight h, long key)
+    {
+        var (mark, sub, can) = WayRow(h);
+        bool photo = mark == 3 && Photos.PeakOf(h) != null;
+        return new PanelRow($"{HourMin(h.Tick)}  {h.Title}", sub, false, Key: key, Act: photo ? "사진" : "▶ 다시보기", ActOn: can || photo, Why: PhotoWhy, Mark: mark);
+    }
 
     /// <summary>날마다: '오늘 지금까지' → 장 (새것 위) · 고른 장은 펼친다 (요약 줄 · 다시볼 장면 · 주인공).</summary>
     private void DayRows(List<PanelRow> rows)
@@ -159,6 +169,7 @@ public sealed partial class LiveShow
             rows.Add(new PanelRow(c.Title, open ? string.Join("\n", c.Lines) : "", false, Key: head));
             if (!open) continue;
             for (int k = 0; k < c.Scenes.Count && k < Director.SceneCount; k++) rows.Add(SceneRow(c.Scenes[k], KeyChapter(i, 1 + k)));
+            if (DayPhoto(c) is { } dp) rows.Add(new PanelRow($"사진 — {dp.Title}", "그날 가장 큰 장면의 정점 · 누르면 크게", false, Key: KeyChapter(i, DayPhotoPart)));   // V5
             for (int k = 0; k < c.Cast.Count; k++)
             {
                 int a = c.Cast[k];
@@ -215,6 +226,7 @@ public sealed partial class LiveShow
             string role = RoleOf(a), deeds = Dir.People.Deeds(a);
             var sub = new List<string> { $"{DayClock(at)} — {DeathLine(cause)}", $"{at / Time.TicksPerDay + 1}일을 함께했다{(deeds.Length > 0 ? " · " + deeds : "")}" };
             if (Dir.People.Find(a) is { } log) foreach (var w in log.Words) sub.Add("추모 — " + w);
+            if (Photos.LastOf(a) != null) sub.Add("마지막 사진 — 누르면 크게");
             var h = DeathScene(a, at);
             bool can = h != null && CanReplay(h);
             rows.Add(new PanelRow($"{AgentName(a)}{(role.Length > 0 ? " · " + role : "")}", string.Join("\n", sub), false, Face: FaceSlotOf(a), Key: KeyTomb(a),
@@ -276,10 +288,13 @@ public sealed partial class LiveShow
             int i = (int)(n >> 8) - 1, part = (int)(n & 0xFF);
             if (part == 0) { _recordShut = key == was && _recordShut != key ? key : 0; return true; }
             if (part >= 16 && i >= 0 && i < chs.Count && part - 16 < chs[i].Cast.Count) { int a = chs[i].Cast[part - 16]; OpenDetail(DetailKind.Person, a); return true; }   // 로봇이면 OpenDetail이 로봇 자세히로
+            if (part == DayPhotoPart && i >= 0 && i < chs.Count && DayPhoto(chs[i]) is { } dp) { ShowPhoto(dp.Id); return true; }
             return true;
         }
         if (sub == 0 && key == KeyToday) { _recordShut = key == was && _recordShut != key ? key : 0; return true; }
         if (sub == 3 && n >> 20 == 2) { OpenDetail(DetailKind.Person, (int)(n & 0xFFFFF)); return true; }
+        if (sub == 1 && Photos.LastOf((int)n - 1) is { } last) { ShowPhoto(last.Id); return true; }   // 묘비 → 마지막 사진 (V5)
+        if (sub == 2 && n > 0) { ShowPhoto((int)n); return true; }   // 사진첩 → 크게
         return true;
     }
 
@@ -308,6 +323,7 @@ public sealed partial class LiveShow
                 int hi = (int)(n & 0xFFFFF);
                 return hi < Dir.Highlights.Count ? Dir.Highlights[hi] : null;
             }
+            case 2 when n > 0: return Photos.Find((int)n)?.Scene;
         }
         return null;
     }
@@ -318,6 +334,7 @@ public sealed partial class LiveShow
         var h = RecordScene(key);
         if (h == null) return false;
         PanelPickKey = key;
+        if (key >> 36 != (8L << 4 | 2) && PhotoOnly(h) is { } only) { ShowPhoto(only.Id); return true; }   // ○ [사진] — 정점 사진을 크게 (V5 · 사진첩 줄의 ▶는 다시보기만)
         if (!StartReplay(h)) { Notify(PhotoWhy); return false; }
         ClosePanel();
         return true;

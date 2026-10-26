@@ -138,7 +138,7 @@ public static partial class Program
             int pump = net.Devices.First(d => d.Type == "CoolantPump").Id;
             v.Run(25);
             int robot = v.Get<Mind>().AddRobot(v, Worlds.At(vlay, 12, 1), AgentKind.Robot, Worlds.At(vlay, 12, 1));
-            net.Loose[pump] = 0.999f;
+            net.Loose[pump] = NearLoose(net, pump, 0.2);   // 다 풀리기 12분 전
             long v0 = v.Get<Sound>().Logged;
             int tools = 0;
             for (int t = 0; t < Time.Minutes(40); t++) { v.Step(); foreach (var e in v.Get<Sound>().LogSince(v0)) if (e.Kind == SoundKind.Tool && e.Actor == robot) tools++; v0 = v.Get<Sound>().Logged; }

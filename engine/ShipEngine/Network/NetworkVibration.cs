@@ -3,12 +3,14 @@ namespace ShipEngine;
 /// <summary>
 /// ⑥ 진동 (④ 열 · 진동 · docs/ENGINE.md ④ '열 · 진동'): 돌아가는 기계(기계 부품이 있는 장치)는 초당 25번 흔들린다 —
 /// 세기 = 4MPa × 갈래(펌프 1.25 · 엔진 2 · 보조 발전기 1.5 · 공조 0.75 · 공장 1 · 그 밖 0.4) × (1 + 4 × 기계 부품 닳음) (풀렸으면 × 1.5).
-/// <para>볼트는 진동에 풀린다 (정커 효과 — 세기의 제곱 · 기본 세기에서 200시간) · 다 풀리면 덜컹거린다 (사실 · 소리 — 모터가 세 배 빨리 닳는다).
+/// <para>볼트는 진동에 풀린다 (정커 효과 — 세기의 제곱 · 기본 세기에서 3,000시간: 새 엔진 (8MPa) 한 달 · 펌프 석 달 — 실제 재조임 주기는 몇 주 ~ 몇 달 ·
+/// 베어링이 닳아 크게 떨면 제곱으로 빨라진다 — 75% 닳은 엔진 이틀) · 다 풀리면 덜컹거린다 (사실 · 소리 — 모터가 세 배 빨리 닳는다).
+/// 예전 200시간은 새 엔진도 50시간마다 다 풀려 새뜰호 열흘 '고쳤다' 73건의 대부분이 볼트였다 (DF10 · 보고서 §4-15).
 /// 곁 벽의 금은 ④ 구조에 요청한다 (1분에 1,500번). 조이는 것은 사람 · 로봇 (주컴퓨터가 맡긴다).</para>
 /// </summary>
 public sealed partial class Network
 {
-    public const double VibBaseMPa = 4, VibHz = 25, LooseHours = 200;
+    public const double VibBaseMPa = 4, VibHz = 25, LooseHours = 3000;
     /// <summary>진동 센서가 잡는 풀림 (떨림의 결이 바뀐다 — 덜컹거리기 전) · 손으로 만져 느끼는 풀림 (조이러 온 이가 렌치를 댄다).</summary>
     public const float LooseSensed = 0.6f, LooseFelt = 0.3f;
     public float[] Loose = Array.Empty<float>();

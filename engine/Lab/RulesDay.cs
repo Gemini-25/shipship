@@ -73,9 +73,11 @@ public static partial class Program
                 recall.Count, recall.Count > 0 ? $"{Time.Clock(recall[0].Tick)} {s.Causes.Text(recall[0].Line)}" : "");
         }
         long ResumeAt = Time.Hours(22); Task<Chapter?>? resumed = null;
+        double o2Start = life.O2Used; float minSat = 1;   // DF10 몸 숫자: 숨으로 쓴 산소 · 가장 낮은 산소 포화
         for (int k = 0; k < Time.Hours(24); k++)
         {
             day.Step();
+            foreach (var a in people) if (life[a.C.Body].Alive != 0 && life[a.C.Body].Conscious != 0) minSat = Math.Min(minSat, life[a.C.Body].SpO2);
             if (k % Time.Minutes(10) == 0)
                 foreach (var a in people) if (a.C.Up != 0 && life[a.C.Body].Asleep == 0) { feltN++; if (a.C.Fear < 0.05f && a.C.Sad < 0.05f && a.C.Anger < 0.05f && a.C.Joy < 0.05f && a.C.Stress < 0.05f) feltZero++; }
             if (k == FireAt) { var fork = day.Clone(); fireEve = Task.Run(() => FireEvening(fork)); }
@@ -134,6 +136,14 @@ public static partial class Program
                 ok && day.Facts.CountOf(FactKind.WallCrack) == 0 && people.Count(a => work[a.Id] > Time.Hours(2)) >= 4,
                 string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)} 끼니 {meals[a.Id]} 잠 {sleepH(a.Id):0.0}시간 일 {work[a.Id] / (double)Time.TicksPerHour:0.0}시간 굶주린 {starving[a.Id] / (double)Time.TicksPerHour:0.0}시간"))
                 + $" · 금 {day.Facts.CountOf(FactKind.WallCrack)}");
+        }
+
+        // ── DF10 몸 숫자 (보고서 §4-19): 건강한 이의 산소 포화는 실제대로 · 숨으로 쓰는 산소는 NASA 어림 언저리 ──
+        {
+            double o2Day = (life.O2Used - o2Start) * 0.032 / people.Count;
+            Check("몸 숫자: 평시 하루 건강한 이의 산소 포화가 늘 0.96 넘게 (실제 97~99% · 예전 모두 0.95) · 숨으로 쓴 산소는 한 사람 하루 0.75~0.95kg (NASA 0.84 — 장부의 '하루에 쓰는 양'은 썩음 · 녹을 더한 값)",
+                minSat >= 0.96f && minSat <= 0.99f && o2Day >= 0.75 && o2Day <= 0.95,
+                $"가장 낮은 포화 {minSat:0.000} · 숨 산소 {o2Day:0.000}kg/인·일");
         }
 
         // ── DF6 물 · 열 경보 (보고서 §4-3 · §4-7): 물 재생기가 하루 든 오수를 다 거른다 · 운동한 건강한 이에게 열 경보 0 · 방송 · 일지 · 배급이 같은 날 수 ──

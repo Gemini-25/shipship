@@ -6,7 +6,13 @@ public enum PeopleKind : byte { Couple, Confess, Reconcile, Dream, Nickname, Cus
 /// <summary>사람 일 하나: 때 · 갈래 · 두 사람 (마음 번호 — 없으면 −1) · 화면 글 (그때 짓는다 — 원인 글 · 이름).</summary>
 public struct PeopleNote { public long Tick; public PeopleKind Kind; public int A, B; public string Text; }
 
-/// <summary>한 사람 (마음 번호)의 장부: 한 일 (구함 · 끔 · 덧댐 · 돌봄 · 고침) · 겪은 일 (다침 · 쓰러짐 · 마음 — 겁 · 단단해짐 · 외상 뒤 성장) · 숨진 때 · 추모에서 나온 말 (셋까지).</summary>
+/// <summary>지나온 길의 갈래 (V6): 구함 · 다침 · 쓰러짐 · 마음 (겁 · 단단해짐 · 외상 뒤 성장) · 짝 · 꿈 · 숨짐.</summary>
+public enum PathKind : byte { Rescue, Hurt, Collapsed, Heart, Couple, Dream, Died }
+
+/// <summary>지나온 길 한 걸음: 때 · 갈래 · 마음 갈래 (Heart일 때) · 화면 글 (그때 짓는다 — 이름).</summary>
+public struct PathStep { public long Tick; public PathKind Kind; public HeartEvent Heart; public string Text; }
+
+/// <summary>한 사람 (마음 번호)의 장부: 한 일 (구함 · 끔 · 덧댐 · 돌봄 · 고침) · 겪은 일 (다침 · 쓰러짐 · 마음 — 겁 · 단단해짐 · 외상 뒤 성장) · 숨진 때 · 추모에서 나온 말 (셋까지) · 지나온 길 (V6 — 때 차례 · 예순넷까지).</summary>
 public sealed class PersonLog
 {
     public int Rescued, Fires, Patches, Treated, Repairs;
@@ -14,6 +20,16 @@ public sealed class PersonLog
     public long DiedAt = -1;
     public int DiedCause, DiedCell = -1;
     public readonly List<string> Words = new();
+    public readonly List<PathStep> Path = new();
+
+    /// <summary>길에 한 걸음 (넘치면 가장 이른 다침 · 쓰러짐부터 놓는다 — 없으면 가장 이른 것).</summary>
+    public void Step(PathStep p)
+    {
+        Path.Add(p);
+        if (Path.Count <= PeopleBook.MaxPath) return;
+        int drop = Path.FindIndex(x => x.Kind is PathKind.Hurt or PathKind.Collapsed);
+        Path.RemoveAt(drop >= 0 ? drop : 0);
+    }
 }
 
 /// <summary>
@@ -23,7 +39,9 @@ public sealed class PersonLog
 /// </summary>
 public sealed class PeopleBook
 {
-    public const int MaxWords = 3, MaxNotes = 4096;
+    public const int MaxWords = 3, MaxNotes = 4096, MaxPath = 64;
+    /// <summary>다침은 한 사람에 이만큼에 한 걸음만 (틱마다 날 수 있다 — 게임 시간).</summary>
+    public static readonly long HurtStepEvery = Time.Hours(1);
     /// <summary>사람마다 장부 (열쇠 차례 — 같은 상태면 같은 바이트).</summary>
     public readonly SortedDictionary<int, PersonLog> Logs = new();
     public readonly List<PeopleNote> Notes = new();
@@ -70,9 +88,17 @@ public sealed class PeopleBook
         w.I32(Notes.Count);
         foreach (var n in Notes) { w.I64(n.Tick); w.Byte((byte)n.Kind); w.I32(n.A); w.I32(n.B); w.Str(n.Text); }
         w.I32(MournFor); w.I64(MournSince); w.I64(MournSeen);
+        // 지나온 길 (연출 기록 판 3 — V6)
+        w.I32(Logs.Count);
+        foreach (var (k, l) in Logs)
+        {
+            w.I32(k); w.I32(l.Path.Count);
+            foreach (var p in l.Path) { w.I64(p.Tick); w.Byte((byte)p.Kind); w.Byte((byte)p.Heart); w.Str(p.Text); }
+        }
     }
 
-    public void Load(StateReader r)
+    /// <summary>읽는다 (path: 연출 기록 판 3부터 — 지나온 길).</summary>
+    public void Load(StateReader r, bool path = true)
     {
         r.Tag("사람 일 장부");
         Logs.Clear();
@@ -86,6 +112,12 @@ public sealed class PeopleBook
         Notes.Clear();
         for (int i = 0, n = r.I32(); i < n; i++) Notes.Add(new PeopleNote { Tick = r.I64(), Kind = (PeopleKind)r.Byte(), A = r.I32(), B = r.I32(), Text = r.Str() ?? "" });
         MournFor = r.I32(); MournSince = r.I64(); MournSeen = r.I64();
+        if (!path) return;
+        for (int i = 0, n = r.I32(); i < n; i++)
+        {
+            var l = Of(r.I32());
+            for (int j = 0, m = r.I32(); j < m; j++) l.Path.Add(new PathStep { Tick = r.I64(), Kind = (PathKind)r.Byte(), Heart = (HeartEvent)r.Byte(), Text = r.Str() ?? "" });
+        }
     }
 
     public void Clear() { Logs.Clear(); Notes.Clear(); MournFor = -1; MournSince = MournSeen = 0; }
@@ -105,23 +137,43 @@ public sealed partial class Director
         static string Head(string s) { int i = s.IndexOf(" — ", StringComparison.Ordinal); return i > 0 ? s[..i] : s; }
         switch (f.Kind)
         {
-            case FactKind.Rescue when agent >= 0: People.Of(agent).Rescued++; break;
+            case FactKind.Rescue when agent >= 0:
+                People.Of(agent).Rescued++;
+                People.Of(agent).Step(new PathStep { Tick = f.Tick, Kind = PathKind.Rescue, Text = f.Other >= 0 && f.Other != agent ? $"{Ko.Eul(Name(f.Other))} 구했다" : "사람을 구했다" });
+                break;
             case FactKind.Extinguished when agent >= 0: People.Of(agent).Fires++; break;
             case FactKind.Patched when agent >= 0: People.Of(agent).Patches++; break;
             case FactKind.Treated when agent >= 0: People.Of(agent).Treated++; break;
             case FactKind.Repaired when agent >= 0: People.Of(agent).Repairs++; break;
-            case FactKind.Hurt when agent >= 0: People.Of(agent).Hurt++; break;
-            case FactKind.Collapsed when agent >= 0: People.Of(agent).Collapsed++; break;
-            case FactKind.Heart when agent >= 0 && (HeartEvent)(int)f.Size is HeartEvent.Fearful or HeartEvent.Hardened or HeartEvent.Grew: People.Of(agent).Hearts++; break;
+            case FactKind.Hurt when agent >= 0:
+            {
+                var l = People.Of(agent); l.Hurt++;
+                int last = l.Path.FindLastIndex(p => p.Kind == PathKind.Hurt);
+                if (last < 0 || f.Tick - l.Path[last].Tick >= PeopleBook.HurtStepEvery) l.Step(new PathStep { Tick = f.Tick, Kind = PathKind.Hurt, Text = "다쳤다" });
+                break;
+            }
+            case FactKind.Collapsed when agent >= 0: People.Of(agent).Collapsed++; People.Of(agent).Step(new PathStep { Tick = f.Tick, Kind = PathKind.Collapsed, Text = "쓰러졌다" }); break;
+            case FactKind.Heart when agent >= 0 && (HeartEvent)(int)f.Size is HeartEvent.Fearful or HeartEvent.Hardened or HeartEvent.Grew:
+            {
+                var he = (HeartEvent)(int)f.Size;
+                People.Of(agent).Hearts++;
+                People.Of(agent).Step(new PathStep { Tick = f.Tick, Kind = PathKind.Heart, Heart = he, Text = he switch { HeartEvent.Fearful => "겁에 질렸다 — 겁이 많아졌다", HeartEvent.Hardened => "맞서며 단단해졌다", _ => "아픔을 지나 자랐다" } });
+                break;
+            }
             case FactKind.Died when agent >= 0:
             {
                 var l = People.Of(agent);
-                if (l.DiedAt < 0) { l.DiedAt = f.Tick; l.DiedCause = f.Cause; l.DiedCell = f.Cell; }
+                if (l.DiedAt < 0) { l.DiedAt = f.Tick; l.DiedCause = f.Cause; l.DiedCell = f.Cell; l.Step(new PathStep { Tick = f.Tick, Kind = PathKind.Died, Text = "숨을 거두었다" }); }
                 break;
             }
             case FactKind.Relationship when (int)f.Size is 1 or 4 && f.Actor >= 0:
                 People.Add(new PeopleNote { Tick = f.Tick, Kind = (int)f.Size == 1 ? PeopleKind.Couple : PeopleKind.Reconcile, A = f.Actor, B = f.Other,
                     Text = f.Cause != 0 ? Head(sim.Causes.Text(f.Cause)) : $"{Ko.Gwa(Name(f.Actor))} {Ko.I(Name(f.Other))} 가까워졌다" });
+                if ((int)f.Size == 1)
+                {
+                    People.Of(f.Actor).Step(new PathStep { Tick = f.Tick, Kind = PathKind.Couple, Text = $"{Ko.Gwa(Name(f.Other))} 짝이 되었다" });
+                    if (f.Other >= 0 && f.Other != f.Actor) People.Of(f.Other).Step(new PathStep { Tick = f.Tick, Kind = PathKind.Couple, Text = $"{Ko.Gwa(Name(f.Actor))} 짝이 되었다" });
+                }
                 break;
             case FactKind.Talk when f.Actor >= 0 && f.Other >= 0 && (TalkEnd)(int)f.Size is TalkEnd.Accept or TalkEnd.Reject:
                 People.Add(new PeopleNote { Tick = f.Tick, Kind = PeopleKind.Confess, A = f.Actor, B = f.Other, Text = $"{Ko.I(Name(f.Actor))} {Name(f.Other)}에게 마음을 털어놓았다" });
@@ -131,6 +183,7 @@ public sealed partial class Director
                 break;
             case FactKind.Aim when f.Actor >= 0 && f.Size >= 1:
                 People.Add(new PeopleNote { Tick = f.Tick, Kind = PeopleKind.Dream, A = f.Actor, B = -1, Text = $"{Ko.I(Name(f.Actor))} 꿈을 이루었다" });
+                People.Of(f.Actor).Step(new PathStep { Tick = f.Tick, Kind = PathKind.Dream, Text = Mind.AimName((Aim)f.Other) is { Length: > 0 } aim ? $"꿈을 이루었다 — {aim}" : "꿈을 이루었다" });
                 break;
             case FactKind.Culture when (CultureEvent)(int)f.Size == CultureEvent.Nickname && f.Actor >= 0:
             {

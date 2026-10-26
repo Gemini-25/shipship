@@ -104,6 +104,8 @@ public sealed class VoyageBundle
     public readonly Dictionary<string, byte[]> Other = new();
     /// <summary>항해 폴더에 따로 쓰는 파일 (장면 금고 vault/ — V4): 이름 → 바이트 · 압축했나 · 날것 길이 (묶음 바이트에는 넣지 않는다 · 이미 있는 파일은 다시 쓰지 않는다).</summary>
     public readonly Dictionary<string, (byte[] data, bool packed, int raw)> Files = new();
+    /// <summary>사진 (photos/ — V5): 파일 이름 → PNG 바이트 (png) · 아직이면 RGBA와 크기 (쓰는 일꾼이 PNG로 짓는다 · 이미 있는 파일은 다시 쓰지 않는다).</summary>
+    public readonly Dictionary<string, (byte[] data, bool png, int w, int h)> Photos = new();
 
     /// <summary>틀 · 압축 (다른 일꾼에서 — 화면 60프레임 · Brotli 빠르게).</summary>
     public byte[] ToBytes()
@@ -288,12 +290,13 @@ public sealed class VoyageStore
         b.Meta.Slot = Rotate(b.Meta); b.Meta.Serial = serial + 1;
         b.Meta.WorldVersion = Sim.SaveVersion; b.Meta.BundleVersion = VoyageBundle.Version;
         WriteVault(folder, b);   // 금고 파일이 먼저 (저장 칸이 없는 파일을 가리키지 않게)
+        WritePhotos(folder, b);
         WriteSafe(SlotPath(folder, b.Meta.Slot), b.ToBytes());
         WriteSafe(Path.Combine(folder, CardFile), System.Text.Encoding.UTF8.GetBytes(b.Meta.ToJson()));
         return b.Meta;
     }
 
-    public const string VaultFolder = "vault";
+    public const string VaultFolder = "vault", PhotoFolder = "photos";
 
     /// <summary>장면 금고 파일 (vault/k-틱.bin · d-날.bin — 압축 바이트): 없는 것만 쓰고 · 이번 목록에 없는 옛 파일은 지운다 (앞선 저장 칸이 가리키던 칸은 이어 볼 때 건너뛴다).</summary>
     private static void WriteVault(string folder, VoyageBundle b)
@@ -308,6 +311,29 @@ public sealed class VoyageStore
         }
         foreach (var f in Directory.GetFiles(dir, "*.bin"))
             if (!b.Files.ContainsKey(Path.GetFileName(f))) try { File.Delete(f); } catch (IOException) { }
+    }
+
+    /// <summary>사진 파일 (photos/p-번호.png — V5): 없는 것만 쓰고 (아직 RGBA면 PNG로 짓는다) · 이번 목록에 없는 옛 사진은 지운다 (사진첩이 놓은 것).</summary>
+    private static void WritePhotos(string folder, VoyageBundle b)
+    {
+        string dir = Path.Combine(folder, PhotoFolder);
+        if (b.Photos.Count == 0 && !Directory.Exists(dir)) return;
+        Directory.CreateDirectory(dir);
+        foreach (var (name, (data, png, w, h)) in b.Photos)
+        {
+            string path = Path.Combine(dir, name);
+            if (!File.Exists(path) && (png || data.Length >= w * h * 4)) WriteSafe(path, png ? data : Png.Encode(w, h, data));
+        }
+        foreach (var f in Directory.GetFiles(dir, "*.png"))
+            if (!b.Photos.ContainsKey(Path.GetFileName(f))) try { File.Delete(f); } catch (IOException) { }
+    }
+
+    /// <summary>그 항해의 사진 파일 (PNG 바이트 — 없거나 못 읽으면 null).</summary>
+    public byte[]? PhotoFile(VoyageMeta m, string name)
+    {
+        if (name.Contains('/') || name.Contains('\\') || name.Contains("..")) return null;
+        string path = Path.Combine(FolderOf(m), PhotoFolder, name);
+        try { return File.Exists(path) ? File.ReadAllBytes(path) : null; } catch (IOException) { return null; }
     }
 
     /// <summary>그 항해의 금고 파일 (압축 바이트 — 없거나 못 읽으면 null).</summary>
@@ -397,7 +423,7 @@ public sealed partial class LiveShow
     public void ResumeGo() { ResumeCard = Array.Empty<string>(); Paused = false; }
 
     /// <summary>화면 마디 판: 2 — 끝난 항해 (결산 · V3 — 판 1도 읽는다).</summary>
-    public const int ScreenVersion = 2;
+    public const int ScreenVersion = 3;   // 3: ☆ 눈여겨보는 이 (V6)
 
     /// <summary>산 세계가 한 틱 돈 뒤: 한 손 장부의 새 손 (받은 차례가 더 큰 것)을 항해 손 기록에 옮긴다.</summary>
     private void LogHands()
@@ -418,6 +444,7 @@ public sealed partial class LiveShow
         var hw = new StateWriter(1 << 12); hw.Tag("손 기록"); hw.List(_handLog); b.Hands = hw.ToArray();
         b.Screen = SaveScreen();
         if (Vault.Scenes.Count + Vault.DayWorlds.Count > 0) b.Other[SceneVault.Part] = Vault.SaveIndex(Dir.Highlights, b.Files);   // 장면 금고 목록 (바이트는 vault/ 파일 — V4)
+        if (Photos.Photos.Count > 0) b.Other[PhotoBook.Part] = Photos.SaveIndex(Dir.Highlights, b.Photos);   // 사진첩 목록 (바이트는 photos/ PNG — V5)
         var mind = Sim.Find<Mind>(); var life = Sim.Find<Life>();
         int aboard = 0, alive = 0, robots = 0;
         if (mind != null)
@@ -437,7 +464,7 @@ public sealed partial class LiveShow
         return b;
     }
 
-    /// <summary>화면 마디: 고른 빠르기 · 하루 목표 · 따라 보기 하루 · 주컴퓨터 말 기록 512 · 판단 일지 32칸 (찍지 않는 화면 고리 — 이어 본 뒤에도 비지 않게).</summary>
+    /// <summary>화면 마디: 고른 빠르기 · 하루 목표 · 따라 보기 하루 · 주컴퓨터 말 기록 512 · 판단 일지 32칸 (찍지 않는 화면 고리 — 이어 본 뒤에도 비지 않게) · 끝 갈래 · ☆ (V6).</summary>
     private byte[] SaveScreen()
     {
         var w = new StateWriter(1 << 16);
@@ -464,6 +491,7 @@ public sealed partial class LiveShow
                 }
             }
         w.Byte((byte)Ended);
+        w.I32(Stars.Count); foreach (int id in Stars) w.I32(id);   // ☆ (V6)
         w.Tag("화면 끝");
         return w.ToArray();
     }
@@ -498,6 +526,12 @@ public sealed partial class LiveShow
             ring?.Rebase(jAdded);
         }
         if (ver >= 2) Ended = (VoyageEnd)r.Byte();
+        if (ver >= 3)
+        {
+            Stars.Clear();
+            for (int i = 0, n = r.I32(); i < n; i++) Stars.Add(r.I32());
+            Dir.Starred = Stars.ToArray();   // 연출의 일상 비춤도 (카메라만)
+        }
         r.Tag("화면 끝");
     }
 
@@ -510,7 +544,7 @@ public sealed partial class LiveShow
         foreach (var (_, b, w) in store.ReadEach(meta))
         {
             if (b == null) { last = w; continue; }
-            try { return Resume(b, null, name => store.VaultFile(meta, name)); }
+            try { return Resume(b, null, name => store.VaultFile(meta, name), name => store.PhotoFile(meta, name)); }
             catch (Exception e) when (e is InvalidDataException or IOException or EndOfStreamException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { last = "저장이 깨졌다"; }
         }
         why = last.Contains("판") ? last : VoyageStore.BrokenText;
@@ -518,7 +552,7 @@ public sealed partial class LiveShow
     }
 
     /// <summary>묶음에서 이어 본다 (setup: 세계 준비 — 없으면 배 열쇠 · 번호로 짓는다): 세계 → 새 화면 → 연출 기록 · 손 기록 · 화면 마디. 빠진 마디는 한 줄씩 <see cref="ResumeNotes"/>에.</summary>
-    public static LiveShow Resume(VoyageBundle b, SimSetup? setup = null, Func<string, byte[]?>? files = null)
+    public static LiveShow Resume(VoyageBundle b, SimSetup? setup = null, Func<string, byte[]?>? files = null, Func<string, byte[]?>? photos = null)
     {
         var m = b.Meta;
         setup ??= ShipWorld.Setup(Layout.Ship(m.Ship, Tables.Default), (ulong)m.Voyage);
@@ -547,6 +581,12 @@ public sealed partial class LiveShow
             // 장면 금고 (V4): 곳간의 vault/ 파일 · 아니면 묶음이 쥔 파일 (시험 · 곧바로 이어 보기)
             files ??= name => b.Files.TryGetValue(name, out var f) ? (f.packed ? f.data : VoyageBundle.Pack(f.data)) : null;
             if (show.Vault.LoadIndex(vault, show.Dir.Highlights, files) < 0) show.ResumeNotes.Add("지난 장면 금고는 옮겨 오지 못했다");
+        }
+        if (b.Other.TryGetValue(PhotoBook.Part, out var album))
+        {
+            // 사진첩 (V5): 곳간의 photos/ PNG · 아니면 묶음이 쥔 바이트 (시험 · 곧바로 이어 보기)
+            photos ??= name => b.Photos.TryGetValue(name, out var f) ? (f.png ? f.data : Png.Encode(f.w, f.h, f.data)) : null;
+            if (show.Photos.LoadIndex(album, show.Dir.Highlights, photos) < 0) show.ResumeNotes.Add("지난 사진은 옮겨 오지 못했다");
         }
         show._lastHighlights = show.Dir.Highlights.Count; show._lastTitle = show._lastHighlights > 0 ? show.Dir.Highlights[^1].Title : "";   // 이어 본 첫 장에 지난 하이라이트를 띄우지 않는다
         show._chaptersSeen = show.Dir.Chapters.Count;   // 지난 날의 장 카드도

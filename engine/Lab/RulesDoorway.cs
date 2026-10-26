@@ -169,5 +169,39 @@ public static partial class Program
                 first >= 0 && lay.Room[first] == lay.Room[At(5, 5)] && m.Dist(first, At(5, 3)) >= 2 && doorAt <= 0.01f && life[m[p].C.Body].Alive != 0,
                 $"처음 선 칸 {(first >= 0 ? $"({lay.X(first) - 1},{lay.Y(first) - 1}) · 문까지 {m.Dist(first, At(5, 3))}" : "없음")} · 그 뒤 문 열림 {doorAt:0.00} · 산다 {life[m[p].C.Body].Alive != 0}");
         }
+
+        // (사) C5 줄 서는 자리: WashShip (변기 T(8,1)이 문 D(7,2)의 대각선 · 먼 변기는 흡입 팬이 망가졌다) — A (대변 0.75)가 앉은 뒤 B (방광 0.8)가 온다
+        //     줄 선 동안 B의 칸이 문 칸 · 문 곁이 아니다 · 그동안 문 닫기를 요청하면 1분 안에 닫힌다 · A가 나온 뒤 B가 쓰고 지림 0 (예전: 문 칸 (7,2)에서 줄을 서 문이 열린 채)
+        {
+            var wl = Worlds.Ascii(WashShip, new Dictionary<char, string> { ['e'] = "Bed", ['T'] = "Toilet", ['S'] = "Shower", ['k'] = "Sink", ['p'] = "PowerPanel", ['b'] = "Battery" });
+            int WAt(int x, int y) => Worlds.At(wl, x, y);
+            var s = Worlds.Full(wl, 5);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var st = s.Get<Structure>(); var f = s.Get<Field>();
+            int pa = m.AddPerson(s, WAt(11, 2)), pb = m.AddPerson(s, WAt(2, 2));
+            s.Run(2);
+            var toilets = wl.Furniture.Where(x => x.Type == "Toilet").OrderBy(x => x.Cells[0] % wl.W).ToList();
+            net.Broken[net.Devices.First(d => d.Furniture == toilets[1].Id).Id * 4 + (int)Part.Mechanical] = 1;   // 먼 변기는 흡입 팬이 망가졌다
+            int seat = toilets[0].Cells[0], wdoor = wl.DoorAt[WAt(7, 2)];
+            void Calm(int p) { int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+            life[m[pa].C.Body].Bowel = Life.BowelMax * 0.75;
+            for (long t = 0; t < Time.Minutes(10) && m[pa].C.Cell != seat; t++) { Calm(pa); Calm(pb); s.Step(); }
+            life[m[pb].C.Body].Bladder = Life.BladderMax * 0.8;
+            int queued = 0, nearDoor = 0, worst = 0; float shut = -1;
+            for (long t = 0; t < Time.Minutes(30) && m.Toilets < 2; t++)
+            {
+                Calm(pa); Calm(pb); s.Step();
+                var b = m[pb];
+                bool inQueue = b.C.Goal == GoalKind.Toilet && b.C.StepIndex < b.Plan.Count && b.Plan[b.C.StepIndex].Kind == StepKind.Use && (UseKind)b.Plan[b.C.StepIndex].Arg == UseKind.Queue && b.C.StepIndex > 0;
+                if (!inQueue) continue;
+                queued++;
+                int k = m.StandKindAt(b.C.Cell); worst = Math.Max(worst, k);
+                if (k >= 2) nearDoor++;
+                if (queued == 5) st.RequestDoor(wdoor, 0);
+                if (queued == 5 + 60) shut = f.DoorOpen[wdoor];
+            }
+            Check("문 칸 (C5) 줄 서는 자리: 문 대각선의 변기 — 줄 선 동안 기다리는 이의 칸이 문 칸 · 문 곁이 아니다 · 그동안 문 닫기를 요청하면 1분 안에 닫힌다 · 앞사람이 나온 뒤 쓰고 지림 0",
+                queued >= 65 && nearDoor == 0 && shut >= 0 && shut <= 0.01f && m.Toilets == 2 && life.Soilings == 0,
+                $"줄 {queued}틱 · 문 곁 {nearDoor}틱 (가장 나쁜 표 {worst}) · 1분 뒤 문 열림 {shut:0.00} · 비움 {m.Toilets} · 지림 {life.Soilings}");
+        }
     }
 }

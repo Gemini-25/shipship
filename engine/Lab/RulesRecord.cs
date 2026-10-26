@@ -280,6 +280,172 @@ public static partial class Program
         }
     }
 
+    /// <summary>
+    /// 사진 (docs/OBSERVER.md §4.4 · §11 · §16 W1 — 묶음 '사진'): 하이라이트의 정점 사진 (그 칸 둘레 40×22칸 · 16도트 → 640×352) · 정점이 바뀌어도 게임 10초 안에는 다시 찍지 않는다 ·
+    /// 숨지면 그 자리의 마지막 사진 (묘비) · 사진첩 · ○ 장면의 [사진] · 자막 사진 (F12) · 사진 모드 · 곳간의 photos/ (이어 보면 같은 사진) · 세계 바이트 같음 · 자리표.
+    /// </summary>
+    private static void PhotoRules()
+    {
+        if (!Do("사진")) return;
+        Console.WriteLine("\n[사진 — 정점 사진 · 마지막 사진 · 사진첩 · 자막 사진 · 사진 모드]");
+        if (Environment.GetEnvironmentVariable("PHOTO_BENCH") == "1")
+        {
+            // 재기 (판정하지 않는다): 배마다 한 시간 뒤 사람 칸 둘레 한 장 — 처음 (덩어리 굽기) · 데운 뒤 가운데 값 · PNG 짓기 (다른 일꾼 몫) · PNG 크기
+            foreach (var ship in new[] { "Didim", "Saetteul", "Hannuri" })
+            {
+                var lay = Layout.Ship(ship, Tables.Default);
+                var w = ShipWorld.Crewed(ship, 7, Math.Max(2, lay.Furniture.Count(f => f.Type == "Bed")), lay.Furniture.Count(f => f.Type == "RobotDock"), 0);
+                var b = new LiveShow(w, lay.Name); b.FastForward(Time.Hours(1)); b.Photos.PackLater = false;
+                var cells = b.Sim.Get<Mind>().Agents.Where(a => a.IsPerson).Select(a => a.C.Cell).ToList();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var p0 = b.Photos.Take(b.Sim, cells[0], b.Sim.Tick, "재기", PhotoKind.Screen);
+                double firstMs = sw.Elapsed.TotalMilliseconds;
+                var ms = new List<double>();
+                for (int i = 0; i < 12; i++) b.Photos.Take(b.Sim, cells[i % cells.Count], b.Sim.Tick, "재기", PhotoKind.Screen);   // 그 둘레 덩어리를 굽는다 (산 화면은 장마다 하나씩 미리 굽는다)
+                Painter.Prof = new(); b.Photos.PackLater = true;
+                for (int i = 0; i < 12; i++) { sw.Restart(); b.Photos.Take(b.Sim, cells[i % cells.Count], b.Sim.Tick, "재기", PhotoKind.Screen); ms.Add(sw.Elapsed.TotalMilliseconds); b.Photos.WaitPacked(); }   // 작업 스레드 몫만 (PNG는 다른 일꾼 — 다음 장 전에 끝낸다)
+                var prof = Painter.Prof; Painter.Prof = null;
+                ms.Sort();
+                Console.WriteLine("      " + string.Join(" · ", prof.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{kv.Key} {kv.Value / 12:0.00}")));
+                sw.Restart(); var png = Png.Encode(p0!.W, p0.H, b.Photos.Pixels(p0)); double pngMs = sw.Elapsed.TotalMilliseconds;
+                Console.WriteLine($"    (사진 재기) {lay.Name}: 처음 {firstMs:0.0}ms · 데운 뒤 가운데 {ms[ms.Count / 2]:0.00}ms · 가장 느림 {ms[^1]:0.00}ms · PNG 짓기 {pngMs:0.0}ms (다른 일꾼) · {png.Length / 1024}KB");
+            }
+        }
+
+        // W1: 하이라이트 → 정점 사진 한 장 (그 칸 둘레) · 10초 안 다시 찍지 않는다 · 죽음 → 마지막 사진 · 사진첩 · 묘비 · ○의 [사진] · 자막 사진 · 사진 모드 · 저장 왕복 · 세계 바이트 같음
+        {
+            var show = new LiveShow(HandShip(81), "디딤호");
+            show.Advance(0.2); show.Paused = true;
+            show.Photos.PackLater = false;   // 시험: PNG를 곧바로
+            var s = show.Sim; var m = s.Get<Mind>(); var life = s.Get<Life>(); var L = s.Layout;
+            var people = m.Agents.Where(a => a.IsPerson).Select(a => a.Id).ToList();
+            int cell = m[people[0]].C.Cell;
+            var h = new Highlight { Tick = s.Tick, StartTick = s.Tick - 2, Last = s.Tick, Cell = cell, Score = 120, Kind = FactKind.Extinguished, Title = "식당 불 → 정지우가 불을 껐다" };
+            show.Dir.Highlights.Add(h);
+            show.FastForward(1);
+            var p1 = show.Photos.PeakOf(h);
+            int cx = L.X(cell), cy = L.Y(cell);
+            bool first = p1 != null && p1.Kind == PhotoKind.Peak && p1.W == PhotoBook.ViewW * PhotoBook.Dots && p1.H == PhotoBook.ViewH * PhotoBook.Dots && p1.Peak == h.Tick
+                && cx >= p1.X0 && cx < p1.X0 + PhotoBook.ViewW && cy >= p1.Y0 && cy < p1.Y0 + PhotoBook.ViewH && p1.Caption.StartsWith("디딤호 · 1일째 ") && p1.Caption.Contains("불을 껐다");
+            var px1 = p1 != null ? show.Photos.Pixels(p1) : Array.Empty<byte>();
+            bool drawn = px1.Length == 640 * 352 * 4 && Enumerable.Range(0, px1.Length / 4).Select(i => px1[i * 4] + px1[i * 4 + 1] * 7 + px1[i * 4 + 2] * 31).Distinct().Count() > 20;   // 빈 그림이 아니다
+            long t1 = p1?.Tick ?? -1;
+            h.Tick = s.Tick; h.Last = s.Tick;   // 정점이 바뀌었다 (더 큰 일)
+            show.FastForward(1);
+            bool held = show.Photos.PeakOf(h) is { } ph && ph.Tick == t1 && ph.Peak != h.Tick;   // 10초 안 — 다시 찍지 않는다
+            show.FastForward(PhotoBook.Again);
+            var p2 = show.Photos.PeakOf(h);
+            bool again = p2 != null && p2.Tick > t1 && p2.Peak == h.Tick && show.Photos.Photos.Count(p => p.Scene == h) == 1;
+            // 숨짐 → 그 자리의 마지막 사진 (따로 한 장)
+            int dead = people[1], at = m[dead].C.Cell;
+            { ref var b = ref life[m[dead].C.Body]; b.Alive = 0; b.Conscious = 0; b.DiedAt = s.Tick; }
+            s.Facts.Emit(s.Tick, FactKind.Died, at, 0, 0, m[dead].C.Body);
+            show.FastForward(1);
+            var last = show.Photos.LastOf(dead);
+            bool lastOk = last != null && last.Kind == PhotoKind.Last && last.Cell == at && last.Agent == dead && last.Caption.Contains(m.NameOf(dead)) && show.Photos.Photos.Count(p => p.Kind == PhotoKind.Last) == 1;
+            show.FastForward(3);
+            bool once = show.Photos.Photos.Count(p => p.Kind == PhotoKind.Last) == 1;
+            // 묘비: '마지막 사진' 줄 → 누르면 크게 (자막은 곁에)
+            show.TogglePanel(PanelKind.Record); show.SetDetailSub(1);
+            var tomb = show.PanelRows().FirstOrDefault(r => r.Main.StartsWith(m.NameOf(dead)));
+            if (tomb.Main != null) show.PanelClick(tomb.Key);
+            var ft = show.Render();
+            bool tombOk = tomb.Main != null && tomb.Sub.Contains("마지막 사진") && ft.Photo != null && ft.Photo.W == 640 && ft.PhotoCaption == last?.Caption;
+            show.ClosePhoto();
+            bool closed = show.Render().Photo == null;
+            // 사진첩: 날 차례 · 누르면 크게 · ▶ 그 장면
+            show.SetDetailSub(2);
+            var album = show.PanelRows();
+            var shots = album.Where(r => r.Key != LiveShow.KeyAlbum(0) && r.Key >> 36 == (8L << 4 | 2)).ToList();
+            // (숨짐 사실이 2분 안 · 가까운 곳이라 연출이 그 장면에 묶을 수 있다 — 그러면 정점이 바뀌어 10초 뒤 다시 찍는다 · 줄은 사진마다 하나)
+            var peak = show.Photos.PeakOf(h);
+            bool albumOk = shots.Count == show.Photos.Photos.Count && shots.Count >= 2 && peak != null && shots.Any(r => r.Key == LiveShow.KeyAlbum(peak.Id) && r.Act.Contains("다시보기"))
+                && shots.Any(r => r.Main.Contains(m.NameOf(dead)) && r.Sub.Contains("마지막")) && shots.Select(r => r.Main[..r.Main.IndexOf("  ", StringComparison.Ordinal)]).SequenceEqual(show.Photos.Photos.OrderBy(p => p.Tick).ThenBy(p => p.Id).Select(p => LiveShow.PhotoWhen(p.Tick)));
+            if (peak != null) show.PanelClick(LiveShow.KeyAlbum(peak.Id));
+            var fa = show.Render();
+            bool big = fa.Photo != null && fa.PhotoCaption == peak?.Caption && fa.PhotoAct.Contains("다시보기");
+            show.ClosePhoto(); show.ClosePanel();
+            // ○ 사진만 남은 장면: 장면 판 줄의 단추가 [사진] (켜짐) → 누르면 그 정점 사진
+            show.Dir.Ring.Clear(); show.Vault.Drop(h);
+            show.TogglePanel(PanelKind.Highlights);
+            var orow = show.PanelRows().FirstOrDefault(r => r.Key == LiveShow.KeyHighlight(show.Dir.Highlights.IndexOf(h)));
+            bool photoAct = orow.Mark == 3 && orow.Act == "사진" && orow.ActOn && show.PanelAct(orow.Key) && show.Render().PhotoCaption == show.Photos.PeakOf(h)?.Caption;
+            show.ClosePhoto(); show.ClosePanel();
+            // 자막 사진 (F12 — 메인 스레드가 뷰포트를 넘긴다): 사진첩에 · 자막 '디딤호 · 항해 n · 1일째 hh:mm · 아래 줄' · 알림 → 사진첩
+            var screen = new byte[64 * 36 * 4]; for (int i = 0; i < screen.Length; i++) screen[i] = (byte)(i * 7);
+            show.ScreenPhoto(64, 36, screen);
+            var sp = show.Photos.Photos.LastOrDefault(p => p.Kind == PhotoKind.Screen);
+            var fn = show.Render();
+            show.NoticeGo();
+            var fg = show.Render();
+            bool screenOk = sp != null && sp.W == 64 && show.Photos.Pixels(sp).AsSpan().SequenceEqual(screen) && sp.Caption.StartsWith($"디딤호 · 항해 {show.Voyage} · 1일째 ") && fn.Notice.Contains("사진첩에 넣었다")
+                && fg.Panel == PanelKind.Record && fg.DetailSub == 2;
+            show.ClosePanel();
+            // 사진 모드: 판 · 띠 숨김 · 세계 멈춤 (고를 수 있다) · 손 카메라 · 나가면 되돌린다
+            show.Paused = false;
+            show.SetPhotoMode(true);
+            long m0 = s.Tick;
+            show.Advance(0.5);
+            var fp = show.Render();
+            bool modeOn = show.PhotoMode && fp.PhotoMode && show.Paused && s.Tick == m0 && !show.Follow;
+            show.SetPhotoMode(false);
+            bool modeOff = !show.PhotoMode && !show.Paused && !show.Render().PhotoMode;
+            show.Paused = true;
+            // 저장 왕복: photos/*.png — 이어 보면 같은 사진 (픽셀 · 자막 · 장면 · 사람)
+            string dir = TempVoyages(); bool kept = false; int files = 0;
+            try
+            {
+                var store = new VoyageStore(dir);
+                var meta = store.Write(show.SaveBundle(SaveKind.Quit));
+                string pd = Path.Combine(store.FolderOf(meta), VoyageStore.PhotoFolder);
+                files = Directory.Exists(pd) ? Directory.GetFiles(pd, "*.png").Length : 0;
+                var back = LiveShow.Resume(store, store.Latest() ?? meta, out _);
+                kept = back != null && back.Photos.Photos.Count == show.Photos.Photos.Count
+                    && back.Photos.Photos.Zip(show.Photos.Photos).All(q => q.First.Caption == q.Second.Caption && q.First.Kind == q.Second.Kind && q.First.Tick == q.Second.Tick && q.First.Agent == q.Second.Agent
+                        && (q.First.Scene == null) == (q.Second.Scene == null) && (q.First.Scene == null || q.First.Scene.Title == q.Second.Scene!.Title) && back.Photos.Pixels(q.First).AsSpan().SequenceEqual(show.Photos.Pixels(q.Second)));
+            }
+            finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch (IOException) { } }
+            // 화면만: 사진을 켠 화면과 끈 화면 — 불씨 하나 낀 1.5분 뒤 (불은 1분 안에 하이라이트) 세계 바이트 · 하이라이트가 같다 (켠 쪽은 정점 사진이 있다)
+            var a = new LiveShow(HandShip(82), "디딤호"); var bb = new LiveShow(HandShip(82), "디딤호");
+            bb.Photos.On = false;
+            foreach (var x in new[] { a, bb }) { var aim = HandTargets(x.Sim); x.FastForward(20); x.Sim.Get<Hand>().Enqueue(Order(HandKind.Fire, aim.Bed, 2)); x.FastForward(Time.Minutes(1.5)); }
+            bool world = a.Sim.Save().AsSpan().SequenceEqual(bb.Sim.Save()) && HighlightsOf(a.Dir) == HighlightsOf(bb.Dir);
+            int peaks = a.Photos.Photos.Count(p => p.Kind == PhotoKind.Peak);
+            // 자리표: 사진 카드 (가운데 · 자막 · [▶ 그 장면] [닫기]) · 사진 모드 띠 ([찍기] [멈춤] [나가기] — 판 · 띠는 숨는다) — 여섯 창 × 글 100 · 150%
+            var hud = new Hud(); var bad = new List<string>();
+            foreach (var (pw, ph2) in new[] { (1920, 1080), (1920, 1010), (1600, 900), (1366, 768), (1280, 720), (2560, 1440) })
+                foreach (float scale in new[] { 1f, 1.5f })
+                    foreach (bool panel in new[] { false, true })
+                    {
+                        string tag = $"{pw}×{ph2} {scale * 100:0}%{(panel ? " 판" : "")}";
+                        var f = panel ? RecordFrame(6, 3) : FakeFrame(6, true, false);
+                        f.Photo = new ShipSim.Art.Img(640, 352); f.PhotoCaption = "디딤호 · 3일째 07:04 · 박서연이 김하늘을 업고 나왔다"; f.PhotoAct = "▶ 다시보기"; f.PhotoActOn = true;
+                        HudLayout.Build(f, new HudState(), pw, ph2, (t, px, b) => Hud.Approx(t, px, b) * scale, (t, px, w, k) => Hud.ApproxLines(t, (int)(px * scale), w, k), hud);
+                        var card = hud.Area("사진 카드"); var pic = hud.Area("사진");
+                        var btn = hud.Hits.Where(x => x.Act is UiAct.PhotoScene or UiAct.PhotoClose).ToList();
+                        if (card.Empty || pic.Empty || !InsideR(pic, card) || btn.Count != 2 || btn.Any(x => !InsideR(x.R, card) || x.R.W < 32 || x.R.H < 32) || pic.H < 100 || Math.Abs(pic.W / pic.H - 640f / 352) > 0.02f)
+                            bad.Add($"{tag}: 카드 {card} · 사진 {pic} · 단추 {btn.Count}");
+                        if (hud.At(card.X + card.W / 2, card.Y + 4).Kind == RouteKind.World) bad.Add($"{tag}: 카드 위 누름이 세계로 샌다");
+                        foreach (var o in hud.Outside()) bad.Add($"{tag}: 밖 {o}");
+                        f.Photo = null; f.PhotoMode = true;
+                        HudLayout.Build(f, new HudState(), pw, ph2, (t, px, b) => Hud.Approx(t, px, b) * scale, (t, px, w, k) => Hud.ApproxLines(t, (int)(px * scale), w, k), hud);
+                        var bar = hud.Area("사진 모드 띠");
+                        var mb = hud.Hits.Where(x => x.Act is UiAct.Photo or UiAct.Pause or UiAct.PhotoMode).ToList();
+                        if (bar.Empty || mb.Count != 3 || hud.Hits.Count != 3 || mb.Any(x => !InsideR(x.R, bar) || x.R.W < 32 || x.R.H < 32) || hud.Blocks.Count != 1 || hud.At(pw / hud.U / 2, ph2 / hud.U / 2).Kind != RouteKind.World)
+                            bad.Add($"{tag} 사진 모드: 띠 {bar} · 단추 {mb.Count}/{hud.Hits.Count} · 막는 판 {hud.Blocks.Count}");
+                        foreach (var o in hud.Outside()) bad.Add($"{tag} 사진 모드: 밖 {o}");
+                    }
+            var bf = FakeFrame(3, true); bf.Photo = new ShipSim.Art.Img(8, 8); bf.Armed = HandKind.Fire;
+            var back1 = new HudState().Back(bf);
+            bf.Photo = null; bf.PhotoMode = true;
+            var back2 = new HudState().Back(bf);
+            Check("사진 W1: 하이라이트 → 정점 사진 한 장 (그 칸 둘레 40×22칸 · 640×352 · 자막 '디딤호 · 1일째 hh:mm · …') · 정점이 바뀌어도 10초 안에는 다시 찍지 않고 그 뒤 다시 (장면마다 한 장) · 숨지면 그 자리 마지막 사진 (한 번) → 묘비 · 사진첩 (날 차례 · 누르면 크게 · ▶) · ○ 장면 [사진] · 자막 사진 (F12 · 알림 → 사진첩) · 사진 모드 (멈춤 · 손 카메라 · 나가면 되돌림) · photos/ 저장 왕복 · 세계 바이트 같음 · 자리표 · 뒤로",
+                first && drawn && held && again && lastOk && once && tombOk && closed && albumOk && big && photoAct && screenOk && modeOn && modeOff && kept && files == show.Photos.Photos.Count && world && peaks > 0 && bad.Count == 0
+                && back1 == BackStep.ClosePhoto && back2 == BackStep.ClosePhotoMode,
+                $"정점 {first} (그림 {drawn}) · 10초 안 {held} · 다시 {again} · 마지막 {lastOk}/{once} · 묘비 {tombOk} · 닫기 {closed} · 사진첩 {albumOk} ({shots.Count}줄) · 크게 {big} · ○ [사진] {photoAct} ('{orow.Act}' {orow.Mark}) · 자막 사진 {screenOk} '{sp?.Caption}' · 사진 모드 {modeOn}/{modeOff} · 왕복 {kept} (파일 {files}) · 세계 같음 {world} (정점 사진 {peaks}) · 자리 {bad.Count} {string.Join(" | ", bad.Take(2))} · 뒤로 {back1}/{back2}");
+        }
+    }
+
     private static bool InsideR(RectF inner, RectF outer) => inner.X >= outer.X - 0.5f && inner.Y >= outer.Y - 0.5f && inner.Right <= outer.Right + 0.5f && inner.Bottom <= outer.Bottom + 0.5f;
 
     /// <summary>기록 판이 열린 시험용 그림 (날마다 · 지나온 날 days칸 — 마지막은 오늘 · 장 줄 서른).</summary>

@@ -1,7 +1,8 @@
 namespace ShipEngine;
 
 /// <summary>막힌 까닭 (⑧ 판단 엔진 — 사람 · 로봇이 남기고 주컴퓨터가 읽는다).</summary>
-public enum SnagKind : byte { None, Far, NoPath, DoorJammed, DoorUnpowered, DoorHeld, DoorVacuum, DoorPressure, DoorStuckBefore, NoWayOut, NoItem, Taken, Other, DoorLocked, DrivenBack, NoHands, NoLegs, DockDead, NoWater }
+public enum SnagKind : byte { None, Far, NoPath, DoorJammed, DoorUnpowered, DoorHeld, DoorVacuum, DoorPressure, DoorStuckBefore, NoWayOut, NoItem, Taken, Other, DoorLocked, DrivenBack, NoHands, NoLegs, DockDead, NoWater,
+    SleepAir, SleepSting, SleepCold, SleepHot, SleepPain }   // 누워 잠들지 못했다 — 몸이 깨울 것 (숨참 · 찌르는 기체 · 추위 · 더위 · 아픔 — DF10 검토)
 
 /// <summary>
 /// ⑧ 판단 엔진 (가) 막힘 — 일이 막히면 까닭 · 자리 · 대상을 남긴다 (docs/ENGINE.md 판단 엔진).
@@ -19,12 +20,13 @@ public sealed partial class Mind
         SnagKind.Far => "멀다", SnagKind.NoPath => "갈 길이 없다", SnagKind.DoorJammed => "문이 끼었다", SnagKind.DoorUnpowered => "문에 전기가 없어 기압 차를 이기지 못한다",
         SnagKind.DoorHeld => "주컴퓨터가 문의 압력 맞춤 밸브를 잠가 두었다", SnagKind.DoorVacuum => "문 너머가 우주로 트여 기압을 맞출 수 없다",
         SnagKind.DoorPressure => "기압 차로 문이 열리지 않는다", SnagKind.DoorStuckBefore => "지난번에 안 열린 문밖에 길이 없다", SnagKind.NoWayOut => "바깥으로 나갈 문이 없다", SnagKind.NoItem => "쓸 물건이 없다", SnagKind.Taken => "남이 먼저 했다", SnagKind.DoorLocked => "주컴퓨터가 문을 잠가 두었다", SnagKind.DrivenBack => "연기 · 열 · 나쁜 공기에 밀려났다",
-        SnagKind.NoHands => "팔이 상해 손을 쓸 수 없다", SnagKind.NoLegs => "다리가 망가져 걸을 수 없다", SnagKind.DockDead => "충전독이 전지를 채우지 않는다", SnagKind.NoWater => "물이 나오지 않는다", _ => "일이 틀어졌다",
+        SnagKind.NoHands => "팔이 상해 손을 쓸 수 없다", SnagKind.NoLegs => "다리가 망가져 걸을 수 없다", SnagKind.DockDead => "충전독이 전지를 채우지 않는다", SnagKind.NoWater => "물이 나오지 않는다",
+        SnagKind.SleepAir => "숨이 차서 잠들지 못한다", SnagKind.SleepSting => "코와 목을 찌르는 냄새에 잠들지 못한다", SnagKind.SleepCold => "추워서 잠들지 못한다", SnagKind.SleepHot => "더워서 잠들지 못한다", SnagKind.SleepPain => "아파서 잠들지 못한다", _ => "일이 틀어졌다",
     };
 
-    /// <summary>문 · 길 · 물건의 막힘인가 (원인 마디 · 사실로 남길 만한).</summary>
+    /// <summary>문 · 길 · 물건 · 잠자리의 막힘인가 (원인 마디 · 사실로 남길 만한).</summary>
     public static bool Telling(SnagKind k) => k is SnagKind.NoPath or SnagKind.DoorJammed or SnagKind.DoorUnpowered or SnagKind.DoorHeld or SnagKind.DoorVacuum or SnagKind.DoorPressure
-        or SnagKind.DoorStuckBefore or SnagKind.NoWayOut or SnagKind.NoItem or SnagKind.DoorLocked or SnagKind.DrivenBack or SnagKind.NoHands or SnagKind.NoLegs or SnagKind.DockDead;
+        or SnagKind.DoorStuckBefore or SnagKind.NoWayOut or SnagKind.NoItem or SnagKind.DoorLocked or SnagKind.DrivenBack or SnagKind.NoHands or SnagKind.NoLegs or SnagKind.DockDead or SnagKind.SleepAir or SnagKind.SleepSting or SnagKind.SleepCold or SnagKind.SleepHot or SnagKind.SleepPain;
 
     public static bool DoorSnag(SnagKind k) => k is SnagKind.DoorJammed or SnagKind.DoorUnpowered or SnagKind.DoorHeld or SnagKind.DoorVacuum or SnagKind.DoorPressure or SnagKind.DoorLocked;
 
@@ -47,9 +49,19 @@ public sealed partial class Mind
         bool same = c.Snag == k && c.SnagSubject == subject && c.SnagGoal == c.Goal && c.SnagTarget == c.GoalTarget && t - c.SnagTick < Time.Minutes(10);
         c.Snag = k; c.SnagCell = cell; c.SnagSubject = subject; c.SnagTick = t; c.SnagGoal = c.Goal; c.SnagTarget = c.GoalTarget;
         if (same || !Telling(k)) return;
+        if (!a.IsPerson && (c.AssignedUntil <= t || c.AssignedGoal != c.Goal) && DoorSnag(k) && ToldDoor(sim, a.Id, k, subject, t)) return;   // 제 판단으로 나선 로봇이 10분 안에 같은 문 · 같은 까닭으로 또 막혔다 — 이미 알린 막힘 (DF10 기록 소음)
         Snags++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {PlaceOf(cell)}에서 막혔다 — {SnagText(k)}", t, cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Blocked, cell, (float)k, cause, a.Id, subject);
+    }
+
+    /// <summary>그 몸이 10분 안에 같은 문에서 같은 까닭으로 막혔다고 이미 알렸나 (사실 흐름의 최근 것 — 저장에 든다).</summary>
+    private static bool ToldDoor(Sim sim, int actor, SnagKind k, int door, long t)
+    {
+        if (door < 0) return false;
+        foreach (var f in sim.Facts.Recent(512))
+            if (f.Kind == FactKind.Blocked && f.Actor == actor && f.Other == door && (int)f.Size == (int)k && t - f.Tick < Time.Minutes(10)) return true;
+        return false;
     }
 
     /// <summary>그 칸의 자리 이름 (방 · 문 · 벽이면 곁의 방).</summary>

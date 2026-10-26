@@ -187,11 +187,29 @@ public sealed partial class Mind
         }
         c.Failed++;
         a.LastFail = $"{c.Goal}: {why}";
-        if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + Time.Minutes(5) });
+        // 같은 일을 다시 해 보는 때: 5분 — 로봇이 제 판단으로 나선 일이 문에 막혔으면 30분 (주컴퓨터를 거쳐 문의 상태를 안다 · 같은 까닭으로 같은 문에 거듭 가지 않는다 —
+        // DF10: 예전엔 5분마다 진공 문에 다시 갔다 · 맡은 일은 주컴퓨터가 문이 열리는 때를 보고 다시 맡긴다)
+        bool own = c.AssignedUntil <= sim.Tick || c.AssignedGoal != c.Goal;
+        if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + (!a.IsPerson && own && DoorSnag(snag) ? Time.Minutes(30) : Time.Minutes(5)) });
         if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
         EndPlan(a);
         if (c.Mode == 0) c.Goal = GoalKind.Idle;
         if (a.IsPerson) c.Anger = Math.Min(1, c.Anger + 0.05f);
+    }
+
+    /// <summary>
+    /// 누워 45분을 잠들지 못했다 (DF10 검토): 일어나 까닭을 남기고 (막힘 · 원인 마디 '…에서 막혔다 — 추워서 잠들지 못한다') —
+    /// 추위 · 더위 · 숨참 · 냄새면 그 방 (제 몸이 느낀 방)을 한나절 (12시간) 잠자리로 고르지 않는다 (곧장 다른 방의 빈 침대 · 자리로 — <see cref="RestPlace"/> · 다음 밤에 한 번 다시 누워 본다 — 그사이 데워졌을 수 있다) ·
+    /// 아픔이면 방을 바꿔도 소용없다 — 그 잠자리에 한 시간은 다시 눕지 않는다 (그사이 주컴퓨터가 아픈 이를 보고 진통제를 가져간다 · 지치면 곯아떨어진다).
+    /// </summary>
+    private void Sleepless(Sim sim, Agent a, SnagKind why)
+    {
+        ref var c = ref a.C;
+        int room = RoomOf(c.Cell), target = c.GoalTarget;
+        Fail(sim, a, SnagText(why), why, c.Cell);
+        for (int i = a.Avoid.Count - 1; i >= 0; i--) if (a.Avoid[i].Goal == GoalKind.Sleep && a.Avoid[i].Target == target) a.Avoid.RemoveAt(i);   // 5분을 기다리지 않는다
+        if (why == SnagKind.SleepPain) AvoidFor(a, GoalKind.Sleep, target, sim.Tick + Time.Hours(1));
+        else if (room >= 0) AvoidFor(a, GoalKind.Sleep, RestlessKey(room), sim.Tick + Time.Hours(12));
     }
 
     private double ItemCharge(byte item)
@@ -230,7 +248,15 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         var use = (UseKind)st.Arg;
-        if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
+        // 잠이 든다: 몸이 깨울 것 (추위 · 더위 · 숨참 · 찌르는 기체 · 아픔)이 있으면 누워 뒤척인다 — 가라앉으면 그때 든다 (DF10 · 보고서 §4-15:
+        // 예전엔 누운 틱에 잠들고 다음 감각에 다시 깼다 — 추운 침실 두 시간 '깼다' 1,000건 · 새뜰호 열흘 16만 건) · 졸림 0.95 넘게 지쳤으면 추위 · 더위 · 아픔을 이기고 곯아떨어진다 ·
+        // 45분을 뒤척여도 잠들지 못하면 일어나 다른 자리를 찾는다 (DF10 검토 — 예전엔 열 시간을 누운 채 채우고 다음 잠도 그 침대였다)
+        if (use == UseKind.Sleep && a.IsPerson && _life![c.Body].Asleep == 0 && (t <= c.StepStart || c.SleptAt < c.StepStart))
+        {
+            var why = RouseWhy(a, c.Cell);
+            if (why == SnagKind.None || c.Sleepy >= ExhaustSleepy && Bearable(why)) { _life[c.Body].Asleep = 1; c.SleptAt = t; }
+            else if (t - c.StepStart >= Time.Minutes(45) && !IsMedBedCell(c.Cell) && !Sheltering(a)) { Sleepless(sim, a, why); return; }   // 치료 침대 · 대피실에서는 누운 채 기다린다
+        }
         Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
         if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }

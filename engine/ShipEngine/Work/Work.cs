@@ -149,7 +149,7 @@ public sealed partial class Work : IEngine
             {
                 (int)Res.Food => $"식량 {st / Mind.MealMol:0}끼니 · 하루에 먹는 양 {use / Mind.MealMol:0.0}끼니 · 거두는 양 {make / Mind.MealMol:0.0}끼니",
                 (int)Res.Water => $"마실 물 {st * 0.018:0}L · 하루에 쓰는 양 {use * 0.018:0.0}L · 되찾는 양 {make * 0.018:0.0}L",
-                _ => $"산소 {st * 0.032:0}kg · 하루에 숨 쉬는 양 {use * 0.032:0.0}kg · 만드는 양 {make * 0.032:0.0}kg",
+                _ => $"산소 {st * 0.032:0}kg · 하루에 쓰는 양 {use * 0.032:0.0}kg · 만드는 양 {make * 0.032:0.0}kg",   // 쓰는 양 = 숨 + 썩음 + 녹 (DF10: 숨만은 한 사람 하루 0.86kg 언저리)
             };
             lines.Add($"{line} → {D(days)} (만들지 못하면 {D(noMake)})");
         }

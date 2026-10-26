@@ -14,4 +14,8 @@
     <ProjectReference Include="../ShipEngine/ShipEngine.csproj" />
     <ProjectReference Include="../ShipView/ShipView.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- PNG 쓰개는 화면 쪽으로 옮겼다 (정점 사진 · 사진첩 — docs/OBSERVER.md §4.4) · 실험실은 그것을 쓴다 -->
+    <Using Include="ShipView.Png" Alias="Png" />
+  </ItemGroup>
 </Project>

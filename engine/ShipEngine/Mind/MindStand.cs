@@ -101,4 +101,41 @@ public sealed partial class Mind
         }
         return best >= 0 ? best : center;
     }
+
+    /// <summary>
+    /// 줄 서는 자리 (5단 C5): 설비와 같은 방의 가구 없는 바닥 — 차례 ① 거리 1 · 표 0~1 ② 거리 2 · 표 0 ③ 거리 1 · 표 2 (문 칸은 고르지 않는다) ·
+    /// 같은 차례 안에서 300 × 표 + 100 × (그 방에 있을 때 보이는 남이 서 있다) + 내 칸까지 맨해튼 거리가 가장 낮은 칸 · 없으면 -1 (예전대로 설비 곁 1칸까지).
+    /// 아는 것: 도면 · 같은 방일 때 눈에 보이는 남의 칸.
+    /// </summary>
+    private int QueueSpot(Agent a, int fu)
+    {
+        if (fu < 0 || fu >= L.Furniture.Count) return -1;
+        int cell = L.Furniture[fu].Cells[0], room = L.Room[cell];
+        if (room < 0) return -1;
+        if (_stand == null) BuildStand();
+        int here = a.C.Cell;
+        bool inRoom = (uint)here < (uint)L.N && L.Room[here] == room;
+        int x0 = L.X(cell), y0 = L.Y(cell);
+        for (int tier = 0; tier < 3; tier++)
+        {
+            int best = -1, bs = int.MaxValue;
+            for (int dy = -2; dy <= 2; dy++)
+                for (int dx = -2; dx <= 2; dx++)
+                {
+                    int x = x0 + dx, y = y0 + dy, d = Math.Max(Math.Abs(dx), Math.Abs(dy));
+                    if (d == 0 || !L.In(x, y)) continue;
+                    int j = L.Index(x, y);
+                    if (L.Kind[j] != CellKind.Floor || L.Room[j] != room || L.FurnitureAt[j] >= 0) continue;
+                    int k = _stand![j];
+                    bool fits = tier switch { 0 => d == 1 && k <= 1, 1 => d == 2 && k == 0, _ => d == 1 && k == 2 };
+                    if (!fits) continue;
+                    int score = 300 * k + Manhattan(here, j);
+                    if (inRoom && Visible(a, j, room, 12))
+                        foreach (var o in Agents) if (o != a && o.C.Cell == j) { score += 100; break; }
+                    if (score < bs) { bs = score; best = j; }
+                }
+            if (best >= 0) return best;
+        }
+        return -1;
+    }
 }

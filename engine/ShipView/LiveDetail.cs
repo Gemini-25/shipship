@@ -87,7 +87,7 @@ public sealed partial class LiveShow
     /// <summary>주컴퓨터 '아는 것' 표를 다시 셈하는 틈 (화면 초 — 시험은 0).</summary>
     public double KnowsEverySec = 0.5;
 
-    /// <summary>사람 자세히 (docs/UI2.md §4.2 — U5): 몸 · 마음 · 하는 일 · 아는 것 · 사람 사이 · 일지 · 지나온 길 (자리만 — docs/OBSERVER_REVIEW.md §4).</summary>
+    /// <summary>사람 자세히 (docs/UI2.md §4.2 — U5): 몸 · 마음 · 하는 일 · 아는 것 · 사람 사이 · 일지 · 지나온 길 (V6 — 사람 일 장부).</summary>
     private void PersonRows(Sim w, Mind mind, Agent a, List<PanelRow> rows)
     {
         var life = w.Find<Life>(); var so = w.Find<Society>();
@@ -101,10 +101,7 @@ public sealed partial class LiveShow
             case 3: BeliefRows(w, mind, a, rows); KnowsRows(w, mind, a, rows); break;
             case 4: PeopleRows(w, mind, so, a, rows); break;
             case 5: JudgedRows(a, rows); NoteRowsFor(w, mind.NameOf(a.Id), rows); break;   // 일지 · 주컴퓨터가 이 사람에게 한 부탁
-            default:   // 지나온 길 (자리 — 함장 결정 10-26: 구함 · 다침 · 외상과 회복 · 짝 · 꿈 · 숨짐을 항해 내내 적는다)
-                rows.Add(new PanelRow("곧 — 이 사람이 항해 내내 지나온 길", "구한 일 · 다친 일 · 겪은 충격과 회복 · 짝 · 꿈 · 숨짐을 차례로 — 맨 위에 '겁이 많았다 → 맞서며 단단해졌다'처럼 달라진 것", false, Key: -1));
-                if (so?.PastLine(a.Id) is { Length: > 0 } past) rows.Add(new PanelRow("출항 전 지난 일", past, false, Key: DK(0)));
-                break;
+            default: PathRows(w, mind, so, a, rows); break;   // 지나온 길 (V6 — 구함 · 다침 · 외상과 회복 · 짝 · 꿈 · 숨짐을 항해 내내 · LiveWatch.cs)
         }
     }
 

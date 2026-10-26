@@ -201,7 +201,7 @@ public sealed partial class Mind
         }
         int cell = L.Furniture[o.Target].Cells[0];
         bool bowel = _life![a.C.Body].Bowel > Life.BowelMax * 0.4;
-        plan.Add(Go(cell, 1));
+        plan.Add(QueueSpot(a, o.Target) is int qs && qs >= 0 ? Go(qs, 0) : Go(cell, 1));   // 줄 서는 자리 — 문 칸 · 문 곁이 아닌 곳 (5단 C5)
         plan.Add(Use(UseKind.Queue, QueueMax, cell, o.Target));
         plan.Add(Go(cell, 0));
         plan.Add(Use(UseKind.Toilet, bowel ? Time.Minutes(6) : Time.Minutes(2), cell, o.Target));
@@ -228,7 +228,7 @@ public sealed partial class Mind
             return true;
         }
         int cell = L.Furniture[o.Target].Cells[0];
-        plan.Add(Go(cell, 1));
+        plan.Add(QueueSpot(a, o.Target) is int qs && qs >= 0 ? Go(qs, 0) : Go(cell, 1));   // 줄 서는 자리 (5단 C5)
         plan.Add(Use(UseKind.Queue, QueueMax, cell, o.Target));
         plan.Add(Go(cell, 0));
         plan.Add(Use(UseKind.Shower, KeepsShowerRule(a) ? Time.Minutes(ShowerRuleMin) : Time.Minutes(6), cell, o.Target));   // (다) 배급을 지키는 이는 짧게
@@ -236,17 +236,21 @@ public sealed partial class Mind
         return true;
     }
 
-    /// <summary>설비 곁의 빈 바닥 칸 (다 쓰고 비켜설 자리 — 없으면 -1).</summary>
+    private static readonly (int dx, int dy)[] StepOffDirs = { (0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1) };
+
+    /// <summary>설비 곁의 빈 바닥 칸 (다 쓰고 비켜설 자리 — 표 0 칸을 먼저 · 문 곁밖에 없으면 그 칸 · 없으면 -1 — 5단 C5).</summary>
     private int StepOff(int cell)
     {
-        int x = L.X(cell), y = L.Y(cell);
-        foreach (var (dx, dy) in new[] { (0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1) })
+        int x = L.X(cell), y = L.Y(cell), first = -1;
+        foreach (var (dx, dy) in StepOffDirs)
         {
             if (!L.In(x + dx, y + dy)) continue;
             int j = L.Index(x + dx, y + dy);
-            if (L.Kind[j] == CellKind.Floor && L.FurnitureAt[j] < 0) return j;
+            if (L.Kind[j] != CellKind.Floor || L.FurnitureAt[j] >= 0) continue;
+            if (StandKindAt(j) == 0) return j;
+            if (first < 0) first = j;
         }
-        return -1;
+        return first;
     }
 
     /// <summary>줄 서기 한 틱: 앞선 이가 없으면 들어간다 · 너무 길면 돌아선다 (그 변기는 한동안 멀게 친다).</summary>

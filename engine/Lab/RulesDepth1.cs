@@ -320,7 +320,10 @@ public static partial class Program
             {
                 // (DF7 뒤 씨 2 → 1: 그 밤 깨어 있던 이 · 있던 곳이 달라져 씨 2는 궁리할 일이 없다. 이 장면은 이제 두 갈래 고침을 함께 꺼도 씨 1~64 어느 것도 같은 계획을 되풀이하지 않는다 —
                 //  DF7 앞 코드도 씨 1~24에서 같다 · 막힌 곳 기억 · 같은 방의 다음 안이 먼저 막는다. 여기서는 궁리가 서고 되풀이되지 않는지를 본다)
-                var runs = new[] { 1UL, 7UL }.AsParallel().AsOrdered().Select(seed =>
+                // (DF10 뒤 씨 1 · 3 → 6 · 5: 깬 이가 나쁜 공기에서 다시 잠들지 못하고 · 산소 포화 곡선과 숨참을 알아채는 문턱이 바뀌어 그 밤의 일이 달라졌다 —
+                //  씨 1 · 3은 첫 방법으로 다 막아 궁리할 일이 없다 · 씨 6은 궁리 둘 · 씨 5는 셋 · 씨 1~14 어느 것도 같은 계획을 둘 넘게 세우지 않는다)
+                //  (5단 C4와 합친 뒤 씨 6 · 5 → 1 · 12: 피할 곳이 문 곁에서 방 안쪽으로 물려 씨 6 · 5는 궁리할 일이 없다 — 씨 1은 궁리 넷 · 씨 12는 셋 · 씨 1~12 어느 것도 같은 계획을 둘 넘게 세우지 않는다)
+                var runs = new[] { 1UL, 12UL }.AsParallel().AsOrdered().Select(seed =>
                 {
                     var s = ShipWorld.Crewed("Didim", seed, 6, 3);
                     s.Run(Time.Minutes(80));   // 새벽 한 시 스무 분 — 모두 잠들었다
@@ -328,7 +331,7 @@ public static partial class Program
                     int rock = s.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", s.Tick);
                     s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, rock);
                     for (int k = 0; k < 10 && !s.Facts.Since(f0).Any(x => x.Kind == FactKind.Impact); k++) s.Step();
-                    // 판단 시험이라 상황을 그대로 차린다: 옛 충돌 셈이 낸 구멍 (침실 둘 외판 0.35m² · 둘레 통로 쪽 벽 14cm²) — DF9 뒤 1.5kg 운석은 외판에 운석 지름의 구멍 (170cm²)만 낸다 (씨도 DF9 뒤 다시 골랐다 — 씨 7은 이제 궁리할 일이 없다 · DF6 뒤 씨 10 → 3: 재배대 · 물 재생기가 바뀌어 씨 10은 궁리할 일이 없다 — 씨 3은 궁리 여섯 번 · 5단 C4 뒤 씨 3 → 7: 피할 곳이 문 곁에서 방 안쪽으로 물려 씨 3은 궁리할 일이 없다 — 씨 7은 궁리 네 번)
+                    // 판단 시험이라 상황을 그대로 차린다: 옛 충돌 셈이 낸 구멍 (침실 둘 외판 0.35m² · 둘레 통로 쪽 벽 14cm²) — DF9 뒤 1.5kg 운석은 외판에 운석 지름의 구멍 (170cm²)만 낸다 (씨도 DF9 뒤 다시 골랐다 — 씨 7은 이제 궁리할 일이 없다 · DF6 뒤 씨 10 → 3: 재배대 · 물 재생기가 바뀌어 씨 10은 궁리할 일이 없다 — 씨 3은 궁리 여섯 번)
                     int hit = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Impact).Select(x => x.Cell).DefaultIfEmpty(-1).First();
                     var stc = s.Get<Structure>();
                     int torn = hit >= 0 ? s.Causes.Add(CauseKind.Impact, "운석이 외판을 크게 찢었다", s.Tick, hit, rock) : rock;
