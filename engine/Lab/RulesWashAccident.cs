@@ -81,12 +81,13 @@ public static partial class Program
                 $"333K 3초 {a.burn:0.000} (사실 {a.hurt} · '{a.why}') / 325K 5초 {b5.burn:0.000} ({b5.hurt}) / 60초 {b60.burn:0.000} / 313K 6분 {ok.burn:0.000} · 더러움 0.8 → {ok.dirt:0.00}");
         }
 
-        // C17 검토 고침 — 마음 길로: 조절기 접점이 붙은 샤워 칸에서 더러운 이가 끝까지 씻으면 덴다 (예전: 물을 잠그고 온수기를 끈 뒤에 물 온도를 읽어 293K — 늘 0)
+        // C17 검토 고침 — 마음 길로: 조절기 접점이 붙은 샤워 칸에서 뜨거움을 느끼지 못하는 더러운 이가 끝까지 씻으면 덴다 (예전: 물을 잠그고 온수기를 끈 뒤에 물 온도를 읽어 293K — 늘 0)
         {
             var s = Worlds.Full(lay, 9);
             var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
             int p = m.AddPerson(s, Worlds.At(lay, 2, 1));
             s.Run(2);
+            m.ShowerTooHotK = 400;   // 뜨거움을 느끼지 못하는 이 (C24 뒤 — 느끼면 첫 물에 물러선다: 아래 'C24 뜨거운 샤워')
             var shower = lay.Furniture.First(x => x.Type == "Shower");
             int dev = net.Devices.First(d => d.Furniture == shower.Id).Id;
             net.BreakThermostat(s, dev, true, s.Causes.Add(CauseKind.Setup, "시험: 온수기 조절기 접점이 붙었다", s.Tick, shower.Cells[0]));
@@ -99,7 +100,7 @@ public static partial class Program
                 s.Step();
             }
             float burn = life[m[p].C.Body].Burn - burn0;
-            Check("화장실 사고 (C17 검토 고침): 조절기 접점이 붙은 샤워 칸 (≈ 325K)에서 더러운 이가 마음대로 끝까지 씻으면 덴다 — 물을 잠그기 전의 물 온도로",
+            Check("화장실 사고 (C17 검토 고침): 조절기 접점이 붙은 샤워 칸 (≈ 325K)에서 뜨거움을 느끼지 못하는 더러운 이가 마음대로 끝까지 씻으면 덴다 — 물을 잠그기 전의 물 온도로",
                 m.ShowersTaken == 1 && burn > 0.1f, $"샤워 {m.ShowersTaken} · 화상 +{burn:0.000}");
         }
 
@@ -222,6 +223,69 @@ public static partial class Program
             Check("화장실 사고 (C23) 샤워 칸 사용 금지 불: 걸어가던 이 · 줄 선 이는 불 켜진 가까운 칸이 아닌 먼 칸에서 씻는다 · 비트 2를 켰다 꺼도 비트 1 불은 남는다",
                 walk.nearUse == 0 && walk.farUse > 0 && walk.ok && line.farUse > 0 && line.ok,
                 $"걸어가던 이: 가까운 칸 물 {walk.nearUse}몰 · 먼 칸 {walk.farUse}몰 · 씻김+불 {walk.ok} / 줄 선 이: 먼 칸 {line.farUse}몰 · 씻김+불 {line.ok}");
+        }
+
+        // C24 샤워 물을 느낀다: 샤워 칸 둘 — (가) 가까운 칸 조절기 접점이 붙었다 (325K): 첫 물에 잠그고 물러선다 (30초 안 · 화상 < 0.02 · 그 칸 샤워 0 · 알림 '뜨겁다' 1) → 30분 안에 먼 칸에서 씻는다 ·
+        //     둘 다 붙었으면 물수건 / (나) 가까운 칸 조절기가 열린 채 굳었다 (293K): 2분 헹구고 잠근다 (≥ 120초치 · 더러움 0.8 → 0.5 아래 · 알림 '찬물')
+        //     (예전: 6분을 다 쓰고 · 알림이 없었다)
+        {
+            var two = Worlds.Ascii(ShowerTwoShip, legend);
+            (double nearSec, double burn, int hotReports, int coldReports, bool farWashed, long wipes, float dirt, bool closed, double stopSec) Feel(int fault, bool both)
+            {
+                var s = Worlds.Full(two, 5);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+                var sh = two.Furniture.Where(x => x.Type == "Shower").OrderBy(x => two.X(x.Cells[0])).ToList();
+                int dn = net.Devices.First(d => d.Furniture == sh[0].Id).Id, df = net.Devices.First(d => d.Furniture == sh[1].Id).Id;
+                int a = m.AddPerson(s, Worlds.At(two, 2, 1));
+                s.Run(2);
+                int cause = s.Causes.Add(CauseKind.Setup, "시험: 조절기가 고장 났다", s.Tick);
+                net.BreakThermostat(s, dn, fault == 1, cause);
+                if (both) net.BreakThermostat(s, df, fault == 1, cause);
+                void Calm() { int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[a].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+                life[m[a].C.Body].Dirt = 0.8f;
+                float burn0 = life[m[a].C.Body].Burn; long w0 = m.Wipes; double n0 = net.ShowerMeter[dn], f0 = net.ShowerMeter[df];
+                long opened = -1, shut = -1;
+                for (long t = 0; t < Time.Minutes(40); t++)
+                {
+                    Calm(); s.Step();
+                    if (opened < 0 && net.ShowerMeter[dn] > n0) opened = s.Tick;
+                    if (opened >= 0 && shut < 0 && !net.ValveOpen(dn)) shut = s.Tick;
+                }
+                return ((net.ShowerMeter[dn] - n0) / Network.ShowerFlow, life[m[a].C.Body].Burn - burn0, m.WashReports.Count(r => r.Kind == 1 && r.Where == dn), m.WashReports.Count(r => r.Kind == 2 && r.Where == dn),
+                    net.ShowerMeter[df] - f0 > Network.ShowerFlow * 200, m.Wipes - w0, life[m[a].C.Body].Dirt, !net.ValveOpen(dn), shut >= 0 && opened >= 0 ? Time.ToSeconds(shut - opened) : -1);
+            }
+            var hot = Feel(1, false); var hot2 = Feel(1, true); var cold = Feel(2, false);
+            Check("화장실 사고 (C24) 뜨거운 샤워: 첫 물에 잠그고 물러선다 (30초 안 · 화상 < 0.02 · 알림 '뜨겁다' 하나) → 30분 안에 먼 칸에서 씻는다 · 둘 다 뜨거우면 물수건",
+                hot.stopSec >= 0 && hot.stopSec <= 30 && hot.burn < 0.02f && hot.hotReports == 1 && hot.farWashed && hot.dirt < 0.5f && hot2.wipes >= 1,
+                $"물러서기까지 {hot.stopSec:0}초 · 그 칸 물 {hot.nearSec:0}초치 · 화상 {hot.burn:0.000} · 알림 {hot.hotReports} · 먼 칸에서 씻음 {hot.farWashed} · 더러움 {hot.dirt:0.00} / 둘 다: 물수건 {hot2.wipes}");
+            Check("화장실 사고 (C24) 찬물 샤워: 처음 느낀 물이 찬물이면 2분 헹구고 잠근다 (≥ 120초치 · 6분이 아니다 · 더러움 0.8 → 0.5 아래 · 밸브 잠김 · 알림 '찬물' 하나)",
+                cold.nearSec >= 115 && cold.nearSec <= 200 && cold.dirt < 0.5f && cold.closed && cold.coldReports == 1,
+                $"헹군 물 {cold.nearSec:0}초치 · 더러움 {cold.dirt:0.00} · 밸브 잠김 {cold.closed} · 알림 {cold.coldReports}");
+        }
+
+        // C24 (다) 몸이 떴다: 씻는 중에 중력 발생기가 꺼지면 (C18 도면) — 1분 안에 쓰던 샤워를 잠그고 나온다 (씻은 것으로 치지 않는다 · 예전: 6분 동안 물을 틀어 두었다)
+        {
+            var lg = new Dictionary<char, string>(legend) { ['G'] = "GravityGenerator" };
+            var glay = Worlds.Ascii(WashShip.Replace("#e.....#T", "#e..G..#T"), lg);
+            var s = Worlds.Full(glay, 3);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            var shower = glay.Furniture.First(x => x.Type == "Shower");
+            int dev = net.Devices.First(d => d.Furniture == shower.Id).Id, gen = net.Devices.First(d => d.Type == "GravityGenerator").Id;
+            int p = m.AddPerson(s, Worlds.At(glay, 2, 1));
+            s.Run(2);
+            life[m[p].C.Body].Dirt = 0.8f;
+            long off = -1, shut = -1; long taken0 = m.ShowersTaken;
+            for (long t = 0; t < Time.Minutes(30) && shut < 0; t++)
+            {
+                int o = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24;
+                ref var c = ref m[p].C; c.ShiftHour = o; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0;
+                s.Step();
+                if (off < 0 && net.ValveOpen(dev) && net.ShowerMeter[dev] > 0) { net.SetOn(gen, false); off = s.Tick; }
+                if (off >= 0 && !net.ValveOpen(dev)) shut = s.Tick;
+            }
+            Check("화장실 사고 (C24) 무중력 샤워: 씻는 중 중력이 꺼져 몸이 뜨면 1분 안에 쓰던 샤워를 잠그고 나온다 (씻은 것으로 치지 않는다)",
+                off >= 0 && shut >= 0 && shut - off <= Time.Minutes(1) && m.ShowersFloated >= 1 && m.ShowersTaken == taken0,
+                $"끈 틱 {off} · 잠근 틱 {shut} ({(shut >= 0 && off >= 0 ? Time.ToSeconds(shut - off) : -1):0}초) · 떠서 그침 {m.ShowersFloated} · 샤워 {m.ShowersTaken - taken0}");
         }
     }
 }

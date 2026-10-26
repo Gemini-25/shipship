@@ -268,6 +268,7 @@ public sealed partial class Mind
             if (Signed(st.Target)) { WashRedirect(a, st.Target, t, "샤워 칸에 사용 금지 불이 켜져 있다"); WashTurnedAway++; return; }   // 틀기 전에 불을 본다 (5단 C23)
             ShowerStart(a, st);
         }
+        else if (use == UseKind.Shower && a.IsPerson && ShowerFeel(sim, a, st)) return;   // 물을 느낀다 (5단 C24 — 걸음을 끝냈으면 WashDone을 부르지 않는다)
         bool done = t - c.StepStart >= st.Value;
         if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
         if (use == UseKind.Surgery) { int r = SurgeryTick(sim, a, st); if (r < 0) return; done = r > 0 || t - c.StepStart >= st.Value; }

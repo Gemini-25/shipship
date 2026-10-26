@@ -42,6 +42,13 @@ public sealed partial class Mind
     public long[] HandRuleAt = Array.Empty<long>();
     /// <summary>샤워 칸 · 화장실 알림 (사람이 배 안 통신으로 — 주컴퓨터가 읽는다 · 많아야 16).</summary>
     public readonly List<WashReport> WashReports = new();
+    /// <summary>사람마다 이번 샤워에서 처음 느낀 물 온도 (K — 0 아직 · 5단 C24: '따뜻했나'는 느낀 온도로).</summary>
+    private float[] _showerFelt = Array.Empty<float>();
+    /// <summary>느낀 물: 이 위면 데일 듯 뜨겁다 (잠그고 물러선다 — 시험 스위치: 찍지 않는다 · 400이면 뜨거움을 느끼지 못하는 이) · 처음 이 아래면 찬물 (2분 헹군다).</summary>
+    public double ShowerTooHotK = 318;
+    public const double ShowerColdK = 300;
+    /// <summary>셈 (찍지 않는다): 뜨거워 물러선 · 찬물에 짧게 헹군 · 떠서 그친 샤워.</summary>
+    public long ShowersScalding, ShowersCold, ShowersFloated;
     /// <summary>재기용: 냄새 나는 이 곁을 피한 번 · 샤워 투덜 · 줄 새치기 · 차례를 부탁한 번 · 비켜 준 번.</summary>
     public long SmellAvoided, Grumbles, LineCuts, AskedTurns, TurnsGiven;
     /// <summary>오물을 비울 곳의 차례: 퇴비통 · 압축기 — 둘 다 없으면 화물 상자 (봉해 쌓아 둔다).</summary>
@@ -301,7 +308,10 @@ public sealed partial class Mind
             case UseKind.Shower:
             {
                 int d = WashDev(st.Target);
-                bool hot = d < 0 || _net!.Working(d);
+                float felt = a.Id < _showerFelt.Length ? _showerFelt[a.Id] : 0;
+                bool hot = d < 0 || (felt > 0 ? felt >= ShowerColdK : _net!.Working(d));   // 따뜻했나 — 느낀 온도로 (5단 C24)
+                if (a.Id < _showerFelt.Length) _showerFelt[a.Id] = 0;
+                if (d >= 0 && felt > 0 && felt < ShowerColdK) { a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Wash, Target = st.Target, Until = t + Time.Hours(6) }); if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0); }   // 찬물 칸은 6시간 피한다
                 if (d >= 0)
                 {
                     double got = ShowerTaken(a, d);   // 흐른 물 (계량기의 차)만큼 씻겼다 (6분에 8L · 배급이면 3분에 4L)
@@ -508,7 +518,7 @@ public sealed partial class Mind
         w.Arr(WashSign); w.Arr(_callTick); w.Arr(_callTo); w.Arr(_callOrder);
         w.I64(Toilets); w.I64(Bags); w.I64(ShowersTaken); w.I64(Wipes); w.I64(HandWashes); w.I64(Queued); w.I64(QueueGaveUp);
         w.I64(ShowerOverRule); w.I64(WashMoved); w.I64(WashTurnedAway); w.I64(Scrubbed); w.I64(Unclogged); w.I64(Emptied); w.I64(ShowersLeftOn);
-        w.Arr(_showerDev); w.Arr(_showerFrom); w.Arr(WasteDown.ToArray());
+        w.Arr(_showerDev); w.Arr(_showerFrom); w.Arr(_showerFelt); w.Arr(WasteDown.ToArray());
         w.Tag("화장실 (라)(마)");
         w.Arr(_smellWho); w.Arr(_smellAt); w.Arr(_smellCause); w.Arr(_smellCell); w.Arr(_toldOdorAt);
         w.Arr(_lineFu); w.Arr(_lineStart); w.Arr(_lineKey); w.Arr(_lineAsked); w.Arr(_lineGrumbled); w.Arr(HandRuleAt); w.List(WashReports);
@@ -522,7 +532,7 @@ public sealed partial class Mind
         WashSign = r.Arr<byte>(); _callTick = r.Arr<long>(); _callTo = r.Arr<int>(); _callOrder = r.Arr<int>();
         Toilets = r.I64(); Bags = r.I64(); ShowersTaken = r.I64(); Wipes = r.I64(); HandWashes = r.I64(); Queued = r.I64(); QueueGaveUp = r.I64();
         ShowerOverRule = r.I64(); WashMoved = r.I64(); WashTurnedAway = r.I64(); Scrubbed = r.I64(); Unclogged = r.I64(); Emptied = r.I64(); ShowersLeftOn = r.I64();
-        _showerDev = r.Arr<int>(); _showerFrom = r.Arr<double>(); WasteDown.Clear(); WasteDown.AddRange(r.Arr<int>());
+        _showerDev = r.Arr<int>(); _showerFrom = r.Arr<double>(); _showerFelt = r.Arr<float>(); WasteDown.Clear(); WasteDown.AddRange(r.Arr<int>());
         r.Tag("화장실 (라)(마)");
         _smellWho = r.Arr<int>(); _smellAt = r.Arr<long>(); _smellCause = r.Arr<int>(); _smellCell = r.Arr<int>(); _toldOdorAt = r.Arr<long>();
         _lineFu = r.Arr<int>(); _lineStart = r.Arr<long>(); _lineKey = r.Arr<long>(); _lineAsked = r.Arr<long>(); _lineGrumbled = r.Arr<long>(); HandRuleAt = r.Arr<long>(); WashReports.Clear(); WashReports.AddRange(r.List<WashReport>());
@@ -538,6 +548,70 @@ public sealed partial class Mind
         if (_net.On[d] == 0) _net.SetOn(d, true);         // 온수기를 켠다 (전력을 줄이려 꺼 두었으면 주컴퓨터가 다시 켤 때까지 찬물)
         if (_showerDev.Length < Agents.Count) { Array.Resize(ref _showerDev, Agents.Count); Array.Resize(ref _showerFrom, Agents.Count); }
         if (_showerDev[a.Id] != d + 1) { _showerDev[a.Id] = d + 1; _showerFrom[a.Id] = d < _net.ShowerMeter.Length ? _net.ShowerMeter[d] : 0; }
+    }
+
+    /// <summary>
+    /// 샤워 물을 느낀다 (5단 C24 — 쓰는 틱마다 · 물이 흘렀을 때만): 아는 것 — 제 살갗에 닿는 그 칸 · 그 때의 물 온도 · 제 몸이 떴는지.
+    /// ① 318K 넘게: 잠그고 물러선다 (씻은 것이 아니다 · 그 칸 12시간 피함 · 알림 '데일 듯 뜨겁다') · ② 처음 느낀 물이 300K 아래: 2분 헹구고 잠근다 (지린 이는 끝까지 · 알림 '찬물' — 한 장치에 2시간에 한 번) ·
+    /// ③ 몸이 떴다: 잠그고 나온다 (물수건은 다음 판단이). 걸음을 끝냈으면 참.
+    /// </summary>
+    private bool ShowerFeel(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        int d = WashDev(st.Target);
+        if (d < 0 || _net == null || _life == null) return false;
+        double got = ShowerTaken(a, d);
+        if (got <= 0) return false;
+        if (_showerFelt.Length < Agents.Count) Array.Resize(ref _showerFelt, Agents.Count);
+        if (c.Floated != 0)
+        {
+            _life.Rinse(sim, c.Body, got, d); ShowerOff(a, d); _showerFelt[a.Id] = 0; ShowersFloated++;
+            Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = c.Cell, Method = 255, Held = c.Holding, Out = JudgeOut.Blocked, Why = SnagKind.Other, By = -1, Note = "몸이 떠 물이 흩어진다 — 물을 잠그고 나온다" });
+            a.LastFail = "Wash: 몸이 떠 샤워를 그쳤다";
+            EndPlan(a);
+            return true;
+        }
+        double k = _net.ShowerWaterK(d);
+        if (k > ShowerTooHotK)
+        {
+            _life.Rinse(sim, c.Body, got, d);   // 그 동안 맞은 물 (데임은 월드가)
+            ShowerOff(a, d); _showerFelt[a.Id] = 0; ShowersScalding++;
+            a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Wash, Target = st.Target, Until = t + Time.Hours(12) });
+            if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
+            int why = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 샤워 물이 데일 듯 뜨거워 잠그고 물러섰다", t, c.Cell, 0, 0, a.Id);
+            a.LastFail = "Wash: 물이 데일 듯 뜨겁다";
+            Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = c.Cell, Method = 255, Held = c.Holding, Out = JudgeOut.Blocked, Why = SnagKind.Other, By = -1, Note = "물이 데일 듯 뜨겁다" });
+            WashReport(t, d, why, a.Id, 1);
+            c.Fear = Math.Min(1, c.Fear + 0.1f);
+            EndPlan(a);
+            return true;
+        }
+        if (_showerFelt[a.Id] <= 0)
+        {
+            _showerFelt[a.Id] = (float)k;
+            if (k < ShowerColdK)
+            {
+                ShowersCold++;
+                if (_life[c.Body].Wet == 0)   // 지린 이는 끝까지 — 아니면 2분 헹구고 잠근다
+                {
+                    var s2 = a.Plan[c.StepIndex];
+                    s2.Value = (float)Math.Min(s2.Value, t - c.StepStart + Time.Minutes(2));
+                    a.Plan[c.StepIndex] = s2;
+                }
+                int why = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 샤워 물이 차가웠다", t, c.Cell, 0, 0, a.Id);
+                WashReport(t, d, why, a.Id, 2);
+            }
+        }
+        return false;
+    }
+
+    /// <summary>샤워 칸 알림 (배 안 통신 — 찬물은 한 장치에 2시간에 한 번 · 많아야 16).</summary>
+    private void WashReport(long t, int dev, int cause, int who, byte kind)
+    {
+        if (kind == 2) foreach (var r in WashReports) if (r.Kind == 2 && r.Where == dev && t - r.Tick < Time.Hours(2)) return;
+        WashReports.Add(new WashReport { Tick = t, Where = dev, Cause = cause, Who = who, Kind = kind });
+        if (WashReports.Count > 16) WashReports.RemoveAt(0);
     }
 
     /// <summary>틀 때부터 흐른 물 (계량기의 차 — 몰).</summary>
