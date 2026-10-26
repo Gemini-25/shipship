@@ -1,0 +1,112 @@
+using ShipEngine;
+
+namespace Lab;
+
+/// <summary>법칙 시험 — 사고의 물리 (docs/DEPTH_FIX.md DF9 · 근거 docs/ENGINE_DEPTH_REVIEW.md §9 · §4-14): 운석 운동량 · 구멍 크기 축척 · 충격파 연속 · 큰 충돌의 갈라짐.</summary>
+public static partial class Program
+{
+    /// <summary>탁자가 고르게 놓인 큰 방 (충격파가 부순 설비를 센다).</summary>
+    internal const string TableHall = @"
+#####################
+#...................#
+#.t.t.t.t.t.t.t.t.t.#
+#...................#
+#.t.t.t.t.t.t.t.t.t.#
+#...................#
+#.t.t.t.t.t.t.t.t.t.#
+#...................#
+#.t.t.t.t.t.t.t.t.t.#
+#...................#
+#####################";
+
+    private static void Depth2Laws()
+    {
+        if (!Do("사고의 물리 법칙")) return;
+        Console.WriteLine("\n[사고의 물리 — 운석 운동량 · 구멍 축척 · 충격파 연속 · 갈라짐]");
+
+        // 운석 운동량: 작은 배에 2kg · 7km/s — 맞은 순간 배의 몸 Δv = m·v / M (운석이 넣은 운동량 장부도 같다)
+        {
+            var lay = Worlds.Ascii(Twins);
+            var s = FieldStructure(lay);
+            s.Run(2);
+            var st = s.Get<Structure>();
+            int hull = Worlds.At(lay, 2, 0);
+            st.Rock(s, hull, 2, 0.5 * 2 * 7000 * 7000, 0, 1, 0, 1, s.Causes.Add(CauseKind.Impact, "2kg 운석", s.Tick, hull));
+            var o = st.Bodies.Count > 0 ? st.Bodies[0] : default;
+            double want = 2 * 7000 / Math.Max(1, o.Mass);
+            Check("운석 운동량: 작은 배 (10×4칸)에 2kg · 7km/s가 위에서 — 맞은 순간 배의 Δv = m·v / M (1% 안 · 날아온 쪽으로) · 운석 장부 14,000N·s",
+                o.Mass > 0 && Math.Abs(o.Vy - want) < 0.01 * want && Math.Abs(o.Vx) < 1e-6 && Math.Abs(st.RockPy - 14000) < 1,
+                $"배 {o.Mass / 1000:0.0}t · Δv ({o.Vx * 1000:0.0}, {o.Vy * 1000:0.0})mm/s · 바람 {want * 1000:0.0}mm/s · 장부 {st.RockPy:0}N·s");
+        }
+
+        // 구멍 크기 축척: 강철 10mm 외판 · 7km/s — 얇은 판 관통 어림 (5g 20 · 60g 49 · 2kg 230cm²)의 두 배 안 · 지름 비가 m^⅓ 언저리 (예전: 44 · 340 · 5651cm² — 무게에 거의 비례)
+        {
+            var lay = Worlds.Ascii(Twins);
+            double Hole(double kg)
+            {
+                var s = FieldStructure(lay);
+                int hull = Worlds.At(lay, 2, 0);
+                s.Get<Structure>().Rock(s, hull, kg, 0.5 * kg * 7000 * 7000, 0, 1, 0, 1, 0);
+                return s.Get<Field>().Hole[hull];
+            }
+            double a5 = Hole(0.005), a60 = Hole(0.06), a2k = Hole(2);
+            double r1 = Math.Sqrt(a60 / a5) / Math.Cbrt(60 / 5.0), r2 = Math.Sqrt(a2k / a60) / Math.Cbrt(2000 / 60.0);
+            bool near(double a, double want) => a > want / 2 && a < want * 2;
+            Check("구멍 크기 축척: 강철 10mm 외판 · 7km/s — 5g · 60g · 2kg의 구멍이 얇은 판 관통 어림 (20 · 49 · 230cm²)의 두 배 안 · 지름 비 ÷ 무게 비의 세제곱근이 0.6~1.4",
+                near(a5 * 1e4, 20) && near(a60 * 1e4, 49) && near(a2k * 1e4, 230) && r1 > 0.6 && r1 < 1.4 && r2 > 0.6 && r2 < 1.4,
+                $"5g {a5 * 1e4:0}cm² · 60g {a60 * 1e4:0}cm² · 2kg {a2k * 1e4:0}cm² · 지름 비 / m^⅓ 비 {r1:0.00} · {r2:0.00}");
+        }
+
+        // 충격파 연속: 같은 방 · 같은 자리에 7km/s 운석 30 · 50 · 80MJ — 부서진 탁자가 에너지와 함께 고르게 는다 (예전: 20MJ 문턱의 절벽 — 49MJ 1 · 81MJ 7)
+        {
+            var lay = Worlds.Ascii(TableHall, new() { ['t'] = "Table" });
+            (int broke, double kpa) Smashed(double mj)
+            {
+                var s = Worlds.Full(lay, 1);
+                s.Run(2);
+                var st = s.Get<Structure>();
+                double kg = 2 * mj * 1e6 / (7000.0 * 7000);
+                st.Rock(s, Worlds.At(lay, 10, 0), kg, mj * 1e6, 0, 1, 0, 1, s.Causes.Add(CauseKind.Impact, $"{kg:0.0}kg 운석", s.Tick));
+                return (Enumerable.Range(0, lay.Furniture.Count).Count(f => st.FurnBroken[f] != 0 && s.Causes.Text(st.FurnCause[f]).StartsWith("충격파에")),
+                    Enumerable.Range(0, lay.N).Sum(c => (double)st.BlastPeakKPa[c]));   // 바닥 칸마다 폭풍 첨두 (kPa) 합 — 고르게 느는 잣대
+            }
+            var (b30, p30) = Smashed(30); var (b50, p50) = Smashed(50); var (b80, p80) = Smashed(80);
+            Check("충격파 연속: 탁자 36개 방 외판에 7km/s 운석 30 · 50 · 80MJ — 바닥 칸마다 폭풍 첨두의 합이 고르게 는다 (30 < 50 < 80 · 50→80이 30→50의 세 배를 넘지 않는다 — 절벽이 없다) · 충격파에 부서진 탁자도 줄지 않고 는다",
+                p30 > 0 && p30 < p50 && p50 < p80 && p80 - p50 <= 3 * (p50 - p30) && b30 <= b50 && b50 <= b80 && b80 > b30,
+                $"첨두 합 30MJ {p30:0} · 50MJ {p50:0} · 80MJ {p80:0}kPa / 부서진 탁자 {b30} · {b50} · {b80}");
+        }
+
+        // 정적 하중은 시들게 하지 않는다: 진공 옆 닫힌 보통 문이 72시간 버틴다 (끼익거리며 · 피로 0 그대로) — 예전: 한 기압 부하 0.84에 피로가 쌓여 51분 만에 날아갔다
+        {
+            var lay = Worlds.Ascii(@"
+#########
+#...D...#
+#...#...#
+#########");
+            var s = FieldStructure(lay);
+            var f = s.Get<Field>(); var st = s.Get<Structure>();
+            f.Adiabatic = true;
+            f.SetHole(Worlds.At(lay, 0, 1), 2.5f);   // 왼쪽 방 외판이 뚫렸다
+            int door = Worlds.At(lay, 4, 1);
+            for (int d = 0; d < lay.Doors.Count; d++) f.DoorTaped[d] = 1;   // 문틈을 막았다 (새는 것으로 오른쪽 방이 빠지지 않게 — 부하를 72시간 그대로)
+            s.Run(Time.Hours(72));
+            Check("정적 하중: 진공 옆 닫힌 보통 문이 72시간 버틴다 — 날아가지 않고 피로도 쌓이지 않는다 (부하 0.5 아래 · 정격 한 기압의 두 배 넘게)",
+                st.DoorsBlown == 0 && st.Fatigue[door] < 0.01f && st.Stress[door] is > 0.3f and < 0.5f,
+                $"날아간 문 {st.DoorsBlown} · 피로 {st.Fatigue[door]:0.000} · 부하 {st.Stress[door]:0.00} · 오른쪽 방 {f.Pressure(Worlds.At(lay, 6, 1)):0.0}kPa");
+        }
+
+        // 큰 충돌의 갈라짐: 두 방을 잇는 좁은 통로를 20kg · 8km/s (640MJ) 운석이 위에서 — 배가 둘로 갈라진다 (예전: 640MJ로는 조각 0 · 5GJ가 들어야 했다)
+        {
+            var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s = FieldStructure(lay);
+            s.Run(2);
+            var st = s.Get<Structure>();
+            st.Rock(s, Worlds.At(lay, 10, 1), 20, 640e6, 0, 1, 0, 1, s.Causes.Add(CauseKind.Impact, "20kg 운석", s.Tick));
+            s.Run(5);
+            var split = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.ShipSplit);
+            Check("큰 충돌의 갈라짐: 두 방을 잇는 3칸 통로를 20kg · 8km/s (640MJ)가 위에서 꿰뚫으면 — 충격파가 통로의 위아래 벽 · 바닥을 찢어 배가 둘로 갈라진다 (원인 사슬이 그 운석까지)",
+                st.Splits >= 1 && split.Kind == FactKind.ShipSplit && s.Causes.Story(split.Cause).Contains("20kg 운석"),
+                $"갈라짐 {st.Splits} · '{(split.Kind == FactKind.ShipSplit ? s.Causes.Story(split.Cause) : "")}'");
+        }
+    }
+}

@@ -35,7 +35,14 @@ public sealed partial class Network
     public const double InsulPvcMolPerStrand = 7 * 0.65 / 62.5, InsulPlastMolPerStrand = 7 * 0.35 / 14.03;
     /// <summary>그 칸에 피복을 깐다 (가닥 수만큼).</summary>
     public void LayInsulation(int c, double strands) { F.AddStore(c, T.sPvc, strands * InsulPvcMolPerStrand); F.AddStore(c, T.sPoly, strands * InsulPlastMolPerStrand); }
-    public const double CoolLeakMolPerSec = 0.05, WaterLeakMolPerSec = 0.46;   // 틈 1에서 펌프가 돌 때 (서 있으면 냉각 10분의 1 · 물 20분의 1)
+    /// <summary>
+    /// 끊긴 관 (틈 1)에서 펌프가 돌 때 뿜는 빠르기 (몰/초 — DF9: 관 단면 × 유량 계수 0.6 × √(2ΔP/ρ)): 물관 ½인치 (1.27cm²) · 물 재생기 압력 100kPa → 1.08kg/s (분에 65L) ·
+    /// 냉각관 ¼인치 (0.32cm²) · 고리 압력 100kPa · 액체 암모니아 600kg/m³ → 0.21kg/s (분에 12kg) · 서 있으면 관에 든 것만 (물 500분의 1 · 냉각 50분의 1).
+    /// 이음매가 풀린 틈 · 스미는 틈 (틈 1 아래)은 그 몫 × 샘 빠르기 (펌프가 돌 때 냉각 0.05 · 물 0.46몰/초 — 서 있으면 냉각 10분의 1 · 물 20분의 1).
+    /// </summary>
+    public const double CoolSeepMolPerSec = 0.05, WaterSeepMolPerSec = 0.46;
+    public static readonly double WaterLeakMolPerSec = 0.6 * 1.27e-4 * Math.Sqrt(2 * 100e3 / 1000) * 1000 / 0.018,
+        CoolLeakMolPerSec = 0.6 * 0.32e-4 * Math.Sqrt(2 * 100e3 / 600) * 600 / 0.017;
     public static byte Bit(LineKind k) => (byte)(1 << (int)k);
 
     // ── 깐 것 (도면에서 · 찍지 않는다) ──
@@ -432,6 +439,29 @@ public sealed partial class Network
         if (wires.Count > 0) parts.Add($"끊긴 {string.Join(" · ", wires)}을 이었다");
         if (cool || water) parts.Add($"새는 {(cool && water ? "냉각관 · 물관" : cool ? "냉각관" : "물관")}을 죄었다");
         return string.Join(" · ", parts);
+    }
+
+    /// <summary>파편이 지나며 칸에 남긴 에너지가 이만큼이면 그 칸의 선 · 관이 찢긴다 (J — 전선 · 센서 선 피복 몇 mm는 수 kJ · 관벽 1~2mm 금속관은 수십 kJ · 어림 · DF8).</summary>
+    public const double ShardCableJ = 3000, ShardPipeJ = 30000;
+
+    /// <summary>틱마다 ④가 적은 파편 길 (DF8): 지난 에너지가 문턱을 넘은 칸의 전선 · 센서 선 · 관을 찢는다 — 원인 '파편에 전선이 끊겼다' (그 파편까지 잇는다). 읽은 것은 비운다.</summary>
+    private void ShardStep(Sim sim)
+    {
+        if (_stc == null || _stc.ShardPasses.Count == 0) return;
+        byte pw = Bit(LineKind.Power), pipes = (byte)(Bit(LineKind.Coolant) | Bit(LineKind.Water));
+        foreach (var h in _stc.ShardPasses)
+        {
+            int c = h.Cell;
+            if (c < 0 || c >= LineAt.Length || h.J < ShardCableJ) continue;
+            byte at = LineAt[c];
+            bool data = c < _onData.Length && _onData[c] && DataBroken[c] == 0;
+            if (data) CutData(sim, c, sim.Causes.Add(CauseKind.Electric, "파편에 센서 선이 끊겼다", sim.Tick, c, h.Cause));
+            if ((at & pw) != 0 && (LineCut[c] & pw) == 0) CutLines(sim, c, pw, sim.Causes.Add(CauseKind.Electric, "파편에 전선이 끊겼다", sim.Tick, c, h.Cause));
+            byte fresh = (byte)(at & pipes & ~LineCut[c]);
+            if (fresh != 0 && h.J >= ShardPipeJ)
+                CutLines(sim, c, fresh, sim.Causes.Add(CauseKind.Leak, (fresh & Bit(LineKind.Coolant)) != 0 ? "파편에 냉각관이 뚫려 암모니아가 뿜어 나온다" : "파편에 물관이 뚫려 물이 뿜어 나온다", sim.Tick, c, h.Cause));
+        }
+        _stc.ShardPasses.Clear();
     }
 
     /// <summary>5틱마다 선이 지나는 칸: 떨어져 나감 · 곁 외판 구멍 · 불의 열 → 선이 상한다 (센서 선은 바퀴 1 그대로).</summary>

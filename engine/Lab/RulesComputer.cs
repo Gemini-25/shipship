@@ -247,7 +247,7 @@ public static partial class Program
             Check("옆 방이 진공: 사람은 새는 문틈 쪽 진공으로 뛰쳐나가지 않는다", minSpO2 > 0.85 && life[m[p].C.Body].Alive != 0,
                 $"가장 낮은 산소 포화 {minSpO2:0.00} · 지금 {m.RoomOf(m[p].C.Cell)}방 · {m.Thought(p)}");
             for (int k = 0; k < Time.Hours(6); k++) s.Step();
-            Check("옆 방이 진공: 끼익거리는 문을 덧대 받쳐 6시간을 버틴다", s.Facts.CountOf(FactKind.DoorBlown) == 0 && st.Braced[door] != 0,
+            Check("옆 방이 진공: 끼익거리는 문이 6시간을 버틴다 (보통 문 정격은 한 기압의 두 배 — 정적 하중에 시들지 않아 덧대 받칠 일이 없다 · DF9)", s.Facts.CountOf(FactKind.DoorBlown) == 0 && st.Fatigue[door] < 0.01f,
                 $"문 날아감 {s.Facts.CountOf(FactKind.DoorBlown)} · 받침 {st.Braced[door]}/{st.Braced[doorC]} · 피로 {st.Fatigue[door]:0.00} · 부하 {st.Stress[door]:0.00}");
         }
 

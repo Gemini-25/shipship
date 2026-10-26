@@ -117,7 +117,7 @@ public sealed partial class Structure
             double kwx = (cs * ddx - sn * ddy) / dl * speed, kwy = (sn * ddx + cs * ddy) / dl * speed;
             if (byGas) { GasPx -= kg * kwx; GasPy -= kg * kwy; GasL -= wx * kg * kwy - wy * kg * kwx; }   // 기체가 밀었다 (몸이 아니라)
             else if (attached) Push(b, wx, wy, -kg * kwx, -kg * kwy);
-            Shards.Add(new Shard { X = wx, Y = wy, Vx = vx + kwx, Vy = vy + kwy, Kg = (float)kg, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = sim.Facts.SubNow });
+            Shards.Add(new Shard { X = wx, Y = wy, Vx = vx + kwx, Vy = vy + kwy, Kg = (float)kg, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = ShedSub(sim, c) });
             ShardsMade++;
         }
         // 너무 많으면 가장 오래된 것부터 장부 '우주로'
@@ -148,7 +148,7 @@ public sealed partial class Structure
             RecalcCellMass(c);
             return;
         }
-        Shards.Add(new Shard { X = wx, Y = wy, Vx = vx, Vy = vy, Kg = (float)fur, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = sim.Facts.SubNow });
+        Shards.Add(new Shard { X = wx, Y = wy, Vx = vx, Vy = vy, Kg = (float)fur, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = ShedSub(sim, c) });
         ShardsMade++;
     }
 

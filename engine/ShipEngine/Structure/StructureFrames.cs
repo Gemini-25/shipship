@@ -398,9 +398,12 @@ public sealed partial class Structure
         BlastProps(sim, cell, hit, bc);   // 둘레 물체를 바깥쪽으로 민다 (벽이 찢기기 전 첨두로)
         foreach (var (c, kpa) in hit)
         {
+            double imp = BlastImpulse(_blastZ[c], w3);
             if (L.Kind[c] is CellKind.Wall or CellKind.Door)
             {
-                double load = 2 * kpa / Math.Max(1, Rating(c));   // 벽에 부딪힌 충격파는 두 배로 되튄다
+                // 벽에 부딪힌 충격파는 두 배로 되튄다 · 짧은 펄스는 충격량으로 (DF9 — 첨두압이 정격을 넘어도 충격량이 판을 찢을 만큼이어야 · 압력-충격량 두 문턱의 작은 쪽)
+                double rating = Math.Max(1, Rating(c));
+                double load = Math.Min(2 * kpa / rating, 2 * imp / (PlateImpulsePaS * rating / DeckRatingKPa));
                 if (L.Kind[c] == CellKind.Door) { if (load >= 1 && L.DoorAt[c] >= 0 && DoorJam[L.DoorAt[c]] == 0) { DamageCause[c] = bc; BlowDoor(sim, c, load, cell, kpa); } continue; }
                 if (load >= 1.6) Open(sim, c, 2.5f, bc, FactKind.WallBreach, 0);
                 else if (load >= 1) Open(sim, c, (float)Math.Min(2.0, 0.02 + 0.5 * (load - 1)), bc, FactKind.WallBreach, 0);
@@ -410,7 +413,8 @@ public sealed partial class Structure
             {
                 BlastPeakKPa[c] = Math.Max(BlastPeakKPa[c], (float)kpa);   // ⑦ 귀가 읽는다 (일시 청력 손실 — 소리 단계 S3)
                 var m = T.Materials[L.Material[c]].Def;
-                double load = kpa / (DeckRatingKPa * Math.Sqrt(Math.Max(0.01, m.Strength / 250.0)) * HeatFactor(c, m) * (1 - Corrode[c]));
+                double deck = DeckRatingKPa * Math.Sqrt(Math.Max(0.01, m.Strength / 250.0)) * HeatFactor(c, m) * (1 - Corrode[c]);
+                double load = Math.Min(kpa / deck, 2 * imp / (PlateImpulsePaS * deck / DeckRatingKPa));   // 첨두압 · 되튄 충격량의 작은 쪽 (DF9 — TNT 120g은 판을 1m/s 남짓 밀 뿐)
                 if (load >= 1)
                 {
                     float area = load >= 1.6 ? 2f : (float)(0.3 + 0.7 * (load - 1) / 0.6);
@@ -418,17 +422,24 @@ public sealed partial class Structure
                 }
                 if (L.FurnitureAt[c] >= 0 && kpa > BlastHarmKPa) HitFurniture(sim, L.FurnitureAt[c], (kpa - BlastHarmKPa) / 70, bc, "충격파에");
                 // ⑦ 몸이 읽는 충격: 넘친 압력 × 충격파의 길이 (작은 폭발은 짧아 덜 다친다 — 지속 시간 ∝ W^(1/3) · 브라운 곡선의 경향) — TNT 15kg 넘게면 100kPa에 3.9kJ
-                if (kpa > BlastHarmKPa) { ImpactJ[c] += (float)((kpa - BlastHarmKPa) * 60 * Math.Min(1, w3 / 2.5)); if (DamageCause[c] == 0) DamageCause[c] = bc; }
+                if (kpa > BlastHarmKPa) { double hj = (kpa - BlastHarmKPa) * 60 * Math.Min(1, w3 / 2.5); ImpactJ[c] += (float)hj; if (DamageCause[c] == 0) DamageCause[c] = bc; HitActors(sim, c, hj, DamageCause[c]); }
             }
         }
         sim.Facts.Emit(sim.Tick, FactKind.LoudSound, cell, (float)Math.Min(194, 120 + 20 * Math.Log10(Math.Max(1, w))), bc);
         sim.Find<Sound>()?.Emit(sim, NearestAir(cell), (float)Math.Min(160, 130 + 10 * Math.Log10(Math.Max(1, w))), SoundKind.Bang, bc);
     }
 
+    private float[] _blastZ = Array.Empty<float>();
+    /// <summary>판이 찢기는 되튄 충격량 (Pa·s — 바닥 판 정격 300kPa에서 · 정격에 비례: 10mm 강판 78kg/m²가 5m/s 남짓 밀리면 · DF9: TNT 0.12kg은 바닥을 못 뚫고 1.9kg은 뚫는다).</summary>
+    public const double PlateImpulsePaS = 400;
+    /// <summary>폭풍의 양압 충격량 (Pa·s · 환산 거리 Z · W^⅓): i ≈ 200 W^⅓ / Z (킨니-그레이엄 어림 — Z 1에서 200kPa·ms/kg^⅓ · 가까이는 Z 0.3에서 멈춘다).</summary>
+    public static double BlastImpulse(double z, double w3) => 200 * w3 / Math.Max(0.3, z);
+
     /// <summary>폭풍이 닿는 칸 · 첨두 압력 (kPa · 칸 차례): 칸 길을 따라 퍼지며 벽 · 문을 지날 때마다 거리 넷만큼 준다 · 버틴 벽 너머는 끊긴다 (15kPa 아래는 뺀다).</summary>
     private List<(int c, double kpa)> BlastReach(int cell, double w3)
     {
         int maxD = (int)Math.Ceiling(9 * w3);   // Z 9 언저리에서 15kPa 아래
+        if (_blastZ.Length != L.N) _blastZ = new float[L.N];
         var dist = new Dictionary<int, int> { [cell] = 0 };
         var pq = new PriorityQueue<int, int>();
         pq.Enqueue(cell, 0);
@@ -440,14 +451,16 @@ public sealed partial class Structure
             double r = Math.Max(0.5, d), kpa = BlastKPa(r / w3);
             if (kpa < BlastFloorKPa) continue;
             hit.Add((c, kpa));
+            _blastZ[c] = (float)(r / w3);
             bool solid = L.Kind[c] is CellKind.Wall || L.Kind[c] == CellKind.Door && !F.DoorPassable(L.DoorAt[c]);
             if (solid && F.Hole[c] < 2 && c != cell) continue;  // 버틴 벽 너머는 아래에서 다시 본다 (찢기면 지나간다)
             L.Neighbors(c, nb);
             foreach (int j in nb)
             {
                 if (j < 0 || F.IsOut(j)) continue;
-                bool js = L.Kind[j] is CellKind.Wall or CellKind.Door;
-                int nd = d + (js ? 4 : 1);
+                // 벽 · 문 칸은 제 거리에서 받고 (DF9 — 곁 벽이 4m 떨어진 것처럼 받던 것) · 그 너머로 지나갈 때 넷만큼 준다 (반사 · 흡수)
+                bool cs = c != cell && L.Kind[c] is CellKind.Wall or CellKind.Door;
+                int nd = d + (cs ? 4 : 1);
                 if (nd > maxD || dist.TryGetValue(j, out int old) && old <= nd) continue;
                 dist[j] = nd; pq.Enqueue(j, nd);
             }

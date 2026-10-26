@@ -69,7 +69,7 @@ public static partial class Program
                 s.Get<Mind>().Crew(s, 2, 0, 0);
                 s.Run(Time.Minutes(1));
                 int seed = s.Causes.Add(CauseKind.Setup, "커다란 운석이 배를 향해 온다", s.Tick);
-                s.Get<Structure>().Impact(s, Worlds.At(l, 10, 1), 640e6, 0, 1, seed);
+                s.Get<Structure>().Rock(s, Worlds.At(l, 10, 1), 20, 640e6, 0, 1, 0, 1, seed);   // 운석 길 그대로 (운동량 · 운석 지름의 구멍 — DF9: 충격파가 통로의 위아래 벽 · 바닥을 찢는다)
                 every = 2; count = 30;
                 break;
             }

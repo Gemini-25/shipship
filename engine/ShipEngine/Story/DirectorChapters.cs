@@ -178,7 +178,7 @@ public sealed partial class Director
         static int Grave(List<Beat> m) => m.Any(b => Critical(b.Kind)) ? 1 : 0;
         var byWeight = moments.OrderByDescending(Grave).ThenByDescending(m => m.Max(b => b.W)).ThenBy(m => m[0].Tick).ToList();
         var peak = byWeight.FirstOrDefault();
-        foreach (var m in byWeight.Take(4))
+        foreach (var m in byWeight.Where(m => m == peak || m[0].Tick > h.StartTick + Sec(20)).Take(4))   // 조짐 컷이 보여 주는 첫 순간은 따로 컷을 두지 않는다 (조짐 컷이 한 틱으로 잘리지 않게)
         {
             var lead = m.OrderByDescending(b => Critical(b.Kind) ? 1 : 0).ThenByDescending(b => b.W).First();
             shots.Add(new Shot { From = Math.Max(h.StartTick, m[0].Tick - Sec(8)), At = lead.Tick, Cell = lead.Cell, Actor = lead.Actor, Speed = m == peak ? CriticalSpeed : DangerSpeed,

@@ -318,14 +318,20 @@ public static partial class Program
             //   (가) 둘레 통로 '외판 구멍 막기'는 다 해도 그대로 샌다 (막을 구멍이 외판에 없다) — 다 마쳤는데 같은 사건이 그대로면 두 번째에 그 걸음을 통하지 않은 것으로 (씨 7)
             //   (나) 미리 돌려 본 세계에서 문이 안 열렸다 — 이 세계의 문은 멀쩡해 '막힌 까닭이 그대로인가'가 곧 풀려 같은 계획을 1분에 여덟 번 (씨 6) → 10분은 그 걸음을 막힌 것으로
             {
-                var runs = new[] { 7UL, 6UL }.AsParallel().AsOrdered().Select(seed =>
+                var runs = new[] { 2UL, 10UL }.AsParallel().AsOrdered().Select(seed =>
                 {
                     var s = ShipWorld.Crewed("Didim", seed, 6, 3);
                     s.Run(Time.Minutes(80));   // 새벽 한 시 스무 분 — 모두 잠들었다
                     long f0 = s.Facts.Total;
                     int rock = s.Causes.Add(CauseKind.Setup, "운석 하나가 배를 향해 온다", s.Tick);
                     s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, rock);
-                    s.Run(Time.Minutes(15));
+                    for (int k = 0; k < 10 && !s.Facts.Since(f0).Any(x => x.Kind == FactKind.Impact); k++) s.Step();
+                    // 판단 시험이라 상황을 그대로 차린다: 옛 충돌 셈이 낸 구멍 (침실 둘 외판 0.35m² · 둘레 통로 쪽 벽 14cm²) — DF9 뒤 1.5kg 운석은 외판에 운석 지름의 구멍 (170cm²)만 낸다 (씨도 DF9 뒤 다시 골랐다 — 씨 7은 이제 궁리할 일이 없다)
+                    int hit = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Impact).Select(x => x.Cell).DefaultIfEmpty(-1).First();
+                    var stc = s.Get<Structure>();
+                    int torn = hit >= 0 ? s.Causes.Add(CauseKind.Impact, "운석이 외판을 크게 찢었다", s.Tick, hit, rock) : rock;
+                    if (hit >= 0) { stc.Tear(s, hit, 0.35f, torn); stc.Tear(s, hit - 10, 0.0014f, torn); }
+                    s.Run(Time.Minutes(15) - 2);
                     var dv = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Devised).Select(x => s.Causes.Text(x.Cause)).ToList();
                     int most = dv.Count == 0 ? 0 : dv.GroupBy(t => t).Max(g => g.Count());
                     if (Debug) foreach (var t in dv) Console.WriteLine($"    ({seed}) 궁리: {t}");

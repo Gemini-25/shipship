@@ -32,11 +32,15 @@ public static partial class Program
         static bool Deed(in Fact f) => f.Kind is FactKind.Talk or FactKind.Fight or FactKind.Sabotage or FactKind.Lie or FactKind.Confessed
             || f.Kind == FactKind.Meeting && f.Size >= 0 || f.Kind == FactKind.Relationship && f.Size == -1 || f.Kind == FactKind.Culture && (int)f.Size == (int)CultureEvent.Nickname;
         var dir = new Director(day.Layout) { KeepRing = false };   // ⑬ 이야기 편집: 날이 바뀌면 지난 하루가 한 장이 된다
+        var dir3 = new Director(day.Layout) { KeepRing = false, DayMinutes = 3 };   // 게임처럼 하루 3분 (PH12 — 물체 볼거리가 하루 길이를 늘리지 않는다)
+        var dir3off = new Director(day.Layout) { KeepRing = false, DayMinutes = 3, PropShowOn = false };   // 물체 볼거리를 끈 연출 (견줌)
+        double dayScreen = -1, dayScreenOff = -1;
         long startTick = day.Tick;
         for (int k = 0; k < Time.Hours(24); k++)
         {
             day.Step();
-            dir.Observe(day);
+            dir.Observe(day); dir3.Observe(day); dir3off.Observe(day);
+            if (day.Tick % Time.TicksPerDay == 0 && dayScreen < 0) { dayScreen = dir3.ScreenSeconds; dayScreenOff = dir3off.ScreenSeconds; }   // 첫 하루 (자정까지 — 하루 예산은 날마다)
             acts.AddRange(m.ActsSince(actCur)); actCur = m.ActsTotal;
             foreach (var f in day.Facts.Since(factCur))
             {
@@ -56,6 +60,10 @@ public static partial class Program
             if (Debug && k % Time.Hours(1) == 0)
                 Console.WriteLine($"    {Time.Clock(day.Tick)} " + string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)}:{a.C.Goal}@{(m.RoomOf(a.C.Cell) >= 0 ? day.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-")}")));
         }
+
+        Check("하루 3분 (물체 볼거리 PH12): 평시 하루의 화면 시간이 물체 볼거리를 끈 연출의 ±5% — 깨어 움직이는 물체 · 떨어진 물건의 느린 틱도 하루 느린 예산 안 (늦은 조짐은 예산을 넘겨 그대로)",
+            dayScreenOff > 0 && Math.Abs(dayScreen - dayScreenOff) <= 0.05 * dayScreenOff,
+            $"첫 하루 (자정까지) 화면 {dayScreen:0.0}초 · 끈 연출 {dayScreenOff:0.0}초 · 물체 볼거리 {dir3.PropScreenSec:0.0}초 · 조짐 {dir3.OmenScreenSec:0}초 · 위험 {dir3.DangerScreenSec:0}초 · 결정적 {dir3.CriticalScreenSec:0}초");
 
         // ── 마음: 굶거나 목마른 사람 없이 먹고 자고 일한다 · 벽에 금 없음 ──
         {

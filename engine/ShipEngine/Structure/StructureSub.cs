@@ -25,8 +25,21 @@ public sealed partial class Structure
     private void SetHole(int c, float area)
     {
         if (area > F.Hole[c] && _blow.Length == L.N) _blow[c] = Math.Max(_blow[c], (float)PressureAcross(c));
+        if (area > F.Hole[c] && _sim != null && _sim.Facts.SubNow != 0)
+        {
+            if (_holeSub.Length != L.N) { _holeSub = new byte[L.N]; _holeSubTick = new long[L.N]; }
+            _holeSub[c] = _sim.Facts.SubNow; _holeSubTick[c] = _sim.Tick;
+            if (_firstHoleTick != _sim.Tick || _sim.Facts.SubNow < _firstHoleSub) { _firstHoleSub = _sim.Facts.SubNow; _firstHoleTick = _sim.Tick; }
+        }
         F.SetHole(c, area);
     }
+    // 구멍이 난 틱 안의 때 (그 틱 안에서만 — 같은 틱 ④ 걸음의 SyncSub가 파인 잔칸 부스러기에 그 때를 붙인다 · 틱 사이에 남지 않아 찍지 않는다 · DF9)
+    private byte[] _holeSub = Array.Empty<byte>();
+    private long[] _holeSubTick = Array.Empty<long>();
+    /// <summary>칸 c의 부스러기가 튀는 틱 안의 때: 지금 때가 없으면 (틱 처음 — ④ 걸음이 파내고 가른다) 이 틱에 그 칸에 구멍이 난 때 · 그것도 없으면 이 틱 첫 구멍의 때.</summary>
+    private byte ShedSub(Sim sim, int c) => sim.Facts.SubNow != 0 ? sim.Facts.SubNow
+        : c < _holeSub.Length && _holeSubTick[c] == sim.Tick ? _holeSub[c] : _firstHoleTick == sim.Tick ? _firstHoleSub : (byte)0;   // 그 칸에 구멍이 없으면 (갈라져 떨어진 칸) 이 틱 첫 구멍의 때
+    private byte _firstHoleSub; private long _firstHoleTick = -1;
 
     private void BuildSub()
     {

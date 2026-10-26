@@ -147,7 +147,7 @@ public static partial class Program
             var s5 = Worlds.Full(l5, 1, sim =>
             {
                 var ff = sim.Get<Field>();
-                foreach (int c in ff.L.Rooms.First(r => r.Cells.Contains(Worlds.At(ff.L, 3, 2))).Cells) ff.AddGas(c, ff.T.gH2, 14, 293);
+                foreach (int c in ff.L.Rooms.First(r => r.Cells.Contains(Worlds.At(ff.L, 3, 2))).Cells) ff.AddGas(c, ff.T.gH2, 30, 293);   // 수소 22% 남짓 (보통 문 정격 210kPa — DF9)
             });
             s5.Run(3);
             s5.Get<Chemistry>().Ignite(Worlds.At(l5, 3, 2), 5e4, 0);
@@ -183,12 +183,12 @@ public static partial class Program
             // 피로가 쌓인 문은 날아간다 — 원인 사슬이 이어진다
             var s7 = Worlds.Full(l6, 1);
             var st7 = s7.Get<Structure>();
-            st7.Fatigue[doorCell6] = 0.3f;
+            st7.Fatigue[doorCell6] = 0.6f;   // 정격이 한 기압 아래로 (보통 문 210kPa × 0.4 — DF9: 정적 하중은 피로를 쌓지 않는다 · 정격을 넘어야 날아간다)
             int rock7 = s7.Causes.Add(CauseKind.Impact, "파편이 외판을 쳤다", s7.Tick, hull6);
             st7.Impact(s7, hull6, 3e5, 1, 0, rock7);
             s7.Run(Time.Minutes(10));
             var blown = s7.Facts.Since(0).Where(x => x.Kind == FactKind.DoorBlown).ToList();
-            Check("피로가 쌓인 문(30%)은 한쪽이 빠지면 날아간다 · '문이 날아갔다'의 원인은 파편까지 이어진다",
+            Check("피로가 쌓인 문(60% — 정격이 한 기압 아래)은 한쪽이 빠지면 날아간다 · '문이 날아갔다'의 원인은 파편까지 이어진다",
                 blown.Count > 0 && s7.Causes.Story(blown[0].Cause).Contains("파편"),
                 blown.Count > 0 ? $"{blown[0].Tick / 25.0:0.0}분 · {s7.Causes.Story(blown[0].Cause)}" : "안 날아갔다");
         }
@@ -556,6 +556,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); NatureRules(); MachineRules(); SupplyChainRules(); CommsRules(); HeatVibRules(); EyeRules(); DressUseRules(); WashRules(); WashSoundRules(); WashCareRules(); LifeSoundRules(); EarRules(); MicRules(); MusicRules(); SoundWorldRules(); MapRules(); LongArcRules(); ChapterRules(); LocalRules(); LightRules(); FxRules(); PeopleArtRules(); TraceRules(); CouncilRules(); JudgmentRules(); WearyRules(); SnagRules(); GaugeRules(); ScrubRules(); MindFixRules(); HandsRules(); AssessRules(); JudgedRules(); HudRules(); ArtRules(); FarRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); PropRules(); MishapRules(); ToxRules(); GravityRules(); OrganRules(); DxRules(); MentalRules(); CultureRules(); SpeedRules(); HandRules(); HandViewRules(); LookRules(); DetailRules(); ForecastRules(); FinishRules(); Depth1Rules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); NatureRules(); MachineRules(); SupplyChainRules(); CommsRules(); HeatVibRules(); EyeRules(); DressUseRules(); WashRules(); WashSoundRules(); WashCareRules(); LifeSoundRules(); EarRules(); MicRules(); MusicRules(); SoundWorldRules(); MapRules(); LongArcRules(); ChapterRules(); LocalRules(); LightRules(); FxRules(); PeopleArtRules(); TraceRules(); CouncilRules(); JudgmentRules(); WearyRules(); SnagRules(); GaugeRules(); ScrubRules(); MindFixRules(); HandsRules(); AssessRules(); JudgedRules(); HudRules(); ArtRules(); FarRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); PropRules(); MishapRules(); ToxRules(); GravityRules(); OrganRules(); DxRules(); MentalRules(); CultureRules(); SpeedRules(); HandRules(); HandViewRules(); LookRules(); DetailRules(); ForecastRules(); FinishRules(); Depth1Rules(); Depth2Rules(); Physics2Rules();
     }
 }

@@ -265,7 +265,19 @@ public static partial class Program
             var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
             int p = m.Agents.First(x => x.IsPerson).Id;
             int dev = net.Devices.First(d => d.Type == "Shower").Id;
-            net.CutLines(s, net.Devices[dev].Cell, Network.Bit(LineKind.Water), s.Causes.Add(CauseKind.Setup, "시험: 샤워 칸 밑 물관이 끊겼다", s.Tick, net.Devices[dev].Cell));
+            // 다른 방에서 끊긴 물관 (보이지 않는 곳 · 그 방 밸브를 잠갔다 — DF9: 끊긴 관은 분에 65L를 뿜어 물탱크가 몇 분에 비고 배급이 선다): 샤워에 물이 안 오는 가장 가까운 칸
+            byte wt = Network.Bit(LineKind.Water);
+            int showerRoom = s.Layout.Room[net.Devices[dev].Cell];
+            foreach (int cut in Enumerable.Range(0, s.Layout.N).Where(c => (net.LineAt[c] & wt) != 0 && s.Layout.Room[c] >= 0 && s.Layout.Room[c] != showerRoom)
+                .OrderBy(c => Math.Abs(s.Layout.X(c) - s.Layout.X(net.Devices[dev].Cell)) + Math.Abs(s.Layout.Y(c) - s.Layout.Y(net.Devices[dev].Cell))).Take(40))
+            {
+                var t = s.Clone(); var tn = t.Get<Network>();
+                tn.CutLines(t, cut, wt, 0); t.Run(2);
+                if (tn.WaterAtDevice(dev)) continue;
+                net.CutLines(s, cut, wt, s.Causes.Add(CauseKind.Setup, "시험: 샤워로 가는 물관이 다른 방에서 끊겼다", s.Tick, cut));
+                net.SetValve(s.Layout.Room[cut], LineKind.Water, true);   // 그 방 물 밸브를 잠갔다 (물탱크가 비지 않게 — 배급 없이 샤워를 틀어 보게)
+                break;
+            }
             s.Run(2);
             bool dry = !net.WaterAtDevice(dev);
             life[m[p].C.Body].Dirt = 0.8f; life[m[p].C.Body].Wet = 1;
