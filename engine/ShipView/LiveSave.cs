@@ -34,8 +34,12 @@ public sealed class VoyageMeta
     public int RobotCount { get; set; }
     public string Slot { get; set; } = "";          // 가장 새 저장 칸 (a · b · c)
     public long Serial { get; set; }                // 묶음 차례 (돌려 쓰는 칸 가운데 가장 새것)
+    public string Run { get; set; } = "";           // 항해 실행 열쇠 (띄울 때마다 새로 · 이어 보면 그대로 — 같은 배 · 같은 번호로 다시 띄운 항해와 가른다 · 빈 글: 열쇠 전 저장)
     /// <summary>항해 폴더 이름: 배 열쇠 + 항해 번호.</summary>
-    [JsonIgnore] public string Folder => $"{Ship}-{Voyage}";
+    [JsonIgnore] public string Folder => Key(Ship, Voyage);
+    public static string Key(string ship, long voyage) => $"{ship}-{voyage}";
+    /// <summary>새 실행 열쇠 (벽시계 · 세계 밖).</summary>
+    public static string NewRun() => Guid.NewGuid().ToString("N")[..12];
 
     internal static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     public string ToJson() => JsonSerializer.Serialize(this, Json);
@@ -256,17 +260,28 @@ public sealed class VoyageStore
     }
 
     /// <summary>항해 하나를 지운다 (그 폴더 통째로).</summary>
-    public void Delete(VoyageMeta m)
+    public void Delete(VoyageMeta m) => Clear(FolderOf(m));
+
+    private static void Clear(string d)
     {
-        string d = FolderOf(m);
         try { if (Directory.Exists(d)) Directory.Delete(d, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>쓴다 (압축 · 쓰기 — 다른 일꾼에서 불러도 된다): 가장 오래된 칸에 임시 이름으로 쓰고 바꾼 뒤 카드가 그 칸을 가리킨다 · 새 항해 폴더가 다섯을 넘기면 가장 오래된 항해를 지운다 (번호 창이 미리 알린다).</summary>
+    /// <summary>폴더 카드의 실행 열쇠 (카드가 없거나 못 읽으면 null).</summary>
+    private static string? CardRun(string folder)
+    {
+        string card = Path.Combine(folder, CardFile);
+        try { return File.Exists(card) ? VoyageMeta.FromJson(File.ReadAllText(card))?.Run : null; }
+        catch (IOException) { return null; }
+    }
+
+    /// <summary>쓴다 (압축 · 쓰기 — 다른 일꾼에서 불러도 된다): 가장 오래된 칸에 임시 이름으로 쓰고 바꾼 뒤 카드가 그 칸을 가리킨다 · 새 항해 폴더가 다섯을 넘기면 가장 오래된 항해를 지운다 ·
+    /// 같은 배 · 같은 번호로 다시 띄운 항해 (카드의 실행 열쇠가 다르다)는 옛 항해를 지우고 새로 쓴다 (둘 다 번호 창이 미리 알린다).</summary>
     public VoyageMeta Write(VoyageBundle b)
     {
         string folder = FolderOf(b.Meta);
         if (!Directory.Exists(folder)) for (int k = 0; k < 8 && WouldPrune(b.Meta.Folder) is { } old; k++) Delete(old);
+        else if (CardRun(folder) != b.Meta.Run) Clear(folder);   // 옛 항해의 칸 · 금고 · 카드가 새 항해에 섞이지 않게 (옛 칸으로 되살리지 않게)
         Directory.CreateDirectory(folder);
         long serial = 0;
         foreach (var slot in SlotNames) serial = Math.Max(serial, SerialOf(SlotPath(folder, slot)) ?? 0);
@@ -325,6 +340,7 @@ public sealed class VoyageStore
             try { data = File.ReadAllBytes(SlotPath(folder, slot)); BinReads++; }
             catch (IOException) { continue; }
             var b = VoyageBundle.FromBytes(data, out string why);
+            if (b != null && b.Meta.Run != m.Run) { b = null; why = "다른 항해의 저장이다"; }   // 같은 번호의 옛 항해가 남긴 칸 (지우다 멈췄다) — 카드의 항해만 잇는다
             yield return (slot, b, why);
         }
     }
@@ -354,6 +370,9 @@ public sealed partial class LiveShow
 
     /// <summary>항해 번호 (= 세계 시드).</summary>
     public long Voyage => (long)Sim.Setup.Seed;
+
+    /// <summary>항해 실행 열쇠 (띄울 때마다 새로 · 이어 보면 그대로 — 같은 배 · 같은 번호로 다시 띄운 항해의 저장과 가른다 · 세계 밖).</summary>
+    public string Run { get; private set; } = VoyageMeta.NewRun();
 
     /// <summary>'지난번까지' 카드 (이어 본 첫 장 — 멈춘 채 · 스페이스나 [계속]으로 간다): 줄들 (빈 배열이면 없다).</summary>
     public string[] ResumeCard = Array.Empty<string>();
@@ -413,7 +432,7 @@ public sealed partial class LiveShow
             Ship = Sim.Setup.Layout.Key, ShipName = ShipName, Voyage = (long)Sim.Setup.Seed, Route = Sim.Find<Outside>()?.Route ?? 0,
             Day = (int)(Sim.Tick / Time.TicksPerDay) + 1, Tick = Sim.Tick, Alive = alive, Aboard = aboard, Robots = robots,
             Yesterday = Dir.Chapters.LastOrDefault(c => !c.Week)?.Title ?? "", End = EndText(Ended), WorldVersion = Sim.SaveVersion, BundleVersion = VoyageBundle.Version,
-            SavedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Kind = kind, People = aboard, RobotCount = robots,
+            SavedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Kind = kind, People = aboard, RobotCount = robots, Run = Run,
         };
         return b;
     }
@@ -511,6 +530,7 @@ public sealed partial class LiveShow
         if (b.Record != null)
             try { record = show.Dir.LoadRecord(new StateReader(b.Record), sim); }
             catch (Exception e) when (e is InvalidDataException or EndOfStreamException or ArgumentException or IndexOutOfRangeException) { show = new LiveShow(sim, name); }   // 반쯤 읽은 연출은 버리고 새로
+        show.Run = m.Run;   // 같은 항해 — 제 저장 칸을 그대로 돌려 쓴다
         if (!record) show.ResumeNotes.Add("지난 장면 기록은 옮겨 오지 못했다");
         if (b.Hands != null)
         {

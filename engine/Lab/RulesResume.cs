@@ -72,6 +72,53 @@ public static partial class Program
                 }
                 finally { try { if (Directory.Exists(d2)) Directory.Delete(d2, true); } catch (IOException) { } }
             }
+            // S6 (같은 번호 두 항해 — V1·V2 검토 고침): 같은 배 · 같은 번호로 다시 띄운 항해는 첫 저장에 옛 항해 (칸 · 금고)를 지우고 쓴다 (번호 창이 미리 알린다) ·
+            // 이어 본 항해는 제 칸을 그대로 돌려 쓴다 · 새 항해의 저장이 모두 깨지면 '이어 볼 수 없다' — 옛 항해의 다른 역사로 되살리지 않는다
+            {
+                string d3 = dir + "-again"; var again = new VoyageStore(d3);
+                try
+                {
+                    var a = new LiveShow(HandShip(4161), "디딤호");
+                    a.FastForward(200); var a1 = a.SaveBundle(SaveKind.Daily); a1.Files["k-x.bin"] = (new byte[] { 1, 1, 1 }, true, 3); again.Write(a1);
+                    a.FastForward(200); var a2 = a.SaveBundle(SaveKind.Quit); a2.Files["k-x.bin"] = (new byte[] { 1, 1, 1 }, true, 3); again.Write(a2);
+                    long ta = a.Sim.Tick;
+                    // 번호 창: 같은 배 · 같은 번호면 '저장된 항해를 지운다' 한 줄 (다른 번호면 없다)
+                    var st = new HudState { Ask = HudAsk.NewVoyage, AskNumber = "4161" };
+                    st.AskVoyages(new[] { "Didim" }, again.List());
+                    string note = HudLayout.VoyageNote(st); bool warn = st.AskWarn;
+                    st.AskNumber = "4162"; string other = HudLayout.VoyageNote(st); bool warn2 = st.AskWarn;
+                    string line = note.Split('\n')[^1];
+                    bool window = warn && !warn2 && line.Contains("같은 번호로 저장된 항해") && line.Contains("지운다") && !other.Contains('\n') && TextLint.Bad(line) == null && Hud.Approx(line, 14, false) <= 520 - 48;
+                    var b = new LiveShow(HandShip(4161), "디딤호"); b.FastForward(10); long tb = b.Sim.Tick;
+                    var b1 = b.SaveBundle(SaveKind.Quit); b1.Files["k-x.bin"] = (new byte[] { 2, 2, 2 }, true, 3);
+                    var mb = again.Write(b1);
+                    var listed = again.List().Select(m => $"{m.Folder}@{m.Tick}").ToList();
+                    var read = again.Read(mb).Select(x => x.bundle?.Meta.Tick ?? -1).ToList();
+                    var vault = again.VaultFile(mb, "k-x.bin");
+                    // 이어 본 항해는 같은 항해 — 제 칸을 지우지 않고 돌려 쓴다
+                    var rb = LiveShow.Resume(again, mb, out _);
+                    long rt = rb?.Sim.Tick ?? -1;
+                    rb?.FastForward(5); long tr = rb?.Sim.Tick ?? -1;
+                    var mb2 = rb != null ? again.Write(rb.SaveBundle(SaveKind.Quit)) : mb;
+                    var read2 = again.Read(mb2).Select(x => x.bundle?.Meta.Tick ?? -1).ToList();
+                    // 옛 항해를 지우다 멈춘 듯 옛 칸 하나가 남았다 (차례가 가장 크다) — 카드의 항해가 아니니 잇지 않는다
+                    string left = VoyageStore.SlotNames.FirstOrDefault(s => !File.Exists(Path.Combine(again.FolderOf(mb2), $"save-{s}.bin"))) ?? "c";
+                    a2.Meta.Serial = 99; File.WriteAllBytes(Path.Combine(again.FolderOf(mb2), $"save-{left}.bin"), a2.ToBytes());
+                    var stale = again.Read(mb2).FirstOrDefault();
+                    bool skip = stale.slot == left && stale.bundle == null && stale.why.Length > 0;
+                    // 새 항해의 칸을 모두 깨뜨린다 (끝을 자른다) — 옛 항해 (400틱)로 되살리지 않는다
+                    foreach (var slot in VoyageStore.SlotNames)
+                    {
+                        string p = Path.Combine(again.FolderOf(mb2), $"save-{slot}.bin");
+                        if (File.Exists(p)) { var raw = File.ReadAllBytes(p); if (raw.Length > 0 && VoyageBundle.FromBytes(raw, out _)?.Meta.Tick is { } t && t <= tr) File.WriteAllBytes(p, raw.AsSpan(0, raw.Length / 2).ToArray()); }
+                    }
+                    var broken = LiveShow.Resume(again, mb2, out string bwhy);
+                    Check("이어 보기 S6 (같은 번호 두 항해): 같은 배 · 같은 번호로 다시 띄운 항해는 첫 저장에 옛 항해의 칸 · 금고를 지운다 (번호 창이 한 줄로 미리 알린다) · 이어 본 항해는 제 칸을 돌려 쓴다 · 새 항해의 저장이 모두 깨지면 '이어 볼 수 없다' (옛 항해의 다른 역사로 되살리지 않는다)",
+                        window && listed.Count == 1 && read.SequenceEqual(new[] { tb }) && vault is [2, 2, 2] && rt == tb && read2.SequenceEqual(new[] { tr, tb }) && skip && broken == null && bwhy == VoyageStore.BrokenText,
+                        $"번호 창 '{line}' 알림 {warn}/{warn2} · 옛 항해 {ta}틱 · 새 항해 {tb}틱 · 목록 {string.Join(" ", listed)} · 칸 {string.Join(" ", read)} · 금고 [{string.Join(",", vault ?? Array.Empty<byte>())}] · 이어 봄 {rt} → {tr}틱 칸 {string.Join(" ", read2)} · 남은 옛 칸 {left} 건너뜀 {skip} '{stale.why}' · 다 깨진 뒤 {broken?.Sim.Tick.ToString() ?? "없음"} '{bwhy}'");
+                }
+                finally { try { if (Directory.Exists(d3)) Directory.Delete(d3, true); } catch (IOException) { } }
+            }
             // S7: 판이 다르면 '이어 볼 수 없다' 글 · 세계를 읽지 않는다 · 예외 없음 / 모르는 마디는 건너뛰고 없는 마디는 빈 채로
             {
                 var meta = store.Write(show.SaveBundle(SaveKind.Quit));

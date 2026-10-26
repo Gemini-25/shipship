@@ -163,6 +163,24 @@ public sealed class HudState
     public int AskFocus;              // 0 그만두기 · 1 하기
     /// <summary>번호 창 (HudAsk.NewVoyage): 넣은 번호 (숫자 글 · 다섯 자리까지) · 고른 배 (배 목록 차례) · 띄우면 지울 가장 오래된 항해 (빈 글: 없음).</summary>
     public string AskNumber = ""; public int AskShipAt; public string AskPrune = "";
+    /// <summary>번호 창: 배 열쇠 (AskShipAt 차례) · 저장된 항해 (폴더 열쇠 → 날 글) — 같은 배 · 같은 번호로 띄우면 그 항해를 지운다고 알린다.</summary>
+    public string[] AskShipKeys = Array.Empty<string>();
+    public Dictionary<string, string> AskSaved = new();
+
+    /// <summary>번호 창 알림 채우기 (저장된 항해들 — 최근 것부터): 다섯이면 지울 가장 오래된 항해 · 같은 배 · 같은 번호면 지울 항해.</summary>
+    public void AskVoyages(string[] shipKeys, IReadOnlyList<VoyageMeta> saved)
+    {
+        AskShipKeys = shipKeys; AskSaved = new();
+        foreach (var m in saved) AskSaved.TryAdd(m.Folder, m.End.Length > 0 ? $"{m.Day}일 · 끝난 항해" : $"{m.Day}일째");
+        AskPrune = saved.Count >= VoyageStore.KeepVoyages ? VoyageCard.Title(saved[^1]) : "";
+    }
+
+    /// <summary>띄우면 지울 같은 배 · 같은 번호의 저장된 항해 (날 글 — 빈 글: 없음).</summary>
+    public string AskReplace => VoyageNumber.Parse(AskNumber) is { } n && AskShipAt >= 0 && AskShipAt < AskShipKeys.Length
+        && AskSaved.TryGetValue(VoyageMeta.Key(AskShipKeys[AskShipAt], (long)n), out var t) ? t : "";
+
+    /// <summary>번호 창이 띄우면 지울 항해를 알리나 (풀이 글 색 · [띄우기] 단추).</summary>
+    public bool AskWarn => AskReplace.Length > 0 || AskPrune.Length > 0;
 
     /// <summary>번호 창 숫자판: 0~9 붙이기 (다섯 자리까지 · 앞 0은 뗀다) · 10 지움 · 11 새로 뽑기.</summary>
     public void VoyageKey(int k)
@@ -650,8 +668,9 @@ public static class HudLayout
     /// <summary>숫자판 글: 0~9 · 10 지움 · 11 새로 뽑기.</summary>
     public static string VoyageKeyLabel(int k) => k switch { 10 => "지움", 11 => "새로 뽑기", _ => k.ToString() };
 
-    /// <summary>번호 창 풀이 (가장 오래된 항해를 지울 때는 그 줄도).</summary>
-    public static string VoyageNote(HudState s) => "같은 배 · 같은 번호 · 같은 항로 · 손대지 않으면 같은 항해" + (s.AskPrune.Length > 0 ? $"\n항해는 다섯까지 — 띄우면 가장 오래된 '{s.AskPrune}'를 지운다" : "");
+    /// <summary>번호 창 풀이 (같은 배 · 같은 번호로 저장된 항해를 지울 때 · 아니면 가장 오래된 항해를 지울 때는 그 줄도 — 같은 폴더면 항해 수는 그대로다).</summary>
+    public static string VoyageNote(HudState s) => "같은 배 · 같은 번호 · 같은 항로 · 손대지 않으면 같은 항해"
+        + (s.AskReplace is { Length: > 0 } r ? $"\n띄우면 같은 번호로 저장된 항해 ({r})를 지운다" : s.AskPrune.Length > 0 ? $"\n항해는 다섯까지 — 띄우면 가장 오래된 '{s.AskPrune}'를 지운다" : "");
 
     /// <summary>사람 줄: 한 줄 이름까지 (×2) → 두 줄 (×1.5) → 넘치면 앞에서부터 (+n) · 칸은 적어도 30×30. 위 끝을 돌려준다.</summary>
     private static float LayoutCrew(LiveFrame f, Hud h, float left, float right, float bottom, Func<string, int, bool, float> tw)

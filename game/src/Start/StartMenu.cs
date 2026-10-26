@@ -257,10 +257,10 @@ public partial class StartMenu : Node2D
             if (h.Act == UiAct.VoyageKey) DrawButton(h, HudLayout.VoyageKeyLabel((int)h.Key), h.Key <= 9 ? 20 : 16);
             else if (h.Act == UiAct.VoyageShip) DrawButton(h, h.Key < 0 ? "‹" : "›", 22);
             else if (h.Act == UiAct.AskNo) DrawButton(h, "그만두기");
-            else if (h.Act == UiAct.AskYes) DrawButton(h, "띄우기", 16, h.Enabled && _hs.AskPrune.Length > 0);
+            else if (h.Act == UiAct.AskYes) DrawButton(h, "띄우기", 16, h.Enabled && _hs.AskWarn);
         }
         var tr = R(_hud.Area("새 항해 풀이"));
-        DrawMultilineString(_font, new Vector2(tr.Position.X, tr.Position.Y + Fs(14) * 0.9f), HudLayout.VoyageNote(_hs), HorizontalAlignment.Center, tr.Size.X, Fs(14), 2, _hs.AskPrune.Length > 0 ? new Color(1f, 0.75f, 0.55f) : InkDim);
+        DrawMultilineString(_font, new Vector2(tr.Position.X, tr.Position.Y + Fs(14) * 0.9f), HudLayout.VoyageNote(_hs), HorizontalAlignment.Center, tr.Size.X, Fs(14), 2, _hs.AskWarn ? new Color(1f, 0.75f, 0.55f) : InkDim);
     }
 
     // ───────────────────────── 손 ─────────────────────────
@@ -286,12 +286,12 @@ public partial class StartMenu : Node2D
         }
     }
 
-    /// <summary>번호 창: 마지막 항해의 배 (없으면 디딤호) · 새로 뽑은 번호 · 항해가 다섯이면 지울 가장 오래된 항해.</summary>
+    /// <summary>번호 창: 마지막 항해의 배 (없으면 디딤호) · 새로 뽑은 번호 · 항해가 다섯이면 지울 가장 오래된 항해 · 같은 배 · 같은 번호로 저장된 항해.</summary>
     private void OpenVoyage()
     {
         string ship = _view.Latest?.Ship ?? "Didim";
         _hs.OpenVoyage(Math.Max(0, Array.IndexOf(_shipKeys, ship)), VoyageNumber.Draw());
-        _hs.AskPrune = _view.Voyages.Length >= VoyageStore.KeepVoyages ? VoyageCard.Title(_view.Voyages[^1]) : "";
+        _hs.AskVoyages(_shipKeys, _view.Voyages);
         _view.ListOpen = false;
     }
 

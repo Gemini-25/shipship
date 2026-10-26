@@ -1756,10 +1756,10 @@ void fragment() {
             if (h.Act == UiAct.VoyageKey) DrawButton(h, HudLayout.VoyageKeyLabel((int)h.Key), h.Key <= 9 ? 20 : 16);
             else if (h.Act == UiAct.VoyageShip) DrawButton(h, h.Key < 0 ? "‹" : "›", 22);
             else if (h.Act == UiAct.AskNo) DrawButton(h, "그만두기");
-            else if (h.Act == UiAct.AskYes) DrawButton(h, "띄우기", 16, h.Enabled && _hs.AskPrune.Length > 0);
+            else if (h.Act == UiAct.AskYes) DrawButton(h, "띄우기", 16, h.Enabled && _hs.AskWarn);
         }
         var tr = R(_hud.Area("새 항해 풀이"));
-        DrawMultilineString(_font, new Vector2(tr.Position.X, tr.Position.Y + Fs(14) * 0.9f), HudLayout.VoyageNote(_hs), HorizontalAlignment.Center, tr.Size.X, Fs(14), 2, _hs.AskPrune.Length > 0 ? new Color(1f, 0.75f, 0.55f) : InkDim);
+        DrawMultilineString(_font, new Vector2(tr.Position.X, tr.Position.Y + Fs(14) * 0.9f), HudLayout.VoyageNote(_hs), HorizontalAlignment.Center, tr.Size.X, Fs(14), 2, _hs.AskWarn ? new Color(1f, 0.75f, 0.55f) : InkDim);
     }
 
     public const string StartScene = "res://scenes/Start.tscn";
@@ -1846,12 +1846,12 @@ void fragment() {
 
     private int _askShipAt;
 
-    /// <summary>번호 창을 연다 (지금 배 · 지금 번호 — 항해가 다섯이면 지울 가장 오래된 항해를 한 줄로 알린다).</summary>
+    /// <summary>번호 창을 연다 (지금 배 · 지금 번호 — 항해가 다섯이면 지울 가장 오래된 항해 · 같은 배 · 같은 번호로 저장된 항해를 한 줄로 알린다).</summary>
     private void OpenVoyageWindow()
     {
         _hs.OpenVoyage(_shipAt, _seed);
-        var old = _store.List();
-        _hs.AskPrune = old.Count >= VoyageStore.KeepVoyages ? VoyageCard.Title(old[^1]) : "";
+        _hs.AskVoyages(_ships, _store.List());
+        if (_saveOn && _shown is { Holding: false } && _ships.Length > 0) _hs.AskSaved[VoyageMeta.Key(_ships[_shipAt], (long)_seed)] = "지금 항해";   // 지금 항해는 띄울 때 저장한다 — 같은 번호면 새 항해가 그 저장을 지운다
     }
 
     private void AskYes()
