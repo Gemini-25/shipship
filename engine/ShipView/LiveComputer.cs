@@ -158,7 +158,7 @@ public sealed partial class LiveShow
                     wrong = life.Bodies[x.Subject].Alive == 0 ? "쓰러졌다고 안다 · 실제는 숨을 거두었다" : "쓰러졌다고 안다 · 실제는 깨어났다"; break;
                 case IncidentKind.DeviceBroken when net != null && x.Subject >= 0 && x.Subject < net.Devices.Count && !Enumerable.Range(0, 4).Any(p => net.IsBroken(x.Subject, (Part)p)): wrong = "고장으로 안다 · 실제는 고쳐졌다"; break;
             }
-            if (wrong.Length > 0) rows.Add(new PanelRow($"틀린 앎 — {sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)}", wrong, true, Key: DK(3000 + k++)));
+            if (wrong.Length > 0) rows.Add(new PanelRow($"틀린 앎 — {sm.RoomName(x.Room)} {sm.IncidentName(x)}", wrong, true, Key: DK(3000 + k++)));
         }
         if (unknown.Count == 0 && k == 0) rows.Add(new PanelRow("모르는 일 · 틀린 앎 없음", "실제로 일어난 큰 일을 주컴퓨터가 다 붙잡고 있다", false, Key: DK(2999)));
         rows.Add(new PanelRow("사람 자리", "사람 표를 참으로 읽는다 — 아직 어림하지 않는다 (못 보는 방의 사람은 모른다)", false, Key: DK(4000)));
@@ -250,7 +250,7 @@ public sealed partial class LiveShow
                 var nt = notes!.Newest(k);
                 var bits = new List<string> { NoteWord(nt.Kind) };
                 if (nt.Robot >= 0 && mind != null && nt.Robot < mind.Agents.Count) bits.Add(mind.NameOf(nt.Robot));
-                if (nt.Incident > 0 && sm.Incidents.FirstOrDefault(x => x.Id == nt.Incident) is { Id: > 0 } x) bits.Add($"{sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)}");
+                if (nt.Incident > 0 && sm.Incidents.FirstOrDefault(x => x.Id == nt.Incident) is { Id: > 0 } x) bits.Add($"{sm.RoomName(x.Room)} {sm.IncidentName(x)}");
                 if (nt.Reason != 0 && ShipMind.ReasonText(nt.Reason) is { Length: > 0 } why) bits.Add(why);
                 _says.Add(new PanelRow($"{HourMin(nt.Tick)}  {TextLint.Clean(nt.Text)}", string.Join(" · ", bits), nt.Kind is NoteKind.Block or NoteKind.Stuck, Key: DK(added - 1 - k)));   // 열쇠는 말의 차례 번호 (새 말이 위에 끼어도 고른 줄이 그대로)
             }
@@ -262,7 +262,7 @@ public sealed partial class LiveShow
         {
             var at = sm.Attempts[i];
             var x = sm.Incidents.FirstOrDefault(q => q.Id == at.Incident);
-            string inc = x.Id > 0 ? $"{sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)}" : "끝난 사건";
+            string inc = x.Id > 0 ? $"{sm.RoomName(x.Room)} {sm.IncidentName(x)}" : "끝난 사건";
             string how = at.Act == 255 ? ShipMind.MethodName(at.Method) : at.Act == 254 ? "방법을 지어내지 못했다" : sm.StepText(new PlanStepRec { Act = at.Act, Obj = at.Obj, Dest = at.Obj });
             rows.Add(new PanelRow($"해 본 방법 — {inc}: {how}", $"{HourMin(at.Tick)} · {(at.Snag == SnagKind.None ? "막히지 않았다" : "막힌 까닭: " + Mind.SnagText(at.Snag))}", at.Snag != SnagKind.None, Key: DK((1L << 34) + i)));
         }

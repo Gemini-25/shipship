@@ -47,7 +47,7 @@ public sealed partial class ShipMind
         string name = _mind.NameOf(best);
         // 로봇의 형편대로 말한다: 이 일에 로봇도 간다 (방침 '함께') · 움직이는 로봇이 있되 모두 다른 일 · 아예 없다 (로봇 없는 배에 '모두 바쁩니다'라 하던 것)
         bool robots = _mind.Agents.Any(r => r.C.Kind == AgentKind.Robot && r.C.Up != 0), with = x.RobotA >= 0 || x.RobotB >= 0;
-        Say(sim, $"{name}님, {RoomName(x.Room)} {KindName(x.Kind)} — {Mind.JobName(g)} 주시겠어요? {(with ? "로봇도 함께 갑니다" : robots ? "로봇이 모두 바쁩니다" : "로봇이 없습니다")}{(urgent ? ", 급합니다" : "")}", NoteKind.Ask, -1, x.Id);
+        Say(sim, $"{name}님, {RoomName(x.Room)} {IncidentName(x)} — {Mind.JobName(g)} 주시겠어요? {(with ? "로봇도 함께 갑니다" : robots ? "로봇이 모두 바쁩니다" : "로봇이 없습니다")}{(urgent ? ", 급합니다" : "")}", NoteKind.Ask, -1, x.Id);
         bool yes = _mind.Ask(sim, best, g, target, BeliefOf(x), t + Time.Minutes(g == GoalKind.Counsel ? 75 : 30), urgent, out string reply);   // 상담은 찾아가서 30분 — 넉넉히
         x.AskedAt = t; x.Asks++; Asked++;
         if (reply.Length > 0) Say(sim, $"{name}: \"{reply}\"", NoteKind.Ask, -1, x.Id);

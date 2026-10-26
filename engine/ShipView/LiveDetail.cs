@@ -423,7 +423,7 @@ public sealed partial class LiveShow
             {
                 if (x.Active == 0 || x.RobotA != a.Id && x.RobotB != a.Id) continue;
                 double min = Math.Max(0, w.Tick - x.Since) * Time.SecondsPerTick / 60;
-                rows.Add(new PanelRow($"맡은 사건 — {cm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)}", $"{min:0}분째{(x.Snag != SnagKind.None ? " · 막힘: " + Mind.SnagText(x.Snag) : "")}{(x.Sealed != 0 ? " · 봉쇄했다" : "")}", x.Snag != SnagKind.None, Key: DK(40 + k++)));
+                rows.Add(new PanelRow($"맡은 사건 — {cm.RoomName(x.Room)} {cm.IncidentName(x)}", $"{min:0}분째{(x.Snag != SnagKind.None ? " · 막힘: " + Mind.SnagText(x.Snag) : "")}{(x.Sealed != 0 ? " · 봉쇄했다" : "")}", x.Snag != SnagKind.None, Key: DK(40 + k++)));
             }
             k = 0;
             foreach (var j in cm.Jobs)

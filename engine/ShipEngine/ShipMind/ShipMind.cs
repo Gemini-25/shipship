@@ -393,7 +393,19 @@ public sealed partial class ShipMind : IEngine
             }
         }
         Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2, Dropped = -1, Dropped2 = -1 });
-        Say(sim, detail == null ? $"{RoomName(room)}: {KindName(k)}" : $"{RoomName(room)}: {KindName(k)} — {detail}");
+        string name = IncidentName(Incidents[^1]);
+        Say(sim, detail == null ? $"{RoomName(room)}: {name}" : $"{RoomName(room)}: {name} — {detail}");
+    }
+
+    /// <summary>
+    /// 사건의 이름 (그 자리를 본다 — DF1): 끊긴 선 사건의 칸에서 전선은 멀쩡하고 냉각관 · 물관만 끊겼으면 (이은 뒤에는 그 칸에 관만 지나면) '관이 터졌다'.
+    /// 반사 측정으로 아는 끊긴 자리 (<see cref="Network.LineFixCell"/>)와 같은 앎이다.
+    /// </summary>
+    public string IncidentName(in Incident x)
+    {
+        if (x.Kind != IncidentKind.LineCut || _net == null || x.Cell < 0 || x.Cell >= _net.LineCut.Length) return KindName(x.Kind);
+        int bits = _net.LineCut[x.Cell] != 0 ? _net.LineCut[x.Cell] : _net.LineAt[x.Cell];
+        return (bits & 1) == 0 && (bits & 0b110) != 0 ? "관이 터졌다" : KindName(x.Kind);
     }
 
     /// <summary>독한 정도 (암모니아 ppm에 견준 값): 오존 ×100 · 시안화수소 ×10 · 염화수소 ×7 (각 기체의 해로운 문턱 — 암모니아 35 · 오존 0.3 · 시안화수소 4.7 · 염화수소 5 — 에 맞춘 무게).</summary>
@@ -934,7 +946,7 @@ public sealed partial class ShipMind : IEngine
 
     private void End(Sim sim, ref Incident x)
     {
-        Say(sim, $"{RoomName(x.Room)}: {KindName(x.Kind)} — 끝");
+        Say(sim, $"{RoomName(x.Room)}: {IncidentName(x)} — 끝");
         if (x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Flammable && _net != null && x.Room >= 0 && Find(IncidentKind.Fire, x.Room) < 0 && Find(IncidentKind.CO, x.Room) < 0 && Find(IncidentKind.Toxic, x.Room) < 0 && Find(IncidentKind.Flammable, x.Room) < 0)
         {
             _net.SetDamper(x.Room, true);
@@ -1151,7 +1163,7 @@ public sealed partial class ShipMind : IEngine
                 if (y.RobotA == best) y.RobotA = -1; else y.RobotB = -1;
                 Incidents[bestFrom] = y;
                 Preempts++;
-                Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {KindName(y.Kind)} 일은 미루고 → {RoomName(x.Room)} {KindName(x.Kind)} (더 급하다)", NoteKind.Defer, best, y.Id, 3);
+                Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {IncidentName(y)} 일은 미루고 → {RoomName(x.Room)} {IncidentName(x)} (더 급하다)", NoteKind.Defer, best, y.Id, 3);
             }
             var belief = g == GoalKind.Repair && x.Kind == IncidentKind.ElectricFault && _net != null
                 ? new Belief { Kind = BeliefKind.Broken, Cell = _net.Devices[target].Cell, Subject = target, Conf = 1f, Cause = x.Cause }
@@ -1163,7 +1175,7 @@ public sealed partial class ShipMind : IEngine
             x.Tries++;
             Assignments++;
             byte why = bestFrom >= 0 ? (byte)3 : x.Dropped >= 0 && sim.Tick - x.DroppedAt < Time.Minutes(10) ? (byte)4 : bestHand < 0 ? (byte)2 : cands <= 1 ? (byte)5 : (byte)1;   // 맡긴 까닭 (일지만 — 판단은 읽지 않는다)
-            Say(sim, $"{_mind.NameOf(best)} → {RoomName(x.Room)} {KindName(x.Kind)}", NoteKind.Assign, best, x.Id, why);
+            Say(sim, $"{_mind.NameOf(best)} → {RoomName(x.Room)} {IncidentName(x)}", NoteKind.Assign, best, x.Id, why);
             sim.Facts.Emit(sim.Tick, FactKind.ComputerAssign, x.Cell, 0, x.Cause, best, (int)x.Kind);
         }
         // 로봇이 모자라면 사람에게 부탁한다 (함장 방침 — 기본은 로봇이 하나도 없을 때 1분 기다린 뒤)
@@ -1207,7 +1219,7 @@ public sealed partial class ShipMind : IEngine
         x.Dropped2 = x.Dropped; x.DroppedAt2 = x.DroppedAt;   // 앞서 놓아준 로봇도 기억한다
         x.Dropped = rb; x.DroppedAt = sim.Tick;
         Released++;
-        Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일에서 놓아준다 — {(body ? (_mind.LegsOk(a) ? Mind.SnagText(SnagKind.NoHands) : Mind.SnagText(SnagKind.NoLegs)) : Mind.SnagText(c.Snag))} → 다른 로봇", NoteKind.Release, rb, x.Id);
+        Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {IncidentName(x)} 일에서 놓아준다 — {(body ? (_mind.LegsOk(a) ? Mind.SnagText(SnagKind.NoHands) : Mind.SnagText(SnagKind.NoLegs)) : Mind.SnagText(c.Snag))} → 다른 로봇", NoteKind.Release, rb, x.Id);
         _mind.NoteReleased(rb, sim.Tick, g, x.Cell);
     }
 
@@ -1236,7 +1248,7 @@ public sealed partial class ShipMind : IEngine
                 NoteTried(x.Id, (byte)(c.Snag == SnagKind.NoWayOut || c.SnagTarget >= 0 && c.SnagTarget < L.N && L.Kind[c.SnagTarget] == CellKind.Outside ? 2 : 1), 255, -1, c.Snag, c.SnagSubject, c.SnagTick);
             if (again) { if (x.Snagged < 255) x.Snagged++; continue; }
             x.Snagged = 1; SnagsRead++;
-            Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일이 막혔다 — {Mind.SnagText(c.Snag)}", NoteKind.Block, rb, x.Id);
+            Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {IncidentName(x)} 일이 막혔다 — {Mind.SnagText(c.Snag)}", NoteKind.Block, rb, x.Id);
         }
     }
 
@@ -1266,7 +1278,7 @@ public sealed partial class ShipMind : IEngine
             if (y.RobotA == best) y.RobotA = -1; else y.RobotB = -1;
             Incidents[bestFrom] = y;
             Preempts++;
-            Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {KindName(y.Kind)} 일은 미루고 → {RoomName(x.Room)} {KindName(x.Kind)} (더 급하다)");
+            Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {IncidentName(y)} 일은 미루고 → {RoomName(x.Room)} {IncidentName(x)} (더 급하다)");
         }
         return best;
     }
@@ -1536,7 +1548,7 @@ public sealed partial class ShipMind : IEngine
         if (count == 0 && carried.Count == 0 && dead.Count == 0) lines.Add(RationFoodOn != 0 || RationWaterOn != 0 ? "큰 사고 없이 지나갔다 — 배급 중" : "큰 일 없이 지나갔다");
         else
         {
-            var heads = groups.Select(g => $"{RoomName(g[0].Room)} {KindName(g[0].Kind)}").Distinct().Take(3).ToList();
+            var heads = groups.Select(g => $"{RoomName(g[0].Room)} {IncidentName(g[0])}").Distinct().Take(3).ToList();
             if (downs.Count > 0 && heads.Count < 3) heads.Add($"쓰러진 사람 {downs.Count}명");
             lines.Add(count > 0 ? $"사건 {count}건 — {string.Join(" · ", heads)}" : "새 사건 없이 지난 일이 이어진다");
         }
@@ -1546,14 +1558,14 @@ public sealed partial class ShipMind : IEngine
         {
             if (shown++ == 8) { lines.Add($"그 밖에 {groups.Count - 8}건"); break; }
             var head = g.Where(x => x.Kind == g[0].Kind).ToList();   // 처음 안 일 (불) — 나머지는 거기서 번진 것
-            var still = g.Where(x => x.Active != 0 && x.Kind != g[0].Kind).Select(x => KindName(x.Kind)).Distinct().ToList();
+            var still = g.Where(x => x.Active != 0 && x.Kind != g[0].Kind).Select(x => IncidentName(x)).Distinct().ToList();
             string took = head.Any(x => x.Active != 0) ? "아직 이어진다"
                 : $"{Math.Max(1, (head.Max(x => x.Ended) - g[0].Since) * 60 / Time.TicksPerHour)}분 만에 끝났다" + (still.Count > 0 ? $" · 아직: {string.Join(" · ", still)}" : "");
             string rooms = string.Join(" · ", g.Select(x => RoomName(x.Room)).Distinct());
-            string kinds = string.Join(" · ", g.Select(x => KindName(x.Kind)).Distinct());
+            string kinds = string.Join(" · ", g.Select(x => IncidentName(x)).Distinct());
             lines.Add($"{Clock(g[0].Since)} {rooms}: {kinds} — {took}");
         }
-        foreach (var x in carried.Take(4)) lines.Add($"지난 일지부터 {RoomName(x.Room)}: {KindName(x.Kind)} — 아직 이어진다");
+        foreach (var x in carried.Take(4)) lines.Add($"지난 일지부터 {RoomName(x.Room)}: {IncidentName(x)} — 아직 이어진다");
         if (downs.Count > 0 && _mind != null)
             lines.Add($"쓰러진 사람 {downs.Count}명: " + string.Join(" · ", downs.Select(body => _mind.Agents.FirstOrDefault(a => a.IsPerson && a.C.Body == body) is { } a ? _mind.NameOf(a.Id) : "?")));
         if (dead.Count > 0) lines.Add("숨을 거둔 사람: " + string.Join(" · ", dead));

@@ -19,7 +19,7 @@ public static partial class Program
         {
             (typeof(Field), new[] { "WetCause" }),
             (typeof(Network), new[] { "ThermoFault", "ThermoCause", "ShowerFloatCause" }),
-            (typeof(Life), new[] { "SurfGerm", "SurfCause", "RoomSpore", "WasteRotKg", "Slips" }),
+            (typeof(Life), new[] { "SurfGerm", "SurfCause", "RoomSpore", "WasteRotKg", "Slips", "MoldCause" }),
             (typeof(Mind), new[] { "_smellWho", "_smellAt", "_smellCause", "_smellCell", "_toldOdorAt", "_lineFu", "_lineStart", "_lineKey", "_lineAsked", "_lineGrumbled", "HandRuleAt",
                 "ShowerCustomMin", "ShowerCustomSince", "SmellAvoided", "Grumbles", "LineCuts", "AskedTurns", "TurnsGiven" }),
             (typeof(ShipMind), new[] { "_showerNoteAt", "_showerNoteKind", "_showerAwait", "_odorStep", "_scrubAsk", "ScrubAt", "_outbreakAt" }),

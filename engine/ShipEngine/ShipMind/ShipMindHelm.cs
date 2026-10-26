@@ -83,7 +83,7 @@ public sealed partial class ShipMind
     {
         foreach (var x in Incidents)
             if (x.Active != 0 && x.Kind is IncidentKind.Fire or IncidentKind.Vacuum or IncidentKind.PersonDown or IncidentKind.Injured or IncidentKind.Toxic or IncidentKind.CO)
-                return $"{RoomName(x.Room)} {KindName(x.Kind)}";
+                return $"{RoomName(x.Room)} {IncidentName(x)}";
         foreach (var a in _mind!.Agents) if (a.C.Carrying >= 0) return "사람을 업고 가는 이가 있다";
         return null;
     }

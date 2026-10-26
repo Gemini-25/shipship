@@ -28,7 +28,8 @@ public sealed partial class Life
         bool low = b.Low != 0;
         int c = b.Cell;
         double irritant = F.HeadPpm(T.gSoot, c, low) / 1500 + F.HeadPpm(T.gNH3, c, low) / 50 + F.HeadPpm(T.gO3, c, low) / 1
-                        + F.HeadPpm(T.gHCl, c, low) / 10 + (F.HeadPpm(T.gHF, c, low) + 2 * F.HeadPpm(T.gPOF3, c, low)) / 6;
+                        + F.HeadPpm(T.gHCl, c, low) / 10 + (F.HeadPpm(T.gHF, c, low) + 2 * F.HeadPpm(T.gPOF3, c, low)) / 6
+                        + b.Spore / 4;   // 곰팡이 포자 (DF1 — 0.4면 0.1몫: 시간에 열두 번쯤)
         if (b.Mask != 0) irritant = 0;
         return (b.Ill == 2 ? 15 : 0) + 40 * b.LungDamage + 120 * Math.Min(2, irritant);
     }

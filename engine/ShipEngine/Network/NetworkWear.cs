@@ -193,7 +193,10 @@ public sealed partial class Network
         }
     }
 
-    /// <summary>피복을 달군 까닭: 곁의 불 · 달군 것 → 정격을 넘게 흐르는 급전선 → 그 방을 덥힌 까닭 (없으면 0).</summary>
+    /// <summary>
+    /// 피복을 달군 까닭: 곁의 불 · 달군 것 → 정격을 넘게 흐르는 급전선 → 그 방을 덥힌 까닭 (없으면 0).
+    /// 합선 (피복이 뜨거워 녹았다)도 이 까닭을 뿌리로 쓴다 (DF1 — 예전: 불 곁이 아니면 '전선 피복이 뜨거워 녹았다'가 뿌리).
+    /// </summary>
     private int InsulHeatCause(Sim sim, int c)
     {
         int h = HeatSource(sim.Find<Chemistry>(), c);
@@ -207,6 +210,9 @@ public sealed partial class Network
         }
         return HeatCondCause(sim, c);
     }
+
+    /// <summary>⑦이 읽는다 (열사병의 까닭 — DF1): 이 칸 둘레를 덥힌 것 — 곁의 불 · 달군 것 → 멈춘 냉각 펌프 · 공조 → 원자로 정지 (없으면 0).</summary>
+    public int HeatCauseAt(Sim sim, int cell) => cell >= 0 && cell < L.N ? HeatCondCause(sim, cell) : 0;
 
     /// <summary>전선 칸을 늙게 한다 (시험 · 만들 때 남은 흠) — 숨은 한계의 fraction까지.</summary>
     public void AgeCable(int cell, double fraction, int cause = 0)

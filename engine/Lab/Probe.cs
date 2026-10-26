@@ -154,7 +154,7 @@ public static partial class Program
             s.Step();
             foreach (var x in s.Facts.Since(cursor))
                 if (Director.Weight(x.Kind) >= 10 || x.Kind is FactKind.Sensed or FactKind.Letter or FactKind.MachineFail or FactKind.LoadShed or FactKind.BreakerTrip)
-                    Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x.Kind)}] 칸 {x.Cell} · {s.Causes.Story(x.Cause)}");
+                    Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x)}] 칸 {x.Cell} · {s.Causes.Story(x.Cause)}");
             cursor = s.Facts.Total;
         }
         foreach (var (tick, text) in sm.Log.TakeLast(30)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
@@ -321,7 +321,7 @@ public static partial class Program
             }
         }
         foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Pilfer or FactKind.Blamed or FactKind.Fight).Take(30))
-            Console.WriteLine($"    {Time.Clock(x.Tick)} {FactNames.Of(x.Kind)}: {s.Causes.Story(x.Cause)}");
+            Console.WriteLine($"    {Time.Clock(x.Tick)} {FactNames.Of(x)}: {s.Causes.Story(x.Cause)}");
         if (sm.Journal.Count > 0) Console.WriteLine($"  마지막 일지:\n      {sm.Journal[^1].text.Replace("\n", "\n      ")}");
     }
 
@@ -393,7 +393,7 @@ public static partial class Program
             s.Step();
             foreach (var x in s.Facts.Since(cursor))
                 if (Director.Weight(x.Kind) >= 3 || x.Kind is FactKind.ComputerAlarm or FactKind.Toxic or FactKind.Fled or FactKind.Warned)
-                    Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x.Kind)}] {Where(x.Cell)} · {s.Causes.Story(x.Cause)}");
+                    Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x)}] {Where(x.Cell)} · {s.Causes.Story(x.Cause)}");
             cursor = s.Facts.Total;
             if (k % every != 0) continue;
             var rooms = s.Layout.Rooms.Select((r, i) => (r.Name, ppm: r.Cells.Length > 0 ? r.Cells.Max(c => f.Ppm(s.Tables.gNH3, c)) : 0)).Where(r => r.ppm > 25).Select(r => $"{r.Name} {r.ppm:0}");

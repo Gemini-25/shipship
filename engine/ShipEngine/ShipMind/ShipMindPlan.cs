@@ -252,7 +252,7 @@ public sealed partial class ShipMind
         }
         if (best < 0) return -1;
         string name = _mind.NameOf(best);
-        Say(sim, $"{name}님, {RoomName(x.Room)} {KindName(x.Kind)} — 로봇이 없습니다 · 구멍 막는 일을 같이 해 주시겠어요? (제가 문과 공기를 맡겠습니다)");
+        Say(sim, $"{name}님, {RoomName(x.Room)} {IncidentName(x)} — 로봇이 없습니다 · 구멍 막는 일을 같이 해 주시겠어요? (제가 문과 공기를 맡겠습니다)");
         bool yes = _mind.Ask(sim, best, GoalKind.Patch, x.Cell, BeliefOf(x), t + Time.Minutes(60), true, out string reply);
         x.AskedAt = t; x.Asks++; Asked++;
         if (reply.Length > 0) Say(sim, $"{name}: \"{reply}\"");
@@ -338,7 +338,7 @@ public sealed partial class ShipMind
             NoteTried(id, 0, 254, sig, SnagKind.Other, -1, _tick);
             int fc = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {RoomName(x.Room)} 구멍을 막을 방법을 찾지 못했다 — {tried} · 닫아 둔 채 기다린다", sim.Tick, x.Cell, x.Cause);
             sim.Facts.Emit(sim.Tick, FactKind.Decision, x.Cell, 0, fc, -1, x.Room);
-            Say(sim, $"생각: {RoomName(x.Room)} {KindName(x.Kind)} — {(tried.Length > 0 ? tried + " → " : "")}다른 방법을 찾지 못했다 (펼침 {res.Expanded}) · 닫아 둔 채 기다린다");
+            Say(sim, $"생각: {RoomName(x.Room)} {IncidentName(x)} — {(tried.Length > 0 ? tried + " → " : "")}다른 방법을 찾지 못했다 (펼침 {res.Expanded}) · 닫아 둔 채 기다린다");
             return;
         }
         DevisesFound++;
@@ -382,7 +382,7 @@ public sealed partial class ShipMind
         sim.Facts.Emit(sim.Tick, FactKind.Devised, x.Cell, res.Minutes, cause, -1, x.Room);
         _mind?.NoteComputerPlan(sim.Tick, x.Room, sim.Tick + Time.Minutes(res.Minutes * 2 + 30));   // 사람이 그 방 일로 막혀 궁리하면 이 계획을 따를지 정한다
         Hold(sim, _mind!.Agents[robot], sim.Tick, pic.Body >= 0 && pic.Body != pic.Out ? pic.Room[pic.Body] : -1);   // 그림을 그린 자리에서 기다린다 (첫 걸음까지 제 일로 떠나면 계획의 셈이 틀린다)
-        Say(sim, $"생각: {RoomName(x.Room)} {KindName(x.Kind)} — {chain} · 약 {res.Minutes:0}분 · 잃을 공기 약 {res.AirLost:0}몰 · 되돌릴 공기 {res.AirBack:0}몰");
+        Say(sim, $"생각: {RoomName(x.Room)} {IncidentName(x)} — {chain} · 약 {res.Minutes:0}분 · 잃을 공기 약 {res.AirLost:0}몰 · 되돌릴 공기 {res.AirBack:0}몰");
     }
 
     /// <summary>그림의 굵은 지문 — 문(열림 · 끼임 · 틈 · 빈 문틀) · 구멍 · 사람 있음 · 통풍구 · 몸의 자리 (기압은 30kPa 단위로).</summary>

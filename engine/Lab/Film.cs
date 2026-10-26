@@ -126,7 +126,7 @@ public static partial class Program
                 var lines = s2.Facts.Since(0).Where(f => f.Tick > (lastAt[k] == 0 ? s2.Tick - 50 : lastAt[k]) && f.Tick <= s2.Tick && Director.Weight(f.Kind) >= 8
                         && f.Cell >= 0 && Math.Max(Math.Abs(L.X(f.Cell) - cx), Math.Abs(L.Y(f.Cell) - cy)) <= 14)
                     .OrderByDescending(f => Director.Weight(f.Kind)).ThenBy(f => f.Tick)
-                    .Select(f => $"[{FactNames.Of(f.Kind)}] {(f.Cause != 0 ? s2.Causes.Text(f.Cause) : "")}").Where(l => l != shot.Main).Distinct().Take(2).ToList();
+                    .Select(f => $"[{FactNames.Of(f)}] {(f.Cause != 0 ? s2.Causes.Text(f.Cause) : "")}").Where(l => l != shot.Main).Distinct().Take(2).ToList();
                 lastAt[k] = s2.Tick;
                 scenes[k].Frames.Add(new FilmFrame(s2.Tick, name, d2.Mood, shot.Main, lines));
                 si++;

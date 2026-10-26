@@ -84,6 +84,7 @@ public struct Body
     public int GutCause;                         // 배탈의 원인 마디
     public float Spore;                          // 마시는 곰팡이 포자 (그 방 몫 — 마스크 · 우주복이면 0)
     public int PropId;                           // ④ 제 힘을 잃은 동안의 물체 Id (0 없음 — docs/PHYSICS.md PH14)
+    public int SporeSeen;                        // 곰팡이 포자로 '다쳤다'를 알린 그 곰팡이의 원인 마디 (같은 얼룩으로 또 알리지 않는다 · 앞서 다친 일 (HurtCause)은 건드리지 않는다 — DF1)
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -164,6 +165,13 @@ public sealed partial class Life : IEngine
     public const double Urine0 = 83.3 / 86400;    // 오줌 (몰/초 — 하루 1.5L, 물이 넉넉하면 많이 · 모자라면 적게)
     public const double UrineRefWater = Mind.BodyWater0 * 0.995; // 이 물에서 하루 1.5L (목마름은 몸의 물이 0.5% 줄 때쯤 마시게 한다 — 그 언저리가 보통)
     public const double BluntHealDays = 7, BurnHealDays = 14;
+    // 곰팡이 포자 (깊이 고침 DF1 — WHO 2009 '실내 습기 · 곰팡이' 지침: 습하고 곰팡이 핀 방은 기침 · 쌕쌕거림 · 천식을 늘린다 · 건강한 어른이 며칠 만에 죽지는 않는다 /
+    //   과민성 폐렴 (농부 폐): 짙게 마신 지 몇 시간 뒤 기침 · 숨참 — 몇 주 ~ 몇 달에 걸쳐 폐가 굳는다):
+    //   마시는 포자 = 칸 곰팡이와 그 방 곰팡이 평균의 가운데 (마스크 · 우주복이면 0) · 0.15 넘게 마시면 곧 기침 ·
+    //   폐 손상은 포자 × 0.15까지 2주 시간 상수로 천천히 다가간다 (곰팡이 1.0 방에서 한 주 0.06 · 다 차도 숨이 조금 찰 뿐 — 예전: 0.3 넘는 순간 계단 독 · 하룻밤에 죽음)
+    public const double SporeCough = 0.15, SporeLungMax = 0.15, SporeLungDays = 14;
+    /// <summary>곰팡이가 '피었다'고 원인 마디를 다는 짙기 (그 아래는 아직 보이지 않는 얼룩).</summary>
+    public const float MoldSeen = 0.05f;
     public const double NightUrine = 0.5;          // 자는 동안 오줌 빠르기 (낮의 절반)
     // 화장실 · 샤워실 (docs/WASH.md): 방광은 0.6L(33몰)를 넘으면 참지 못한다 (보통 어른 방광 0.4~0.6L) · 장의 찌꺼기는 먹은 음식의 13% (하루 0.15kg 남짓) · 0.45kg를 넘으면 참지 못한다
     public const double BladderMax = 33, BowelPerMol = 0.039, BowelMax = 0.45;
@@ -181,7 +189,9 @@ public sealed partial class Life : IEngine
     public List<Body> Bodies = new();
     public List<Crop> Crops = new();
     public float[] Mold;
-    /// <summary>방마다 떠다니는 곰팡이 포자 (그 방 곰팡이 평균 — 5단).</summary>
+    /// <summary>칸마다 곰팡이가 핀 원인 마디 (깊이 고침 DF1 — 핀 칸의 젖음 · 고인 물의 원인에 잇는다 · 걷히면 0).</summary>
+    public int[] MoldCause;
+    /// <summary>방마다 떠다니는 곰팡이 포자 (그 방 곰팡이 평균 — 5단 · 곰팡이 단계마다).</summary>
     public float[] RoomSpore;
     public long Deaths;
     public double FoodRotted;   // 썩은 양분 (몰 — 장부)
@@ -191,7 +201,7 @@ public sealed partial class Life : IEngine
         F = f; L = f.L; T = f.T;
         _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment");
         _glucose = T.S("Glucose"); _waterL = T.S("H2O_l"); _fat = T.S("Fat");
-        Mold = new float[L.N]; RoomSpore = new float[L.Rooms.Count];
+        Mold = new float[L.N]; MoldCause = new int[L.N]; RoomSpore = new float[L.Rooms.Count];
         _sealed = new bool[L.N];
         foreach (var fu in L.Furniture) if (T.Equip(fu.Type).Sealed) foreach (int c in fu.Cells) _sealed[c] = true;
         WashArrays();
@@ -304,7 +314,7 @@ public sealed partial class Life : IEngine
         Ears(sim, dt);        // 소리 단계 S3: 큰 소리가 귀를 먹먹하게 한다
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
-        if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }
+        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); }
         if (sim.Tick % 25 == 3) Spread(sim, dt * 5);   // 옮는 병 (1분마다)
         if (st != null) StampAirLoss(sim, st, sim.Tick % 25 == 7);
     }
@@ -503,9 +513,16 @@ public sealed partial class Life : IEngine
         if (hf > 2) b.Pain = (float)Math.Min(1, b.Pain + Math.Min(0.5, hf / 300) * dt / 300);
         if (o3 > 5) lung += o3 / 200;
         if (soot > 2000) lung += soot / 200_000;
-        if (Mold[c] > 0.3f) lung += 0.002;
+        // 곰팡이 포자 (DF1): 짙기에 비례해 날 단위로 천천히 — 쓰러짐 · 죽음의 이름이 되지 않는 가벼운 해 (mild)
+        int room = L.Room[c];
+        double spore = own ? 0 : 0.5 * (Mold[c] + (room >= 0 && room < RoomSpore.Length ? RoomSpore[room] : Mold[c]));
+        b.Spore = (float)spore;
+        double sporeTo = SporeLungMax * spore;
+        string? mild = null;
         if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= hf > 15 ? "플루오린화수소를 마셨다" : hcl > 50 ? "염화수소를 마셨다" : nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
-        else LungHeal(ref b, dt);
+        else if (b.LungDamage < sporeTo) b.LungDamage += (float)((sporeTo - b.LungDamage) * (1 - Math.Exp(-dt / (SporeLungDays * 86400))));
+        else { LungHeal(ref b, dt); if (b.LungDamage < sporeTo) b.LungDamage = (float)sporeTo; }
+        if (spore > SporeCough) mild = "곰팡이 포자를 마셨다";
 
         // ── 체온 ──
         double tsurf = F.HasSurface(c) ? F.Tf[c] : F.Ts[c];
@@ -584,6 +601,8 @@ public sealed partial class Life : IEngine
         }
         if (!suit && thead < 250 && p > 1) b.Frost += (float)((250 - thead) / 100 * dt / 600);
         if (b.CoreK < 306.5 && b.Alive != 0) { harm ??= "추위에 몸이 식었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
+        // 열사병 (DF1): 심부 40℃를 넘으면 쓰러진다 — 까닭은 그 방을 덥힌 것 (불 · 달군 장치 · 멈춘 냉각 — 없으면 이 마디가 뿌리)
+        if (b.CoreK > 313 && b.Alive != 0) { harm ??= "몸이 너무 뜨거워졌다"; env = env == 0 ? HotCause(sim, c, st, chem) : env; }
 
         // ── 압력 · 충격 · 방사선 ──
         double dp = b.LastKPa - p;
@@ -631,8 +650,10 @@ public sealed partial class Life : IEngine
         if (down && b.Conscious != 0)
         {
             b.Conscious = 0;
+            // 이번에 몸을 해친 것이 없으면 쓰러뜨린 몸의 상태에서 까닭을 · 앞서 다친 일에 잇는다 (DF1 — 예전: 까닭 · 원인 없는 '쓰러졌다')
+            var (why, from) = harm != null ? (harm, env) : DownWhy(b, pain, outside);
             int cause = b.Infect > 1 && harm == null ? sim.Causes.Add(CauseKind.Biology, "패혈증으로 쓰러졌다 — 곪은 상처를 치료하지 못했다", sim.Tick, c, b.InfectCause)
-                      : sim.Causes.Add(CauseKind.Biology, harm ?? "쓰러졌다", sim.Tick, c, env);
+                      : sim.Causes.Add(CauseKind.Biology, why, sim.Tick, c, from);
             b.HurtCause = cause;
             sim.Facts.Emit(sim.Tick, FactKind.Collapsed, c, (float)b.Hypoxia, cause, actor: id);
         }
@@ -654,6 +675,12 @@ public sealed partial class Life : IEngine
             b.HurtCause = sim.Causes.Add(CauseKind.Biology, harm, sim.Tick, c, env);
             sim.Facts.Emit(sim.Tick, FactKind.Hurt, c, 0, b.HurtCause, actor: id);
         }
+        // 곰팡이 포자 (가벼운 해 — DF1): 핀 얼룩마다 한 번 '다쳤다' (기침 — 원인은 그 곰팡이) · 쓰러짐 · 죽음의 이름이나 앞서 다친 일이 되지 않는다
+        if (mild != null && b.Alive != 0 && SporeCause(c) is int sc && sc != 0 && sc != b.SporeSeen)
+        {
+            b.SporeSeen = sc;
+            sim.Facts.Emit(sim.Tick, FactKind.Hurt, c, 0, sim.Causes.Add(CauseKind.Biology, mild, sim.Tick, c, sc), actor: id);
+        }
     }
 
     /// <summary>이 칸을 해친 것의 원인: 구역이 바깥과 이어진 구멍 → 그 벽의 원인 · 불 → 불의 원인.</summary>
@@ -674,6 +701,44 @@ public sealed partial class Life : IEngine
         int room = L.Room[c];
         if (room >= 0 && room < AirLostCause.Length && AirLostCause[room] != 0 && sim.Tick - AirLostTick[room] < Time.Hours(12)) return AirLostCause[room];
         return 0;
+    }
+
+    /// <summary>
+    /// 쓰러뜨린 몸의 상태 (이번 틱에 몸을 해친 것이 없을 때 — 앞서 쌓인 것): 까닭의 글 · 부모 원인 (앞서 다친 일 · 심정지 · 별 폭발).
+    /// 쓰러짐의 조건 (StepBody의 down)과 같은 차례로 본다.
+    /// </summary>
+    private static (string why, int from) DownWhy(in Body b, double pain, Outside? outside)
+    {
+        if (b.Arrest != 0) return ("심장이 멎어 쓰러졌다", b.ArrestCause);
+        if (b.Brain >= 0.5f) return ("뇌를 다쳐 쓰러졌다", b.HurtCause);
+        if (b.CN > 1) return ("시안화수소에 중독돼 쓰러졌다", b.HurtCause);
+        if (b.COHb > 0.5) return ("일산화탄소에 중독돼 쓰러졌다", b.HurtCause);
+        if (b.Hypoxia > 0.5) return ("숨이 모자라 쓰러졌다", b.HurtCause != 0 ? b.HurtCause : b.DrugCause);
+        if (b.BloodL < 3.5) return ("피를 많이 흘려 쓰러졌다", b.HurtCause);
+        if (b.CoreK > 313) return ("몸이 너무 뜨거워 쓰러졌다", b.HurtCause);
+        if (b.CoreK < 305) return ("몸이 식어 쓰러졌다", b.HurtCause);
+        if (pain > 0.95) return ("너무 아파 쓰러졌다", b.HurtCause);
+        if (b.RadRecent > 6) return ("방사선을 많이 쬐어 쓰러졌다", outside != null && outside.FlareCause != 0 ? outside.FlareCause : b.HurtCause);
+        return ("기운이 다해 쓰러졌다", b.HurtCause);
+    }
+
+    /// <summary>이 칸을 덥힌 까닭 (열사병 — DF1): 불 · 구멍 (<see cref="EnvCause"/>) → 달군 장치 · 불씨 → 멈춘 냉각 · 공조 · 원자로 (⑥ — 없으면 0).</summary>
+    private int HotCause(Sim sim, int c, Structure? st, Chemistry? chem)
+    {
+        int e = EnvCause(sim, c, st, chem);
+        if (e != 0) return e;
+        if (chem != null && chem.HeatCauseAt(c) is int h && h != 0) return h;
+        return _net?.HeatCauseAt(sim, c) ?? 0;
+    }
+
+    /// <summary>곰팡이 포자의 원인 (DF1): 그 칸 곰팡이의 마디 · 없으면 그 방에서 가장 짙게 핀 칸의 마디.</summary>
+    private int SporeCause(int c)
+    {
+        if (MoldCause[c] != 0) return MoldCause[c];
+        int room = L.Room[c], best = 0; float most = 0;
+        if (room < 0) return 0;
+        foreach (int k in L.Rooms[room].Cells) if (MoldCause[k] != 0 && Mold[k] > most) { most = Mold[k]; best = MoldCause[k]; }
+        return best;
     }
 
     /// <summary>작물: 빛 × 이산화탄소 × 온도 × 물 × 건강 — 광합성 반응식대로 (칸 CO₂ → O₂ · 물탱크의 물).</summary>
@@ -707,17 +772,33 @@ public sealed partial class Life : IEngine
         }
     }
 
-    /// <summary>곰팡이 (125틱마다): 상대 습도 80%↑ · 278~310K에서 자라고, 마르면 준다.</summary>
-    private void MoldStep(double dt)
+    /// <summary>
+    /// 곰팡이 (125틱마다): 상대 습도 80%↑ · 278~310K에서 자라고, 마르면 준다. 핀 칸 (0.05↑)에 원인 마디 — 고인 물이면 그 물의 원인에 잇는다 ·
+    /// 곁의 칸이 같은 까닭으로 핀 마디가 있으면 그것을 쓴다 (번진 얼룩 하나에 마디 하나) · 걷히면 0. 방마다 떠다니는 포자 = 그 방 곰팡이 평균 (DF1).
+    /// </summary>
+    private void MoldStep(Sim sim, double dt)
     {
+        Span<int> nb = stackalloc int[4];
         for (int c = 0; c < L.N; c++)
         {
-            if (!L.IsSpace(c) || F.RegionOf.Length <= c || F.RegionOf[c] < 0) { Mold[c] = 0; continue; }
+            if (!L.IsSpace(c) || F.RegionOf.Length <= c || F.RegionOf[c] < 0) { Mold[c] = 0; MoldCause[c] = 0; continue; }
             double t = F.Temp(c);
             double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, t)));
-            bool wet = rh > 0.8 || F.Stored(T.sWater, c) > 50;
+            bool pooled = F.Stored(T.sWater, c) > 50, wet = rh > 0.8 || pooled;
             if (wet && t > 278 && t < 310) Mold[c] = (float)Math.Min(1, Mold[c] + Math.Max(Mold[c], 0.01) * 0.7 * dt / 86400);
             else Mold[c] = (float)Math.Max(0, Mold[c] - 0.2 * dt / 86400);
+            if (Mold[c] < 0.01f) { MoldCause[c] = 0; continue; }
+            if (MoldCause[c] != 0 || Mold[c] < MoldSeen) continue;
+            int from = F.WetCause[c], cause = 0;   // 고인 물 · 젖은 바닥의 원인 (마른 칸이면 0 — 습한 공기)
+            L.Neighbors(c, nb);
+            foreach (int j in nb) if (j >= 0 && MoldCause[j] != 0 && sim.Causes[MoldCause[j]].Parent == from) { cause = MoldCause[j]; break; }
+            MoldCause[c] = cause != 0 ? cause : sim.Causes.Add(CauseKind.Biology, pooled ? "고인 물에 곰팡이가 피었다" : "습한 공기에 곰팡이가 피었다", sim.Tick, c, from);
+        }
+        for (int r = 0; r < L.Rooms.Count && r < RoomSpore.Length; r++)
+        {
+            double sum = 0; int n = 0;
+            foreach (int c in L.Rooms[r].Cells) if (L.IsSpace(c)) { sum += Mold[c]; n++; }
+            RoomSpore[r] = n > 0 ? (float)(sum / n) : 0;
         }
     }
 
@@ -765,7 +846,7 @@ public sealed partial class Life : IEngine
         foreach (int k in cells)
         {
             if (k < 0 || k >= L.N) continue;
-            if ((what & MopKind.Mold) != 0) Mold[k] = 0;
+            if ((what & MopKind.Mold) != 0) { Mold[k] = 0; MoldCause[k] = 0; }
             if ((what & MopKind.Water) == 0 || _net == null) continue;
             double w = F.Stored(T.sWater, k);
             if (w > 0) { double got = F.TakeStore(k, T.sWater, w); _net.WasteWater += got; wiped += got; }
@@ -789,8 +870,8 @@ public sealed partial class Life : IEngine
         return (g, w, f);
     }
 
-    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); w.Tag("변기"); w.Arr(Tank); w.Arr(Bowl); w.Arr(Heap); w.Arr(Clogged); w.Arr(ClogCause); w.Arr(Grime); w.Arr(Flushes); w.Arr(ScrubbedAt); w.I64(Clogs); w.I64(Overflows); w.F64(WasteCarried); w.Tag("균 · 포자"); w.Arr(SurfGerm); w.Arr(SurfCause); w.Arr(RoomSpore); w.F64(WasteRotKg); w.I64(Slips); }
-    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); r.Tag("변기"); Tank = r.Arr<double>(); Bowl = r.Arr<double>(); Heap = r.Arr<double>(); Clogged = r.Arr<byte>(); ClogCause = r.Arr<int>(); Grime = r.Arr<float>(); Flushes = r.Arr<int>(); ScrubbedAt = r.Arr<int>(); Clogs = r.I64(); Overflows = r.I64(); WasteCarried = r.F64(); r.Tag("균 · 포자"); SurfGerm = r.Arr<float>(); SurfCause = r.Arr<int>(); r.ArrInto(RoomSpore); WasteRotKg = r.F64(); Slips = r.I64(); }
+    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); w.I64(CratesOpened); w.Tag("씻기"); w.F64(SewageKg); w.I64(Soilings); w.I64(Showers); w.I64(Voids); w.Tag("변기"); w.Arr(Tank); w.Arr(Bowl); w.Arr(Heap); w.Arr(Clogged); w.Arr(ClogCause); w.Arr(Grime); w.Arr(Flushes); w.Arr(ScrubbedAt); w.I64(Clogs); w.I64(Overflows); w.F64(WasteCarried); w.Tag("균 · 포자"); w.Arr(SurfGerm); w.Arr(SurfCause); w.Arr(RoomSpore); w.F64(WasteRotKg); w.I64(Slips); w.Arr(MoldCause); }
+    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); CratesOpened = r.I64(); r.Tag("씻기"); SewageKg = r.F64(); Soilings = r.I64(); Showers = r.I64(); Voids = r.I64(); r.Tag("변기"); Tank = r.Arr<double>(); Bowl = r.Arr<double>(); Heap = r.Arr<double>(); Clogged = r.Arr<byte>(); ClogCause = r.Arr<int>(); Grime = r.Arr<float>(); Flushes = r.Arr<int>(); ScrubbedAt = r.Arr<int>(); Clogs = r.I64(); Overflows = r.I64(); WasteCarried = r.F64(); r.Tag("균 · 포자"); SurfGerm = r.Arr<float>(); SurfCause = r.Arr<int>(); r.ArrInto(RoomSpore); WasteRotKg = r.F64(); Slips = r.I64(); r.ArrInto(MoldCause); }
 }
 
 /// <summary>닦는 갈래 (Life.Mop — 겹쳐 쓴다).</summary>

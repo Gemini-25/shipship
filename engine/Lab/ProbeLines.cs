@@ -57,7 +57,7 @@ public static partial class Program
             if (i % 250 == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 공급 {net.Supplied:0.0}/{net.Demanded:0.0} · 원자로 {net.ReactorKw:0.0}/{net.ReactorMaxKw:0.0} · 섬 {net.Islands} · 스크램 {net.ReactorScram} · 원자로 칸 {f.Ts[net.Devices.First(d => d.Def.Role == "reactor").Cell]:0}K");
         }
         foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Short or FactKind.BreakerTrip or FactKind.CableCut or FactKind.PipeLeak or FactKind.Overheat or FactKind.Ignition).Take(40))
-            Console.WriteLine($"  {Time.Clock(x.Tick)} {FactNames.Of(x.Kind)} 칸 {x.Cell} · {s.Causes.Story(x.Cause)}");
+            Console.WriteLine($"  {Time.Clock(x.Tick)} {FactNames.Of(x)} 칸 {x.Cell} · {s.Causes.Story(x.Cause)}");
     }
 }
 

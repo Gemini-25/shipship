@@ -383,6 +383,7 @@ public sealed partial class Director
     }
 
     public static string FactText(FactKind k) => FactNames.Of(k);
+    public static string FactText(in Fact f) => FactNames.Of(f);
 
     /// <summary>그 사실에 이어진 한 마디 (대화 · 싸움 — 사회의 말 기록에서).</summary>
     private static string LineOf(Sim sim, in Fact f)
@@ -408,7 +409,7 @@ public sealed partial class Director
         int actor = f.Kind is FactKind.Died or FactKind.Collapsed or FactKind.Hurt && mind != null ? mind.AgentOfBody(f.Actor) : f.Actor; // 생명의 사실은 몸 번호
         string who = actor >= 0 && mind != null && actor < mind.Agents.Count ? Ko.I(mind.NameOf(actor)) + " " : "";
         string story = f.Cause != 0 ? sim.Causes.Story(f.Cause) : "";
-        return story.Length > 0 ? story : who + FactText(f.Kind);
+        return story.Length > 0 ? story : who + FactText(f);
     }
 
     // ───────────────────────── 다시보기 ─────────────────────────

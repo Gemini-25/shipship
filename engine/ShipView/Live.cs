@@ -1202,7 +1202,7 @@ public sealed partial class LiveShow
             if (mind != null) foreach (int r in new[] { x.RobotA, x.RobotB }) if (r >= 0 && r < mind.Agents.Count) who.Add($"{mind.NameOf(r)}에게 맡김");
             if (x.Person >= 0 && mind != null && x.Person < mind.Agents.Count) who.Add($"{mind.NameOf(x.Person)}이(가) 받아 줌");
             string plan = sm.PlanLine(x.Id), chain = plan.Length > 0 ? sm.ChainLine(x) : "";   // 판단 엔진: 지어낸 계획 — 생각 사슬 · 걸음 (✔ 마침 · ▶ 하는 중)
-            rows.Add(new PanelRow($"지금 · {sm.RoomName(x.Room)}: {ShipMind.KindName(x.Kind)} ({Math.Max(0, now - x.Since) / (double)Time.Minutes(1):0}분째)",
+            rows.Add(new PanelRow($"지금 · {sm.RoomName(x.Room)}: {sm.IncidentName(x)} ({Math.Max(0, now - x.Since) / (double)Time.Minutes(1):0}분째)",
                 (who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다") + (chain.Length > 0 ? "\n궁리: " + chain : "") + (plan.Length > 0 ? "\n계획: " + plan : ""), true, Key: x.Id));
         }
         string blind = sm.BlindLine();
@@ -1376,7 +1376,7 @@ public sealed partial class LiveShow
         FeedItem Line(List<Incident> xs, bool active, List<Incident>? over = null)
         {
             var top = xs.OrderByDescending(x => LevelOf(x.Kind)).ThenBy(x => x.Since).First();
-            var kinds = xs.OrderByDescending(x => LevelOf(x.Kind)).Select(x => ShipMind.KindName(x.Kind)).Distinct();
+            var kinds = xs.OrderByDescending(x => LevelOf(x.Kind)).Select(x => sm.IncidentName(x)).Distinct();
             var did = new List<string>();
             if (xs.Any(x => x.Sealed != 0)) did.Add("봉쇄");
             var robots = xs.SelectMany(x => new[] { x.RobotA, x.RobotB }).Where(r => r >= 0).Distinct().Select(Who).Where(n => n.Length > 0).ToList();
@@ -1384,7 +1384,7 @@ public sealed partial class LiveShow
             var asked = xs.Where(x => x.Person >= 0).Select(x => Who(x.Person)).Where(n => n.Length > 0).Distinct().ToList();
             if (asked.Count > 0) did.Add(string.Join("·", asked) + "에게 부탁");
             string room = top.Room >= 0 ? sm.RoomName(top.Room) : "배 전체";
-            string ended = over is { Count: > 0 } ? " · 끝: " + string.Join(" · ", over.Select(x => ShipMind.KindName(x.Kind)).Distinct()) : "";   // 같은 방에서 막 끝난 일
+            string ended = over is { Count: > 0 } ? " · 끝: " + string.Join(" · ", over.Select(x => sm.IncidentName(x)).Distinct()) : "";   // 같은 방에서 막 끝난 일
             string text = $"{room} · {string.Join(" · ", kinds)}{ended}{(active ? "" : " — 끝")}{(active && did.Count > 0 ? " — 주컴퓨터: " + string.Join(" · ", did) : "")}";
             return new FeedItem(Hm(active ? xs.Min(x => x.Since) : xs.Max(x => x.Ended)), text, xs.Max(x => LevelOf(x.Kind)), top.Cell, active);
         }

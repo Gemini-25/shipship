@@ -525,7 +525,7 @@ public sealed partial class Network : IEngine
                 if (!wet && !burnt && !spent) continue;
                 FaultCell[fd.Id] = c;
                 Shorts++;
-                int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c, HeatSource(sim.Find<Chemistry>(), c)) : wet ? sim.Causes.Add(CauseKind.Leak, F.Grav[c] < Field.LowG ? "떠다니던 물방울이 전선에 들러붙었다" : "전선이 지나는 바닥이 젖었다", sim.Tick, c, SpillNear(c))
+                int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c, InsulHeatCause(sim, c)) : wet ? sim.Causes.Add(CauseKind.Leak, F.Grav[c] < Field.LowG ? "떠다니던 물방울이 전선에 들러붙었다" : "전선이 지나는 바닥이 젖었다", sim.Tick, c, SpillNear(c))
                     : sim.Causes.Add(CauseKind.Electric, "상한 전선에 전기가 들어갔다", sim.Tick, c, LineCause[c * 3]);
                 int cause = sim.Causes.Add(CauseKind.Electric, "합선", sim.Tick, c, parent);
                 sim.Facts.Emit(sim.Tick, FactKind.Short, c, 0, cause, other: fd.Id);
