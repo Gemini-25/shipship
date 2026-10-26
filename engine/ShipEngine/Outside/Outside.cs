@@ -360,7 +360,11 @@ public sealed partial class Outside : IEngine
     private bool HitShip(Sim sim, double ux, double uy, double off, double energy, double kg, int parentCause, string what, out int hit, Func<int, byte>? subOf = null)
     {
         hit = -1;
+        // 배의 몸 자세로 (PH15): 곧은 길은 세상 틀 — 배의 몸 가운데 (도면 가운데의 세상 자리)를 지나게 · 걸음마다 몸마다 제 틀로 옮겨 그 몸의 칸에 드는가 (돌거나 갈라진 배도 맞는 쪽이 맞다)
+        var st = sim.Find<Structure>();
+        int nb = st != null ? st.Bodies.Count : 0;
         double cx = L.W / 2.0, cy = L.H / 2.0;
+        if (nb > 0 && st!.Bodies[0].Mass > 0) (cx, cy) = st.WorldOf(0, cx, cy);
         double px = -uy, py = ux;
         double reach = Math.Sqrt(L.W * L.W + L.H * L.H);
         double sx = cx - ux * reach + px * off, sy = cy - uy * reach + py * off;
@@ -368,15 +372,24 @@ public sealed partial class Outside : IEngine
         for (int s = 0; s < steps; s++)
         {
             double x = sx + ux * s * 0.5, y = sy + uy * s * 0.5;
-            int ix = (int)Math.Floor(x), iy = (int)Math.Floor(y);
-            if (!L.In(ix, iy)) continue;
-            int c = L.Index(ix, iy);
-            if (L.Kind[c] == CellKind.Outside) continue;
+            int c = -1, hb = -1;
+            for (int b = 0; b < Math.Max(1, nb) && c < 0; b++)
+            {
+                double lx = x, ly = y;
+                if (nb > 0) { if (st!.Bodies[b].Mass <= 0) continue; (lx, ly) = st.LocalOf(b, x, y); }
+                int ix = (int)Math.Floor(lx), iy = (int)Math.Floor(ly);
+                if (!L.In(ix, iy)) continue;
+                int k = L.Index(ix, iy);
+                if (L.Kind[k] == CellKind.Outside || nb > 0 && st!.BodyOf(k) != b) continue;
+                c = k; hb = b;
+            }
+            if (c < 0) continue;
             int cause = sim.Causes.Add(CauseKind.Impact, $"{Ko.I(what)} 부딪혔다 ({energy / 1000:0.#}kJ)", sim.Tick, c, parentCause);
-            int dx = Math.Abs(ux) >= Math.Abs(uy) ? Math.Sign(ux) : 0, dy = dx == 0 ? Math.Sign(uy) : 0;
+            double th = hb >= 0 && nb > 0 ? st!.Bodies[hb].Th : 0, lux = Math.Cos(th) * ux + Math.Sin(th) * uy, luy = -Math.Sin(th) * ux + Math.Cos(th) * uy;   // 그 몸 틀의 들어온 쪽
+            int dx = Math.Abs(lux) >= Math.Abs(luy) ? Math.Sign(lux) : 0, dy = dx == 0 ? Math.Sign(luy) : 0;
             byte was = sim.Facts.SubNow;
             if (subOf != null) sim.Facts.SubNow = subOf(c);   // 맞은 그 때 — 그 운석에 난 사실 · 부스러기 · 소리도 그 때부터 (DF9)
-            sim.Find<Structure>()?.Rock(sim, c, kg, energy, ux, uy, dx, dy, cause);
+            st?.Rock(sim, c, kg, energy, lux, luy, dx, dy, cause);   // 그 몸 틀 쪽으로 (Rock이 세상 틀로 옮긴다)
             sim.Facts.SubNow = was;
             hit = c;
             return true;

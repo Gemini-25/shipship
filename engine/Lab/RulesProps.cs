@@ -691,7 +691,7 @@ public static partial class Program
         for (int k = 0; k < 6 && !got; k++)
         {
             show.Advance(1.0);
-            foreach (var sh in st.Shards) if (sh.Born == s.Tick - 1 && sh.Sub > 0) { first = sh; got = true; break; }
+            foreach (var sh in st.FlyingDebris()) if (sh.Born == s.Tick - 1 && sh.Sub > 0) { first = sh; got = true; break; }
         }
         bool hidden = false, shown = false;
         if (got)

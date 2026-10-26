@@ -290,9 +290,9 @@ public static partial class Program
             List<(int x, int y)> Line() => Diff(p, s, wx0, wy0, ww, wh, () => p.Strikes = new());
             List<(int x, int y)> Bits()   // 부스러기 하나도 없는 그림과 (한 틱에 수십 m — 넓게)
             {
-                var all = st.Shards.ToList();
-                var d = Diff(p, s, -70, -40, 80, 90, () => st.Shards.Clear());
-                st.Shards.Clear(); st.Shards.AddRange(all);
+                var all = st.Shards.ToList(); var props = st.Props.ToList();   // 나는 판 조각 (PH15)도 부스러기로 그린다
+                var d = Diff(p, s, -70, -40, 80, 90, () => { st.Shards.Clear(); st.Props.RemoveAll(q => q.Kind == 4 && Structure.Flying(q)); });
+                st.Shards.Clear(); st.Shards.AddRange(all); st.Props.Clear(); st.Props.AddRange(props);
                 return d;
             }
             bool ok = !double.IsNaN(sub);
@@ -323,10 +323,10 @@ public static partial class Program
             }
             Check("운석 줄: 맞은 틱에 '맞음' 하나 · 틱 안의 때 0.5 ± 0.1 · 그 때를 지나는 장부터 들어온 쪽 화면 끝에서 맞은 칸까지 줄 (20도트 넘게) · 0.2 앞 장에는 없다 · 잔상 0.25초 뒤 없다 · 그 운석에 난 부스러기도 그 때부터 · 파편 구름 속에서는 맞은 파편마다 짧은 줄",
                 ran == 1 && struck == 1 && Math.Abs(sub - 0.5) <= 0.1 && early.Count == 0 && inSide >= 20 && after.Count == 0 &&
-                st.Shards.Count > 0 && earlyBits.Count == 0 && hitBits.Count > 0 &&
+                st.FlyingDebris().Count > 0 && earlyBits.Count == 0 && hitBits.Count > 0 &&
                 o2.Struck.Count == o2.DebrisHits - h0 && o2.Struck.Count >= 2 && lined == o2.Struck.Count,
                 $"맞음 {struck} · 때 {sub:0.000} · 줄 도트 (때 − 0.2 · + 0.01 들어온 쪽 · 0.25초 뒤) {early.Count} · {inSide}/{hitLine.Count} · {after.Count} · " +
-                $"부스러기 {st.Shards.Count} (때 − 0.2 · + 0.01 그린 도트 {earlyBits.Count} · {hitBits.Count}) · 구름 맞음 {o2.Struck.Count}/{o2.DebrisHits - h0} · 줄 있는 {lined}");
+                $"부스러기 {st.FlyingDebris().Count} (때 − 0.2 · + 0.01 그린 도트 {earlyBits.Count} · {hitBits.Count}) · 구름 맞음 {o2.Struck.Count}/{o2.DebrisHits - h0} · 줄 있는 {lined}");
         }
     }
 }

@@ -315,6 +315,39 @@ public static partial class Program
     }
 
     /// <summary>
+    /// props-plate (PH15 — docs/PHYSICS.md §5-4): 공기 찬 화물칸 외판 셋이 뜯겨 나간다 — 떨어져 나온 잔칸이 강철 판 조각이 되어 빠지는 공기에 밀려 별 위로 날며 돈다.
+    /// 뜯긴 틱의 0.02 · 0.06 · 0.11 · 0.18 (틱 사이 장 — 한 틱 2.4초에 판 조각은 수십 m를 난다).
+    /// </summary>
+    private static void PropsPlateScene(string dir)
+    {
+        const string art = "\n              ###############\n              #.....#.......#\n              #.....D.......#\n              #.....#.......#\n              ###############";
+        var lay = Worlds.Ascii(art, Worlds.Seats);
+        var s = Worlds.Full(lay, 5);
+        var st = s.Get<Structure>(); var f = s.Get<Field>();
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        st.RequestDoor(lay.DoorAt[At(20, 2)], 0);
+        s.Run(3);
+        int cut = s.Causes.Add(CauseKind.Setup, "화물칸 외판이 뜯겨 나갔다", s.Tick);
+        for (int x = 16; x <= 18; x++) st.Destroy(s, At(x, 0), cut);
+        var painter = new Painter(s.Layout);
+        double[] fr = { 0.02, 0.06, 0.11, 0.18 };
+        int fw = 30 * Painter.T, fh = 15 * Painter.T, gap = 6;
+        var sheet = new Img(2 * fw + gap, 2 * fh + gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        for (int k = 0; k < fr.Length; k++)
+        {
+            if (k == 0) s.Step();
+            painter.TickFrac = fr[k];
+            var img = painter.Frame(s, 0, -10, 30, 15, 1);
+            sheet.Draw(img, k % 2 * (fw + gap), k / 2 * (fh + gap));
+            Console.WriteLine($"  props-plate 틱 {s.Tick} 사이 {fr[k]:0.00}: 화물칸 {f.Pressure(At(17, 2)):0}kPa · 판 조각 {st.Props.Count(p => p.Kind == 4)} (나는 것 {st.Props.Count(p => p.Kind == 4 && Structure.Flying(p))}) · 빠르기 {st.Props.Where(p => p.Kind == 4).Select(p => Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy)).DefaultIfEmpty(0).Max():0}m/s");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-plate.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-plate: {dir}/props-plate.png ({sheet.W}×{sheet.H}) — 뜯긴 틱의 0.02 · 0.06 · 0.11 · 0.18 (외판 판 조각이 별 위로 날며 돈다)");
+    }
+
+    /// <summary>
     /// props-burn 틀 (PH4d — 함장 장면 '화살호 추진제 반 0.40g'의 틀 · docs/PHYSICS.md §10): 몸이 없는 배가 0.40g로 점화한다 (엔진은 +x로 민다 — 배 안의 것은 −x로 −m·a) —
     /// 마른 바닥 식량 상자 (μs 0.375)도 미끄러져 뒤 벽에 닿아 서고 · 젖은 바닥의 것은 더 빨리 · 소화기는 깨지만 (넘어짐 문턱) 정지 마찰이 붙든다 (넘어짐 · 구름 · 탁자 끝 병 낙하는 PH7) ·
     /// 탁자 · 의자 곁 것은 가구에 걸린다. 점화 앞 한 장 + 첫 틱 · 둘째 · 넷째 틱 (틱 안 메움은 PH5).

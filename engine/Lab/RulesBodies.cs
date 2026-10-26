@@ -301,7 +301,7 @@ public static partial class Program
             for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
             s.Run(3);
             double w = st.Bodies.Count > 1 ? Math.Abs(st.Bodies[1].W) : 1, slow = 0;
-            foreach (var sh in st.Shards) slow = Math.Max(slow, Math.Sqrt((sh.Vx - st.Bodies[1].Vx) * (sh.Vx - st.Bodies[1].Vx) + (sh.Vy - st.Bodies[1].Vy) * (sh.Vy - st.Bodies[1].Vy)));
+            foreach (var sh in st.FlyingDebris()) slow = Math.Max(slow, Math.Sqrt((sh.Vx - st.Bodies[1].Vx) * (sh.Vx - st.Bodies[1].Vx) + (sh.Vy - st.Bodies[1].Vy) * (sh.Vy - st.Bodies[1].Vy)));
             long made = st.ShardsMade;
             var lay2 = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
             var s2 = FieldStructure(lay2, 2);
@@ -310,7 +310,7 @@ public static partial class Program
             for (int y = 2; y <= 4; y++) st2.Destroy(s2, Worlds.At(lay2, 10, y), 0);
             s2.Run(1);
             double fast = 0; int n2 = 0;
-            foreach (var sh in st2.Shards) { var o = st2.Bodies[0]; fast += Math.Sqrt((sh.Vx - o.Vx) * (sh.Vx - o.Vx) + (sh.Vy - o.Vy) * (sh.Vy - o.Vy)); n2++; }
+            foreach (var sh in st2.FlyingDebris()) { var o = st2.Bodies[0]; fast += Math.Sqrt((sh.Vx - o.Vx) * (sh.Vx - o.Vx) + (sh.Vy - o.Vy) * (sh.Vy - o.Vy)); n2++; }
             fast /= Math.Max(1, n2);
             Check("부스러기의 반동: 공기 없는 벽을 끊으면 부스러기는 천천히 흩어지고 (1m/s 아래) 떨어진 조각은 돌지 않는다 · 공기 찬 통로를 끊으면 빠지는 공기가 부스러기를 세게 민다 (평균 10m/s 넘게)",
                 made > 0 && slow < 1 && w < Structure.SpinRadS && st.Spins == 0 && n2 > 0 && fast > 10,
@@ -328,7 +328,7 @@ public static partial class Program
             s.Step();
             var o = st.Bodies[0];
             int side = 0, n = 0;
-            foreach (var sh in st.Shards) { double vx = Math.Abs(sh.Vx - o.Vx), vy = Math.Abs(sh.Vy - o.Vy); n++; if (vx > vy) side++; }
+            foreach (var sh in st.FlyingDebris()) { double vx = Math.Abs(sh.Vx - o.Vx), vy = Math.Abs(sh.Vy - o.Vy); n++; if (vx > vy) side++; }
             Check("부스러기가 튀는 쪽: 통로를 끊으면 벽 조각은 통로에 수직으로 (위 · 아래 우주 쪽) 날고 · 바닥 판은 평면 밖으로 떠난다 (장부 '우주로')",
                 n > 0 && side == 0 && st.ShardKgLost > 0, $"날고 있는 {n} · 통로 쪽으로 튄 {side} · 평면 밖으로 {st.ShardKgLost:0}kg");
         }
@@ -359,11 +359,11 @@ public static partial class Program
             s.Run(3);
             for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), 0);
             s.Run(1);
-            int made = (int)st.ShardsMade, flying = st.Shards.Count;
+            int made = (int)st.ShardsMade, flying = st.FlyingDebris().Count;
             // 빠지는 공기에 밀린 부스러기는 한 틱(2.4초)에 수십 m — 부스러기마다 그 둘레를 그려 본다
             var p = new Painter(lay);
             int seen = 0;
-            foreach (var sh in st.Shards)
+            foreach (var sh in st.FlyingDebris())
             {
                 var (sx, sy) = st.LocalOf(0, sh.X, sh.Y);
                 int x0 = (int)Math.Floor(sx) - 3, y0 = (int)Math.Floor(sy) - 3;
@@ -375,8 +375,8 @@ public static partial class Program
             }
             s.Run(150);
             Check("갈라질 때 부스러기: 끊긴 통로의 부서진 판이 알갱이로 튀어 날고 화면에 보인다 · 300m 넘게 멀어지면 장부 '우주로'",
-                made >= 3 && flying >= 3 && seen >= 1 && st.ShardKgLost > 0 && st.Shards.Count < flying,
-                $"부스러기 {made} · 날고 있는 {flying} · 화면에 보인 {seen} · 150틱 뒤 날고 있는 {st.Shards.Count} · 우주로 {st.ShardKgLost:0}kg");
+                made >= 3 && flying >= 3 && seen >= 1 && st.PlateKgLost + st.ShardKgLost > 0 && st.FlyingDebris().Count < flying,
+                $"부스러기 {made} · 날고 있는 {flying} · 화면에 보인 {seen} · 150틱 뒤 날고 있는 {st.FlyingDebris().Count} · 우주로 {st.PlateKgLost + st.ShardKgLost:0}kg");
         }
 
         // ── (바) 관전 화면: 갈라진 조각은 틱(2.4초) 사이에도 미끄러지듯 움직이고 (지난 틱 → 지금 자세를 메운다 — 걸음처럼 한 틱 늦게) · 카메라는 도면 밖으로 멀어진 조각까지 간다 ──
@@ -516,11 +516,11 @@ public static partial class Program
             // 알갱이 하나만 둔 그림 − 하나도 없는 그림: 다른 도트 (세계는 그대로 돌려놓는다 — 그림은 읽기만)
             static List<(int x, int y, double l, bool core)> Dots(Painter p, Sim s, Structure st, int keep, int x0, int y0, int w, int h)
             {
-                var all = st.Shards.ToList();
-                st.Shards.Clear(); var bare = p.Frame(s, x0, y0, w, h, 0);
-                if (keep >= 0) st.Shards.Add(all[keep]); else st.Shards.AddRange(all);
+                var all = st.Shards.ToList(); var props = st.Props.ToList();   // 나는 판 조각 (PH15)도 부스러기로 그린다 — 빼고 · 되돌린다
+                st.Shards.Clear(); st.Props.RemoveAll(q => q.Kind == 4 && Structure.Flying(q)); var bare = p.Frame(s, x0, y0, w, h, 0);
+                if (keep >= 0) st.Shards.Add(all[keep]); else { st.Shards.AddRange(all); st.Props.Clear(); st.Props.AddRange(props); }
                 var with = p.Frame(s, x0, y0, w, h, 0);
-                st.Shards.Clear(); st.Shards.AddRange(all);
+                st.Shards.Clear(); st.Shards.AddRange(all); st.Props.Clear(); st.Props.AddRange(props);
                 var d = new List<(int, int, double, bool)>();
                 for (int y = 0; y < with.H; y++)
                     for (int x = 0; x < with.W; x++)
@@ -598,10 +598,10 @@ public static partial class Program
             Check("부스러기 틱 사이: 틱 사이 장마다 그 때 자리 (20m/s 알갱이가 틱 사이 ¼ → ¾에 24m) · 제 돎만큼 판이 돈다 (돌지 않으면 같은 꼴) · 불 끈 방에서는 어둡다 · 충돌 잔걸음에 난 것은 나기 전 자리 (배 안 바닥)에 그리지 않는다 · 외판이 부서진 틱에도 배 안 바닥 위에 없다",
                 ran == 2 && a0.Count > 0 && a1.Count > 0 && Math.Abs(moved - expect) <= 2 && Math.Abs(ay1 - ay0) <= 1 && sa0 == sa1 && sh0 != "" && sh1 != "" && sh0 != sh1 &&
                 lay.Kind[backCell] == CellKind.Floor && crashFloor == 0 && cEnd.Count > 0 && dimL < litL * 0.6 &&
-                ranD == 1 && stD.Shards.Count > 0 && dD.Count > 0 && hullFloor == 0,
+                ranD == 1 && stD.FlyingDebris().Count > 0 && dD.Count > 0 && hullFloor == 0,
                 $"틱 {ran} · ¼ → ¾ 밝은 도트 무게중심 {moved:0.0}도트 (기대 {expect:0}) · 세로 {ay1 - ay0:0.0} · 판 꼴 돎 {(sh0 != sh1 ? "바뀜" : "같음")} · 안 돎 {(sa0 == sa1 ? "같음" : "바뀜")} · " +
                 $"충돌에 난 것 뒤로 늘인 자리 {lay.Kind[backCell]} · 그 장 바닥 위 도트 {crashFloor} · 틱 끝 도트 {cEnd.Count} · 밝기 켠 방 {litL:0} / 불 끈 방 {dimL:0} · " +
-                $"외판 틱 {ranD} · 부스러기 {stD.Shards.Count} · 그린 도트 {dD.Count} · 배 안 바닥 위 {hullFloor}");
+                $"외판 틱 {ranD} · 부스러기 {stD.FlyingDebris().Count} · 그린 도트 {dD.Count} · 배 안 바닥 위 {hullFloor}");
         }
 
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──

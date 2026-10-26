@@ -60,17 +60,18 @@ public static partial class Program
                 if (Environment.GetEnvironmentVariable("LEDGER_DEBUG") == "1" && k < 30)
                 {
                     var (ax, ay, al, _) = st.BodyMomentum(); var (bx, by, bl) = st.ShardMomentum();
-                    Console.WriteLine($"    틱 {k}: 몸 {st.Bodies.Count} · 남는 {ax + bx + st.GasPx:0.000},{ay + by + st.GasPy:0.000} · 각 {al + bl + st.GasL:0.000} · 부스러기 {st.Shards.Count}/{st.ShardsMade} 부딪힘 {st.ShardHits} · 우주로 {st.ShardKgLost:0}kg");
+                    Console.WriteLine($"    틱 {k}: 몸 {st.Bodies.Count} · 남는 {ax + bx + st.GasPx:0.000},{ay + by + st.GasPy:0.000} · 각 {al + bl + st.GasL:0.000} · 판 조각 {st.PlatesMade} 세게 맞음 {st.PlateHits} · 우주로 {st.PlateKgLost:0}kg");
                 }
             }
             var (px, py, l, _) = st.BodyMomentum();
             var (sx, sy, sl) = st.ShardMomentum();
+            var (qx, qy, ql) = st.PropMomentum();   // 판 조각 (PH15 — 나는 것 · 실린 것 · 우주로 간 것)
             // 기체 장부에는 뿜은 공기의 운동량에서 빠지는 공기가 부스러기에 준 것이 빠져 있다 (그만큼 부스러기가 가져간다) — 잣대는 뿜은 크기의 합
             double gas = st.GasAbs;
-            double ex = px + sx + st.GasPx, ey = py + sy + st.GasPy, el = l + sl + st.GasL;
-            Check("운동량 장부: 갈라져 뿜는 두 방 — 몸들의 운동량 + 부스러기(날고 있는 것 · 우주로 · 붙은 것) + 우주로 간 기체가 가져간 운동량 = 0 · 원점에 대한 각운동량도 (뿜은 운동량의 1e-9 안)",
+            double ex = px + sx + qx + st.GasPx, ey = py + sy + qy + st.GasPy, el = l + sl + ql + st.GasL;
+            Check("운동량 장부: 갈라져 뿜는 두 방 — 몸들의 운동량 + 판 조각(나는 것 · 실린 것 · 우주로 간 것) + 우주로 간 기체가 가져간 운동량 = 0 · 원점에 대한 각운동량도 (뿜은 운동량의 1e-9 안)",
                 st.Bodies.Count == 2 && gas > 1000 && st.ShardsMade > 0 && Math.Sqrt(ex * ex + ey * ey) < 1e-9 * gas && Math.Abs(el) < 1e-9 * gas * 10 && Math.Abs(st.Bodies[1].W) > 0.01,
-                $"뿜은 {gas / 1000:0.0}kN·s (남은 기체 장부 {Math.Sqrt(st.GasPx * st.GasPx + st.GasPy * st.GasPy) / 1000:0.0}) · 부스러기 {st.ShardsMade} (부딪힘 {st.ShardHits}) · 남는 운동량 {Math.Sqrt(ex * ex + ey * ey):0.0e0} · 남는 각운동량 {el:0.0e0} · 오른쪽 방 각속도 {st.Bodies[1].W:0.000}rad/s");
+                $"뿜은 {gas / 1000:0.0}kN·s (남은 기체 장부 {Math.Sqrt(st.GasPx * st.GasPx + st.GasPy * st.GasPy) / 1000:0.0}) · 판 조각 {st.PlatesMade} (세게 맞음 {st.PlateHits}) · 남는 운동량 {Math.Sqrt(ex * ex + ey * ey):0.0e0} · 남는 각운동량 {el:0.0e0} · 오른쪽 방 각속도 {st.Bodies[1].W:0.000}rad/s");
         }
 
         // ── 부딪힘: 닫힌 두 방을 갈라 서로 마주 밀면 부딪혀 튕긴다 — 앞뒤 운동량 · 각운동량이 같고 · 운동 에너지는 늘지 않는다 ──
@@ -109,10 +110,10 @@ public static partial class Program
                 st.Push(1, st.Bodies[1].X, st.Bodies[1].Y, st.Bodies[1].Mass * 60 * dx / dl, st.Bodies[1].Mass * 60 * dy / dl, 0);
             }
             s.Run(60);
-            double total = st.StructRemain() + st.ShardKgFlying + st.ShardKgStuck + st.ShardKgLost;
-            Check("잔칸 질량: 파편 · 갈라짐 · 세게(60m/s) 부딪힘으로 판이 부서져도 남은 잔칸 + 날고 있는 부스러기 + 붙은 것 + 우주로 간 것 = 처음 판 · 골조 질량",
-                st.ShardsMade > 10 && st.Crashes > 0 && Rel(total, st.StructInitial) < 1e-9,
-                $"처음 {st.StructInitial / 1000:0.000}t · 남은 잔칸 {st.StructRemain() / 1000:0.000}t · 날고 있는 {st.ShardKgFlying:0}kg · 붙은 {st.ShardKgStuck:0}kg · 우주로 {st.ShardKgLost:0}kg · 부스러기 {st.ShardsMade} · 부딪힘 {st.Crashes}");
+            double total = st.StructRemain() + st.ShardKgFlying + st.ShardKgStuck + st.ShardKgLost + st.PlateKgNow + st.PlateKgLost + st.PlateKgDust;
+            Check("잔칸 질량: 파편 · 갈라짐 · 세게(60m/s) 부딪힘으로 판이 부서져도 남은 잔칸 + 판 조각 (나는 것 · 실린 것) + 우주로 간 것 + 가루로 합친 것 = 처음 판 · 골조 질량",
+                st.ShardsMade > 10 && st.PlatesMade > 10 && st.Crashes > 0 && Rel(total, st.StructInitial) < 1e-9,
+                $"처음 {st.StructInitial / 1000:0.000}t · 남은 잔칸 {st.StructRemain() / 1000:0.000}t · 판 조각 {st.PlateKgNow:0}kg · 우주로 {st.PlateKgLost + st.ShardKgLost:0}kg · 가루로 {st.PlateKgDust:0}kg · 판 조각 {st.PlatesMade} · 부딪힘 {st.Crashes}");
         }
 
         // ── 대칭: 위아래 벽이 같은 자리에서 똑같이 뚫린 방은 공기를 뿜어도 제자리 · 돌지 않는다 (무게중심이 어디든 — 힘과 돌림힘이 서로 지운다) ──

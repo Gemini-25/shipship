@@ -17,6 +17,7 @@ public sealed partial class Structure
     {
         if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
         if (p.Kind is 5 or 6) return BodyForm(p);   // 몸 물체 (PH14)
+        if (p.Kind == 4) return PlateForm();   // 판 조각 (PH15)
         if (p.Kind is 1 or 3) return FurnPropForm(p);   // 뜯긴 가구 · 날아간 문짝 (PH10)
         int key = p.What * 8 + p.Pose;
         if ((uint)key < (uint)_propFormAt.Length && _propFormAt[key] is { } at) return at;   // 표 차례로 곧장 (섬 짝마다 잔걸음마다 부른다 — 속도만)
@@ -169,6 +170,7 @@ public sealed partial class Structure
         if (world && all.Length > 0) Reactions(all);
         if (_breakHits.Count > 0) { long tb = Prof.Start(); Breaks(sim, world); Prof.Lap("구조:깨짐", tb); }       // 깨짐 · 이음매 · 찌그러짐 · 쏟음 (PH8 — 몸이 되받은 뒤 · 맞은 그 때의 상태에서)
         if (Props.Count > PieceCap) Crumble(world);   // 작은 조각이 너무 많으면 가장 가벼운 것부터 가루로 (셈을 붙드는 상한)
+        if (Props.Count > ShardMax) PlateCap(world);   // 판 조각이 600을 넘으면 잠든 것부터 가루로 (PH15)
         if (_noises.Count > 0) { long tn = Prof.Start(); EmitNoises(sim); Prof.Lap("구조:물체 소리", tn); }       // 물체 소리 (방마다 · 갈래마다 한 번)
         if (any || gone)
         {

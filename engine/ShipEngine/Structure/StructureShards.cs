@@ -18,7 +18,7 @@ public struct Shard
 }
 
 /// <summary>
-/// ④ 칸 강체 (마) 알갱이 (docs/ENGINE.md ④ '바퀴 3 설계 — 칸 강체').
+/// ④ 칸 강체 (마) 알갱이 (docs/ENGINE.md ④ '바퀴 3 설계 — 칸 강체') — PH15부터 떨어져 나온 잔칸은 판 조각 물체 (StructurePropsPlate.cs)로 · 알갱이는 바깥에서 던진 것 (<see cref="Throw"/> — 다른 배의 잔해)과 옛 저장의 것만.
 /// <para>
 /// 잔칸이 떨어져 나가면 (구멍이 파이고 · 부딪혀 으스러지고 · 갈라진 자리가 찢기고 · 2톤 아래 덩어리가 떨어지면) 그 판의 질량이 부스러기 알갱이가 된다 —
 /// 그 자리 몸의 빠르기(v + ω×r)에 튀는 빠르기(구멍은 바깥 쪽 · 나머지는 몸 바깥쪽으로 몇 m/s)를 더해 날아가고 · 몸은 그만큼 반대로 밀리며 질량 · 무게중심 · 회전관성이 준다 (운동량 · 각운동량이 꼭 맞는다).
@@ -117,7 +117,7 @@ public sealed partial class Structure
             double kwx = (cs * ddx - sn * ddy) / dl * speed, kwy = (sn * ddx + cs * ddy) / dl * speed;
             if (byGas) { GasPx -= kg * kwx; GasPy -= kg * kwy; GasL -= wx * kg * kwy - wy * kg * kwx; }   // 기체가 밀었다 (몸이 아니라)
             else if (attached) Push(b, wx, wy, -kg * kwx, -kg * kwy);
-            Shards.Add(new Shard { X = wx, Y = wy, Vx = vx + kwx, Vy = vy + kwy, Kg = (float)kg, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = ShedSub(sim, c) });
+            MakePlate(sim, wx, wy, vx + kwx, vy + kwy, kg, spin, cause, frame, ShedSub(sim, c));   // 판 조각 물체로 (PH15 — 튕기고 · 쌓이고 · 미끄러진다)
             ShardsMade++;
         }
         // 너무 많으면 가장 오래된 것부터 장부 '우주로'
@@ -148,7 +148,7 @@ public sealed partial class Structure
             RecalcCellMass(c);
             return;
         }
-        Shards.Add(new Shard { X = wx, Y = wy, Vx = vx, Vy = vy, Kg = (float)fur, Cause = cause, From = frame, Born = sim.Tick, Spin = spin, Id = (int)ShardsMade + 1, Sub = ShedSub(sim, c) });
+        MakePlate(sim, wx, wy, vx, vy, fur, spin, cause, frame, ShedSub(sim, c));   // 덩어리 판 (PH15)
         ShardsMade++;
     }
 

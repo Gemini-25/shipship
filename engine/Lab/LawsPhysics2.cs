@@ -194,4 +194,37 @@ public static partial class Program
             seen > 100 && bad == 0,
             $"돌풍 칸 {seen} · 어긋남 {bad}{(bad > 0 ? " (" + at + ")" : "")}");
     }
+
+    /// <summary>법칙 — 판 조각 600 상한 (PH15): 넘으면 잠든 것부터 가루로 (그 몸이 운동량을 받는다) · 그래도 넘으면 가장 오래된 나는 것을 장부 '우주로' — 질량 · 운동량 장부가 그대로.</summary>
+    private static void PlateLaws()
+    {
+        if (!Do("판 조각 법칙")) return;
+        Console.WriteLine("\n[판 조각 — 600 상한 · 장부 (PH15)]");
+        var s = PropWorld(1);
+        var st = s.Get<Structure>();
+        st.EnsureBody();
+        s.Step();
+        for (int k = 0; k < 590; k++) st.ThrowPlate(s, -40 - k % 25 * 2.0, -40 - k / 25 * 2.0, 0, 0, 20, 0);   // 배 밖 — 멈춰 떠 있다
+        var inside = new List<int>();
+        for (int k = 0; k < 10; k++) inside.Add(st.ThrowPlate(s, 3.5 + k % 5 * 1.5, 3.5 + k / 5 * 3, 1, 0, 25, 0));   // 방 안 — 바닥에 실려 미끄러지다 선다
+        s.Run(3);   // 600 — 아직 넘지 않는다 · 방 안 것은 섰다
+        bool settled = inside.All(id => st.IndexOf(id) >= 0 && st.Props[st.IndexOf(id)].State == 0);
+        for (int k = 0; k < 5; k++) st.ThrowPlate(s, -40, 60 + k * 2.0, 0, 0, 20, 0);   // 605 — 잠든 것 다섯이 가루로
+        var b0 = WorldBook(st);
+        s.Step();
+        var b1 = WorldBook(st);
+        int n1 = st.Props.Count(p => p.Kind == 4), dust1 = inside.Count(id => st.IndexOf(id) < 0);
+        double grit1 = st.GritKg;
+        for (int k = 0; k < 10; k++) st.ThrowPlate(s, -40, 80 + k * 2.0, 0, 0, 20, 0);   // 610 — 남은 잠든 것 다섯이 가루로 · 그래도 넘는 다섯은 가장 오래된 나는 것이 우주로
+        var b2 = WorldBook(st);
+        s.Step();
+        var b3 = WorldBook(st);
+        int n2 = st.Props.Count(p => p.Kind == 4), dust2 = inside.Count(id => st.IndexOf(id) < 0);
+        double kgSum = st.PlateKgNow + st.PlateKgLost + st.PlateKgDust, size = 600 * 25;
+        bool book = Math.Abs(b1.px - b0.px) < 1e-9 * size && Math.Abs(b1.py - b0.py) < 1e-9 * size && Math.Abs(b1.l - b0.l) < 1e-9 * size * 100
+            && Math.Abs(b3.px - b2.px) < 1e-9 * size && Math.Abs(b3.py - b2.py) < 1e-9 * size && Math.Abs(b3.l - b2.l) < 1e-9 * size * 100;
+        Check("판 조각 600 상한: 605개 (방 안에 선 것 10)면 잠든 것 가운데 오래된 다섯이 가루로 (그 칸 바닥) · 610개면 남은 잠든 다섯이 가루로 · 그래도 넘는 다섯은 가장 오래된 나는 것이 장부 '우주로' — 질량 (만든 = 있는 + 우주로 + 가루) · 운동량 장부가 그대로 (1e-9)",
+            settled && n1 == 600 && dust1 == 5 && Math.Abs(grit1 - 125) < 1e-6 && n2 == 600 && dust2 == 10 && Math.Abs(st.PlateKgLost - 100) < 1e-6 && Math.Abs(kgSum - st.PlateKgMade) < 1e-9 * st.PlateKgMade && book,
+            $"섰다 {settled} · 605 → {n1} (가루로 {dust1} · {grit1:0}kg) · 610 → {n2} (가루로 {dust2} · 우주로 {st.PlateKgLost:0}kg) · 질량 {kgSum:0.000} / 만든 {st.PlateKgMade:0.000} · 장부 어긋남 ({b1.px - b0.px:0.0e0}, {b1.l - b0.l:0.0e0} / {b3.px - b2.px:0.0e0}, {b3.l - b2.l:0.0e0})");
+    }
 }

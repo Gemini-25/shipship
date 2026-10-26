@@ -9,6 +9,7 @@ namespace ShipEngine;
 public sealed partial class Structure
 {
     /// <summary>우주로 간 것으로 칠 거리 (m — 배의 몸 가운데에서) · 몸에 닿아 튈 때의 반발 · 닿음을 살피는 걸음 (m).</summary>
+    private readonly List<(int c, double e, int dx, int dy, int cause, double size)> _flyHits = new();   // 날다 세게 맞은 벽 (찍지 않는다 — 같은 틱에 쓰고 비운다)
     public const double SpaceGoneM = 300, SpaceBounce = 0.3, SpaceProbeM = 0.2, SpaceHoleM2 = 0.01;
 
     /// <summary>세상 틀로 나는 물체인가 (구멍 밖 우주 · 실린 몸 없음).</summary>
@@ -90,12 +91,18 @@ public sealed partial class Structure
             if (Flying(p) && t < dt) { p.X += p.Vx * (dt - t); p.Y += p.Vy * (dt - t); p.Th += p.W * (dt - t); }
             if (Flying(p) && ((p.X - cx) * (p.X - cx) + (p.Y - cy) * (p.Y - cy) > SpaceGoneM * SpaceGoneM)) { p.Host = -2; gone = true; }
         }
+        if (_flyHits.Count > 0)
+        {
+            foreach (var (c, e, dx, dy, cause, size) in _flyHits) Impact(sim, c, e, dx, dy, cause, size);   // 세게 맞은 벽 · 외판 (④ 충격 길 — 금 · 구멍 · 떨어진 잔칸은 새 판 조각 — 다음 틱부터 난다)
+            _flyHits.Clear();
+        }
         if (!gone) return;
         foreach (var p in Props)
         {
             if (p.State != 5 || p.Host != -2) continue;
             PropPxGone += p.Kg * p.Vx; PropPyGone += p.Kg * p.Vy; PropLGone += p.Kg * (p.X * p.Vy - p.Y * p.Vx) + p.Inertia * p.W;
             if (p.Kind == 0) sim.Book.AddItem(p.What, Flow.Spaced, -1);
+            if (p.Kind == 4) PlateKgLost += p.Kg;
             PropSpaced++;
             Track?.Gone.Add(p);
         }
@@ -113,7 +120,7 @@ public sealed partial class Structure
             int ix = (int)Math.Floor(lx), iy = (int)Math.Floor(ly);
             if (!L.In(ix, iy)) continue;
             int c = L.Index(ix, iy);
-            if (BodyOf(c) != b || L.Kind[c] == CellKind.Outside) continue;
+            if (BodyOf(c) != b || L.Kind[c] == CellKind.Outside || PlateGrace(p, b)) continue;
             if (L.Kind[c] == CellKind.Wall && F.Hole[c] >= SpaceHoleM2) continue;   // 뚫린 벽 칸은 지나간다 (나간 그 구멍 · 큰 구멍)
             var (px, py) = LocalOf(b, x0, y0);
             int jx = (int)Math.Floor(px), jy = (int)Math.Floor(py);
@@ -134,13 +141,20 @@ public sealed partial class Structure
             double vn = lvx * nx + lvy * ny;
             if (vn >= 0) continue;
             double j = -(1 + SpaceBounce) * vn * p.Kg;
+            double eHit = 0.5 * p.Kg * vn * vn;   // 법선으로 받은 에너지 — 세면 ④ 충격 길 (금 · 구멍 — 예전 알갱이와 같다 · PH15)
             lvx += j / p.Kg * nx; lvy += j / p.Kg * ny;
             double wvx = cs * lvx - sn * lvy, wvy = sn * lvx + cs * lvy;
             p.Vx = wvx + (o.Vx - o.W * ry); p.Vy = wvy + (o.Vy + o.W * rx);
             double gjx = -(cs * nx - sn * ny) * j, gjy = -(sn * nx + cs * ny) * j;   // 몸이 받는 충격량 (세상 틀)
+            p.X = x0; p.Y = y0;   // 칸 밖 (지난 자리)으로 — 충격량도 그 자리에서 (각운동량 장부가 맞게 · PH15)
             Push(b, p.X, p.Y, gjx, gjy, p.Cause);
-            p.X = x0; p.Y = y0;   // 칸 밖 (지난 자리)으로
             Bounces++;
+            if (eHit >= PlateHitJ && L.Kind[c] == CellKind.Wall)
+            {
+                int hc = sim.Causes.Add(CauseKind.Impact, $"날아온 {p.Kg:0.#}kg {Ko.I(PropName(p))} 부딪혔다 ({-vn:0.0}m/s)", sim.Tick, c, p.Cause);
+                _flyHits.Add((c, eHit, (int)-nx, (int)-ny, hc, Math.Cbrt(p.Kg / 7850.0)));   // 날기가 끝난 뒤 (판 조각이 늘어 목록이 바뀐다) · 들어온 쪽에서 칸 안으로 · 크기: 같은 무게 강철 정육면체의 한 변
+                PlateHits++;
+            }
             return;
         }
     }

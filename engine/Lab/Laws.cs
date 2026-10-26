@@ -571,6 +571,7 @@ public static partial class Program
         WindCapLaws();    // 바람 끌림은 공기 빠르기를 넘지 않는다
         PairArmLaws();    // 짝 닿음의 팔은 제 껍질까지
         RegionDecayLaws();   // 바람의 줄어드는 빠르기는 구역 전체의 몫
+        PlateLaws();      // 판 조각 600 상한 · 장부 (PH15)
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>

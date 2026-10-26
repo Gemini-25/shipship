@@ -210,7 +210,7 @@ public sealed partial class Structure
     {
         _itemNames ??= T.People.Items.Keys.ToArray();
         bool furn = p.Kind == 1 || p.Kind == 2 && (p.Flags & FurnPieceFlag) != 0;   // 가구 · 가구 조각 (PH10 — What = 가구 번호)
-        string name = p.Kind == 5 ? "사람" : p.Kind == 6 ? "로봇" : p.Kind == 3 ? "문짝" : furn ? (p.What >= 0 && p.What < L.Furniture.Count ? T.Equip(L.Furniture[p.What].Type).Name : "설비")
+        string name = p.Kind == 5 ? "사람" : p.Kind == 6 ? "로봇" : p.Kind == 4 ? "판 조각" : p.Kind == 3 ? "문짝" : furn ? (p.What >= 0 && p.What < L.Furniture.Count ? T.Equip(L.Furniture[p.What].Type).Name : "설비")
             : p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
         return p.Kind == 2 ? name + " 조각" : name;
     }

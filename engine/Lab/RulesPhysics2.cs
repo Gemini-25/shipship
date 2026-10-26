@@ -260,5 +260,58 @@ public static partial class Program
                     $"사람 {d:0.0}m · 떠감 {m1[who1].C.Adrift} · 되살림 같음 {same} · 물건 날아감 사실 {flung} / 로봇 밀림 {s2.Get<Structure>().RobotsKnocked} · {db:0.0}m");
             }
         }
+
+        // ── PH15 판 조각: 떨어져 나온 잔칸은 강철 판 물체 — 튀고 (세게 맞으면 금 · 구멍) · 트인 칸에 들면 실려 미끄러지다 선다 · 돌아 있는 배에도 운석은 제 자세대로 맞는다 ──
+        if (Do("판 조각"))
+        {
+            Console.WriteLine("\n[판 조각 — 튀고 · 쌓이고 · 미끄러진다 (PH15)]");
+            // (가) 40kg 판 조각이 60m/s로 외판에 맞으면 튀어 나가고 (반발 0.3 — 되돌아 나는 쪽으로) · 72kJ로 외판이 상한다 (원인 '판 조각')
+            {
+                var s = PropWorld(1);
+                var st = s.Get<Structure>(); var L = s.Layout;
+                st.EnsureBody();
+                s.Step();
+                int id = st.ThrowPlate(s, 6.5, -4, 0, 60, 40, s.Causes.Add(CauseKind.Setup, "시험 — 이웃 배에서 떨어진 판 조각이 날아왔다", s.Tick));
+                s.Run(2);
+                int i = st.IndexOf(id);
+                var p = i >= 0 ? st.Props[i] : default;
+                int roof = L.Index(6, 1);
+                string story = st.DamageCause[roof] != 0 ? s.Causes.Story(st.DamageCause[roof]) : "";
+                Check("판 조각 (가): 40kg 판 조각이 60m/s로 외판에 맞으면 되튀어 나가고 (반발 0.3 — 붙어 사라지지 않는다) · 72kJ에 외판이 상한다 (원인 사슬에 '판 조각')",
+                    i >= 0 && Structure.Flying(p) && p.Vy < -5 && p.Vy > -25 && st.PlateHits == 1 && story.Contains("판 조각"),
+                    $"판 조각 {(i >= 0 ? (Structure.Flying(p) ? "남 · 난다" : "남") : "없음")} · 빠르기 {p.Vy:0.0}m/s · 세게 맞음 {st.PlateHits} · 외판 \"{story}\"");
+            }
+            // (나) 외판 큰 구멍으로 5m/s로 들어온 판 조각은 방 바닥에 실려 미끄러지다 선다 (쌓인다 — 날아 지나가지 않는다)
+            {
+                var s = PropWorld(1);
+                var st = s.Get<Structure>(); var f = s.Get<Field>(); var L = s.Layout;
+                st.EnsureBody();
+                f.SetHole(L.Index(1, 4), 2.5f);
+                s.Step();
+                int id = st.ThrowPlate(s, -3, 4.5, 5, 0, 30, 0);
+                s.Run(4);
+                int i = st.IndexOf(id);
+                var p = i >= 0 ? st.Props[i] : default;
+                int c = i >= 0 ? st.CellOf(p) : -1;
+                Check("판 조각 (나): 외판 큰 구멍으로 5m/s로 들어온 30kg 판 조각은 방 바닥에 실려 (배의 몸) 미끄러지다 선다",
+                    i >= 0 && !Structure.Flying(p) && p.Host == 0 && p.State == 0 && c >= 0 && L.Kind[c] == CellKind.Floor && p.X > 2.5,
+                    $"판 조각 {(i >= 0 ? $"({p.X:0.00},{p.Y:0.00}) 상태 {p.State} · 몸 {p.Host}" : "없음")} · 칸 {(c >= 0 ? L.Kind[c].ToString() : "-")}");
+            }
+            // (다) 배가 90° 돌아 있으면 세상 틀 +y로 오는 운석은 도면 왼쪽 외판을 맞는다 (예전: 도면 틀 그대로 — 윗 외판)
+            {
+                var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+                var s = Worlds.Full(lay, 1);
+                var st = s.Get<Structure>(); var o = s.Get<Outside>();
+                st.EnsureBody();
+                var b = st.Bodies[0]; b.Th = Math.PI / 2; st.Bodies[0] = b;
+                o.AddRock(0.005, 7000, 0, 1, 0, 40, s.Causes.Add(CauseKind.Setup, "시험 운석", s.Tick));
+                int hit = -1;
+                for (int k = 0; k < 4 && hit < 0; k++) { s.Step(); if (o.Struck.Count > 0) hit = o.Struck[0].Cell; }
+                bool left = hit >= 0 && (lay.X(hit) == 0 || lay.Kind[lay.Index(lay.X(hit) - 1, lay.Y(hit))] == CellKind.Outside);
+                bool top = hit >= 0 && (lay.Y(hit) == 0 || lay.Kind[lay.Index(lay.X(hit), lay.Y(hit) - 1)] == CellKind.Outside);
+                Check("판 조각 (다) 운석과 배의 자세: 배가 90° 돌아 있으면 세상 틀 +y로 오는 운석은 도면 왼쪽 외판 (왼쪽이 우주인 칸)을 맞는다",
+                    hit >= 0 && left && !top, hit >= 0 ? $"맞은 칸 ({lay.X(hit)},{lay.Y(hit)}) · 왼쪽이 우주 {left} · 위가 우주 {top}" : "맞음 없음");
+            }
+        }
 }
 }
