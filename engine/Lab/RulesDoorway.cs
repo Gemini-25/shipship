@@ -82,5 +82,27 @@ public static partial class Program
                 best >= 3 && door2 == 0 && shared == 0 && slept,
                 $"머무는 이 {best} · 문 곁 사람-틱 {door2} · 같은 칸 {shared} · 졸린 이 칸 ({lay.X(sc)},{lay.Y(sc)}) 표 {m.StandKindAt(sc)} · 잠 {life[m[sleepy].C.Body].Asleep}");
         }
+
+        // (다) C2 연 문은 서서도 챙긴다: 배식기가 문 바로 아래 (5,5) — 배고픈 이가 침실에서 와 (5,4)에서 먹는다 → 2분 안에 문이 닫히고 먹기는 끝까지 (예전: 먹는 10분 내내 열려 있었다)
+        {
+            var lay2 = Worlds.Ascii(DoorwayShip.Replace("#m........#", "#....m....#"), legend);
+            var s = Worlds.Full(lay2, 3);
+            var m = s.Get<Mind>(); var f = s.Get<Field>();
+            int p = m.AddPerson(s, Worlds.At(lay2, 4, 1));
+            s.Run(2);
+            int d2 = lay2.DoorAt[Worlds.At(lay2, 5, 3)];
+            long meals0 = m.Meals, startEat = -1, closedAt = -1;
+            for (int k = 0; k < (int)Time.Minutes(30) && m.Meals == meals0; k++)
+            {
+                ref var c = ref m[p].C; c.Hunger = Math.Max(c.Hunger, 0.9f); c.Sleepy = 0; c.Thirst = 0;
+                s.Step();
+                bool eating = m[p].C.Goal == GoalKind.Eat && m[p].C.StepIndex < m[p].Plan.Count && m[p].Plan[m[p].C.StepIndex].Kind == StepKind.Use;
+                if (eating && startEat < 0) startEat = s.Tick;
+                if (startEat >= 0 && closedAt < 0 && f.DoorOpen[d2] <= 0.01f) closedAt = s.Tick;
+            }
+            Check("문 칸 (C2) 연 문은 서서도 챙긴다: 문 바로 아래 배식기에서 먹는 이 — 먹기 시작한 뒤 2분 안에 제가 연 문이 닫히고 먹기는 끝까지 간다",
+                startEat >= 0 && closedAt >= 0 && closedAt - startEat <= Time.Minutes(2) && m.Meals == meals0 + 1,
+                $"먹기 시작 {startEat} · 문 닫힘 {closedAt} ({(closedAt >= 0 && startEat >= 0 ? (closedAt - startEat) * Time.SecondsPerTick / 60 : -1):0.0}분) · 먹음 {m.Meals - meals0}");
+        }
     }
 }

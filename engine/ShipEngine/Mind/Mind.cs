@@ -556,6 +556,7 @@ public sealed partial class Mind : IEngine
             HeedWashCall(a, sim.Tick);   // 주컴퓨터가 다른 화장실이 비었다고 하면 옮긴다
             string? sk = Prof != null && a.C.StepIndex < a.Plan.Count ? a.Plan[a.C.StepIndex].Kind.ToString() : null;
             if (a.C.Up != 0 || IsSleeping(a)) Advance(sim, a, dt);
+            if (a.C.OpenedDoor >= 0 && a.C.Up != 0 && !OnTheMove(a)) CloseBehind(sim, a, 1);   // 연 문은 서서도 챙긴다 (5단 C2 — 문 곁에서 먹고 · 일하고 · 비켜선 동안 열어 두지 않는다 · 뒤따르는 이를 기다린 뒤에도)
             if (Prof != null) LapWho("걸음 " + sk, a, t);
             t = Lap("걸음 · 일", t);
             Needs(sim, a, dt);
