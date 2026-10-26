@@ -122,7 +122,7 @@ public static partial class Program
                 s.Run(5);
                 if (drift) net.StartO2Drift(1, s.Causes.Add(CauseKind.Setup, "시험: 조절 센서가 늙기 시작했다", s.Tick));
                 float most = 0; long cal0 = net.O2Calibrations;
-                for (int k = 0; k < Time.Hours(3); k++)
+                for (int k = 0; k < Time.Hours(1); k++)   // 어긋남을 잡아 다시 맞춘 때(750틱 · 30분)의 두 배 (예전 3시간)
                 {
                     s.Step();
                     if (k % 25 == 0) for (int r = 0; r < s.Layout.Rooms.Count; r++) if (sm.RoomSeen[r] != 0 && sm.RoomKPa[r] > 40) most = Math.Max(most, sm.RoomO2Pct[r]);

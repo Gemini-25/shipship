@@ -39,7 +39,7 @@ public static partial class Program
             int crops = span.Length;
             var fridge = s.Layout.Furniture.Where(fu => fu.Type == "Fridge").SelectMany(fu => fu.Cells).ToList();
             double fridge0 = fridge.Sum(c => s.Get<Field>().Stored(s.Tables.sFood, c));
-            s.Run(Time.Hours(3));
+            s.Run(Time.Minutes(116));   // 다 거둬 냉장고에 넣은 때(1450틱 · 58분)의 두 배 (예전 3시간)
             double fridge1 = fridge.Sum(c => s.Get<Field>().Stored(s.Tables.sFood, c));
             double got = s.Book.Of(Res.Food, Flow.Harvest);
             bool holding = m.Agents.Any(a => a.C.Holding == m.iHarvest) || Worlds.Items(s).Any(x => x.Item == m.iHarvest);

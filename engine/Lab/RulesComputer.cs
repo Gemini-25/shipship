@@ -345,7 +345,7 @@ public static partial class Program
             s.Get<Structure>().DamageCause[hull] = s.Causes.Add(CauseKind.Setup, "작은 운석이 휴게실 외판을 뚫었다", s.Tick, hull);
             f.SetHole(hull, 0.009f);
             long patchedAt = -1; bool outside = false; double lowest = 200;
-            for (int k = 0; k < Time.Hours(8); k++)
+            for (int k = 0; k < Time.Minutes(82); k++)   // 막고 · 다시 채워 배 기압이 85kPa를 넘는 때(1025틱 · 41분)의 두 배 (예전 8시간)
             {
                 s.Step();
                 if (patchedAt < 0 && f.Hole[hull] <= 0) { patchedAt = s.Tick; outside = L2.Kind[m[r].C.Cell] == CellKind.Outside; }
@@ -356,7 +356,7 @@ public static partial class Program
             if (Debug) foreach (var x in cm.Incidents.Where(x => x.Active != 0)) Console.WriteLine($"    사건 {x.Kind} {cm.RoomName(x.Room)} 보냄 {x.Tries} 로봇 {x.RobotA} 봉쇄 {x.Sealed} 읽힘 {(x.Room >= 0 ? cm.RoomSeen[x.Room] : 9)}");
             if (Debug) Console.WriteLine($"    로봇 {m.Thought(r)} 맡음 {m[r].C.AssignedGoal}:{m[r].C.AssignedTarget} 기한 {(m[r].C.AssignedUntil - s.Tick) / 25}분 피함 {string.Join(",", m[r].Avoid.Select(v => v.Goal + ":" + v.Target))}");
             Check("빠진 방의 외판 구멍: 로봇이 에어락으로 나가 바깥에서 막는다 → 주컴퓨터가 예비 공기로 배를 다시 채운다", patchedAt > 0 && outside && avg > 85 && net.AirReleased > 0 && s.Facts.CountOf(FactKind.WentOutside) > 0,
-                patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 {(outside ? "바깥에서" : "안에서")} 막음 · 가장 낮던 배 기압 {lowest:0} → 8시간 뒤 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"못 막음 · 배 기압 {avg:0}kPa");
+                patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 {(outside ? "바깥에서" : "안에서")} 막음 · 가장 낮던 배 기압 {lowest:0} → 82분 뒤 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"못 막음 · 배 기압 {avg:0}kPa");
         }
 
         // ── 냉매 샘: 냉각 펌프 봉함이 터져 암모니아가 샌다 → 주컴퓨터가 알아채 경보 · 통풍구를 닫고 그 방 덕트를 정화기로만 돌려 거른다 · 봉쇄 →
@@ -496,7 +496,7 @@ public static partial class Program
             int fd = Enumerable.Range(0, net.Feeders.Count).First(k => net.Feeders[k].Path.Any(c => s.Layout.Room[c] >= 0 && s.Layout.Kind[c] == CellKind.Floor));
             int wet = net.Feeders[fd].Path.First(c => s.Layout.Room[c] >= 0 && s.Layout.Kind[c] == CellKind.Floor);
             f.AddStore(wet, f.T.sWater, 60);
-            s.Run(Time.Minutes(90));
+            s.Run(Time.Minutes(53));   // 로봇이 닦고 차단기를 다시 올린 때(655틱 · 26분)의 두 배 (예전 90분)
             long shorts = s.Facts.Since(0).Count(x => x.Kind == FactKind.Short && x.Other == fd);
             if (Debug) foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Short or FactKind.BreakerTrip or FactKind.BreakerReset).Where(x => x.Other == fd).Take(20))
                 Console.WriteLine($"    {Time.Clock(x.Tick)} {x.Kind} 칸 {x.Cell} 급전선 {x.Other} (시험 급전선 {fd} · 젖힌 칸 {wet}) · {s.Causes.Story(x.Cause)}");

@@ -7,6 +7,7 @@ public sealed partial class Field
     /// <summary>무중력에서 공조 바람이 닿지 않는 곳의 섞임 (m²/s — 대류가 없고 남는 것은 지나가는 사람 · 문 여닫음의 흔들림쯤).</summary>
     public const double MixQuiet = 0.002;
     private double[] _n2 = Array.Empty<double>(), _u2 = Array.Empty<double>(), _t2 = Array.Empty<double>(), _st2 = Array.Empty<double>(), _nt = Array.Empty<double>(), _tc = Array.Empty<double>();
+    private double[] _kcR = Array.Empty<double>(), _kcD = Array.Empty<double>();   // 고체 전도: 오른쪽 · 아래쪽 이음의 이번 전도율 (틱 안에서만)
 
     /// <summary>확산: 같은 구역 이웃끼리 같은 몰 수를 주고받는다 → 성분 · 열이 섞이고 압력은 그대로. 두 버퍼 · 줄 덩어리 병렬.</summary>
     private void Diffuse(double dt)
@@ -15,11 +16,16 @@ public sealed partial class Field
         // 칸마다 몰 수 · 온도를 한 번만
         Par.Rows(L.H, (y0, y1) =>
         {
-            for (int i = y0 * L.W; i < y1 * L.W; i++)
+            int i = y0 * L.W, end = y1 * L.W;
+            for (; i + 1 < end; i += 2)   // 이웃한 두 칸을 한 고리에서 (칸마다 셈은 그대로)
             {
-                double n = 0, c = 0;
-                int b = i * G;
-                for (int g = 0; g < G; g++) { double v = N[b + g]; n += v; c += v * _cv[g]; }
+                SumNC2(i, i + 1, out double n, out double c, out double n1, out double c1);
+                _nt[i] = n; _tc[i] = c > 1e-9 ? U[i] / c : Ts[i];
+                _nt[i + 1] = n1; _tc[i + 1] = c1 > 1e-9 ? U[i + 1] / c1 : Ts[i + 1];
+            }
+            for (; i < end; i++)
+            {
+                double n = SumNC(i, out double c);
                 _nt[i] = n; _tc[i] = c > 1e-9 ? U[i] / c : Ts[i];
             }
         });
@@ -27,13 +33,14 @@ public sealed partial class Field
         {
             Span<int> nb = stackalloc int[4];
             Span<double> flux = stackalloc double[G];
+            // 줄 덩어리를 통째로 옮겨 두고 (구역 밖 · 빈 칸은 그대로) 섞이는 칸만 아래에서 다시 쓴다
+            Array.Copy(N, y0 * L.W * G, _n2, y0 * L.W * G, (y1 - y0) * L.W * G);
+            Array.Copy(U, y0 * L.W, _u2, y0 * L.W, (y1 - y0) * L.W);
             for (int y = y0; y < y1; y++)
                 for (int x = 0; x < L.W; x++)
                 {
                     int i = y * L.W + x, bi = i * G;
                     int r = RegionOf[i];
-                    for (int g = 0; g < G; g++) _n2[bi + g] = N[bi + g];
-                    _u2[i] = U[i];
                     if (r < 0) continue;
                     double ni = _nt[i];
                     if (ni <= 1e-12) continue;
@@ -53,10 +60,10 @@ public sealed partial class Field
                         double m = Math.Min(0.2, d * dt) * Math.Min(ni, nj);
                         int bj = j * G;
                         double a = m / nj, bb = m / ni;
-                        for (int g = 0; g < G; g++) flux[g] += a * N[bj + g] - bb * N[bi + g];
+                        Lanes.AddDiff(flux, N.AsSpan(bj, G), N.AsSpan(bi, G), a, bb);   // flux[g] += a·N[j,g] − bb·N[i,g] (네 성분씩 · 같은 셈)
                         fu += a * U[j] - bb * U[i];
                     }
-                    for (int g = 0; g < G; g++) _n2[bi + g] = Math.Max(0, N[bi + g] + flux[g]);
+                    Lanes.SumFloor0(_n2.AsSpan(bi, G), N.AsSpan(bi, G), flux);   // _n2[i,g] = Math.Max(0, N[i,g] + flux[g])
                     _u2[i] = Math.Max(0, U[i] + fu);
                 }
         });
@@ -96,8 +103,19 @@ public sealed partial class Field
             for (int i = y0 * L.W; i < y1 * L.W; i++)
                 if (_surfTick.Length != Cells || _surfTick[i] <= _tickNow - SlowEvery) SurfaceExchange(i, dt); // 매 틱 다룬 겉면은 빼고
         });
-        // ② 고체 전도 (두 버퍼)
+        // ② 고체 전도 (두 버퍼) — 이음마다 전도율(벽 ↔ 바닥이면 그 칸 기압으로)을 먼저 한 번씩 센다: 칸마다 이웃 넷을 세면 이음 하나를 두 칸이 두 번 센다 (같은 값 — 이 사이 기체 · 구멍은 그대로)
         if (_t2.Length != Cells) _t2 = new double[Cells];
+        if (_kcR.Length != Cells) { _kcR = new double[Cells]; _kcD = new double[Cells]; }
+        Par.Rows(L.H, (y0, y1) =>
+        {
+            for (int y = y0; y < y1; y++)
+                for (int x = 0; x < L.W; x++)
+                {
+                    int i = y * L.W + x;
+                    _kcR[i] = x + 1 < L.W ? Kc(i, i + 1, _kRight[i]) : 0;
+                    _kcD[i] = y + 1 < L.H ? Kc(i, i + L.W, _kDown[i]) : 0;
+                }
+        });
         Par.Rows(L.H, (y0, y1) =>
         {
             for (int y = y0; y < y1; y++)
@@ -106,10 +124,10 @@ public sealed partial class Field
                     int i = y * L.W + x;
                     if (Cs[i] <= 0) { _t2[i] = Ts[i]; continue; }
                     double q = 0;
-                    if (x + 1 < L.W) q += Kc(i, i + 1, _kRight[i]) * (Ts[i + 1] - Ts[i]);
-                    if (x > 0) q += Kc(i - 1, i, _kRight[i - 1]) * (Ts[i - 1] - Ts[i]);
-                    if (y + 1 < L.H) q += Kc(i, i + L.W, _kDown[i]) * (Ts[i + L.W] - Ts[i]);
-                    if (y > 0) q += Kc(i - L.W, i, _kDown[i - L.W]) * (Ts[i - L.W] - Ts[i]);
+                    if (x + 1 < L.W) q += _kcR[i] * (Ts[i + 1] - Ts[i]);
+                    if (x > 0) q += _kcR[i - 1] * (Ts[i - 1] - Ts[i]);
+                    if (y + 1 < L.H) q += _kcD[i] * (Ts[i + L.W] - Ts[i]);
+                    if (y > 0) q += _kcD[i - L.W] * (Ts[i - L.W] - Ts[i]);
                     _t2[i] = Ts[i] + q * dt / Cs[i];
                 }
         });
@@ -310,6 +328,22 @@ public sealed partial class Field
             int s = liq.Store;
             bool water = s == T.sWater;
             const double Film = 55;
+            // 막보다 두꺼운 칸이 하나도 없으면 아무것도 흐르지 않는다 (아래 셈의 d가 모든 칸에서 0) — 이웃을 보지 않고 아래 셈과 같은 값만 쓴다 (0 아래 · −0은 +0 · 원인은 마르면 지운다)
+            int b0 = s * Cells;
+            bool flows = false;
+            for (int i = 0; i < Cells; i++) if (!(Store[b0 + i] <= Film)) { flows = true; break; }   // NaN도 흐르는 쪽으로 (아래 셈 그대로)
+            if (!flows)
+            {
+                for (int i = 0; i < Cells; i++)
+                {
+                    double v = Store[b0 + i], d = 0;
+                    double nv = RegionOf[i] < 0 && L.Kind[i] != CellKind.Floor ? v : Math.Max(0, v + d);
+                    Store[b0 + i] = nv;
+                    if (water) _wc2[i] = nv < DryMol ? 0 : WetCause[i];
+                }
+                if (water) (WetCause, _wc2) = (_wc2, WetCause);
+                continue;
+            }
             Par.Rows(L.H, (y0, y1) =>
             {
                 Span<int> nb = stackalloc int[4];
@@ -342,7 +376,7 @@ public sealed partial class Field
                         if (water) _wc2[i] = _st2[i] < DryMol ? 0 : WetCause[i] != 0 ? WetCause[i] : v < DryMol && from >= 0 ? WetCause[from] : 0;   // 잇기는 마른 칸이 젖을 때만 (원인 모를 물이 고인 칸은 조금 받아도 모름 그대로)
                     }
             });
-            for (int i = 0; i < Cells; i++) Store[s * Cells + i] = _st2[i];
+            Array.Copy(_st2, 0, Store, b0, Cells);
             if (water) (WetCause, _wc2) = (_wc2, WetCause);
         }
     }

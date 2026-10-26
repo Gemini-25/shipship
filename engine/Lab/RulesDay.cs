@@ -213,7 +213,7 @@ public static partial class Program
         {
             var back = new Sim(day.Setup); back.Load(day.Save());
             long at = day.Tick, diff = -1;
-            for (int k = 0; k < 150 && diff < 0; k++) { day.Step(); back.Step(); if (day.Hash() != back.Hash()) diff = day.Tick; }
+            for (int k = 0; k < 150 && diff < 0; k++) { day.Step(); back.Step(); if (!day.Save().AsSpan().SequenceEqual(back.Save())) diff = day.Tick; }   // 바이트 그대로 견준다 (지문을 셀 까닭이 없다 — 지문은 바이트마다 곱셈 하나라 틱마다 두 번이면 묶음의 4%)
             Check("긴 왕복: 하루 끝에 되살린 세계가 원래 세계와 150틱 바이트까지 같다 (주컴퓨터가 물자를 묻는 틱을 지나도)", diff < 0,
                 $"되살린 틱 {at} (125 나머지 {at % 125})" + (diff < 0 ? "" : $" · 틱 {diff}에 갈라짐"));
         }

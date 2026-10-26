@@ -40,7 +40,7 @@ public static partial class Program
                 ref var b = ref life[m[p].C.Body];
                 b.Burn = 0.9f; b.HurtCause = s.Causes.Add(CauseKind.Setup, "조리대에 팔을 크게 데었다", s.Tick, b.Cell);
                 float burn0 = b.Burn;
-                for (int k = 0; k < Time.Hours(6); k++) { s.Step(); ref var c = ref m[p].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; }
+                for (int k = 0; k < Time.Minutes(236); k++) { s.Step(); ref var c = ref m[p].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; }   // 로봇이 돌보고 낫기 시작한 때(2950틱 · 118분)의 두 배 (예전 6시간)
                 var bb = life[m[p].C.Body];
                 bool treated = s.Facts.Since(0).Any(f => f.Kind == FactKind.Treated && f.Other == p);
                 string log = string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("다친") || t.Contains("돌봐")));

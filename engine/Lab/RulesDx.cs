@@ -204,7 +204,7 @@ public static partial class Program
                 }
                 else { life[vb].Heart = 0.4f; life[vb].HeartPeak = 0.8f; }
                 bool planned = m.PlannedOp(s.Tick, m[p], life).op != Op.None;
-                for (long k = 0; k < Time.Hours(3); k++) { s.Step(); foreach (var ag in m.Agents) if (ag.IsPerson && life[ag.C.Body].Alive != 0) { ag.C.Hunger = 0; ag.C.Thirst = 0; } }
+                for (long k = 0; k < Time.Minutes(119); k++) { s.Step(); foreach (var ag in m.Agents) if (ag.IsPerson && life[ag.C.Body].Alive != 0) { ag.C.Hunger = 0; ag.C.Thirst = 0; } }   // 수술을 마친 때(1486틱 · 59분)의 두 배 (예전 3시간)
                 var op = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.Surgery);
                 string why = op.Kind == FactKind.Surgery ? s.Causes.Text(op.Cause) : "";
                 string chain = op.Kind == FactKind.Surgery ? s.Causes.Text(s.Causes[op.Cause].Parent) : "";

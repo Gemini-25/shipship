@@ -66,10 +66,10 @@ public sealed partial class Field
     public double LayerTarget(int i)
     {
         if (Severed[i] != 0 || !Passable(i) || Grav[i] < LowG) return 0;
-        double n = Read(i, out double gc, out double kPa);
+        double n = SumNCM(i, out double gc, out double mass);   // 몰 · 열용량 · 질량을 한 번에 (Read · 성분 질량 합과 같은 차례 — 세 합이 서로 기다리지 않는다)
+        double kPa = gc > 1e-9 ? n * R * (U[i] / gc) / CellVolume / 1000.0 : 0;   // Read와 같은 셈
         if (n < 1e-6 || kPa < 5 || gc <= 1e-9) return 0;
-        double temp = U[i] / gc, mass = 0;
-        for (int g = 0; g < G; g++) mass += N[i * G + g] * _molar[g];
+        double temp = U[i] / gc;
         double hot = Math.Max(0, temp - Ts[i] - LayerHotDeadK) / temp;
         double heavy = Math.Max(0, mass / n / AirMolar * Ts[i] / temp - 1 - LayerDenseDead);
         double b = 9.8 * Grav[i] * LayerH * (hot - heavy);

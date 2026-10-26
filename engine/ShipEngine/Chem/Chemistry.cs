@@ -617,12 +617,13 @@ public sealed class Chemistry : IEngine
         if (total < 1e-6) return;
         double o2 = F.Gas(T.gO2, i) / total;
         if (o2 < 0.05) return;
-        double tg = F.Temp(i);
+        double tg = 0; bool hasT = false;   // 기체 온도는 연소 범위에 든 기체가 있고 불씨가 없을 때만 (대부분의 칸은 범위 밖) — 처음 쓸 때 센다: 그 앞에서 탄 것이 없으니 고리 앞에서 센 값과 같다
         bool spark = _spark[i] != 0 || Burning[i] != 0;
         foreach (var gf in _gasFires)
         {
             double x = F.Gas(gf.gas, i) / total;
             if (x < gf.lfl || x > gf.ufl) continue;
+            if (!spark && !hasT) { tg = F.Temp(i); hasT = true; }
             if (!spark && tg < gf.r.Def.MinK) continue;
             double budget = F.Gas(T.gO2, i) * 0.9;
             double fuelNu = gf.r.In.First(t => T.Substances[t.S].Gas == gf.gas).Nu;

@@ -96,7 +96,7 @@ public static partial class Program
             life[p.C.Body].Suit = 1; life[p.C.Body].SuitO2 = 40; p.C.Consc = 0.1f;
             p.C.Goal = GoalKind.Idle; p.Plan.Clear();
             bool laid = false;
-            for (long t = 0; t < Time.Hours(3); t++) { s.Step(); if (Worlds.Items(s).Any(x => x.Item == m.iSuit)) laid = true; }
+            for (long t = 0; t < 30; t++) { s.Step(); if (Worlds.Items(s).Any(x => x.Item == m.iSuit)) laid = true; }   // 내려놓고(첫 틱) 주워 제자리에 넣은 때(15틱)의 두 배 (예전 3시간)
             int suits1 = lockers.Sum(fu => m.Stock[fu * m.ItemCount + m.iSuit]);
             Check("덤벙대는 이의 우주복: 그 자리에 내려놓은 우주복을 주컴퓨터가 카메라로 보고 · 로봇이 없으면 일하는 사람에게 줍기를 맡겨 제자리로",
                 laid && suits1 == suits0 + 1 && !Worlds.Items(s).Any(x => x.Item == m.iSuit), $"내려놓음 {laid} · 보관함 {suits0} → {suits1} · 주움 {m.Gathered} · 바닥 {Worlds.Items(s).Count(x => x.Item == m.iSuit)} · 든 이 {string.Join(",", m.Agents.Where(a => a.C.Holding == m.iSuit).Select(a => $"{m.NameOf(a.Id)}({a.C.Consc:0.0} {a.C.Goal} {m.Thought(a.Id)})"))}");

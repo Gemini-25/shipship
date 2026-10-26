@@ -20,7 +20,7 @@ public static partial class Program
             s.Run(2);
             so.Bond[a * so.N + b] = 0.4f; so.Bond[b * so.N + a] = 0.4f;
             m[a].C.Lonely = 1; m[b].C.Lonely = 1; m[a].C.Sociable = 0.8f; m[b].C.Sociable = 0.8f;
-            for (int k = 0; k < Time.Hours(4); k++)
+            for (int k = 0; k < Time.Minutes(216); k++)   // 정이 문턱을 넘은 때(2700틱 · 108분)의 두 배 (예전 4시간)
             {
                 s.Step();
                 if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1" && k % 250 == 0)

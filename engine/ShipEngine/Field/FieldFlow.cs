@@ -31,19 +31,74 @@ public sealed partial class Field
     /// </summary>
     public double ZoneKPa(int region) => region >= 0 && region < Regions.Count && region < _rn.Length ? RegionP(region) / 1000 : 0;
 
+    /// <summary>
+    /// 구역마다 몰 · 현열 · 열용량 · 질량의 합. 합은 칸 차례 · 성분 차례 그대로 하나씩 이어 더한다 (비트까지 같아야 한다 — 차례를 바꾸면 반올림이 달라진다).
+    /// 이어 더하기는 앞 덧셈을 기다리므로 구역들을 두 줄로 나눠(<see cref="SplitLanes"/>) 한 고리에서 칸 하나씩 나란히 센다 — 두 줄의 합은 서로 기다리지 않아 겹쳐 돈다 (구역마다 더하는 차례는 그대로).
+    /// </summary>
     private void RegionTotals()
     {
         int n = Regions.Count;
         if (_rn.Length < n) { _rn = new double[n]; _rU = new double[n]; _rC = new double[n]; _rM = new double[n]; }
-        for (int r = 0; r < n; r++)
+        if (_ids.Length < n) { _ids = new int[n]; _laneA = new int[n]; _laneB = new int[n]; }
+        for (int r = 0; r < n; r++) _ids[r] = r;
+        SplitLanes(_ids.AsSpan(0, n), _laneA, _laneB, out int na, out int nb);
+        int qa = 0, qb = 0, ka = 0, kb = 0, ra = -1, rb = -1;
+        double an = 0, au = 0, ac = 0, am = 0, bn = 0, bu = 0, bc = 0, bm = 0;
+        while (true)
         {
-            double sn = 0, su = 0, sc = 0, sm = 0;
-            foreach (int i in Regions[r])
+            if (ra < 0) { if (qa >= na) break; ra = _laneA[qa++]; ka = 0; an = au = ac = am = 0; }
+            if (rb < 0) { if (qb >= nb) break; rb = _laneB[qb++]; kb = 0; bn = bu = bc = bm = 0; }
+            int[] ca = Regions[ra], cb = Regions[rb];
+            int m = Math.Min(ca.Length - ka, cb.Length - kb);
+            ReadOnlySpan<int> xa = ca.AsSpan(ka, m), xb = cb.AsSpan(kb, m);
+            ReadOnlySpan<double> cv = _cv, mo = _molar;
+            for (int t = 0; t < xa.Length; t++)
             {
-                su += U[i];
-                for (int g = 0; g < G; g++) { double v = N[i * G + g]; sn += v; sc += v * _cv[g]; sm += v * _molar[g]; }
+                int i = xa[t], j = xb[t];
+                au += U[i]; bu += U[j];
+                var ri = N.AsSpan(i * G, G); var rj = N.AsSpan(j * G, G);
+                for (int g = 0; g < ri.Length; g++)
+                {
+                    double v = ri[g], w = rj[g];
+                    an += v; ac += v * cv[g]; am += v * mo[g];
+                    bn += w; bc += w * cv[g]; bm += w * mo[g];
+                }
             }
-            _rn[r] = sn; _rU[r] = su; _rC[r] = sc; _rM[r] = sm;
+            ka += m; kb += m;
+            if (ka == ca.Length) { _rn[ra] = an; _rU[ra] = au; _rC[ra] = ac; _rM[ra] = am; ra = -1; }
+            if (kb == cb.Length) { _rn[rb] = bn; _rU[rb] = bu; _rC[rb] = bc; _rM[rb] = bm; rb = -1; }
+        }
+        // 한 줄이 먼저 끝났다 — 남은 줄은 하나씩
+        if (ra >= 0) TotalsFrom(ra, ka, an, au, ac, am);
+        while (qa < na) TotalsFrom(_laneA[qa++], 0, 0, 0, 0, 0);
+        if (rb >= 0) TotalsFrom(rb, kb, bn, bu, bc, bm);
+        while (qb < nb) TotalsFrom(_laneB[qb++], 0, 0, 0, 0, 0);
+    }
+    private int[] _ids = Array.Empty<int>(), _laneA = Array.Empty<int>(), _laneB = Array.Empty<int>();
+
+    /// <summary>구역 r의 합을 칸 from부터 이어서 (앞에서 센 합에서) 끝까지.</summary>
+    private void TotalsFrom(int r, int from, double sn, double su, double sc, double sm)
+    {
+        var cells = Regions[r];
+        ReadOnlySpan<double> cv = _cv, mo = _molar;
+        for (int k = from; k < cells.Length; k++)
+        {
+            int i = cells[k];
+            su += U[i];
+            var row = N.AsSpan(i * G, G);
+            for (int g = 0; g < row.Length; g++) { double v = row[g]; sn += v; sc += v * cv[g]; sm += v * mo[g]; }
+        }
+        _rn[r] = sn; _rU[r] = su; _rC[r] = sc; _rM[r] = sm;
+    }
+
+    /// <summary>구역들을 두 줄로: 앞에서부터 칸이 덜 찬 줄에 (같으면 첫 줄). 줄을 어떻게 나누든 구역마다 셈은 같다 — 빠르기만 바뀐다.</summary>
+    private void SplitLanes(ReadOnlySpan<int> ids, Span<int> la, Span<int> lb, out int na, out int nb)
+    {
+        na = 0; nb = 0; long fa = 0, fb = 0;
+        foreach (int r in ids)
+        {
+            if (fa <= fb) { la[na++] = r; fa += Regions[r].Length; }
+            else { lb[nb++] = r; fb += Regions[r].Length; }
         }
     }
 
@@ -491,71 +546,154 @@ public sealed partial class Field
     /// 낮은 칸이 모자란 만큼 나눠 받는다 — 그래서 한 칸에 넣은 연기 · 이산화탄소는 그 칸에 남고(확산으로 천천히 퍼진다), 압력만 고르게 된다.
     /// 성분 · 에너지가 그대로 옮겨져 보존된다.
     /// </summary>
-    private sealed class EqBuf { public double[] Pool = Array.Empty<double>(), Avg = Array.Empty<double>(), Give = Array.Empty<double>(), P = new double[256], Pn = new double[256], Pc = new double[256]; }
+    /// <summary>고르기 한 구역의 첫 훑기 (칸마다 압력 · 몰 · 열용량 · 구역 평균 조성 · 압력 합 · 가장 큰 · 작은 압력 · 몰 합).</summary>
+    private sealed class EqSet
+    {
+        public double[] Avg = Array.Empty<double>(), P = new double[256], Pn = new double[256], Pc = new double[256];
+        public double Sum, Mx, Mn, Tot;
+        public void Ready(int cells, int g)
+        {
+            if (Avg.Length != g) Avg = new double[g];
+            if (P.Length < cells) { P = new double[cells]; Pn = new double[cells]; Pc = new double[cells]; }
+            Array.Clear(Avg); Sum = 0; Mx = double.MinValue; Mn = double.MaxValue; Tot = 0;
+        }
+    }
+    private sealed class EqBuf { public double[] Pool = Array.Empty<double>(), Give = Array.Empty<double>(); public readonly EqSet A = new(), B = new(); }
     [ThreadStatic] private static EqBuf? _eqBuf;
 
     private void Equalize()
     {
         int nr = Regions.Count;
         if (_imb.Length < nr) { var a = new double[nr]; Array.Fill(a, 1.0); Array.Copy(_imb, a, _imb.Length); _imb = a; }
-        Par.Items(nr, 4, (a, b) =>
+        // 구역끼리는 칸이 겹치지 않아 어느 덩어리 · 어느 차례로 골라도 같다 (덩어리 크기는 빠르기만 바꾼다 — 줄 둘에 나눌 구역이 넉넉하게 16)
+        Par.Items(nr, 16, (a, b) =>
         {
             // 일꾼마다 한 벌 (덩어리마다 새로 잡지 않는다 — 구역마다 다 덮어쓰거나 지우고 쓴다)
             var buf = _eqBuf ??= new EqBuf();
-            if (buf.Pool.Length != G) { buf.Pool = new double[G]; buf.Avg = new double[G]; buf.Give = new double[G]; }
-            var pool = buf.Pool; var avg = buf.Avg; var give = buf.Give;
-            var p = buf.P; var pn = buf.Pn; var pc = buf.Pc;   // 칸의 압력 · 몰 · 열용량 (압력을 셀 때 한 번 — 넘친 칸에서 다시 세지 않는다)
+            if (buf.Pool.Length != G) { buf.Pool = new double[G]; buf.Give = new double[G]; }
+            Span<double> tmp = stackalloc double[G];
+            Span<int> act = stackalloc int[b - a], la = stackalloc int[b - a], lb = stackalloc int[b - a];
+            int cnt = 0;
             for (int r = a; r < b; r++)
             {
                 if (_imb[r] < ImbalanceTolerance) continue;
                 _imb[r] = 0;
-                var cells = Regions[r];
-                if (cells.Length < 2) continue;
-                if (p.Length < cells.Length) { buf.P = p = new double[cells.Length]; buf.Pn = pn = new double[cells.Length]; buf.Pc = pc = new double[cells.Length]; }
-                double sum = 0, mx = double.MinValue, mn = double.MaxValue;
-                Array.Clear(avg);
-                double tot = 0;   // 구역 평균 조성도 같은 훑기에서 (같은 차례로 더한다)
-                for (int k = 0; k < cells.Length; k++)
-                {
-                    int i = cells[k], bi = i * G;
-                    double n0 = 0, c0 = 0;
-                    for (int g = 0; g < G; g++) { double w = N[bi + g]; n0 += w; c0 += w * _cv[g]; avg[g] += w; tot += w; }
-                    double v = c0 > 1e-9 ? n0 * R * (U[i] / c0) / CellVolume / 1000.0 : 0;   // Pressure(i)와 같은 셈
-                    p[k] = v; pn[k] = n0; pc[k] = c0; sum += v;
-                    if (v > mx) mx = v; if (v < mn) mn = v;
-                }
-                double mean = sum / cells.Length;
-                if (mx - mn <= 1e-9 * mean + 1e-9) continue;
-                if (tot <= 0) continue;
-                for (int g = 0; g < G; g++) avg[g] /= tot;
-                Array.Clear(pool);
-                double poolU = 0, deficit = 0;
-                for (int k = 0; k < cells.Length; k++)
-                {
-                    if (p[k] <= mean) { deficit += mean - p[k]; continue; }
-                    int i = cells[k];
-                    double n = pn[k], c = pc[k];   // 위에서 센 값 (그 사이 이 칸은 바뀌지 않았다)
-                    if (n <= 0 || c <= 0) continue;
-                    double e = n * (p[k] - mean) / p[k];   // 내놓을 몰 수
-                    double tc = U[i] / c;                  // 이 칸 온도
-                    bool ok = true;
-                    for (int g = 0; g < G; g++) { give[g] = e * avg[g]; if (give[g] > 0.9 * N[i * G + g]) ok = false; }
-                    if (!ok) for (int g = 0; g < G; g++) give[g] = e / n * N[i * G + g]; // 이 칸 조성이 평균과 너무 다르면 제 조성대로
-                    double du = 0;
-                    for (int g = 0; g < G; g++) { N[i * G + g] -= give[g]; pool[g] += give[g]; du += give[g] * _cv[g] * tc; }
-                    du = Math.Min(du, U[i]);
-                    U[i] -= du; poolU += du;
-                }
-                if (deficit <= 0) continue;
-                for (int k = 0; k < cells.Length; k++)
-                {
-                    if (p[k] >= mean) continue;
-                    int i = cells[k];
-                    double s = (mean - p[k]) / deficit;
-                    for (int g = 0; g < G; g++) N[i * G + g] += pool[g] * s;
-                    U[i] += poolU * s;
-                }
+                if (Regions[r].Length < 2) continue;
+                act[cnt++] = r;
             }
+            // 고를 구역을 두 줄로: 첫 훑기(칸마다 성분을 이어 더한다 — 앞 덧셈을 기다린다)를 두 줄 나란히 한 고리에서 하고 · 훑기를 마친 구역부터 하나씩 고른다
+            // (고르기는 제 구역 칸만 바꾸고 다른 줄의 훑기는 제 구역 칸만 읽는다 · 구역마다 더하는 차례는 그대로 — 비트까지 같다)
+            SplitLanes(act[..cnt], la, lb, out int na, out int nb);
+            int qa = 0, qb = 0, ka = 0, kb = 0, ra = -1, rb = -1;
+            while (true)
+            {
+                if (ra < 0) { if (qa >= na) break; ra = la[qa++]; ka = 0; buf.A.Ready(Regions[ra].Length, G); }
+                if (rb < 0) { if (qb >= nb) break; rb = lb[qb++]; kb = 0; buf.B.Ready(Regions[rb].Length, G); }
+                int[] ca = Regions[ra], cb = Regions[rb];
+                int m = Math.Min(ca.Length - ka, cb.Length - kb);
+                ScanPair(ca, ka, buf.A, cb, kb, buf.B, m);
+                ka += m; kb += m;
+                if (ka == ca.Length) { Settle(ca, buf.A, buf, tmp); ra = -1; }
+                if (kb == cb.Length) { Settle(cb, buf.B, buf, tmp); rb = -1; }
+            }
+            // 한 줄이 먼저 끝났다 — 남은 줄은 하나씩
+            if (ra >= 0) { ScanFrom(Regions[ra], ka, buf.A); Settle(Regions[ra], buf.A, buf, tmp); }
+            while (qa < na) { var c = Regions[la[qa++]]; buf.A.Ready(c.Length, G); ScanFrom(c, 0, buf.A); Settle(c, buf.A, buf, tmp); }
+            if (rb >= 0) { ScanFrom(Regions[rb], kb, buf.B); Settle(Regions[rb], buf.B, buf, tmp); }
+            while (qb < nb) { var c = Regions[lb[qb++]]; buf.B.Ready(c.Length, G); ScanFrom(c, 0, buf.B); Settle(c, buf.B, buf, tmp); }
         });
+    }
+
+    /// <summary>첫 훑기 — 칸 from부터 끝까지 하나씩 (구역 하나).</summary>
+    private void ScanFrom(int[] cells, int from, EqSet e)
+    {
+        ReadOnlySpan<double> cv = _cv.AsSpan(0, G);
+        var avg = e.Avg; var p = e.P; var pn = e.Pn; var pc = e.Pc;
+        double sum = e.Sum, mx = e.Mx, mn = e.Mn, tot = e.Tot;   // 구역 평균 조성도 같은 훑기에서 (같은 차례로 더한다)
+        for (int k = from; k < cells.Length; k++)
+        {
+            int i = cells[k];
+            double n0 = 0, c0 = 0;
+            var ni = N.AsSpan(i * G, G);
+            Lanes.Add(avg, ni);   // avg[g] += N[i,g] (네 성분씩 — 성분마다 칸 차례는 그대로)
+            for (int g = 0; g < ni.Length; g++) { double w = ni[g]; n0 += w; c0 += w * cv[g]; tot += w; }
+            double v = c0 > 1e-9 ? n0 * R * (U[i] / c0) / CellVolume / 1000.0 : 0;   // Pressure(i)와 같은 셈
+            p[k] = v; pn[k] = n0; pc[k] = c0; sum += v;
+            if (v > mx) mx = v; if (v < mn) mn = v;
+        }
+        e.Sum = sum; e.Mx = mx; e.Mn = mn; e.Tot = tot;
+    }
+
+    /// <summary>첫 훑기 — 구역 둘(ka · kb 칸부터 m칸씩)을 칸 하나씩 번갈아 한 고리에서. 앞에서 센 합에 이어 더한다 · 구역마다 셈 · 차례는 <see cref="ScanFrom"/>과 같다.</summary>
+    private void ScanPair(int[] ca, int ka, EqSet ea, int[] cb, int kb, EqSet eb, int m)
+    {
+        ReadOnlySpan<double> cv = _cv.AsSpan(0, G);
+        var avgA = ea.Avg; var avgB = eb.Avg;
+        ReadOnlySpan<int> xa = ca.AsSpan(ka, m), xb = cb.AsSpan(kb, m);
+        Span<double> pA = ea.P.AsSpan(ka, m), pnA = ea.Pn.AsSpan(ka, m), pcA = ea.Pc.AsSpan(ka, m);
+        Span<double> pB = eb.P.AsSpan(kb, m), pnB = eb.Pn.AsSpan(kb, m), pcB = eb.Pc.AsSpan(kb, m);
+        double sumA = ea.Sum, mxA = ea.Mx, mnA = ea.Mn, totA = ea.Tot;
+        double sumB = eb.Sum, mxB = eb.Mx, mnB = eb.Mn, totB = eb.Tot;
+        for (int t = 0; t < xa.Length; t++)
+        {
+            int i = xa[t], j = xb[t];
+            double nA = 0, cA = 0, nB = 0, cB = 0;
+            var ni = N.AsSpan(i * G, G); var nj = N.AsSpan(j * G, G);
+            Lanes.Add(avgA, ni); Lanes.Add(avgB, nj);
+            for (int g = 0; g < ni.Length; g++)
+            {
+                double w = ni[g], x = nj[g];
+                nA += w; cA += w * cv[g]; totA += w;
+                nB += x; cB += x * cv[g]; totB += x;
+            }
+            double vA = cA > 1e-9 ? nA * R * (U[i] / cA) / CellVolume / 1000.0 : 0;
+            double vB = cB > 1e-9 ? nB * R * (U[j] / cB) / CellVolume / 1000.0 : 0;
+            pA[t] = vA; pnA[t] = nA; pcA[t] = cA; sumA += vA;
+            if (vA > mxA) mxA = vA; if (vA < mnA) mnA = vA;
+            pB[t] = vB; pnB[t] = nB; pcB[t] = cB; sumB += vB;
+            if (vB > mxB) mxB = vB; if (vB < mnB) mnB = vB;
+        }
+        ea.Sum = sumA; ea.Mx = mxA; ea.Mn = mnA; ea.Tot = totA;
+        eb.Sum = sumB; eb.Mx = mxB; eb.Mn = mnB; eb.Tot = totB;
+    }
+
+    /// <summary>첫 훑기를 마친 구역을 고른다: 평균보다 높은 칸은 넘친 몰을 평균 조성으로 내놓고 · 낮은 칸이 모자란 만큼 나눠 받는다.</summary>
+    private void Settle(int[] cells, EqSet e, EqBuf buf, Span<double> tmp)
+    {
+        double mean = e.Sum / cells.Length;
+        if (e.Mx - e.Mn <= 1e-9 * mean + 1e-9) return;
+        double tot = e.Tot;
+        if (tot <= 0) return;
+        var avg = e.Avg; var p = e.P; var pn = e.Pn; var pc = e.Pc;
+        var pool = buf.Pool; var give = buf.Give;
+        ReadOnlySpan<double> cv = _cv.AsSpan(0, G);
+        for (int g = 0; g < G; g++) avg[g] /= tot;
+        Array.Clear(pool);
+        double poolU = 0, deficit = 0;
+        for (int k = 0; k < cells.Length; k++)
+        {
+            if (p[k] <= mean) { deficit += mean - p[k]; continue; }
+            int i = cells[k];
+            double n = pn[k], c = pc[k];   // 위에서 센 값 (그 사이 이 칸은 바뀌지 않았다)
+            if (n <= 0 || c <= 0) continue;
+            double ex = n * (p[k] - mean) / p[k];   // 내놓을 몰 수
+            double tc = U[i] / c;                  // 이 칸 온도
+            var ni = N.AsSpan(i * G, G);
+            bool ok = Lanes.ScaleWithin(give, avg, ex, ni, 0.9);   // give[g] = ex · avg[g] · 하나라도 0.9 · N[i,g]를 넘으면 false
+            if (!ok) Lanes.Scale(give, ni, ex / n); // 이 칸 조성이 평균과 너무 다르면 제 조성대로
+            Lanes.Move(ni, pool, give);   // N[i,g] −= give[g] · pool[g] += give[g]
+            double du = Lanes.SumProd(give, cv, tc, tmp);   // Σ give[g] · cv[g] · tc (성분 차례대로)
+            du = Math.Min(du, U[i]);
+            U[i] -= du; poolU += du;
+        }
+        if (deficit <= 0) return;
+        for (int k = 0; k < cells.Length; k++)
+        {
+            if (p[k] >= mean) continue;
+            int i = cells[k];
+            double sk = (mean - p[k]) / deficit;
+            Lanes.AddScaled(N.AsSpan(i * G, G), pool, sk);   // N[i,g] += pool[g] · sk
+            U[i] += poolU * sk;
+        }
     }
 }
