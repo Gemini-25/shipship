@@ -12,7 +12,7 @@ public readonly record struct PickKey(PickKind Kind, int Id)
 }
 
 /// <summary>왼쪽 카드의 갈래: 없음 · 사람 · 로봇 · 물건 (기체 · 선 · 관은 겹쳐 보기로 본다).</summary>
-public enum CardKind : byte { None, Agent, Thing }
+public enum CardKind : byte { None, Agent, Thing, Episode }
 
 /// <summary>세계 위 테두리 하나 (칸 · 그린 자리 네 모서리 — 돌린 네모): 고른 것 (노랑) · 올린 것 (흰).</summary>
 public readonly record struct Outline(bool Picked, double X0, double Y0, double X1, double Y1, double X2, double Y2, double X3, double Y3);
@@ -170,7 +170,7 @@ public sealed partial class LiveShow
     {
         if (k.Kind == PickKind.Agent) { SelectAgent(k.Id); return; }
         if (!k.Any) { Release(); return; }
-        Look = k; Selected = -1; FollowSelected = false;
+        Look = k; Selected = -1; FollowSelected = false; _episodeRoot = 0;
     }
 
     /// <summary>그 자리를 다시 셈해 살펴본다 (빠른 손 — 누른 자리가 올린 자리에서 여유 넘게 떨어졌다).</summary>
@@ -188,6 +188,7 @@ public sealed partial class LiveShow
     public void CardGo()
     {
         if (Selected >= 0) { CenterOn(Selected); return; }
+        if (!Look.Any && Dir.EpisodeOf(_episodeRoot) is { Cell: >= 0 } ep) { LookAt(ep.Cell); return; }   // 경과 카드 (V8): 그 일이 난 자리
         int c = LookCell(Look);
         if (c >= 0) LookAt(c);
     }

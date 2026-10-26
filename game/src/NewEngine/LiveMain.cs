@@ -72,6 +72,11 @@ void fragment() {
     public static VoyageMeta? PendingResume;
     public static (string Ship, ulong Number)? PendingNew;
     private VoyageStore _store = null!;
+    // 함장의 보기 설정 (docs/OBSERVER.md §3.1 profile.json · V7): 큰 일 멈춤 갈래 · 창이 뒤로 가면 · 본 길잡이 — 항해마다 넘기고 바뀌면 작업 스레드가 틱 사이에 쓴다
+    private ViewPrefs _prefs = new();
+    private string _prefsPath = "";
+    private bool _prefsSave;
+    private double _touchSent = -1;   // 손이 닿았다 (Touched)를 보낸 때 — 0.5초에 한 번만
     private bool _saveOn;                                      // 항해를 저장한다 (확인용 띄우기는 --save일 때만)
     private volatile VoyageMeta? _launchResume;                // 이어 볼 항해 (작업 스레드가 받는다)
     // ── 사진 (docs/OBSERVER.md §4.4 · §11 — V5): 크게 연 사진의 텍스처 · 사진 모드 [찍기]는 띠를 숨긴 장을 찍는다 (두 장 뒤) · 찍은 뒤 저장 (photos/) ──
@@ -167,6 +172,16 @@ void fragment() {
         _noHold = !args.Contains("--hold") && VoyageNumber.CheckRun(args);
         _seed = VoyageNumber.ForLaunch(args);   // 켤 때마다 새 번호 (--voyage= · --seed= 가 먼저 · 확인용 띄우기는 18)
         _store = new VoyageStore(ProjectSettings.GlobalizePath("user://voyages"));
+        _prefsPath = System.IO.Path.Combine(_store.Root, ViewPrefs.FileName);
+        _prefs = ViewPrefs.Load(_prefsPath);
+        _prefsSave = !VoyageNumber.CheckRun(args);
+        if (!_prefsSave)
+        {
+            // 확인용 띄우기 (화면 사진 · CI): 함장의 설정을 쓰지 않고 · 길잡이 없이 (--hints면 보인다) · 큰 일에 멈추지 않는다 (--stops · --ui=stop이면 기본 갈래) — 화면 사진이 같게
+            _prefs = new ViewPrefs();
+            if (!args.Contains("--hints")) foreach (var (key, _) in LiveShow.HintTexts) _prefs.HintsSeen.Add(key);
+            if (!args.Contains("--stops") && _ui != "stop") _prefs.Stops = new bool[ViewPrefs.StopDefaults.Length];
+        }
         _saveOn = !VoyageNumber.CheckRun(args) || args.Contains("--save");
         if (args.Contains("--resume")) PendingResume ??= _store.Latest();   // 확인용: 가장 새 항해를 곧장 이어 본다
         if (PendingNew is { } pn) { ship = pn.Ship; _seed = pn.Number; PendingNew = null; }
@@ -219,6 +234,7 @@ void fragment() {
                 LiveShow? back = null; string why = "";
                 if (resume != null) back = LiveShow.Resume(_store, resume, out why);
                 _show = back ?? LiveShow.Crewed(want, _launchSeed);
+                _show.Prefs = _prefs;   // 함장의 보기 설정 (항해를 넘는다 — V7)
                 Warmup.Crisis(_show.Sim);   // 위기 길 데우기: 첫 불의 멈칫 (새뜰 6.9ms → 2ms 아래) — 복제로 · 한 번만
                 if (back == null) _show.DayMinutes = LiveShow.DefaultDayMinutes;   // 하루 길이 목표 (기본 3분 · 빠르기 단추 '3분' — 이어 보면 고른 그대로)
                 _chapters = _show.Dir.Chapters.Count; _saveDue = false;
@@ -251,6 +267,7 @@ void fragment() {
             _chapters = chapters;
             if (_saveDue && !(show.Sim.Find<ShipMind>()?.WorkerBusy ?? false)) { _saveDue = false; SaveNow(show, SaveKind.Daily, wait: false); }
             if (show.EndSaveDue) { show.EndSaveDue = false; SaveNow(show, SaveKind.End, wait: false); }
+            if (_prefsSave && _prefs.Dirty) _prefs.Save(_prefsPath);   // 보기 설정이 바뀌었다 (갈래 · 창이 뒤로 가면 · 본 길잡이 — 작은 글 하나)
             if (_photoSave && !(show.Sim.Find<ShipMind>()?.WorkerBusy ?? false)) { _photoSave = false; SaveNow(show, SaveKind.Daily, wait: false); }   // 자막 사진 (F12): 곧 photos/에 남긴다   // 항해가 끝났다 (결산 — card.json에 끝 갈래)
             var pic = new Pic { F = show.Render(), Gen = gen };
             var old = Interlocked.Exchange(ref _ready, pic);
@@ -296,6 +313,8 @@ void fragment() {
     public override void _Notification(int what)
     {
         if (what == NotificationWMCloseRequest) SaveAndThen(() => GetTree().Quit());   // 창 닫기: 저장한 뒤 끈다
+        else if (what == NotificationApplicationFocusOut) _cmds.Enqueue(s => s.Background(true));   // 창이 뒤로 갔다 (V7 — 그대로 · 느리게 · 멈춤)
+        else if (what == NotificationApplicationFocusIn) _cmds.Enqueue(s => s.Background(false));   // 앞으로 왔다 — 되돌리고 '그사이' 카드
     }
 
     // ───────────────────────── 메인 스레드 ─────────────────────────
@@ -463,6 +482,7 @@ void fragment() {
         if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
         if (_ui == "newvoyage" && _runT > 3) { _ui = null; OpenVoyageWindow(); }   // 번호 창 (메뉴 [새 항해 ›])
+        if (_ui == "menustops" && _runT > 3) { _ui = null; _hs.Open = HudOpen.Stops; }   // 메뉴 [알림 멈춤 ›] 갈래 고르기 (V7)
         if (_ui == "f12" && _runT > 3 && _shown != null && _firstShown >= 0 && _runT > _firstShown + 1)
         {
             // 자막 사진 (V5): 지금 화면을 찍어 사진첩에 넣고 그 사진을 크게 연다 (기록 판 사진첩)
@@ -606,6 +626,60 @@ void fragment() {
                 break;
             }
             case "chapter": if (s.Dir.Chapters.Count > 0) s.DayTurned(s.Dir.Chapters[^1]); break;
+            // 놓치지 않게 (V7): 큰 일 멈춤 — 첫 사람에게서 가장 가까운 외판 칸에 구멍 (함장의 손 — 월드 길 · 외판 구멍은 기본 켬) → 그 틱에서 멈춤 카드
+            case "stop":
+            {
+                var L = s.Sim.Layout;
+                var pa = mind?.Agents.FirstOrDefault(a => a.IsPerson);
+                if (pa == null) break;
+                int px = L.X(pa.C.Cell), py = L.Y(pa.C.Cell), best = -1, bd = int.MaxValue;
+                for (int c = 0; c < L.N; c++)
+                {
+                    if (L.Kind[c] != CellKind.Wall || !L.Hull[c]) continue;
+                    int x = L.X(c), y = L.Y(c);
+                    bool room = false;
+                    foreach (var (dx, dy) in new[] { (0, -1), (1, 0), (0, 1), (-1, 0) }) if (L.In(x + dx, y + dy) && L.Room[L.Index(x + dx, y + dy)] >= 0) room = true;
+                    int d = Math.Abs(x - px) + Math.Abs(y - py);
+                    if (room && d < bd) { bd = d; best = c; }
+                }
+                if (best < 0) break;
+                s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Hole, Cell = best, Size = 2 });
+                s.LookAt(best);
+                break;
+            }
+            // 경과 (V8): --ignite의 침대 불 (또는 침대 불씨 — 함장의 손) → 4분 → 그 경과 카드 · 결산 띠 (끝날 때까지 감고 띠를 다시 띄운다) · 손 결과 이름표 (불씨를 겨눈 채 침대 위)
+            case "episode" or "tally":
+            {
+                if (s.Dir.Episodes.Count == 0)
+                {
+                    var bed = s.Sim.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                    if (bed != null) s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Fire, Cell = bed.Cells[0], Size = 2 });
+                }
+                s.FastForward(Time.Minutes(4));
+                for (int i = 0; i < 30 && parts[0] == "tally" && (s.Dir.Episodes.LastOrDefault()?.End ?? 0) < 0; i++) s.FastForward(Time.Minutes(1));
+                if (s.Dir.Episodes.LastOrDefault() is { } ep) { s.OpenEpisode(ep.Root); if (ep.Cell >= 0) s.LookAt(ep.Cell); if (parts[0] == "tally") s.TallyAgain(ep.Root); }
+                break;
+            }
+            case "handlabel":
+            {
+                var L = s.Sim.Layout;
+                var bed = L.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                if (bed == null) break;
+                s.ArmHand(HandKind.Fire, 1);
+                s.SetHoverAt(L.X(bed.Cells[0]) + 0.5, L.Y(bed.Cells[0]) + 0.5, 0.2);
+                s.LookAt(bed.Cells[0]);
+                break;
+            }
+            // 그사이 카드 (V7): 지금 손이 끊긴 것으로 적고 · 침대 불씨 (함장의 손) → 세 시간 감기 → 손이 닿는다
+            case "away":
+            {
+                s.MarkAway();
+                var bed = s.Sim.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                if (bed != null) s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Fire, Cell = bed.Cells[0], Size = 2 });
+                s.FastForward(Time.Hours(3));
+                s.Touched();
+                break;
+            }
             case "end": s.EndVoyage(VoyageEnd.Quit); break;
             case "rewind":
             {
@@ -1190,20 +1264,41 @@ void fragment() {
             }
             else if (h.Act == UiAct.CardClose) { DrawButton(h, ""); DrawCross(R(h.R).GetCenter(), 6 * U, Ink); }
             else if (h.Act == UiAct.DetailOpen) { DrawButton(h, "자세히 보기", 14); DrawChevron(R(h.R).GetCenter() + new Vector2(MeasureW("자세히 보기", Fs(14), false) / 2 + 12 * U, 0), 4 * U, +1, InkDim); }
+            else if (h.Act == UiAct.EpisodeReplay) DrawButton(h, "▶ 다시보기", 14);   // 경과 카드 (V8)
             else if (h.Act == UiAct.CardName && Hovered(h)) DrawLine(new Vector2(box.Position.X + 16 * U, cy + 4 * U), new Vector2(box.Position.X + 16 * U + _bold.GetStringSize(f.Card[0], HorizontalAlignment.Left, -1, Fs(19)).X, cy + 4 * U), new Color(1f, 0.92f, 0.65f), 1);
         }
-        float cardEnd = box.End.Y - (_hud.Hits.Any(x => x.Act == UiAct.DetailOpen) ? 36 * U : 0);
+        float cardEnd = box.End.Y - (_hud.Hits.Any(x => x.Act == UiAct.DetailOpen) ? 36 * U : 0) - (f.CardIs == CardKind.Episode ? 38 * U : 0);
         for (int i = 0; i < f.Card.Length; i++)
         {
             bool head = i == 0;
-            float avail = head ? w - 28 * U - 130 * U : w - 28 * U;
+            bool ep = f.CardIs == CardKind.Episode;   // 경과 카드 머리는 두 줄까지 (곁에 × 단추만 — V8)
+            float avail = head ? w - 28 * U - (ep ? 44 : 130) * U : w - 28 * U;
             int size = Fs(head ? 19 : 16);
-            float lh = Math.Max(26 * U, (head ? MeasureHB(f.Card[i], size, avail, 1) : MeasureH(f.Card[i], size, avail, 2)) + 6 * U);
+            float lh = Math.Max(26 * U, (head ? MeasureHB(f.Card[i], size, avail, ep ? 2 : 1) : MeasureH(f.Card[i], size, avail, 2)) + 6 * U);
             if (cy + lh - 20 * U > cardEnd) break;
             bool gloss = i == 1 && f.CardIs == CardKind.Thing;   // 물건 카드의 둘째 줄은 옅은 풀이
-            DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16 * U, cy), f.Card[i], HorizontalAlignment.Left, avail, size, head ? 1 : 2,
-                head ? new Color(1f, 0.92f, 0.65f) : gloss ? InkDim : new Color(0.86f, 0.89f, 0.95f));
+            DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16 * U, cy), f.Card[i], HorizontalAlignment.Left, avail, size, head ? (ep ? 2 : 1) : 2,
+                head ? new Color(1f, 0.92f, 0.65f) : gloss ? InkDim : f.CardIs == CardKind.Episode && f.Card[i].StartsWith("까닭") ? new Color(1f, 0.78f, 0.55f) : new Color(0.86f, 0.89f, 0.95f));
             cy += lh;
+            if (head && f.CardIs == CardKind.Episode && _hud.Areas.TryGetValue("경과 시계", out var ck)) { DrawEpisodeClock(f, R(ck)); cy = R(ck).End.Y + 6 * U + 18 * U; }
+        }
+    }
+
+    /// <summary>경과 카드의 가로 시계 (V8): 일어남 → 끝 (열린 경과는 지금 — 깜빡인다) 줄 위에 마디마다 점 (갈래마다 빛깔 · 도형).</summary>
+    private void DrawEpisodeClock(LiveFrame f, Rect2 r)
+    {
+        float y = r.Position.Y + r.Size.Y / 2, x0 = r.Position.X + 6 * U, x1 = r.End.X - 6 * U;
+        DrawLine(new Vector2(x0, y), new Vector2(x1, y), new Color(0.5f, 0.6f, 0.78f, 0.8f), 2 * U);
+        Color[] tone = { new(1f, 0.42f, 0.36f), new(1f, 0.85f, 0.4f), new(0.5f, 0.75f, 1f), new(0.45f, 0.95f, 0.95f), new(0.55f, 0.95f, 0.6f), new(0.95f, 0.95f, 0.95f), new(0.65f, 0.68f, 0.75f) };
+        bool open = f.Card.Length > 0 && f.Card[0].Contains("— 아직 ·");
+        float blink = open ? 0.5f + 0.5f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau) : 1;
+        foreach (var d in f.EpisodeDots)
+        {
+            var c = new Vector2(x0 + (x1 - x0) * d.At, y);
+            var col = tone[Math.Min(d.Kind, (byte)6)];
+            if (d.Kind == 6) { DrawRect(new Rect2(c - new Vector2(3, 7) * U, new Vector2(6, 14) * U), new Color(col, open ? blink : 1)); continue; }   // 끝 (열렸으면 지금)
+            DrawCircle(c, 5 * U, new Color(0.03f, 0.04f, 0.07f));
+            DrawCircle(c, 4 * U, col);
         }
     }
 
@@ -1264,6 +1359,18 @@ void fragment() {
             DrawString(_bold, new Vector2(r.Position.X + 40 * U, r.Position.Y + r.Size.Y / 2 + Fs(16) * 0.36f), f.Rewind, HorizontalAlignment.Left, r.Size.X - 170 * U, Fs(16), new Color(1f, 0.88f, 0.62f));
             foreach (var h in _hud.Hits) if (h.Act == UiAct.RewindStop) DrawButton(h, "그만", 15);
         }
+        if (_hud.Areas.TryGetValue("멈춤 카드", out var pb))
+        {
+            // 멈춤 카드 (V7): 붉은 테두리 · 멈춤 표 (두 막대) · 글 · [보기] [계속] (단추가 글 아래면 두 줄)
+            var r = R(pb); var red = new Color(1f, 0.45f, 0.38f);
+            DrawRect(r, new Color(0.1f, 0.03f, 0.03f, 0.95f)); DrawRect(r, red, false, 2);
+            var go = _hud.Hits.FirstOrDefault(x => x.Act == UiAct.StopGo);
+            bool one = go != null && go.R.Y < pb.Y + 20;
+            float tx = r.Position.X + 16 * U, tw = r.Size.X - 32 * U - (one ? 236 * U : 0);
+            if (one) DrawString(_bold, new Vector2(tx, r.Position.Y + r.Size.Y / 2 + Fs(18) * 0.36f), f.StopLine, HorizontalAlignment.Left, tw, Fs(18), new Color(1f, 0.88f, 0.84f));
+            else DrawMultilineString(_bold, new Vector2(tx, r.Position.Y + 12 * U + Fs(18) * 0.9f), f.StopLine, HorizontalAlignment.Left, tw, Fs(18), 2, new Color(1f, 0.88f, 0.84f));
+            foreach (var h in _hud.Hits) { if (h.Act == UiAct.StopSee) DrawButton(h, "보기", 16); else if (h.Act == UiAct.StopGo) DrawButton(h, "계속", 16); }
+        }
         if (_hud.Areas.TryGetValue("출항 띠", out var hb))
         {
             var r = R(hb);
@@ -1288,6 +1395,23 @@ void fragment() {
                 y += (head ? 28 : 24) * U;
             }
             foreach (var h in _hud.Hits) if (h.Act == UiAct.ResumeGo) DrawButton(h, "계속", 16);
+        }
+        if (_hud.Areas.TryGetValue("그사이", out var ab))
+        {
+            // '그사이' 카드 (V7 — '지난번까지'와 같은 꼴): 머리 · 장 · 장면 · 숨진 이 (옅은 빨강) · 바뀐 것 · [닫기] — 낮은 창에서는 들어가는 줄까지
+            var r = R(ab);
+            DrawRect(r, new Color(0.03f, 0.05f, 0.09f, 0.95f)); DrawRect(r, new Color(0.55f, 0.75f, 1f, 0.9f), false, 1.5f);
+            float y = r.Position.Y + 14 * U + Fs(18) * 0.9f, bottom = r.End.Y - 60 * U;
+            for (int i = 0; i < f.AwayCard.Length; i++)
+            {
+                bool head = i == 0;
+                if (!head && y > bottom) break;
+                string line = f.AwayCard[i];
+                var col = head ? Ink : line.StartsWith("숨진 이") ? new Color(0.95f, 0.66f, 0.6f) : line.StartsWith("장면") ? new Color(1f, 0.86f, 0.6f) : new Color(0.82f, 0.86f, 0.94f);
+                DrawString(head ? _bold : _font, new Vector2(r.Position.X + 24 * U, y), line, HorizontalAlignment.Left, r.Size.X - 48 * U, Fs(head ? 18 : 16), col);
+                y += (head ? 28 : 24) * U;
+            }
+            foreach (var h in _hud.Hits) if (h.Act == UiAct.AwayClose) DrawButton(h, "닫기", 16);
         }
         if (_hud.Areas.TryGetValue("결산 카드", out var eb))
         {
@@ -1345,6 +1469,16 @@ void fragment() {
             DrawMultilineString(_bold, new Vector2(r.Position.X + 20 * U, r.Position.Y + 9 * U + Fs(22) * 0.9f), "★ " + f.Banner, HorizontalAlignment.Left, r.Size.X - 40 * U - (btn ? 104 * U : 0), Fs(22), 2, new Color(1f, 0.86f, 0.6f, a));
             foreach (var h in _hud.Hits) if (h.Act == UiAct.BannerReplay) DrawButton(h, "▶ 다시보기", 14);
         }
+        if (_hud.Areas.TryGetValue("결산 띠", out var tb))
+        {
+            // 결산 띠 (V8 — 6초): 끝난 경과 한 줄 · 누르면 그 경과 카드 (꺾쇠)
+            var r = R(tb); float a = f.TallyAlpha;
+            var hit = _hud.Hits.FirstOrDefault(x => x.Act == UiAct.TallyGo);
+            DrawRect(r, new Color(0.04f, 0.06f, 0.08f, (hit != null && Hovered(hit) ? 0.97f : 0.9f) * a));
+            DrawRect(r, new Color(0.55f, 0.95f, 0.75f, 0.9f * a), false, 1.5f);
+            DrawString(_bold, new Vector2(r.Position.X + 20 * U, r.Position.Y + r.Size.Y / 2 + Fs(17) * 0.36f), f.Tally, HorizontalAlignment.Left, r.Size.X - 60 * U, Fs(17), new Color(0.85f, 1f, 0.9f, a));
+            DrawChevron(new Vector2(r.End.X - 18 * U, r.Position.Y + r.Size.Y / 2), 5 * U, +1, new Color(0.7f, 0.95f, 0.8f, a));
+        }
         if (_hud.Areas.TryGetValue("알림", out var nb))
         {
             var r = R(nb);
@@ -1353,6 +1487,14 @@ void fragment() {
             DrawRect(r, new Color(0.04f, 0.06f, 0.1f, hit != null && Hovered(hit) ? 0.97f : 0.9f));
             DrawRect(r, new Color(0.5f, 0.65f, 0.9f, 0.9f), false, 1);
             DrawMultilineString(_font, new Vector2(r.Position.X + 14 * U, r.Position.Y + 7 * U + Fs(17) * 0.9f), f.Notice + (link ? "  ›" : ""), HorizontalAlignment.Left, r.Size.X - 24 * U, Fs(17), 2, new Color(0.85f, 0.9f, 1f));
+        }
+        if (_hud.Areas.TryGetValue("길잡이", out var gb))
+        {
+            // 처음 한 줄 길잡이 (V7 — 5초 · 스며들고 사라진다): 옅은 풀빛 테두리 · 왼쪽 작은 점
+            var r = R(gb); float a = f.HintAlpha; var leaf = new Color(0.6f, 0.95f, 0.7f);
+            DrawRect(r, new Color(0.03f, 0.08f, 0.05f, 0.9f * a)); DrawRect(r, new Color(leaf, 0.85f * a), false, 1);
+            DrawCircle(new Vector2(r.Position.X + 11 * U, r.Position.Y + r.Size.Y / 2), 3 * U, new Color(leaf, a));
+            DrawMultilineString(_font, new Vector2(r.Position.X + 20 * U, r.Position.Y + 7 * U + Fs(16) * 0.9f), f.Hint, HorizontalAlignment.Left, r.Size.X - 28 * U, Fs(16), 2, new Color(0.85f, 1f, 0.9f, a));
         }
     }
 
@@ -1790,12 +1932,14 @@ void fragment() {
     /// <summary>펼친 목록 (고정 빠르기 · 겹쳐 보기 · 메뉴 · 배 바꾸기).</summary>
     private void DrawOpen(LiveFrame f)
     {
-        foreach (var name in new[] { "목록 고정", "목록 겹쳐 보기", "목록 메뉴", "목록 배" })
+        foreach (var name in new[] { "목록 고정", "목록 겹쳐 보기", "목록 메뉴", "목록 배", "목록 알림 멈춤", "목록 창이 뒤로 가면" })
         {
             if (!_hud.Areas.TryGetValue(name, out var a)) continue;
             var r = R(a);
             DrawRect(r, new Color(0.03f, 0.04f, 0.07f, 0.96f));
             DrawRect(r, new Color(0.55f, 0.7f, 0.95f, 0.9f), false, 1.5f);
+            if (name is "목록 알림 멈춤" or "목록 창이 뒤로 가면")   // 갈래 고르기의 머리 한 줄 (V7)
+                DrawString(_bold, r.Position + new Vector2(14, 27) * U, name == "목록 알림 멈춤" ? HudLayout.StopsHead : HudLayout.AwayHead, HorizontalAlignment.Left, r.Size.X - 24 * U, Fs(15), new Color(1f, 0.9f, 0.7f));
         }
         foreach (var h in _hud.Hits)
         {
@@ -1806,11 +1950,12 @@ void fragment() {
                     DrawButton(h with { On = false }, "");
                     DrawString(h.On ? _bold : _font, R(h.R).Position + new Vector2(14, 22) * U, (h.On ? "● " : "") + HudLayout.OverlayWords[h.Key], HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), Ink);
                     break;
-                case UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuEnd or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help when h.Key >= 100:
+                case UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuEnd or UiAct.MenuStops or UiAct.MenuAway or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help when h.Key >= 100:
                 {
                     string t = h.Act switch
                     {
                         UiAct.MenuShip => "배 바꾸기  ›", UiAct.MenuRestart => "새 항해  ›", UiAct.MenuEnd => "항해 끝내기", UiAct.MenuStart => "처음 화면으로",
+                        UiAct.MenuStops => "알림 멈춤  ›", UiAct.MenuAway => "창이 뒤로 가면  ›",
                         UiAct.Sound => _hs.Mute switch { 0 => "소리: 다 켬", 1 => "소리: 음악 끔", _ => "소리: 끔" }, UiAct.Captions => f.CaptionsOn ? "소리 자막: 켬" : "소리 자막: 끔",
                         UiAct.Speech => f.SpeechOn ? "말풍선: 켬" : "말풍선: 끔", UiAct.Thoughts => ThoughtWords[Math.Clamp(f.ThoughtsOn, 0, 2)], _ => "도움말",
                     };
@@ -1822,6 +1967,26 @@ void fragment() {
                     DrawButton(h with { On = false }, "");
                     DrawString(_font, R(h.R).Position + new Vector2(14, 24) * U, h.Key < _shipNames.Length ? _shipNames[h.Key] : "", HorizontalAlignment.Left, R(h.R).Size.X - 20 * U, Fs(15), Ink);
                     break;
+                case UiAct.StopPick or UiAct.AwayPick:
+                {
+                    // 갈래 고르기 (V7): 도형 체크 (네모 — 여럿) · 도형 동그라미 (하나) — ✔ 글자를 쓰지 않는다
+                    DrawButton(h with { On = false }, "");
+                    var r = R(h.R); var box = new Rect2(r.Position + new Vector2(12, 10) * U, new Vector2(16, 16) * U);
+                    var edge = h.On ? new Color(1f, 0.82f, 0.4f) : new Color(0.7f, 0.76f, 0.86f);
+                    if (h.Act == UiAct.StopPick)
+                    {
+                        DrawRect(box, edge, false, 1.5f * U);
+                        if (h.On) DrawPolyline(new[] { box.Position + new Vector2(3.5f, 8.5f) * U, box.Position + new Vector2(7, 12) * U, box.Position + new Vector2(13, 4) * U }, edge, 2.2f * U);
+                    }
+                    else
+                    {
+                        DrawArc(box.GetCenter(), 8 * U, 0, Mathf.Tau, 24, edge, 1.5f * U);
+                        if (h.On) DrawCircle(box.GetCenter(), 4.5f * U, edge);
+                    }
+                    string[] names = h.Act == UiAct.StopPick ? ViewPrefs.StopNames : ViewPrefs.AwayNames;
+                    DrawString(h.On ? _bold : _font, r.Position + new Vector2(38, 24) * U, h.Key < names.Length ? names[h.Key] : "", HorizontalAlignment.Left, r.Size.X - 44 * U, Fs(15), Ink);
+                    break;
+                }
             }
         }
     }
@@ -1932,7 +2097,7 @@ void fragment() {
             case UiAct.Speech: _cmds.Enqueue(s => { s.SpeechBubbles = !s.SpeechBubbles; s.Notify(s.SpeechBubbles ? "말풍선 켬 — 소리 내어 한 말 · 외침" : "말풍선 끔"); }); break;
             case UiAct.Thoughts: _cmds.Enqueue(s => { s.ThoughtBubbles = (s.ThoughtBubbles + 1) % 3; s.Notify(ThoughtWords[s.ThoughtBubbles]); }); break;
             case UiAct.Help: _hs.Help = k == 0 || k >= 100 ? !_hs.Help : false; _hs.HelpBlink = 0; _hs.Open = HudOpen.None; break;
-            case UiAct.Menu: _hs.Open = _hs.Open is HudOpen.Menu or HudOpen.Ships ? HudOpen.None : HudOpen.Menu; break;
+            case UiAct.Menu: _hs.Open = _hs.Open is HudOpen.Menu or HudOpen.Ships or HudOpen.Stops or HudOpen.Away ? HudOpen.None : HudOpen.Menu; break;
             case UiAct.MenuShip: _hs.Open = _hs.Open == HudOpen.Ships ? HudOpen.Menu : HudOpen.Ships; break;
             case UiAct.ShipPick: if (k < _ships.Length) { _hs.Ask = HudAsk.Ship; _hs.AskShip = _shipNames[k]; _askShipAt = (int)k; _hs.AskFocus = 0; _hs.Open = HudOpen.None; } break;
             case UiAct.MenuRestart: OpenVoyageWindow(); break;
@@ -1968,7 +2133,9 @@ void fragment() {
             case UiAct.RobotMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Robots || s.Detail != DetailKind.None) { s.ClosePanel(); s.TogglePanel(PanelKind.Robots); } }); break;
             case UiAct.Robot: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
             case UiAct.Talk: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Journal) s.TogglePanel(PanelKind.Journal); }); break;
-            case UiAct.Feed: if (f != null && k < f.Feed.Length) { int cell = f.Feed[k].Cell; _cmds.Enqueue(s => s.LookAt(cell)); } break;
+            case UiAct.Feed: if (f != null && k < f.Feed.Length) { int cell = f.Feed[k].Cell, root = f.Feed[k].Root; _cmds.Enqueue(s => s.FeedGo(cell, root)); } break;   // 그 자리로 · 그 경과 카드 (V8)
+            case UiAct.TallyGo: _cmds.Enqueue(s => s.TallyGo()); break;          // 결산 띠 → 그 경과 카드 (V8)
+            case UiAct.EpisodeReplay: _cmds.Enqueue(s => s.EpisodeReplay()); break;   // 경과 카드 [▶ 다시보기]
             case UiAct.Vital: if (f != null && k < f.Vitals.Length) { string icon = f.Vitals[k].Icon; _cmds.Enqueue(s => s.GaugeGo(icon)); } break;
             case UiAct.Notice: _cmds.Enqueue(s => s.NoticeGo()); break;
             case UiAct.BannerReplay: _cmds.Enqueue(s => s.StartReplay()); break;
@@ -1985,6 +2152,14 @@ void fragment() {
             case UiAct.RewindStop: _cmds.Enqueue(s => s.StopRewind()); break;   // 감기 그만 (V4)
             // 사진 (V5): 사진 카드 [▶ 그 장면] [닫기] · 사진 모드 [찍기] [나가기] · 보기 묶음 사진기
             case UiAct.Star: { int id = (int)k; _cmds.Enqueue(s => s.ToggleStar(id)); break; }   // ☆ 눈여겨보기 (V6)
+            // 놓치지 않게 (V7): 멈춤 카드 [보기] [계속] · 그사이 카드 [닫기] · 메뉴 [알림 멈춤 ›] [창이 뒤로 가면 ›] · 갈래 고르기
+            case UiAct.StopSee: _cmds.Enqueue(s => s.StopSee()); break;
+            case UiAct.StopGo: _cmds.Enqueue(s => s.StopGo()); break;
+            case UiAct.AwayClose: _cmds.Enqueue(s => s.AwayClose()); break;
+            case UiAct.MenuStops: _hs.Open = _hs.Open == HudOpen.Stops ? HudOpen.Menu : HudOpen.Stops; break;
+            case UiAct.MenuAway: _hs.Open = _hs.Open == HudOpen.Away ? HudOpen.Menu : HudOpen.Away; break;
+            case UiAct.StopPick: { var kind = (StopKind)k; _cmds.Enqueue(s => s.ToggleStop(kind)); break; }
+            case UiAct.AwayPick: { var mode = (AwayMode)k; _cmds.Enqueue(s => s.SetAwayMode(mode)); break; }
             case UiAct.PhotoScene: _cmds.Enqueue(s => s.PhotoScene()); break;
             case UiAct.PhotoClose: _cmds.Enqueue(s => s.ClosePhoto()); break;
             case UiAct.Photo: PhotoShot(); break;
@@ -2031,7 +2206,7 @@ void fragment() {
         if (_shown == null) return false;
         switch (_hs.Back(_shown))
         {
-            case BackStep.CloseCard: _cmds.Enqueue(s => s.EndWatch()); return true;   // 결산 카드: 그대로 지켜보기
+            case BackStep.CloseCard: _cmds.Enqueue(s => { if (s.EndCard.Length > 0) s.EndWatch(); else s.AwayClose(); }); return true;   // 결산 카드: 그대로 지켜보기 · 그사이 카드: 닫기 (V7)
             case BackStep.ClosePhoto: _cmds.Enqueue(s => s.ClosePhoto()); return true;   // 크게 연 사진 (V5)
             case BackStep.ClosePhotoMode: _cmds.Enqueue(s => s.SetPhotoMode(false)); return true;   // 사진 모드 나가기
             case BackStep.Disarm: _cmds.Enqueue(s => s.Disarm()); return true;
@@ -2055,6 +2230,7 @@ void fragment() {
     public override void _UnhandledInput(InputEvent e)
     {
         if (_shown == null) return;
+        if (_clock - _touchSent >= 0.5 && e is InputEventKey or InputEventMouseButton or InputEventMouseMotion) { _touchSent = _clock; _cmds.Enqueue(s => s.Touched()); }   // 손이 닿았다 ('그사이' 카드 — V7)
         if (e is InputEventKey { Pressed: true } key) { OnKey(key); return; }
         if (e is InputEventMouseButton mb) { Mouse(mb); return; }
         if (e is InputEventMouseMotion mm)

@@ -177,7 +177,40 @@ public sealed partial class LiveShow
             case HandKind.Fault when why.Length == 0: where += " " + Device.PartName((Part)o.Part) + " 부품"; break;
         }
         if (why == "그 물건이 없다" && Armed == HandKind.Shove) why = "물건 위를 누른다";
+        if (why.Length == 0 && o.Cell >= 0 && Armed is not (HandKind.Shove or HandKind.Cloud)) where += AimPeople(o.Cell, Armed == HandKind.Fire);   // 손 결과 이름표 (V8 — docs/OBSERVER.md §7.3)
         return new HandAim(why.Length == 0, o.Cell, cx, cy, dx, dy, label + " — " + where, why, o.Obj);
+    }
+
+    /// <summary>손 결과 이름표 (docs/OBSERVER.md §7.3 — V8): ' · 이 방 사람 2 (1명 잠)' · 불씨면 ' · 가장 가까운 소화기 4m' (소화기 · 이산화탄소 소화기가 든 선반 · 보관함 — 칸 1m).</summary>
+    private string AimPeople(int cell, bool fire)
+    {
+        var L = Sim.Layout;
+        int room = Director.RoomNear(L, cell);
+        if (room < 0) return "";
+        var mind = Sim.Find<Mind>(); var life = Sim.Find<Life>();
+        int n = 0, asleep = 0;
+        if (mind != null && life != null)
+            foreach (var a in mind.Agents)
+            {
+                if (!a.IsPerson || a.C.Cell < 0 || a.C.Cell >= L.N || L.Room[a.C.Cell] != room) continue;
+                var b = life.Bodies[a.C.Body];
+                if (b.Alive == 0) continue;
+                n++; if (b.Asleep != 0) asleep++;
+            }
+        string s = $" · 이 방 사람 {n}" + (asleep > 0 ? $" ({asleep}명 잠)" : "");
+        if (fire)
+        {
+            double best = double.MaxValue;
+            if (mind != null)
+                foreach (var fu in L.Furniture)
+                {
+                    if (fu.Cells.Length == 0 || mind.Stock[fu.Id * mind.ItemCount + mind.iExt] + mind.Stock[fu.Id * mind.ItemCount + mind.iCO2] <= 0) continue;
+                    double dx = L.X(fu.Cells[0]) - L.X(cell), dy = L.Y(fu.Cells[0]) - L.Y(cell);
+                    best = Math.Min(best, Math.Sqrt(dx * dx + dy * dy));
+                }
+            s += best < double.MaxValue ? $" · 가장 가까운 소화기 {Math.Round(best):0}m" : " · 남은 소화기 없음";
+        }
+        return s;
     }
 
     /// <summary>받아 둔다 (산 세계 · 다음 틱 맨 처음에 일어난다): 알림 · 누른 칸 고리 · 손 카메라 8초 (바깥 갈래는 그대로) · 한 번 누르면 한 번 (겨눔이 풀린다).</summary>

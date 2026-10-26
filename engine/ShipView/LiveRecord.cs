@@ -38,6 +38,8 @@ public sealed partial class LiveShow
     {
         _cardCh = ch; _cardFull = _cardLeft = ch.Week ? WeekSec : ChapterSec;
         _cardFaces = ch.Cast.Select(FaceSlotOf).Where(s => s >= 0).Take(3).ToArray();
+        ShowHint("chapter");   // 첫 장 카드 · 첫 조용한 날 길잡이 (V7)
+        if (!ch.Week && ch.Mood == 0) ShowHint("calm");
     }
 
     /// <summary>나아갈 때마다 (Advance): 새 장이 생겼으면 카드 (같은 틱에 날 장과 한 주 장이 함께 나면 한 주 장) · 카드 시간을 줄인다.</summary>

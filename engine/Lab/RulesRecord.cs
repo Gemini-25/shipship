@@ -444,6 +444,49 @@ public static partial class Program
                 && back1 == BackStep.ClosePhoto && back2 == BackStep.ClosePhotoMode,
                 $"정점 {first} (그림 {drawn}) · 10초 안 {held} · 다시 {again} · 마지막 {lastOk}/{once} · 묘비 {tombOk} · 닫기 {closed} · 사진첩 {albumOk} ({shots.Count}줄) · 크게 {big} · ○ [사진] {photoAct} ('{orow.Act}' {orow.Mark}) · 자막 사진 {screenOk} '{sp?.Caption}' · 사진 모드 {modeOn}/{modeOff} · 왕복 {kept} (파일 {files}) · 세계 같음 {world} (정점 사진 {peaks}) · 자리 {bad.Count} {string.Join(" | ", bad.Take(2))} · 뒤로 {back1}/{back2}");
         }
+
+        // W1 (V5 검토 고침): 곳간에 쓴 뒤 정점이 바뀌어 다시 찍은 사진 — 다음 저장이 photos/에 새 그림을 남기고 (옛 파일은 지운다) · 이어 보면 새 그림 (자막 · 때와 맞는다)
+        {
+            var show = new LiveShow(HandShip(81), "디딤호");
+            show.Advance(0.2); show.Paused = true;
+            show.Photos.PackLater = false;
+            var s = show.Sim; var m = s.Get<Mind>();
+            int cell = m.Agents.First(a => a.IsPerson).C.Cell;
+            var h = new Highlight { Tick = s.Tick, StartTick = s.Tick - 2, Last = s.Tick, Cell = cell, Score = 120, Kind = FactKind.Extinguished, Title = "식당 불 → 정지우가 불을 껐다" };
+            show.Dir.Highlights.Add(h);
+            show.FastForward(1);
+            string dir = TempVoyages(); bool oldOnDisk = false, nowOnDisk = false, differ = false, retaken = false, resumed = false, captions = false; int files = -1; long t1 = -1, t2 = -1;
+            try
+            {
+                var store = new VoyageStore(dir);
+                var p = show.Photos.PeakOf(h);
+                t1 = p?.Tick ?? -1;
+                var oldPx = p != null ? show.Photos.Pixels(p).ToArray() : Array.Empty<byte>();
+                store.Write(show.SaveBundle(SaveKind.Daily));
+                show.FastForward(40);
+                h.Tick = s.Tick; h.Last = s.Tick;   // 정점이 바뀌었다 (게임 10초 넘어)
+                show.FastForward(1);
+                var p2 = show.Photos.PeakOf(h);
+                t2 = p2?.Tick ?? -1;
+                var nowPx = p2 != null ? show.Photos.Pixels(p2).ToArray() : Array.Empty<byte>();
+                retaken = p2 != null && t2 > t1 && p2.Peak == h.Tick;
+                differ = oldPx.Length > 0 && nowPx.Length == oldPx.Length && !oldPx.AsSpan().SequenceEqual(nowPx);   // 사람이 움직여 그림이 바뀌었다 (같으면 시험이 아무것도 못 본다)
+                var meta = store.Write(show.SaveBundle(SaveKind.Daily));
+                string pd = Path.Combine(store.FolderOf(meta), VoyageStore.PhotoFolder);
+                var disk = Directory.Exists(pd) ? Directory.GetFiles(pd, "*.png").Select(f => Png.Decode(File.ReadAllBytes(f))?.px).ToList() : new();
+                files = disk.Count;
+                oldOnDisk = disk.Any(d => d != null && d.AsSpan().SequenceEqual(oldPx));
+                nowOnDisk = disk.Any(d => d != null && d.AsSpan().SequenceEqual(nowPx));
+                var back = LiveShow.Resume(store, store.Latest() ?? meta, out _);
+                var bp = back?.Photos.Photos.FirstOrDefault(q => q.Kind == PhotoKind.Peak && q.Scene?.Title == h.Title);
+                resumed = bp != null && back!.Photos.Pixels(bp).AsSpan().SequenceEqual(nowPx);
+                captions = bp != null && p2 != null && bp.Tick == p2.Tick && bp.Caption == p2.Caption;
+            }
+            finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch (IOException) { } }
+            Check("사진 W1 다시 찍은 사진의 저장: 날마다 저장한 뒤 정점이 바뀌어 다시 찍으면 다음 저장의 photos/에 새 그림만 남고 (옛 그림은 지운다) · 이어 보면 새 그림 (자막 · 때와 맞는다)",
+                retaken && differ && nowOnDisk && !oldOnDisk && files == show.Photos.Photos.Count && resumed && captions,
+                $"다시 찍음 {retaken} (틱 {t1} → {t2}) · 그림 바뀜 {differ} · 곳간 = 지금 {nowOnDisk} · 곳간 = 옛 사진 {oldOnDisk} · 파일 {files}/{show.Photos.Photos.Count} · 이어 본 그림 같음 {resumed} · 자막 · 때 {captions}");
+        }
     }
 
     private static bool InsideR(RectF inner, RectF outer) => inner.X >= outer.X - 0.5f && inner.Y >= outer.Y - 0.5f && inner.Right <= outer.Right + 0.5f && inner.Bottom <= outer.Bottom + 0.5f;

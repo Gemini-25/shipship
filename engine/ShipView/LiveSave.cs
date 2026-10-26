@@ -313,7 +313,7 @@ public sealed class VoyageStore
             if (!b.Files.ContainsKey(Path.GetFileName(f))) try { File.Delete(f); } catch (IOException) { }
     }
 
-    /// <summary>사진 파일 (photos/p-번호.png — V5): 없는 것만 쓰고 (아직 RGBA면 PNG로 짓는다) · 이번 목록에 없는 옛 사진은 지운다 (사진첩이 놓은 것).</summary>
+    /// <summary>사진 파일 (photos/p-번호-틱.png — V5): 없는 것만 쓰고 (아직 RGBA면 PNG로 짓는다 · 다시 찍은 사진은 틱이 달라 새 이름) · 이번 목록에 없는 옛 사진은 지운다 (사진첩이 놓은 것 · 다시 찍기 전 그림).</summary>
     private static void WritePhotos(string folder, VoyageBundle b)
     {
         string dir = Path.Combine(folder, PhotoFolder);
@@ -431,7 +431,7 @@ public sealed partial class LiveShow
         if (Sim.Find<Hand>() is not { } h || h.Done.Count == 0 || h.Done[^1].Seq <= _handSeq) return;
         int i = h.Done.Count;
         while (i > 0 && h.Done[i - 1].Seq > _handSeq) i--;
-        for (; i < h.Done.Count; i++) _handLog.Add(h.Done[i]);
+        for (; i < h.Done.Count; i++) { _handLog.Add(h.Done[i]); NoteHandRoot(h.Done[i].Cause); }   // 일어난 손의 뿌리 — 그 경과 카드 (V8)
         _handSeq = h.Done[^1].Seq;
     }
 

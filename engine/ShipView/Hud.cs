@@ -28,6 +28,10 @@ public enum UiAct
     PhotoScene, PhotoClose, Photo, PhotoMode,
     // 내 사람 (docs/OBSERVER.md §6.2 — V6): ☆ 눈여겨보기 (사람 카드 · 자세히 머리 — 열쇠는 사람 번호)
     Star,
+    // 놓치지 않게 (docs/OBSERVER.md §6.3 ~ 6.5 — V7): 멈춤 카드 [보기] [계속] · '그사이' 카드 [닫기] · 메뉴 [알림 멈춤 ›] [창이 뒤로 가면 ›] · 갈래 고르기 (열쇠는 갈래 차례)
+    StopSee, StopGo, AwayClose, MenuStops, MenuAway, StopPick, AwayPick,
+    // 경과 (docs/OBSERVER.md §7.1 · 7.2 — V8): 경과 카드 [▶ 다시보기] · 결산 띠 (누르면 그 카드 — 열쇠는 뿌리)
+    EpisodeReplay, TallyGo,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -39,7 +43,7 @@ public enum RouteKind { World, Blocked, Hit }
 public readonly record struct Route(RouteKind Kind, UiHit? Hit = null, string Block = "");
 
 /// <summary>열린 펼친 목록 · 창.</summary>
-public enum HudOpen { None, Fixed, Overlay, Menu, Ships }
+public enum HudOpen { None, Fixed, Overlay, Menu, Ships, Stops, Away }
 public enum HudAsk { None, Ship, Restart, Start, NewVoyage, End }
 public enum BackStep { None, CloseAsk, CloseOpen, CloseHelp, CloseCard, Disarm, CloseDetail, ClosePanel, Release, ClosePhoto, ClosePhotoMode }
 
@@ -234,8 +238,10 @@ public sealed class HudState
     {
         HudOpen.Fixed => a is UiAct.Fixed or UiAct.FixedMenu,
         HudOpen.Overlay => a is UiAct.Overlay or UiAct.OverlayMenu,
-        HudOpen.Menu => a is UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuEnd or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help or UiAct.Menu,
+        HudOpen.Menu => a is UiAct.MenuShip or UiAct.MenuRestart or UiAct.MenuEnd or UiAct.MenuStops or UiAct.MenuAway or UiAct.MenuStart or UiAct.Sound or UiAct.Captions or UiAct.Speech or UiAct.Thoughts or UiAct.Help or UiAct.Menu,
         HudOpen.Ships => a is UiAct.ShipPick or UiAct.MenuShip or UiAct.Menu,
+        HudOpen.Stops => a is UiAct.StopPick or UiAct.MenuStops or UiAct.Menu,   // 갈래 고르기는 고르는 동안 열려 있다 (V7)
+        HudOpen.Away => a is UiAct.AwayPick or UiAct.MenuAway or UiAct.Menu,
         _ => false,
     };
 
@@ -248,7 +254,7 @@ public sealed class HudState
         return r.Hit.Act == p.Act && r.Hit.Key == p.Key ? r.Hit : null;
     }
 
-    /// <summary>뒤로 (오른쪽 누르기 · Esc): 확인 창 → 펼친 목록 → 도움말 → 결산 카드 (그대로 지켜보기) → 겨눔 (그만두기) → 자세히 (목록으로 — 사람 · 로봇) → 판 → 고른 이 → 없음. 다시보기는 끝내지 않는다 (docs/UI2.md §6.5 · OBSERVER.md §15.7).</summary>
+    /// <summary>뒤로 (오른쪽 누르기 · Esc): 확인 창 → 펼친 목록 → 도움말 → 결산 · 그사이 카드 → 겨눔 (그만두기) → 자세히 (목록으로 — 사람 · 로봇) → 판 → 고른 이 → 없음. 다시보기는 끝내지 않는다 (docs/UI2.md §6.5 · OBSERVER.md §15.7).</summary>
     public BackStep Back(LiveFrame f)
     {
         if (Ask != HudAsk.None) { Ask = HudAsk.None; return BackStep.CloseAsk; }
@@ -256,11 +262,11 @@ public sealed class HudState
         if (Help) { Help = false; return BackStep.CloseHelp; }
         if (f.PhotoMode) return BackStep.ClosePhotoMode;   // 사진 모드 · 크게 연 사진 (V5)
         if (f.Photo != null) return BackStep.ClosePhoto;
-        if (f.EndCard.Length > 0) return BackStep.CloseCard;
+        if (f.EndCard.Length > 0 || f.AwayCard.Length > 0) return BackStep.CloseCard;   // 결산 · 그사이 카드 (V7 — 멈춤 카드는 [계속] · 스페이스로만)
         if (f.Armed != HandKind.None) return BackStep.Disarm;
         if (f.Panel != PanelKind.None && f.Detail is DetailKind.Person or DetailKind.Robot) return BackStep.CloseDetail;   // 주컴퓨터 판은 목록이 없다 — 판을 닫는다
         if (f.Panel != PanelKind.None) return BackStep.ClosePanel;
-        if (f.Selected >= 0 || f.CardIs == CardKind.Thing) return BackStep.Release;   // 고른 이 · 고른 물건
+        if (f.Selected >= 0 || f.CardIs is CardKind.Thing or CardKind.Episode) return BackStep.Release;   // 고른 이 · 고른 물건 · 경과 카드 (V8)
         return BackStep.None;
     }
 
@@ -306,7 +312,7 @@ public static class HudLayout
         for (int i = 0; i < 4; i++)
         {
             var r = new RectF(ix, 6, 36, 32);
-            bool on = icons[i] switch { UiAct.Menu => s.Open is HudOpen.Menu or HudOpen.Ships, UiAct.Help => s.Help, UiAct.Captions => f.CaptionsOn, _ => s.Mute == 0 };
+            bool on = icons[i] switch { UiAct.Menu => s.Open is HudOpen.Menu or HudOpen.Ships or HudOpen.Stops or HudOpen.Away, UiAct.Help => s.Help, UiAct.Captions => f.CaptionsOn, _ => s.Mute == 0 };
             h.Hits.Add(new UiHit(r, icons[i], i, on, true, iconTips[i]));
             h.Areas["아이콘" + i] = r;
             ix -= 36 + 6;
@@ -411,16 +417,26 @@ public static class HudLayout
         {
             float lh = 0;
             for (int i = 0; i < f.Card.Length; i++) lh += Math.Max(26, Th(f.Card[i], i == 0 ? 19 : 16, CardW - 28, i == 0 ? 1 : 2) + 6);
-            bool thing = f.CardIs == CardKind.Thing, more = !thing && f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] · 물건 카드: [사고 ›] (docs/UI2.md §5.4)
-            var card = new RectF(Side, leftY, CardW, Math.Max(0, Math.Min(20 + lh + 8 + (more ? 36 : 0), lowTop - leftY - 40)));   // 아주 낮은 창에서는 0 (음수 높이를 그리지 않는다)
+            bool thing = f.CardIs == CardKind.Thing, episode = f.CardIs == CardKind.Episode, more = !thing && !episode && f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] · 물건 카드: [사고 ›] (docs/UI2.md §5.4) · 경과 카드: 가로 시계 · [▶ 다시보기] (V8)
+            float head = Math.Max(26, Th(f.Card[0], 19, CardW - 28, 1) + 6);
+            if (f.CardIs == CardKind.Episode) { float h2 = Math.Max(26, Th(f.Card[0], 19, CardW - 72, 2) + 6); lh += h2 - head; head = h2; }   // 경과 카드 머리는 두 줄까지 (× 단추만 곁에)
+            var card = new RectF(Side, leftY, CardW, Math.Max(0, Math.Min(20 + lh + 8 + (more ? 36 : 0) + (episode ? EpisodeClockH + 6 + 38 : 0), lowTop - leftY - 40)));   // 아주 낮은 창에서는 0 (음수 높이를 그리지 않는다)
             if (more) h.Hits.Add(new UiHit(new RectF(Side + 8, card.Bottom - 36, CardW - 16, 28), UiAct.DetailOpen, 0, false, true, "자세히 보기 — 몸 · 마음 · 하는 일 · 아는 것 · 일지"));
             h.Areas["카드"] = card;
             h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28, leftY + 6, 28, 28), UiAct.CardClose, 0, false, true, "놓기 (Esc · 오른쪽 누르기)"));
-            if (thing) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.LookHand, 0, false, f.LookHandOk, "이것에 사고를 일으킨다 — 사고 판이 열리고 겨눈다", f.LookHandWhy));
+            if (episode)
+            {
+                // 경과 카드 (docs/OBSERVER.md §7.1 — V8): 머리 아래 가로 시계 (일어남 → 끝 · 마디마다 점) · 맨 아래 [▶ 다시보기] (그 뿌리의 장면이 없거나 볼 수 없으면 옅게)
+                var clock = new RectF(Side + 16, leftY + 8 + head, CardW - 32, EpisodeClockH);
+                if (clock.Bottom <= card.Bottom - 38) h.Areas["경과 시계"] = clock;
+                h.Hits.Add(new UiHit(new RectF(Side + 8, card.Bottom - 36, 170, 30), UiAct.EpisodeReplay, 0, false, f.EpisodeCanReplay, "그 장면 다시보기", "그 일의 장면이 없거나 이미 볼 수 없다"));
+                h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 8, 30), UiAct.CardName, 0, false, true, "그 자리로"));
+            }
+            else if (thing) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.LookHand, 0, false, f.LookHandOk, "이것에 사고를 일으킨다 — 사고 판이 열리고 겨눈다", f.LookHandWhy));
             else h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.CardFollow, 0, f.FollowSelected, true, f.FollowSelected ? "따라가는 중" : "다시 따라가기"));
             bool star = !thing && f.Selected >= 0 && f.Crew.Any(c => c.Id == f.Selected);   // 사람 카드의 ☆ (V6 — 로봇은 없다)
             if (star) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80 - 6 - 32, leftY + 6, 32, 28), UiAct.Star, f.Selected, f.Stars.Contains(f.Selected), true, StarTip(f.Stars.Contains(f.Selected))));
-            h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8 - (star ? 38 : 0), 30), UiAct.CardName, 0, false, true, "그 자리로"));
+            if (!episode) h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8 - (star ? 38 : 0), 30), UiAct.CardName, 0, false, true, "그 자리로"));
             h.Blocks.Add(("카드", card));
             leftY = card.Bottom + 8;
         }
@@ -477,6 +493,21 @@ public static class HudLayout
             h.Blocks.Add(("감기 띠", r));
             cy = r.Bottom + 8;
         }
+        if (f.StopLine.Length > 0)
+        {
+            // 멈춤 카드 (docs/OBSERVER.md §6.3 — V7 · 큰 일이 난 그 틱 · 하나만): '멈춤 — 김하늘이 쓰러졌다 (식당 · 07:04)' · [보기] (그 자리 · 따라가기) [계속] (스페이스) — 칸이 좁으면 단추를 글 아래에
+            const float Pad = 12, BtnW = 110, BtnH = 36;
+            float tw = Tw(f.StopLine, 18, true);
+            bool one = tw + 2 * BtnW + 8 + 48 <= colW;
+            float th = one ? BtnH : Th(f.StopLine, 18, colW - 32, 2);
+            var r = one ? Center(tw + 2 * BtnW + 8 + 48, BtnH + 2 * Pad) : Center(colW, Pad + th + 8 + BtnH + Pad);
+            h.Areas["멈춤 카드"] = r;
+            var go = new RectF(r.Right - 16 - BtnW, r.Bottom - Pad - BtnH, BtnW, BtnH);
+            h.Hits.Add(new UiHit(new RectF(go.X - 8 - BtnW, go.Y, BtnW, BtnH), UiAct.StopSee, 0, false, true, "그 자리로 — 사람이면 따라간다"));
+            h.Hits.Add(new UiHit(go, UiAct.StopGo, 0, true, true, "계속 (스페이스) — 멈출 갈래는 메뉴 [알림 멈춤 ›]"));
+            h.Blocks.Add(("멈춤 카드", r));
+            cy = r.Bottom + 8;
+        }
         if (f.EndCard.Length > 0)
         {
             // 결산 카드 (docs/OBSERVER.md §5.6 — 멈춘다): 제목 · 사람마다 한 줄 · 큰 장면 · [같은 배로 새 항해 — 새 사람들] [그대로 지켜보기] — 칸이 좁으면 단추를 두 줄로 · 낮으면 줄을 덜 보인다
@@ -519,6 +550,18 @@ public static class HudLayout
             h.Blocks.Add(("지난번까지", r));
             cy = r.Bottom + 8;
         }
+        if (f.AwayCard.Length > 0)
+        {
+            // '그사이' 카드 (docs/OBSERVER.md §6.5 — V7 · 닫을 때까지): 머리 · 장 · 장면 · 숨진 이 · 바뀐 것 · [닫기] — '지난번까지'와 같은 꼴 · 낮으면 줄을 덜 보인다
+            float wide = f.AwayCard.Select((l, i) => Tw(l, i == 0 ? 18 : 16, i == 0)).DefaultIfEmpty(0).Max();
+            int fit = (int)Math.Floor((lowTop - cy - 8 - (14 + 28 + 12 + 40 + 12)) / 24);
+            int shown = Math.Clamp(f.AwayCard.Length - 1, 0, Math.Max(0, fit));
+            var r = Center(Math.Max(520, wide + 48), 14 + 28 + shown * 24 + 12 + 40 + 12);
+            h.Areas["그사이"] = r;
+            h.Hits.Add(new UiHit(new RectF(r.Right - 16 - 140, r.Bottom - 12 - 40, 140, 40), UiAct.AwayClose, 0, true, true, "닫기 (Esc · 오른쪽 누르기)"));
+            h.Blocks.Add(("그사이", r));
+            cy = r.Bottom + 8;
+        }
         if (f.ChapterTitle.Length > 0 && f.ChapterAlpha > 0.02f)
         {
             // 장 카드 (docs/OBSERVER.md §5.1 — 4초 · 한 주 6초): 제목 · 하루의 결 · 주인공 얼굴 · '누르면 기록 ›' — 카드 전체가 누를 자리
@@ -542,6 +585,16 @@ public static class HudLayout
             h.Blocks.Add(("★ 띠", r));
             cy = r.Bottom + 8;
         }
+        if (f.Tally.Length > 0 && f.TallyAlpha > 0.02f)
+        {
+            // 결산 띠 (docs/OBSERVER.md §7.2 — V8 · 6초): '침실 둘 불 — 11분 · 다친 이 1 · 끈 이 로봇 1' — 띠 전체가 누를 자리 (그 경과 카드)
+            float tw = Math.Min(Tw(f.Tally, 17, true), colW - 40 - 24);
+            var r = Center(tw + 40 + 24, 40);
+            h.Areas["결산 띠"] = r;
+            h.Hits.Add(new UiHit(r, UiAct.TallyGo, 0, false, true, "경과 카드 보기 — 언제 알고 · 누가 맞서고 · 어떻게 끝났나"));
+            cy = r.Bottom + 8;
+        }
+        float noticeBottom = -1;
         if (f.Notice.Length > 0)
         {
             float tw = Math.Min(Tw(f.Notice, 17), colW - 40);
@@ -550,6 +603,18 @@ public static class HudLayout
             h.Areas["알림"] = r;
             if (f.NoticeLink != PanelKind.None) h.Hits.Add(new UiHit(r, UiAct.Notice, 0, false, true, "눌러서 보기"));
             else h.Blocks.Add(("알림", r));
+            noticeBottom = r.Bottom;
+        }
+        if (f.Hint.Length > 0 && f.HintAlpha > 0.02f)
+        {
+            // 처음 한 줄 길잡이 (docs/OBSERVER.md §6.6 — V7 · 5초): 알림 아래 · 아래 묶음까지 자리가 없으면 띄우지 않는다
+            float keep = cy;
+            if (noticeBottom > 0) cy = noticeBottom + 8;
+            float tw = Math.Min(Tw(f.Hint, 16), colW - 40);
+            float th = Th(f.Hint, 16, tw, 2);
+            var r = Center(tw + 32, Math.Max(34, th + 14));
+            if (r.Bottom <= lowTop - 8) { h.Areas["길잡이"] = r; h.Blocks.Add(("길잡이", r)); cy = r.Bottom + 8; }
+            else cy = keep;
         }
 
         // ── 두 곳 나눠 보기 (U9 · docs/OBSERVER.md §8-12): 가운데 칸 왼쪽 아래 (아래 묶음 위) — 자리가 모자라면 띄우지 않는다 ──
@@ -596,10 +661,10 @@ public static class HudLayout
             h.Blocks.Insert(0, ("목록 겹쳐 보기", area)); h.Areas["목록 겹쳐 보기"] = area;
             for (int i = 0; i < 6; i++) h.Hits.Insert(0, new UiHit(new RectF(area.X + 8, area.Y + 8 + i * 34, 244, 32), UiAct.Overlay, i, (int)f.Show == i, true, LiveShow.OverlayName((Overlay)i)));
         }
-        if (s.Open is HudOpen.Menu or HudOpen.Ships)
+        if (s.Open is HudOpen.Menu or HudOpen.Ships or HudOpen.Stops or HudOpen.Away)
         {
-            string[] items = { "배 바꾸기 ›", "새 항해 ›", "항해 끝내기", "소리", "소리 자막", "말풍선 (K)", "속마음 풍선 (I)", "도움말", "처음 화면으로" };
-            UiAct[] acts = { UiAct.MenuShip, UiAct.MenuRestart, UiAct.MenuEnd, UiAct.Sound, UiAct.Captions, UiAct.Speech, UiAct.Thoughts, UiAct.Help, UiAct.MenuStart };
+            string[] items = MenuWords;
+            UiAct[] acts = { UiAct.MenuShip, UiAct.MenuRestart, UiAct.MenuEnd, UiAct.MenuStops, UiAct.MenuAway, UiAct.Sound, UiAct.Captions, UiAct.Speech, UiAct.Thoughts, UiAct.Help, UiAct.MenuStart };
             var area = new RectF(W - Side - 240, 46, 240, items.Length * 38 + 12);
             h.Blocks.Insert(0, ("목록 메뉴", area)); h.Areas["목록 메뉴"] = area;
             for (int i = items.Length - 1; i >= 0; i--)
@@ -612,6 +677,21 @@ public static class HudLayout
                 var sa = new RectF(area.X - 8 - 260, 46, 260, ships.Length * 38 + 12);
                 h.Blocks.Insert(0, ("목록 배", sa)); h.Areas["목록 배"] = sa;
                 for (int i = ships.Length - 1; i >= 0; i--) h.Hits.Insert(0, new UiHit(new RectF(sa.X + 6, sa.Y + 6 + i * 38, 248, 36), UiAct.ShipPick, i, false, true, ships[i]));
+            }
+            if (s.Open is HudOpen.Stops or HudOpen.Away)
+            {
+                // 갈래 고르기 (docs/OBSERVER.md §6.3 · 6.4 · §15.4 — V7): 머리 한 줄 · 줄마다 도형 체크 (알림 멈춤 — 여럿) · 도형 동그라미 (창이 뒤로 가면 — 하나)
+                bool stops = s.Open == HudOpen.Stops;
+                string[] names = stops ? ViewPrefs.StopNames : ViewPrefs.AwayNames;
+                string name = stops ? "목록 알림 멈춤" : "목록 창이 뒤로 가면";
+                var sa = new RectF(area.X - 8 - 300, 46, 300, 40 + names.Length * 38 + 8);
+                h.Blocks.Insert(0, (name, sa)); h.Areas[name] = sa;
+                for (int i = names.Length - 1; i >= 0; i--)
+                {
+                    bool on = stops ? i < f.StopKinds.Length && f.StopKinds[i] : f.AwayMode == i;
+                    string tip = stops ? (on ? $"{names[i]} — 그 틱에서 멈춘다 (누르면 끈다)" : $"{names[i]} — 멈추지 않는다 (누르면 켠다)") : names[i];
+                    h.Hits.Insert(0, new UiHit(new RectF(sa.X + 6, sa.Y + 40 + i * 38, 288, 36), stops ? UiAct.StopPick : UiAct.AwayPick, i, on, true, tip));
+                }
             }
         }
         if (s.Help)
@@ -634,6 +714,13 @@ public static class HudLayout
             h.Modal = true;
         }
     }
+
+    /// <summary>경과 카드의 가로 시계 높이 (V8).</summary>
+    public const float EpisodeClockH = 26;
+
+    /// <summary>메뉴 줄 글 (차례 — LiveMain이 그린다 · 시험이 글자를 본다).</summary>
+    public static readonly string[] MenuWords = { "배 바꾸기 ›", "새 항해 ›", "항해 끝내기", "알림 멈춤 ›", "창이 뒤로 가면 ›", "소리", "소리 자막", "말풍선 (K)", "속마음 풍선 (I)", "도움말", "처음 화면으로" };
+    public const string StopsHead = "큰 일이 나면 그 자리에서 멈춘다", AwayHead = "창이 뒤로 가면";
 
     /// <summary>판에 출항 줄이 있나: 출항 준비 중 항로 판 · 출항 소개 (사람 판의 목록 — V6).</summary>
     public static bool HoldRow(LiveFrame f) => f.Holding && (f.Panel == PanelKind.Route || f.Panel == PanelKind.People && f.Detail == DetailKind.None);
