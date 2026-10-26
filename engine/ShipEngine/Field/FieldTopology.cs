@@ -241,11 +241,13 @@ public sealed partial class Field
         int back = Cell(x - dx, y - dy);
         if (!Side(back)) return;
         double area = Hole[i];
+        int last = i;
         for (int k = 1; k <= 3; k++)
         {
             int j = Cell(x + dx * k, y + dy * k);
-            if (HoledWall(j)) { area = Math.Min(area, Hole[j]); continue; }
-            if (k > 1 && Side(j) && (Gasy(back) || Gasy(j))) AddLink(back, j, i, area, area >= 0.05 ? LinkKind.Breach : LinkKind.Crack);
+            if (HoledWall(j)) { area = Math.Min(area, Hole[j]); last = j; continue; }
+            // 틈의 구멍 칸은 공기 쪽 끝의 것 (막음 · 빨림이 그 칸으로 읽는다 — 배가 어느 쪽을 보든 같게 · DF8 검토 고침)
+            if (k > 1 && Side(j) && (Gasy(back) || Gasy(j))) AddLink(back, j, Gasy(j) && !Gasy(back) ? last : i, area, area >= 0.05 ? LinkKind.Breach : LinkKind.Crack);
             return;
         }
     }

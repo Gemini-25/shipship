@@ -68,6 +68,26 @@ public static partial class Program
                     $"구멍 외판 {f.Hole[hull] * 1e4:0}cm² · 칸막이 {f.Hole[inner] * 1e4:0}cm² · 방 {p0:0.0} → {f.Pressure(room):0.0}kPa · 틈 {string.Join(",", f.Links.Select(k => $"{k.Kind}({lay.X(k.Via)},{lay.Y(k.Via)}){k.Area*1e4:0}"))} · 구멍 {string.Join(",", Enumerable.Range(0, lay.N).Where(c => f.Hole[c] > 0).Select(c => $"({lay.X(c)},{lay.Y(c)}){lay.Kind[c]}{f.Hole[c]*1e4:0}"))}");
             }
 
+            // 두 겹 벽 막음은 배가 보는 쪽과 상관없다 (DF8 검토 고침): 외판이 위 · 아래 어느 쪽이든 안쪽 칸막이 구멍을 덮으면 새는 것이 거의 멎는다 (예전: 외판이 위면 덮어도 그대로)
+            {
+                double Room(bool top, bool plug)
+                {
+                    string art = top ? "\n###########\n#####.....#\n#.........#\n#.........#\n#.........#\n###########"
+                                     : "\n###########\n#.........#\n#.........#\n#.........#\n#####.....#\n###########";
+                    var lay = Worlds.Ascii(art);
+                    var s = FieldStructure(lay);
+                    var f = s.Get<Field>();
+                    int hull = Worlds.At(lay, 2, top ? 0 : 5), inner = Worlds.At(lay, 2, top ? 1 : 4);
+                    f.SetHole(hull, 0.03f); f.SetHole(inner, 0.02f);
+                    if (plug) f.SetPlug(inner, 0.97f * 0.02f);
+                    s.Run((int)Time.Minutes(1));
+                    return f.Pressure(Worlds.At(lay, 6, 2));
+                }
+                double topOpen = Room(true, false), topPlug = Room(true, true), botOpen = Room(false, false), botPlug = Room(false, true);
+                Check("두 겹 벽 막음: 외판이 위든 아래든 안쪽 칸막이 구멍을 덮으면 1분 뒤 기압이 거의 그대로 (덮지 않으면 빠진다 · 위 = 아래)",
+                    topPlug > 90 && botPlug > 90 && topOpen < 80 && Math.Abs(topPlug - botPlug) < 1, $"위: 열림 {topOpen:0.0} · 덮음 {topPlug:0.0}kPa / 아래: 열림 {botOpen:0.0} · 덮음 {botPlug:0.0}kPa");
+            }
+
             // 맞은 몸은 그 자리에서: 같은 파편 · 같은 자리 · 다음 틱에 걸어 나간다 — 생명 박자의 위상 다섯 가지 모두 같은 타박 (예전: 바로 다음 틱이 생명 틱일 때만 맞았다)
             {
                 var lay = Worlds.Ascii(Worlds.Sealed);

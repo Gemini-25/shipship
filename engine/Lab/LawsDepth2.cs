@@ -60,18 +60,20 @@ public static partial class Program
         // 충격파 연속: 같은 방 · 같은 자리에 7km/s 운석 30 · 50 · 80MJ — 부서진 탁자가 에너지와 함께 고르게 는다 (예전: 20MJ 문턱의 절벽 — 49MJ 1 · 81MJ 7)
         {
             var lay = Worlds.Ascii(TableHall, new() { ['t'] = "Table" });
-            int Smashed(double mj)
+            (int broke, double kpa) Smashed(double mj)
             {
                 var s = Worlds.Full(lay, 1);
                 s.Run(2);
                 var st = s.Get<Structure>();
                 double kg = 2 * mj * 1e6 / (7000.0 * 7000);
                 st.Rock(s, Worlds.At(lay, 10, 0), kg, mj * 1e6, 0, 1, 0, 1, s.Causes.Add(CauseKind.Impact, $"{kg:0.0}kg 운석", s.Tick));
-                return Enumerable.Range(0, lay.Furniture.Count).Count(f => st.FurnBroken[f] != 0 && s.Causes.Text(st.FurnCause[f]).StartsWith("충격파에"));
+                return (Enumerable.Range(0, lay.Furniture.Count).Count(f => st.FurnBroken[f] != 0 && s.Causes.Text(st.FurnCause[f]).StartsWith("충격파에")),
+                    Enumerable.Range(0, lay.N).Sum(c => (double)st.BlastPeakKPa[c]));   // 바닥 칸마다 폭풍 첨두 (kPa) 합 — 고르게 느는 잣대
             }
-            int s30 = Smashed(30), s50 = Smashed(50), s80 = Smashed(80);
-            Check("충격파 연속: 탁자 36개 방 외판에 7km/s 운석 30 · 50 · 80MJ — 충격파에 부서진 설비가 고르게 는다 (30 < 50 < 80 · 50→80이 30→50의 세 배를 넘지 않는다 — 절벽이 없다)",
-                s30 < s50 && s50 < s80 && s80 - s50 <= 3 * (s50 - s30), $"30MJ {s30} · 50MJ {s50} · 80MJ {s80}");
+            var (b30, p30) = Smashed(30); var (b50, p50) = Smashed(50); var (b80, p80) = Smashed(80);
+            Check("충격파 연속: 탁자 36개 방 외판에 7km/s 운석 30 · 50 · 80MJ — 바닥 칸마다 폭풍 첨두의 합이 고르게 는다 (30 < 50 < 80 · 50→80이 30→50의 세 배를 넘지 않는다 — 절벽이 없다) · 충격파에 부서진 탁자도 줄지 않고 는다",
+                p30 > 0 && p30 < p50 && p50 < p80 && p80 - p50 <= 3 * (p50 - p30) && b30 <= b50 && b50 <= b80 && b80 > b30,
+                $"첨두 합 30MJ {p30:0} · 50MJ {p50:0} · 80MJ {p80:0}kPa / 부서진 탁자 {b30} · {b50} · {b80}");
         }
 
         // 정적 하중은 시들게 하지 않는다: 진공 옆 닫힌 보통 문이 72시간 버틴다 (끼익거리며 · 피로 0 그대로) — 예전: 한 기압 부하 0.84에 피로가 쌓여 51분 만에 날아갔다

@@ -238,6 +238,7 @@ public sealed partial class Structure : IEngine
             }
             if (nu == 0) break;
             bool opened = false;
+            double hopBlast = 0, hopTop = 0; int hopAt = -1;   // 이 걸음의 충격파 (갈래들의 칸을 합쳐 가장 뜨거운 칸에서 한 번 — DF8·DF9 검토 고침: 칸마다 따로 터뜨리면 큰 충돌 한 번에 폭풍 셈이 스무 번)
             for (int u = 0; u < nu; u++)
             {
                 int c = uc[u];
@@ -281,7 +282,8 @@ public sealed partial class Structure : IEngine
                     double heat = e * 0.5;
                     // 초고속 충돌은 배 안에서 터진다: 그 열의 15%가 충격파 (파편 구름 · 증기의 팽창 — 문턱 없이 연속 · DF9: 작은 관통은 TNT 50g 아래라 폭풍이 없고 ·
                     //  kg급 운석부터 방을 넘어서는 충격파가 된다 — 예전 20MJ 문턱의 절벽이 없다)
-                    if (heat * BlastShare >= BlastMinJ) { Blast(sim, c, heat * BlastShare, cause); heat *= 1 - BlastShare; }
+                    hopBlast += heat * BlastShare; if (heat > hopTop) { hopTop = heat; hopAt = c; }
+                    heat *= 1 - BlastShare;
                     F.AddSurfaceHeat(c, heat * 0.5);
                     F.AddHeat(c, heat * 0.5);
                     sim.Find<Chemistry>()?.Ignite(c, 0, cause);
@@ -297,6 +299,8 @@ public sealed partial class Structure : IEngine
                 while (uc[u] != rc[i]) u++;
                 re[i] *= uf[u];
             }
+            if (hopBlast >= BlastMinJ) Blast(sim, hopAt, hopBlast, cause);
+            else if (hopBlast > 0) { F.AddSurfaceHeat(hopAt, hopBlast * 0.5); F.AddHeat(hopAt, hopBlast * 0.5); }   // 폭풍이 되기엔 작다 — 그 칸의 열로
             if (opened)
             {
                 // 첫 벽을 뚫었다: 남은 에너지를 원뿔의 갈래로 나눈다
