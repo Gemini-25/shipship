@@ -18,6 +18,8 @@ public enum UiAct
     Pause, Speed, FixedMenu, Fixed, Sound, Captions, Help, Menu, MenuShip, ShipPick, MenuRestart, MenuStart, Tab, PanelClose, PanelRow, PanelRowAct, PanelBar, ChainLines, Depart,
     CardFollow, CardClose, CardName, Crew, CrewMore, Feed, Vital, Notice, BannerReplay, Broadcast, Story, ReplayStop, Director, Overview, ZoomIn, ZoomOut, OverlayMenu, Overlay, ReplayLast, AskYes, AskNo, RouteTab, Speech, Thoughts, Robot, RobotMore, Talk,
     DetailTab, DetailBack, DetailFollow, DetailOpen, HandSize, HandCancel, HandNow, LookHand, Inset,
+    // 항해 번호 · 이어 보기 (docs/OBSERVER.md §3.3 · 3.4 — V2): 번호 창 (숫자판 0~9 · 10 지움 · 11 새로 뽑기 · 배 ‹ ›) · 출항 준비 [다른 사람들로] · '지난번까지' [계속] · 처음 화면 카드
+    VoyageKey, VoyageShip, Recrew, ResumeGo, StartResume, StartOther, StartNew, StartPick, StartRenew, StartDelete, StartChoice, StartQuit,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -30,7 +32,7 @@ public readonly record struct Route(RouteKind Kind, UiHit? Hit = null, string Bl
 
 /// <summary>열린 펼친 목록 · 창.</summary>
 public enum HudOpen { None, Fixed, Overlay, Menu, Ships }
-public enum HudAsk { None, Ship, Restart, Start }
+public enum HudAsk { None, Ship, Restart, Start, NewVoyage }
 public enum BackStep { None, CloseAsk, CloseOpen, CloseHelp, Disarm, CloseDetail, ClosePanel, Release }
 
 /// <summary>
@@ -138,7 +140,7 @@ public sealed class Hud
         "오른쪽 아래   연출 따라가기 (F) · 배 전체 (Tab) · 축소 · 확대 · 겹쳐 보기 (O) · 방금 장면 다시보기 (B)",
         "겹쳐 보기   공기 · 열 · 연기 · 사슬 선 · 선과 관",
         "위 오른쪽   소리 (M) · 소리 자막 (U) · 도움말 (H) · 메뉴 — 말풍선 (K) · 속마음 풍선: 끔 · 고른 이 · 화면 안 셋 (I)",
-        "메뉴   배 바꾸기 (N 두 번) · 같은 배로 새 항해 (R 두 번) · 처음 화면 (Esc 두 번)",
+        "메뉴   배 바꾸기 (N 두 번) · 새 항해 — 번호를 넣거나 새로 뽑는다 (R 두 번) · 처음 화면 (Esc 두 번) · 지금 항해는 저장해 둔다",
         "띠 · 알림 누르기   그 자리 · 그 판으로",
         $"항로   출항 전에만 여덟 항로 가운데 고른다 · 지금 항로: {route}",
     };
@@ -152,6 +154,26 @@ public sealed class HudState
     public HudAsk Ask;
     public string AskShip = "";
     public int AskFocus;              // 0 그만두기 · 1 하기
+    /// <summary>번호 창 (HudAsk.NewVoyage): 넣은 번호 (숫자 글 · 다섯 자리까지) · 고른 배 (배 목록 차례) · 띄우면 지울 가장 오래된 항해 (빈 글: 없음).</summary>
+    public string AskNumber = ""; public int AskShipAt; public string AskPrune = "";
+
+    /// <summary>번호 창 숫자판: 0~9 붙이기 (다섯 자리까지 · 앞 0은 뗀다) · 10 지움 · 11 새로 뽑기.</summary>
+    public void VoyageKey(int k)
+    {
+        if (k is >= 0 and <= 9) { if (AskNumber.Length >= 5 || AskNumber.Length == 0 && k == 0) return; AskNumber += (char)('0' + k); }
+        else if (k == 10) { if (AskNumber.Length > 0) AskNumber = AskNumber[..^1]; }
+        else if (k == 11) AskNumber = VoyageNumber.Draw().ToString();
+    }
+
+    /// <summary>넣은 번호가 띄울 수 있는 번호인가 (1000 ~ 99999).</summary>
+    public bool AskNumberOk => VoyageNumber.Parse(AskNumber) != null;
+
+    /// <summary>번호 창을 연다 (지금 배 · 지금 번호로 — 넣을 수 없는 번호 (확인용 18)면 새로 뽑아 둔다).</summary>
+    public void OpenVoyage(int shipAt, ulong number)
+    {
+        Ask = HudAsk.NewVoyage; AskShipAt = shipAt; AskFocus = 1; Open = HudOpen.None;
+        AskNumber = VoyageNumber.Parse(number.ToString()) != null ? number.ToString() : VoyageNumber.Draw().ToString();
+    }
     public int PanelFirst;
     public PanelKind PanelSeen;
     public long PickSeen = long.MinValue;
@@ -412,11 +434,21 @@ public static class HudLayout
         }
         if (f.Holding && f.Panel != PanelKind.Route)
         {
-            var r = Center(560, 44);
+            var r = Center(720, 44);
             h.Areas["출항 띠"] = r;
             h.Hits.Add(new UiHit(new RectF(r.Right - 8 - 150, r.Y + 4, 150, 36), UiAct.Depart, 0, false, true, "이대로 출항 (스페이스)"));
             h.Hits.Add(new UiHit(new RectF(r.Right - 8 - 150 - 6 - 120, r.Y + 4, 120, 36), UiAct.RouteTab, 0, false, true, "항로 고르기 (T)"));
+            h.Hits.Add(new UiHit(new RectF(r.Right - 8 - 150 - 6 - 120 - 6 - 136, r.Y + 4, 136, 36), UiAct.Recrew, 0, false, true, "새 번호로 다른 사람들을 태운다 (출항 전에만)"));
             h.Blocks.Add(("출항 띠", r));
+            cy = r.Bottom + 8;
+        }
+        if (f.ResumeCard.Length > 0)
+        {
+            float wide = f.ResumeCard.Select((l, i) => Tw(l, i == 0 ? 18 : 16, i == 0)).DefaultIfEmpty(0).Max();
+            var r = Center(Math.Max(520, wide + 48), 14 + 28 + (f.ResumeCard.Length - 1) * 24 + 12 + 40 + 12);
+            h.Areas["지난번까지"] = r;
+            h.Hits.Add(new UiHit(new RectF(r.Right - 16 - 140, r.Bottom - 12 - 40, 140, 40), UiAct.ResumeGo, 0, true, true, "계속 (스페이스)"));
+            h.Blocks.Add(("지난번까지", r));
             cy = r.Bottom + 8;
         }
         if (f.Banner.Length > 0 && f.BannerAlpha > 0.05f)
@@ -483,7 +515,7 @@ public static class HudLayout
         }
         if (s.Open is HudOpen.Menu or HudOpen.Ships)
         {
-            string[] items = { "배 바꾸기 ›", "같은 배로 새 항해", "소리", "소리 자막", "말풍선 (K)", "속마음 풍선 (I)", "도움말", "처음 화면으로" };
+            string[] items = { "배 바꾸기 ›", "새 항해 ›", "소리", "소리 자막", "말풍선 (K)", "속마음 풍선 (I)", "도움말", "처음 화면으로" };
             UiAct[] acts = { UiAct.MenuShip, UiAct.MenuRestart, UiAct.Sound, UiAct.Captions, UiAct.Speech, UiAct.Thoughts, UiAct.Help, UiAct.MenuStart };
             var area = new RectF(W - Side - 240, 46, 240, items.Length * 38 + 12);
             h.Blocks.Insert(0, ("목록 메뉴", area)); h.Areas["목록 메뉴"] = area;
@@ -504,7 +536,8 @@ public static class HudLayout
             h.Hits.Insert(1, new UiHit(new RectF(0, 0, W, H), UiAct.Help, 2, false, true, ""));   // 아무 데나 누르면 닫힌다
             h.Modal = true;
         }
-        if (s.Ask != HudAsk.None)
+        if (s.Ask == HudAsk.NewVoyage) VoyageWindow(h, s, ships, (t, size, b) => Tw(t, size, b));
+        else if (s.Ask != HudAsk.None)
         {
             var r = new RectF(W / 2 - 230, H / 2 - 85, 460, 170);
             h.Areas["창 확인"] = r;
@@ -514,6 +547,42 @@ public static class HudLayout
             h.Modal = true;
         }
     }
+
+    /// <summary>번호 창 (docs/OBSERVER.md §3.4 — 게임 메뉴 [새 항해 ›] · 처음 화면 [새 항해 ›]가 같은 창): 배 ‹ › · 번호 · [새로 뽑기] · 숫자판 · [그만두기] [띄우기]. 다른 누를 자리는 지운다 (모달).</summary>
+    public static void VoyageWindow(Hud h, HudState s, string[]? ships, Func<string, int, bool, float> tw)
+    {
+        float ww = 520, wh = 540;
+        var r = new RectF(h.W / 2 - ww / 2, Math.Max(8, h.H / 2 - wh / 2), ww, wh);
+        h.Areas["창 새 항해"] = r;
+        h.Hits.Clear();
+        int n = ships?.Length ?? 0;
+        // 배 ‹ › (이름은 그 사이에)
+        h.Hits.Add(new UiHit(new RectF(r.X + 24, r.Y + 60, 44, 44), UiAct.VoyageShip, -1, false, n > 1, "앞 배"));
+        h.Hits.Add(new UiHit(new RectF(r.Right - 24 - 44, r.Y + 60, 44, 44), UiAct.VoyageShip, 1, false, n > 1, "다음 배"));
+        h.Areas["새 항해 배"] = new RectF(r.X + 76, r.Y + 60, ww - 152, 44);
+        // 번호 · [새로 뽑기]
+        h.Areas["새 항해 번호"] = new RectF(r.X + 24, r.Y + 120, 220, 56);
+        h.Hits.Add(new UiHit(new RectF(r.X + 24 + 220 + 12, r.Y + 120, ww - 48 - 232, 56), UiAct.VoyageKey, 11, false, true, "번호를 새로 뽑는다"));
+        // 숫자판: 1 2 3 / 4 5 6 / 7 8 9 / 지움 0
+        float kw = 96, kh = 52, gap = 8, kx = r.X + ww / 2 - (3 * kw + 2 * gap) / 2, ky = r.Y + 192;
+        int[] grid = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0 };
+        for (int i = 0; i < grid.Length; i++)
+        {
+            int row = i / 3, col = i % 3;
+            h.Hits.Add(new UiHit(new RectF(kx + col * (kw + gap), ky + row * (kh + gap), kw, kh), UiAct.VoyageKey, grid[i], false, true, grid[i] == 10 ? "한 자리 지운다 (Backspace)" : ""));
+        }
+        h.Areas["새 항해 풀이"] = new RectF(r.X + 24, ky + 4 * (kh + gap) + 4, ww - 48, 44);
+        bool ok = s.AskNumberOk;
+        h.Hits.Add(new UiHit(new RectF(r.X + 70, r.Bottom - 56, 150, 40), UiAct.AskNo, 0, s.AskFocus == 0, true, "그만두기 (Esc)"));
+        h.Hits.Add(new UiHit(new RectF(r.Right - 70 - 150, r.Bottom - 56, 150, 40), UiAct.AskYes, 0, s.AskFocus == 1 && ok, ok, "이 배 · 이 번호로 띄운다 (Enter)", ok ? "" : $"번호는 {VoyageNumber.Min}부터 {VoyageNumber.Max}까지 — 숫자를 넣거나 [새로 뽑기]"));
+        h.Modal = true;
+    }
+
+    /// <summary>숫자판 글: 0~9 · 10 지움 · 11 새로 뽑기.</summary>
+    public static string VoyageKeyLabel(int k) => k switch { 10 => "지움", 11 => "새로 뽑기", _ => k.ToString() };
+
+    /// <summary>번호 창 풀이 (가장 오래된 항해를 지울 때는 그 줄도).</summary>
+    public static string VoyageNote(HudState s) => "같은 배 · 같은 번호 · 같은 항로 · 손대지 않으면 같은 항해" + (s.AskPrune.Length > 0 ? $"\n항해는 다섯까지 — 띄우면 가장 오래된 '{s.AskPrune}'를 지운다" : "");
 
     /// <summary>사람 줄: 한 줄 이름까지 (×2) → 두 줄 (×1.5) → 넘치면 앞에서부터 (+n) · 칸은 적어도 30×30. 위 끝을 돌려준다.</summary>
     private static float LayoutCrew(LiveFrame f, Hud h, float left, float right, float bottom, Func<string, int, bool, float> tw)
@@ -673,7 +742,8 @@ public static class HudLayout
         {
             var hold = new RectF(box.X + 8, box.Y + 50, box.W - 16, 44);
             h.Areas["출항 줄"] = hold;
-            h.Hits.Add(new UiHit(new RectF(hold.Right - 4 - 160, hold.Y + 4, 160, 36), UiAct.Depart, 0, false, true, "이대로 출항 (스페이스)"));
+            h.Hits.Add(new UiHit(new RectF(hold.Right - 4 - 132, hold.Y + 4, 132, 36), UiAct.Depart, 0, false, true, "이대로 출항 (스페이스)"));
+            h.Hits.Add(new UiHit(new RectF(hold.Right - 4 - 132 - 6 - 132, hold.Y + 4, 132, 36), UiAct.Recrew, 0, false, true, "새 번호로 다른 사람들을 태운다 (출항 전에만)"));
         }
         float y = top;
         for (int i = s.PanelFirst; i < last; i++)
@@ -704,5 +774,83 @@ public static class HudLayout
             h.Hits.Add(new UiHit(bar, UiAct.PanelBar, 0, false, true, ""));
         }
         h.Blocks.Add(("판", box));
+    }
+}
+
+/// <summary>처음 화면에 보일 것 (docs/OBSERVER.md §3.3): 이어 볼 항해 카드 (없으면 null) · 판이 달라 이어 볼 수 없는 까닭 · 다른 항해 목록 · 판 고르기.</summary>
+public sealed class StartView
+{
+    public VoyageMeta? Latest;
+    public string Why = "";
+    public VoyageMeta[] Voyages = Array.Empty<VoyageMeta>();
+    public bool ListOpen;
+    public int Pick = 1;
+}
+
+/// <summary>처음 화면 자리표 (순수 C# — StartMenu가 그리고 실험실이 시험): 제목 · 이어 보기 카드 · 판 고르기 카드 둘 · 나가기 · 다른 항해 목록 · 번호 창.</summary>
+public static class StartLayout
+{
+    public const float CardW = 560, CardH = 250, Gap = 36, ResumeH = 132;
+
+    /// <summary>
+    /// 자리를 셈한다 (논리 크기 — 창 높이 1080 기준): 제목 → 이어 보기 카드 (있으면 · 배 · 번호 · 날 · 어제 · 끈 때 + [다른 항해 ›] [새 항해 ›] [이어 보기] — 판이 다르면 [같은 번호로 새로] [지우기]) →
+    /// 판 고르기 카드 둘 (카드가 없으면 새 엔진 판 카드 안에 [새 항해 ›]) → 풀이 → [나가기] · 다른 항해 목록 (펼침) · 번호 창 (모달).
+    /// </summary>
+    public static void Build(StartView v, HudState s, float pxW, float pxH, Hud.Measure m, Hud into, string[]? ships = null)
+    {
+        var h = into;
+        h.Clear();
+        h.U = Math.Clamp(pxH / 1080f, 0.85f, 2f);
+        float U = h.U, W = pxW / U, H = pxH / U;
+        h.W = W; h.H = H;
+        float Tw(string t, int size, bool bold = false) => m(t, Math.Max(13, (int)Math.Round(size * U)), bold) / U * 1.03f;
+        float cx = W / 2;
+        h.Areas["제목"] = new RectF(cx - 300, H * 0.10f, 600, 90);
+        float total = Math.Min(2 * CardW + Gap, W - 64), cw = (total - Gap) / 2;
+        float top = H * 0.30f;
+        if (v.Latest != null)
+        {
+            var card = new RectF(cx - total / 2, H * 0.21f, total, ResumeH);
+            h.Areas["이어 보기 카드"] = card; h.Blocks.Add(("이어 보기 카드", card));
+            float bx = card.Right - 16, by = card.Bottom - 12 - 40;
+            RectF Btn(float w) { bx -= w; var r = new RectF(bx, by, w, 40); bx -= 8; return r; }
+            if (v.Why.Length == 0)
+            {
+                bool ended = v.Latest.End.Length > 0;
+                h.Hits.Add(new UiHit(Btn(Math.Max(150, Tw(ended ? "그대로 지켜보기" : "이어 보기", 16, true) + 28)), UiAct.StartResume, 0, true, true, ended ? "끝난 항해를 그대로 지켜본다" : "지난번 그 자리에서 이어 본다 (Enter)"));
+            }
+            else
+            {
+                h.Hits.Add(new UiHit(Btn(100), UiAct.StartDelete, 0, false, true, "이 항해의 저장을 지운다"));
+                h.Hits.Add(new UiHit(Btn(Math.Max(170, Tw("같은 번호로 새로", 16) + 28)), UiAct.StartRenew, 0, true, true, "같은 배 · 같은 번호로 새로 띄운다"));
+            }
+            h.Hits.Add(new UiHit(Btn(Math.Max(130, Tw("새 항해 ›", 16) + 28)), UiAct.StartNew, 0, false, true, "번호를 넣거나 새로 뽑아 띄운다"));
+            if (v.Voyages.Length > 1)
+            {
+                var other = Btn(Math.Max(140, Tw("다른 항해 ›", 16) + 28));
+                h.Hits.Add(new UiHit(other, UiAct.StartOther, 0, v.ListOpen, true, "남은 항해 가운데 고른다"));
+                h.Areas["다른 항해"] = other;
+            }
+            h.Areas["이어 보기 글"] = new RectF(card.X + 24, card.Y + 12, Math.Max(0, bx - card.X - 24 - 8), card.H - 24);
+            top = card.Bottom + 28;
+        }
+        for (int i = 0; i < 2; i++)
+        {
+            var r = new RectF(cx - total / 2 + i * (cw + Gap), top, cw, CardH);
+            h.Areas["판 " + i] = r; h.Blocks.Add(("판 " + i, r));
+            if (i == 1 && v.Latest == null) h.Hits.Add(new UiHit(new RectF(r.Right - 16 - 130, r.Bottom - 16 - 40, 130, 40), UiAct.StartNew, 0, false, true, "번호를 넣거나 새로 뽑아 띄운다"));
+        }
+        for (int i = 0; i < 2; i++) h.Hits.Add(new UiHit(h.Areas["판 " + i], UiAct.StartChoice, i, v.Pick == i, true, i == 0 ? "기존 판 (1)" : "새 엔진 판 (2)"));
+        h.Areas["풀이"] = new RectF(cx - total / 2, top + CardH + 24, total, 56);
+        var quit = new RectF(cx - 70, top + CardH + 92, 140, 40);
+        h.Areas["나가기"] = quit; h.Hits.Add(new UiHit(quit, UiAct.StartQuit, 0, false, true, "나가기 (Esc)"));
+        if (v.ListOpen && v.Voyages.Length > 0 && h.Areas.TryGetValue("다른 항해", out var ob))
+        {
+            float lw = Math.Min(560, W - 32), rowH = 52;
+            var area = new RectF(Math.Clamp(ob.Right - lw, 16, Math.Max(16, W - 16 - lw)), ob.Bottom + 6, lw, v.Voyages.Length * rowH + 12);
+            h.Blocks.Insert(0, ("목록 항해", area)); h.Areas["목록 항해"] = area;
+            for (int i = v.Voyages.Length - 1; i >= 0; i--) h.Hits.Insert(0, new UiHit(new RectF(area.X + 6, area.Y + 6 + i * rowH, lw - 12, rowH - 4), UiAct.StartPick, i, false, VoyageStore.Why(v.Voyages[i]).Length == 0, VoyageCard.Title(v.Voyages[i]), VoyageStore.Why(v.Voyages[i])));
+        }
+        if (s.Ask == HudAsk.NewVoyage) HudLayout.VoyageWindow(h, s, ships, (t, size, b) => Tw(t, size, b));
     }
 }

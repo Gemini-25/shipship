@@ -42,6 +42,48 @@ public sealed class VoyageMeta
     public static VoyageMeta? FromJson(string s) { try { return JsonSerializer.Deserialize<VoyageMeta>(s, Json); } catch (JsonException) { return null; } }
 }
 
+/// <summary>항해 번호 (docs/OBSERVER.md §3.4): 켤 때마다 새로 뽑는다 (벽시계 · 세계 밖) — 번호가 곧 세계 시드 · 확인용 띄우기는 18 (화면 사진 · CI가 같게).</summary>
+public static class VoyageNumber
+{
+    public const int Min = 1000, Max = 99999;
+    public const ulong Check = 18;
+    public static ulong Draw() => (ulong)Random.Shared.Next(Min, Max + 1);
+    /// <summary>넣은 번호 (숫자만 · 1000 ~ 99999 — 앞의 0은 뗀다) · 아니면 null.</summary>
+    public static ulong? Parse(string s)
+    {
+        s = s.Trim();
+        if (s.Length == 0 || s.Length > 6 || !s.All(char.IsAsciiDigit)) return null;
+        ulong v = ulong.Parse(s);
+        return v >= Min && v <= Max ? v : null;
+    }
+    /// <summary>확인용 띄우기 인자 (화면 사진 · CI — 늘 같은 항해).</summary>
+    public static bool CheckRun(IEnumerable<string> args) => args.Any(a => a.StartsWith("--for") || a.StartsWith("--shots") || a.StartsWith("--shot=") || a.StartsWith("--skip") || a == "--ignite" || a.StartsWith("--panel") || a.StartsWith("--pick") || a.StartsWith("--ui"));
+    /// <summary>띄울 번호: --voyage= · --seed= 이 먼저 · 확인용 띄우기 (--for · --shots · --ui · --skip …)는 18 · 아니면 새로 뽑는다.</summary>
+    public static ulong ForLaunch(IEnumerable<string> args)
+    {
+        var l = args.ToList();
+        foreach (var a in l)
+        {
+            if (a.StartsWith("--voyage=") && ulong.TryParse(a[9..], out var v)) return v;
+            if (a.StartsWith("--seed=") && ulong.TryParse(a[7..], out var sd)) return sd;
+        }
+        return CheckRun(l) ? Check : Draw();
+    }
+}
+
+/// <summary>이어 보기 카드 글 (docs/OBSERVER.md §3.3 — 처음 화면): '디딤호 · 항해 4127 · 43일째 · 6명 가운데 5명' · '어제: …' · '끈 때 10-26 21:40'.</summary>
+public static class VoyageCard
+{
+    /// <summary>첫 줄: 배 · 항해 번호 · 날 · 산 이 (끝난 항해는 '17일 — 모두 잃었다').</summary>
+    public static string Title(VoyageMeta m) => m.End.Length > 0
+        ? $"{m.ShipName} · 항해 {m.Voyage} · {m.Day}일 — {m.End}"
+        : $"{m.ShipName} · 항해 {m.Voyage} · {m.Day}일째 · {m.Aboard}명 가운데 {m.Alive}명";
+    /// <summary>둘째 줄: 어제의 장 제목 (아직 하루가 지나지 않았으면 그렇게).</summary>
+    public static string Yesterday(VoyageMeta m) => m.Yesterday.Length > 0 ? $"어제: {m.Yesterday}" : "어제: 아직 하루가 지나지 않았다";
+    /// <summary>셋째 줄: 끈 때 (월-일 시:분).</summary>
+    public static string When(VoyageMeta m) => "끈 때 " + (m.SavedAt.Length >= 16 ? m.SavedAt[5..16] : m.SavedAt);
+}
+
 /// <summary>
 /// 항해 묶음 한 벌 (save-?.bin — docs/OBSERVER.md §3.1): 머리 ('항해 묶음' · 묶음 판 · 세계 판 · 저장 모양 · 차례) + 마디 (이름 · 길이 · 압축한 바이트 — 모르는 마디는 건너뛴다 · 없는 마디는 빈 채로).
 /// 작업 스레드는 날것 마디만 짓고 (<see cref="LiveShow.SaveBundle"/>) · 압축 · 쓰기는 다른 일꾼이 (<see cref="VoyageStore.Write"/>).
@@ -199,10 +241,28 @@ public sealed class VoyageStore
         catch (IOException) { return null; }
     }
 
-    /// <summary>쓴다 (압축 · 쓰기 — 다른 일꾼에서 불러도 된다): 가장 오래된 칸에 임시 이름으로 쓰고 바꾼 뒤 카드가 그 칸을 가리킨다.</summary>
+    /// <summary>항해 폴더는 다섯까지 (docs/OBSERVER.md §3.2).</summary>
+    public const int KeepVoyages = 5;
+
+    /// <summary>새 항해 폴더를 만들면 다섯을 넘나 — 넘으면 지울 가장 오래된 항해 (아니면 null).</summary>
+    public VoyageMeta? WouldPrune(string newFolder)
+    {
+        var l = List();
+        return l.Count < KeepVoyages || l.Any(m => m.Folder == newFolder) ? null : l[^1];
+    }
+
+    /// <summary>항해 하나를 지운다 (그 폴더 통째로).</summary>
+    public void Delete(VoyageMeta m)
+    {
+        string d = FolderOf(m);
+        try { if (Directory.Exists(d)) Directory.Delete(d, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>쓴다 (압축 · 쓰기 — 다른 일꾼에서 불러도 된다): 가장 오래된 칸에 임시 이름으로 쓰고 바꾼 뒤 카드가 그 칸을 가리킨다 · 새 항해 폴더가 다섯을 넘기면 가장 오래된 항해를 지운다 (번호 창이 미리 알린다).</summary>
     public VoyageMeta Write(VoyageBundle b)
     {
         string folder = FolderOf(b.Meta);
+        if (!Directory.Exists(folder)) for (int k = 0; k < 8 && WouldPrune(b.Meta.Folder) is { } old; k++) Delete(old);
         Directory.CreateDirectory(folder);
         long serial = 0;
         foreach (var slot in SlotNames) serial = Math.Max(serial, SerialOf(SlotPath(folder, slot)) ?? 0);
@@ -261,6 +321,31 @@ public sealed partial class LiveShow
 
     /// <summary>이어 볼 때 옮겨 오지 못한 것 (화면 한 줄씩).</summary>
     public readonly List<string> ResumeNotes = new();
+
+    /// <summary>항해 번호 (= 세계 시드).</summary>
+    public long Voyage => (long)Sim.Setup.Seed;
+
+    /// <summary>'지난번까지' 카드 (이어 본 첫 장 — 멈춘 채 · 스페이스나 [계속]으로 간다): 줄들 (빈 배열이면 없다).</summary>
+    public string[] ResumeCard = Array.Empty<string>();
+
+    /// <summary>이어 본 첫 장: 멈추고 '지난번까지' 카드 — 배 · 번호 · 날 · 마지막 장 셋 · 산 이 · 옮겨 오지 못한 것.</summary>
+    public void ShowResumeCard()
+    {
+        var l = new List<string> { $"지난번까지 — {ShipName} · 항해 {Voyage} · {Sim.Tick / Time.TicksPerDay + 1}일째" };
+        var days = Dir.Chapters.Where(c => !c.Week).TakeLast(3).Select(c => c.Title).ToList();
+        if (days.Count == 0) days.Add("아직 지나간 날이 없다");
+        l.AddRange(days);
+        var mind = Sim.Find<Mind>(); var life = Sim.Find<Life>();
+        int all = 0, alive = 0;
+        if (mind != null && life != null) foreach (var a in mind.Agents) if (a.IsPerson) { all++; if (a.C.Body >= 0 && life.Bodies[a.C.Body].Alive != 0) alive++; }
+        l.Add($"산 이 — {all}명 가운데 {alive}명");
+        l.AddRange(ResumeNotes);
+        ResumeCard = l.ToArray();
+        Paused = true;
+    }
+
+    /// <summary>[계속] · 스페이스: 카드를 닫고 다시 간다.</summary>
+    public void ResumeGo() { ResumeCard = Array.Empty<string>(); Paused = false; }
 
     public const int ScreenVersion = 1;
 

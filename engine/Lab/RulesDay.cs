@@ -316,5 +316,18 @@ public static partial class Program
             Check("긴 왕복: 하루 끝에 되살린 세계가 원래 세계와 150틱 바이트까지 같다 (주컴퓨터가 물자를 묻는 틱을 지나도)", diff < 0,
                 $"되살린 틱 {at} (125 나머지 {at % 125})" + (diff < 0 ? "" : $" · 틱 {diff}에 갈라짐"));
         }
+
+        // ── S8 이어 보기 카드 (docs/OBSERVER.md §16): 하루가 지난 디딤호를 묶음으로 — 카드 글 '디딤호 · 항해 3 · 2일째 · 6명 가운데 6명' · '어제: 1일째 — …' · '끈 때 …' · 개발 말 0 ──
+        {
+            var show = new ShipView.LiveShow(day, "디딤호");
+            var rw = new StateWriter(1 << 16); dir.SaveRecord(rw); show.Dir.LoadRecord(new StateReader(rw.ToArray()), day);   // 하루를 본 연출을 화면에 옮긴다
+            var meta = show.SaveBundle(ShipView.SaveKind.Daily).Meta;
+            int alive = people.Count(a => life[a.C.Body].Alive != 0);
+            string t = ShipView.VoyageCard.Title(meta), y = ShipView.VoyageCard.Yesterday(meta), w = ShipView.VoyageCard.When(meta);
+            static bool DevFree(string x) => !System.Text.RegularExpressions.Regex.IsMatch(x, "[A-Za-z{}_]|NaN|null");
+            Check("이어 보기 S8: 카드 글 — '디딤호 · 항해 3 · 2일째 · 6명 가운데 n명' · '어제: 1일째 — …' (지난 장 제목) · '끈 때 월-일 시:분' · 개발 말 0",
+                t == $"디딤호 · 항해 3 · 2일째 · 6명 가운데 {alive}명" && y.StartsWith("어제: 1일째 — ") && w.StartsWith("끈 때 ") && DevFree(t) && DevFree(y) && DevFree(w),
+                $"'{t}' / '{y}' / '{w}'");
+        }
     }
 }

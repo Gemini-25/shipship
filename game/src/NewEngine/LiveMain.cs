@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Godot;
 using ShipEngine;
 using ShipView;
@@ -65,7 +66,18 @@ void fragment() {
     private int _thoughts = -1;
     private string[] _ships = Array.Empty<string>(), _shipNames = Array.Empty<string>();
     private int _shipAt;
-    private ulong _seed = 18;
+    private ulong _seed = VoyageNumber.Check;   // 항해 번호 (= 세계 시드 — 켤 때 뽑는다 · 확인용 띄우기는 18 · docs/OBSERVER.md §3.4)
+    // ── 저장 · 이어 보기 (docs/OBSERVER.md §3.2 · 3.3) ──
+    /// <summary>처음 화면이 넘기는 띄울 것 (장면을 바꿀 때 인자 대신 — 정적 한 칸): 이어 볼 항해 · 새 항해 (배 · 번호).</summary>
+    public static VoyageMeta? PendingResume;
+    public static (string Ship, ulong Number)? PendingNew;
+    private VoyageStore _store = null!;
+    private bool _saveOn;                                      // 항해를 저장한다 (확인용 띄우기는 --save일 때만)
+    private volatile VoyageMeta? _launchResume;                // 이어 볼 항해 (작업 스레드가 받는다)
+    private int _chapters = -1; private bool _saveDue;          // 날이 바뀌었다 (장이 하나 지어졌다) — 저장 (일꾼이 셈 중이면 다음 장으로 미룬다)
+    private Task? _writing;                                    // 압축 · 쓰기 일꾼 (하나씩 차례로)
+    private readonly ManualResetEventSlim _saved = new(false);
+    private bool _quitting;
     private double _escAt = -99, _nAt = -99, _rAt = -99, _clock;   // 항해를 버리는 키는 3초 안에 두 번 (함장 결정)
     private bool _meter;
     private const double CutDipSec = 0.18;
@@ -126,7 +138,6 @@ void fragment() {
         foreach (var a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--ship=")) ship = a[7..];
-            else if (a.StartsWith("--seed=") && ulong.TryParse(a[7..], out var sd)) _seed = sd;
             else if (a.StartsWith("--shots=")) _shotDir = a[8..];
             else if (a.StartsWith("--every=")) _shotEvery = double.Parse(a[8..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
@@ -144,11 +155,19 @@ void fragment() {
             else if (a.StartsWith("--thoughts=") && int.TryParse(a[11..], out var th)) _thoughts = Math.Clamp(th, 0, 2);
         }
         var args = OS.GetCmdlineUserArgs();
-        _noHold = !args.Contains("--hold") && args.Any(a => a.StartsWith("--for") || a.StartsWith("--shots") || a.StartsWith("--skip") || a == "--ignite" || a.StartsWith("--panel") || a.StartsWith("--pick") || a.StartsWith("--ui"));
+        _noHold = !args.Contains("--hold") && VoyageNumber.CheckRun(args);
+        _seed = VoyageNumber.ForLaunch(args);   // 켤 때마다 새 번호 (--voyage= · --seed= 가 먼저 · 확인용 띄우기는 18)
+        _store = new VoyageStore(ProjectSettings.GlobalizePath("user://voyages"));
+        _saveOn = !VoyageNumber.CheckRun(args) || args.Contains("--save");
+        if (args.Contains("--resume")) PendingResume ??= _store.Latest();   // 확인용: 가장 새 항해를 곧장 이어 본다
+        if (PendingNew is { } pn) { ship = pn.Ship; _seed = pn.Number; PendingNew = null; }
+        VoyageMeta? resume = PendingResume; PendingResume = null;
+        if (resume != null) { ship = resume.Ship; _seed = (ulong)resume.Voyage; }
+        if (_saveOn) GetTree().AutoAcceptQuit = false;   // 창을 닫으면 저장한 뒤 끈다 (_Notification)
         if (_shotName != null) _shotDir ??= "docs/screens/ui";
         if (_shotDir != null) System.IO.Directory.CreateDirectory(_shotDir);
         _shipAt = Math.Max(0, Array.IndexOf(_ships, ship));
-        Launch(ship, _seed);
+        Launch(ship, _seed, resume);
         _running = true;
         _worker = new Thread(Work) { IsBackground = true, Name = "세계" };
         _worker.Start();
@@ -160,9 +179,10 @@ void fragment() {
         _worker?.Join(2000);
     }
 
-    private void Launch(string ship, ulong seed)
+    private void Launch(string ship, ulong seed, VoyageMeta? resume = null)
     {
         _launchSeed = seed;
+        _launchResume = resume;
         _gen++;
         _launchShip = ship;
         _shown = null;
@@ -184,9 +204,14 @@ void fragment() {
                 _launchShip = null;
                 gen = _gen;
                 while (_cmds.TryDequeue(out _)) { }               // 옛 배에 내린 손은 버린다
-                _show = LiveShow.Crewed(want, _launchSeed);
+                if (_show != null) SaveNow(_show, SaveKind.Quit, wait: true);   // 지금 항해는 저장해 둔다 (처음 화면 이어 보기 — 출항 전 항해는 남기지 않는다)
+                var resume = _launchResume; _launchResume = null;
+                LiveShow? back = null; string why = "";
+                if (resume != null) back = LiveShow.Resume(_store, resume, out why);
+                _show = back ?? LiveShow.Crewed(want, _launchSeed);
                 Warmup.Crisis(_show.Sim);   // 위기 길 데우기: 첫 불의 멈칫 (새뜰 6.9ms → 2ms 아래) — 복제로 · 한 번만
-                _show.DayMinutes = LiveShow.DefaultDayMinutes;   // 하루 길이 목표 (기본 3분 · 빠르기 단추 '3분')
+                if (back == null) _show.DayMinutes = LiveShow.DefaultDayMinutes;   // 하루 길이 목표 (기본 3분 · 빠르기 단추 '3분' — 이어 보면 고른 그대로)
+                _chapters = _show.Dir.Chapters.Count; _saveDue = false;
                 if (_skipHours > 0) { _show.FastForward(Time.Hours(_skipHours)); _skipHours = 0; }
                 if (_ignite)
                 {
@@ -195,7 +220,12 @@ void fragment() {
                     var bed = w.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
                     if (bed != null) { int c = bed.Cells[0]; w.Get<ShipEngine.Chemistry>().Ignite(c, 3e6, w.Causes.Add(CauseKind.Setup, "침대 밑에서 불씨가 튀었다", w.Tick)); _show.LookAt(c); }
                 }
-                if (!_noHold) _show.HoldForDeparture();          // 출항 준비 (docs/UI.md 4 — 추천 A): 멈춘 채 항로 판 · 항로를 누르거나 [이대로 출항]
+                if (back != null) back.ShowResumeCard();         // 이어 보기: 멈춘 채 '지난번까지' 카드 (스페이스나 [계속])
+                else
+                {
+                    if (resume != null) _show.Notify(why.Length > 0 ? why : VoyageStore.BrokenText, 8);
+                    if (!_noHold) _show.HoldForDeparture();      // 출항 준비 (docs/UI.md 4 — 추천 A): 멈춘 채 항로 판 · 항로를 누르거나 [이대로 출항]
+                }
                 last = clock.Elapsed.TotalSeconds;
             }
             var show = _show;
@@ -205,12 +235,55 @@ void fragment() {
             while (_cmds.TryDequeue(out var cmd)) cmd(show);
             show.Aspect = _aspect;
             show.Advance(dt);
+            // 날이 바뀐 틱 (장이 하나 지어졌다): 저장 — 주컴퓨터 일꾼이 셈 중이면 다음 장으로 미룬다 (다시보기 고리와 같은 규칙)
+            int chapters = show.Dir.Chapters.Count;
+            if (_chapters >= 0 && chapters > _chapters) _saveDue = true;
+            _chapters = chapters;
+            if (_saveDue && !(show.Sim.Find<ShipMind>()?.WorkerBusy ?? false)) { _saveDue = false; SaveNow(show, SaveKind.Daily, wait: false); }
             var pic = new Pic { F = show.Render(), Gen = gen };
             var old = Interlocked.Exchange(ref _ready, pic);
             if (old != null) show.Recycle(old.F.Img);            // 메인이 미처 못 가져간 장
             double spent = clock.Elapsed.TotalSeconds - now;
             if (spent < 1 / 60.0) Thread.Sleep((int)((1 / 60.0 - spent) * 1000)); // 그림은 많아야 1초에 60장
         }
+    }
+
+    /// <summary>
+    /// 항해 묶음을 남긴다 (작업 스레드 · 틱 사이): 날것 마디만 여기서 (새뜰 약 4ms) · 압축 · 쓰기는 다른 일꾼이 차례로 (화면 60프레임) · wait면 쓰기를 기다린다 (끌 때 — 2초 안).
+    /// 확인용 띄우기 (--save 없이) · 출항 전 항해는 남기지 않는다.
+    /// </summary>
+    private void SaveNow(LiveShow show, SaveKind kind, bool wait)
+    {
+        if (!_saveOn || show.Holding) return;
+        VoyageBundle b;
+        try { b = show.SaveBundle(kind); }
+        catch (Exception e) when (e is InvalidOperationException or System.IO.IOException or System.IO.InvalidDataException) { GD.Print($"저장하지 못했다: {e.Message}"); return; }
+        var prev = _writing;
+        var job = Task.Run(() =>
+        {
+            prev?.Wait();
+            try { _store.Write(b); }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { GD.Print($"저장하지 못했다: {e.Message}"); }
+        });
+        _writing = job;
+        if (wait) job.Wait(2000);
+    }
+
+    /// <summary>메인 스레드: 지금 항해를 저장한 뒤 then (창 닫기 · 처음 화면으로) — 작업 스레드가 틱 사이에 짓고 쓸 때까지 2.5초 안 기다린다.</summary>
+    private void SaveAndThen(Action then)
+    {
+        if (!_saveOn || _show == null || _quitting) { then(); return; }
+        _quitting = true;
+        _saved.Reset();
+        _cmds.Enqueue(s => { SaveNow(s, SaveKind.Quit, wait: true); _saved.Set(); });
+        _saved.Wait(2500);
+        _quitting = false;
+        then();
+    }
+
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest) SaveAndThen(() => GetTree().Quit());   // 창 닫기: 저장한 뒤 끈다
     }
 
     // ───────────────────────── 메인 스레드 ─────────────────────────
@@ -376,6 +449,7 @@ void fragment() {
         if (_overlay != Overlay.None && _runT > 2) { var o = _overlay; _overlay = Overlay.None; _cmds.Enqueue(s => s.Show = o); }
         if (_thoughts >= 0) { int th = _thoughts; _thoughts = -1; _cmds.Enqueue(s => s.ThoughtBubbles = th); }
         if (_helpOnce && _runT > 2) { _helpOnce = false; _hs.Help = true; }
+        if (_ui == "newvoyage" && _runT > 3) { _ui = null; OpenVoyageWindow(); }   // 번호 창 (메뉴 [새 항해 ›])
         if (_ui != null && _runT > 3) { string ui = _ui; _ui = null; _cmds.Enqueue(s => SetUpUi(s, ui)); }
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shotDir != null && _shown != null && _runT >= _nextShot)
@@ -392,7 +466,7 @@ void fragment() {
             double P(double q) => o.Count == 0 ? 0 : o[(int)Math.Min(o.Count - 1, q * o.Count)];
             GD.Print($"화면 {_runT:0}초 · 그림 {_picsTotal}장 · 게임 {Time.Clock(_shown?.Tick ?? 0)} · 프레임 {o.Count} · 보통 {P(0.5):0.0}ms · 99% {P(0.99):0.0}ms · 가장 김 {(o.Count > 0 ? o[^1] : 0):0.0}ms · 17ms 넘은 프레임 {o.Count(x => x > 17.5)} · 메인: 자리표 {_hudMs / Math.Max(1, _fpsTotal):0.00}ms · 그리기 명령 {_drawMs / Math.Max(1, _fpsTotal):0.00}ms ({string.Join(" · ", _laps.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / Math.Max(1, _fpsTotal):0.00}"))})");
             _runFor = 0;
-            GetTree().Quit();
+            SaveAndThen(() => GetTree().Quit());   // 확인용 --save: 저장해 두고 끈다 (처음 화면 카드 사진)
         }
     }
 
@@ -1097,9 +1171,26 @@ void fragment() {
         {
             var r = R(hb);
             DrawRect(r, new Color(0.03f, 0.06f, 0.1f, 0.92f)); DrawRect(r, new Color(0.5f, 0.85f, 1f, 0.9f), false, 1.5f);
-            string t = double.IsNaN(f.DepartIn) ? "출항 준비 중" : $"출항 준비 중 · 출발까지 {HoursMin(f.DepartIn)}";
-            DrawString(_bold, new Vector2(r.Position.X + 14 * U, r.Position.Y + r.Size.Y / 2 + Fs(16) * 0.36f), t, HorizontalAlignment.Left, r.Size.X - 300 * U, Fs(16), Ink);
-            foreach (var h in _hud.Hits) { if (h.Act == UiAct.Depart && h.R.Y >= hb.Y && h.R.Bottom <= hb.Bottom) DrawButton(h, "이대로 출항"); else if (h.Act == UiAct.RouteTab) DrawButton(h, "항로 고르기"); }
+            string t = double.IsNaN(f.DepartIn) ? $"출항 준비 중 · 항해 {f.Voyage}" : $"출항 준비 중 · 항해 {f.Voyage} · 출발까지 {HoursMin(f.DepartIn)}";
+            DrawString(_bold, new Vector2(r.Position.X + 14 * U, r.Position.Y + r.Size.Y / 2 + Fs(16) * 0.36f), t, HorizontalAlignment.Left, r.Size.X - 440 * U, Fs(16), Ink);
+            foreach (var h in _hud.Hits)
+            {
+                if (h.R.Y < hb.Y || h.R.Bottom > hb.Bottom) continue;
+                if (h.Act == UiAct.Depart) DrawButton(h, "이대로 출항"); else if (h.Act == UiAct.RouteTab) DrawButton(h, "항로 고르기"); else if (h.Act == UiAct.Recrew) DrawButton(h, "다른 사람들로");
+            }
+        }
+        if (_hud.Areas.TryGetValue("지난번까지", out var lb))
+        {
+            var r = R(lb);
+            DrawRect(r, new Color(0.03f, 0.05f, 0.09f, 0.95f)); DrawRect(r, new Color(0.45f, 0.95f, 0.8f, 0.9f), false, 1.5f);
+            float y = r.Position.Y + 14 * U + Fs(18) * 0.9f;
+            for (int i = 0; i < f.ResumeCard.Length; i++)
+            {
+                bool head = i == 0;
+                DrawString(head ? _bold : _font, new Vector2(r.Position.X + 24 * U, y), f.ResumeCard[i], HorizontalAlignment.Left, r.Size.X - 48 * U, Fs(head ? 18 : 16), head ? Ink : new Color(0.82f, 0.86f, 0.94f));
+                y += (head ? 28 : 24) * U;
+            }
+            foreach (var h in _hud.Hits) if (h.Act == UiAct.ResumeGo) DrawButton(h, "계속", 16);
         }
         if (_hud.Areas.TryGetValue("★ 띠", out var sb))
         {
@@ -1335,9 +1426,13 @@ void fragment() {
         {
             var r = R(ho);
             DrawRect(r, new Color(0.06f, 0.12f, 0.18f, 0.95f));
-            string t = double.IsNaN(f.DepartIn) ? "출항 준비" : $"출항까지 {HoursMin(f.DepartIn)} · 항로를 누르면 바꾼다";
-            DrawString(_font, new Vector2(r.Position.X + 10 * U, r.Position.Y + r.Size.Y / 2 + Fs(15) * 0.36f), t, HorizontalAlignment.Left, r.Size.X - 180 * U, Fs(15), Ink);
-            foreach (var h in _hud.Hits) if (h.Act == UiAct.Depart && h.R.Y >= ho.Y && h.R.Bottom <= ho.Bottom + 1) DrawButton(h, "이대로 출항");
+            string t = double.IsNaN(f.DepartIn) ? "출항 준비" : $"출항까지 {HoursMin(f.DepartIn)}";
+            DrawString(_font, new Vector2(r.Position.X + 10 * U, r.Position.Y + r.Size.Y / 2 + Fs(15) * 0.36f), t, HorizontalAlignment.Left, r.Size.X - 290 * U, Fs(15), Ink);
+            foreach (var h in _hud.Hits)
+            {
+                if (h.R.Y < ho.Y || h.R.Bottom > ho.Bottom + 1) continue;
+                if (h.Act == UiAct.Depart) DrawButton(h, "이대로 출항"); else if (h.Act == UiAct.Recrew) DrawButton(h, "다른 사람들로");
+            }
         }
         var mouse = _mouse;
         foreach (var (i, rf) in _hud.PanelLines)
@@ -1448,7 +1543,7 @@ void fragment() {
                 {
                     string t = h.Act switch
                     {
-                        UiAct.MenuShip => "배 바꾸기  ›", UiAct.MenuRestart => "같은 배로 새 항해", UiAct.MenuStart => "처음 화면으로",
+                        UiAct.MenuShip => "배 바꾸기  ›", UiAct.MenuRestart => "새 항해  ›", UiAct.MenuStart => "처음 화면으로",
                         UiAct.Sound => _hs.Mute switch { 0 => "소리: 다 켬", 1 => "소리: 음악 끔", _ => "소리: 끔" }, UiAct.Captions => f.CaptionsOn ? "소리 자막: 켬" : "소리 자막: 끔",
                         UiAct.Speech => f.SpeechOn ? "말풍선: 켬" : "말풍선: 끔", UiAct.Thoughts => ThoughtWords[Math.Clamp(f.ThoughtsOn, 0, 2)], _ => "도움말",
                     };
@@ -1507,15 +1602,16 @@ void fragment() {
 
     private void DrawAsk(Vector2 vp)
     {
+        if (_hs.Ask == HudAsk.NewVoyage) { DrawVoyageWindow(vp); return; }
         var a = R(_hud.Area("창 확인"));
         DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, 0.5f));
         DrawRect(a, new Color(0.03f, 0.04f, 0.07f, 0.97f));
         DrawRect(a, new Color(1f, 0.6f, 0.4f, 0.9f), false, 1.5f);
         string q = _hs.Ask switch
         {
-            HudAsk.Ship => $"'{_hs.AskShip}'로 새로 띄울까요?\n지금 항해는 사라집니다.",
-            HudAsk.Restart => "같은 배로 새 항해를 띄울까요?\n지금 항해는 사라집니다.",
-            _ => "처음 화면으로 갈까요?\n지금 항해는 사라집니다.",
+            HudAsk.Ship => $"'{_hs.AskShip}'로 새로 띄울까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)",
+            HudAsk.Restart => "같은 배로 새 항해를 띄울까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)",
+            _ => "처음 화면으로 갈까요?\n지금 항해는 저장해 둔다 (처음 화면 이어 보기)",
         };
         DrawMultilineString(_bold, a.Position + new Vector2(24, 44) * U, q, HorizontalAlignment.Center, a.Size.X - 48 * U, Fs(17), 3, Ink);
         foreach (var h in _hud.Hits)
@@ -1523,6 +1619,32 @@ void fragment() {
             if (h.Act == UiAct.AskNo) DrawButton(h, "그만두기");
             else if (h.Act == UiAct.AskYes) DrawButton(h, _hs.Ask == HudAsk.Start ? "처음 화면으로" : "새로 띄우기", 15, true);
         }
+    }
+
+    /// <summary>번호 창 (docs/OBSERVER.md §3.4): 배 ‹ › · 번호 · [새로 뽑기] · 숫자판 · 풀이 · [그만두기] [띄우기].</summary>
+    private void DrawVoyageWindow(Vector2 vp)
+    {
+        var a = R(_hud.Area("창 새 항해"));
+        DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, 0.5f));
+        DrawRect(a, new Color(0.03f, 0.04f, 0.07f, 0.97f));
+        DrawRect(a, new Color(0.45f, 0.95f, 0.8f, 0.9f), false, 1.5f);
+        DrawString(_bold, a.Position + new Vector2(24, 40) * U, "새 항해", HorizontalAlignment.Left, -1, Fs(22), Ink);
+        string ship = _ships.Length > 0 ? _shipNames[Math.Clamp(_hs.AskShipAt, 0, _shipNames.Length - 1)] : "";
+        var sr = R(_hud.Area("새 항해 배"));
+        DrawString(_bold, new Vector2(sr.Position.X, sr.Position.Y + sr.Size.Y / 2 + Fs(18) * 0.36f), ship, HorizontalAlignment.Center, sr.Size.X, Fs(18), Ink);
+        var nr = R(_hud.Area("새 항해 번호"));
+        DrawRect(nr, new Color(0.05f, 0.08f, 0.12f, 0.95f)); DrawRect(nr, _hs.AskNumberOk ? new Color(0.45f, 0.95f, 0.8f, 0.9f) : new Color(1f, 0.6f, 0.4f, 0.8f), false, 1.5f);
+        string num = _hs.AskNumber.Length > 0 ? "항해 " + _hs.AskNumber : "번호를 넣는다";
+        DrawString(_bold, new Vector2(nr.Position.X, nr.Position.Y + nr.Size.Y / 2 + Fs(24) * 0.36f), num, HorizontalAlignment.Center, nr.Size.X, Fs(_hs.AskNumber.Length > 0 ? 24 : 16), _hs.AskNumber.Length > 0 ? Ink : InkDim);
+        foreach (var h in _hud.Hits)
+        {
+            if (h.Act == UiAct.VoyageKey) DrawButton(h, HudLayout.VoyageKeyLabel((int)h.Key), h.Key <= 9 ? 20 : 16);
+            else if (h.Act == UiAct.VoyageShip) DrawButton(h, h.Key < 0 ? "‹" : "›", 22);
+            else if (h.Act == UiAct.AskNo) DrawButton(h, "그만두기");
+            else if (h.Act == UiAct.AskYes) DrawButton(h, "띄우기", 16, h.Enabled && _hs.AskPrune.Length > 0);
+        }
+        var tr = R(_hud.Area("새 항해 풀이"));
+        DrawMultilineString(_font, new Vector2(tr.Position.X, tr.Position.Y + Fs(14) * 0.9f), HudLayout.VoyageNote(_hs), HorizontalAlignment.Center, tr.Size.X, Fs(14), 2, _hs.AskPrune.Length > 0 ? new Color(1f, 0.75f, 0.55f) : InkDim);
     }
 
     public const string StartScene = "res://scenes/Start.tscn";
@@ -1551,7 +1673,11 @@ void fragment() {
             case UiAct.Menu: _hs.Open = _hs.Open is HudOpen.Menu or HudOpen.Ships ? HudOpen.None : HudOpen.Menu; break;
             case UiAct.MenuShip: _hs.Open = _hs.Open == HudOpen.Ships ? HudOpen.Menu : HudOpen.Ships; break;
             case UiAct.ShipPick: if (k < _ships.Length) { _hs.Ask = HudAsk.Ship; _hs.AskShip = _shipNames[k]; _askShipAt = (int)k; _hs.AskFocus = 0; _hs.Open = HudOpen.None; } break;
-            case UiAct.MenuRestart: _hs.Ask = HudAsk.Restart; _hs.AskFocus = 0; _hs.Open = HudOpen.None; break;
+            case UiAct.MenuRestart: OpenVoyageWindow(); break;
+            case UiAct.VoyageKey: _hs.VoyageKey((int)k); _hs.AskFocus = 1; break;
+            case UiAct.VoyageShip: if (_ships.Length > 0) _hs.AskShipAt = ((_hs.AskShipAt + (int)k) % _ships.Length + _ships.Length) % _ships.Length; break;
+            case UiAct.Recrew: _seed = VoyageNumber.Draw(); Launch(_ships[_shipAt], _seed); break;   // 출항 준비: 새 번호로 다른 사람들 (출항 전 항해는 남기지 않는다)
+            case UiAct.ResumeGo: _cmds.Enqueue(s => s.ResumeGo()); break;
             case UiAct.MenuStart: _hs.Ask = HudAsk.Start; _hs.AskFocus = 0; _hs.Open = HudOpen.None; break;
             case UiAct.AskNo: _hs.Ask = HudAsk.None; break;
             case UiAct.AskYes: AskYes(); break;
@@ -1598,6 +1724,14 @@ void fragment() {
 
     private int _askShipAt;
 
+    /// <summary>번호 창을 연다 (지금 배 · 지금 번호 — 항해가 다섯이면 지울 가장 오래된 항해를 한 줄로 알린다).</summary>
+    private void OpenVoyageWindow()
+    {
+        _hs.OpenVoyage(_shipAt, _seed);
+        var old = _store.List();
+        _hs.AskPrune = old.Count >= VoyageStore.KeepVoyages ? VoyageCard.Title(old[^1]) : "";
+    }
+
     private void AskYes()
     {
         var ask = _hs.Ask;
@@ -1605,8 +1739,12 @@ void fragment() {
         switch (ask)
         {
             case HudAsk.Ship: _shipAt = _askShipAt; Launch(_ships[_shipAt], _seed); break;
-            case HudAsk.Restart: _seed++; Launch(_ships[_shipAt], _seed); break;
-            case HudAsk.Start: GetTree().ChangeSceneToFile(StartScene); break;
+            case HudAsk.Restart: _seed = VoyageNumber.Draw(); Launch(_ships[_shipAt], _seed); break;
+            case HudAsk.Start: SaveAndThen(() => GetTree().ChangeSceneToFile(StartScene)); break;
+            case HudAsk.NewVoyage:
+                if (VoyageNumber.Parse(_hs.AskNumber) is not { } n) { _hs.Ask = HudAsk.NewVoyage; break; }   // 틀린 번호 — 창을 닫지 않는다
+                _shipAt = Math.Clamp(_hs.AskShipAt, 0, Math.Max(0, _ships.Length - 1)); _seed = n; Launch(_ships[_shipAt], _seed);
+                break;
         }
     }
 
@@ -1757,6 +1895,21 @@ void fragment() {
     private void OnKey(InputEventKey k)
     {
         // 창이 떠 있으면 먼저 받고 그 밖의 키는 삼킨다
+        if (_hs.Ask == HudAsk.NewVoyage)
+        {
+            if (k.Echo) return;
+            switch (k.Keycode)
+            {
+                case >= Godot.Key.Key0 and <= Godot.Key.Key9: _hs.VoyageKey((int)(k.Keycode - Godot.Key.Key0)); break;
+                case >= Godot.Key.Kp0 and <= Godot.Key.Kp9: _hs.VoyageKey((int)(k.Keycode - Godot.Key.Kp0)); break;
+                case Godot.Key.Backspace or Godot.Key.Delete: _hs.VoyageKey(10); break;
+                case Godot.Key.Left: Do(new UiHit(default, UiAct.VoyageShip, -1)); break;
+                case Godot.Key.Right: Do(new UiHit(default, UiAct.VoyageShip, 1)); break;
+                case Godot.Key.Escape: _hs.Ask = HudAsk.None; break;
+                case Godot.Key.Enter or Godot.Key.KpEnter: if (_hs.AskNumberOk) AskYes(); break;
+            }
+            return;
+        }
         if (_hs.Ask != HudAsk.None)
         {
             if (k.Echo) return;
@@ -1797,7 +1950,7 @@ void fragment() {
             case Godot.Key.Equal or Godot.Key.KpAdd: Do(Hk(UiAct.ZoomIn)); break;
             case Godot.Key.Minus or Godot.Key.KpSubtract: Do(Hk(UiAct.ZoomOut)); break;
             case Godot.Key.N: if (Twice(ref _nAt, "다음 배로")) { _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); Launch(_ships[_shipAt], _seed); } break;
-            case Godot.Key.R: if (Twice(ref _rAt, "같은 배를 새로")) { _seed++; Launch(_ships[_shipAt], _seed); } break;
+            case Godot.Key.R: if (Twice(ref _rAt, "같은 배를 새 번호로")) { _seed = VoyageNumber.Draw(); Launch(_ships[_shipAt], _seed); } break;
             case Godot.Key.H: Do(Hk(UiAct.Help)); break;
             case Godot.Key.T: Do(Hk(UiAct.Tab, 1)); break;
             case Godot.Key.L: Do(Hk(UiAct.Tab, 0)); break;
@@ -1814,7 +1967,7 @@ void fragment() {
             case Godot.Key.I: Do(Hk(UiAct.Thoughts)); break;
             case Godot.Key.Escape:
                 if (Back()) break;   // 펼친 목록 → 판 → 고른 이를 먼저 닫는다
-                if (Twice(ref _escAt, "처음 화면으로")) GetTree().ChangeSceneToFile(StartScene);
+                if (Twice(ref _escAt, "처음 화면으로")) SaveAndThen(() => GetTree().ChangeSceneToFile(StartScene));
                 break;
         }
     }

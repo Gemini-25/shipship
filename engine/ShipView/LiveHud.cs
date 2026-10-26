@@ -38,7 +38,7 @@ public sealed partial class LiveShow
     }
 
     /// <summary>멈춤 · 계속 (출항 준비면 떠난다).</summary>
-    public void TogglePause() { if (Holding) { Depart(); return; } Paused = !Paused; }
+    public void TogglePause() { if (ResumeCard.Length > 0) { ResumeGo(); return; } if (Holding) { Depart(); return; } Paused = !Paused; }
 
     // ── 출항 준비 (docs/UI.md 4 — 추천 A): 띄우면 세계는 멈춘 채 항로 판이 열린다 · 항로를 누르면 고르기만 · [이대로 출항] · 멈춤 · 빠르기로 떠난다 ──
     public bool Holding;

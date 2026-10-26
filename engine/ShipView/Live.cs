@@ -54,6 +54,9 @@ public sealed class LiveFrame
     public string ReplayWhy = "";
     public bool Holding;
     public double DepartIn = double.NaN;
+    /// <summary>항해 번호 · '지난번까지' 카드 줄 (이어 본 첫 장 — docs/OBSERVER.md §3.3).</summary>
+    public long Voyage;
+    public string[] ResumeCard = Array.Empty<string>();
     public int Highlights;
     public bool JournalNew;
     public PanelKind NoticeLink;
@@ -839,7 +842,7 @@ public sealed partial class LiveShow
             Follow = Follow, Overview = Overview, FollowSelected = FollowSelected, Replaying = _replay != null, HandLeft = HandLeft,
             SpeedPick = SpeedPick, FixedPick = FixedPick, CaptionsOn = Ears.Captions,
             CanReplay = latest != null && CanReplay(latest), ReplayWhy = latest == null ? "아직 볼 만한 장면이 없다" : CanReplay(latest) ? "" : "한 시간 넘게 지나 다시 볼 수 없다",
-            Holding = Holding, DepartIn = DepartInMin(), Highlights = Dir.Highlights.Count, JournalNew = JournalNew, NoticeLink = Notice.Length > 0 ? _noticeLink : PanelKind.None,
+            Holding = Holding, DepartIn = DepartInMin(), Voyage = Voyage, ResumeCard = ResumeCard, Highlights = Dir.Highlights.Count, JournalNew = JournalNew, NoticeLink = Notice.Length > 0 ? _noticeLink : PanelKind.None,
             StoryIsChain = ChainNow().Count > 0, Spots = spots,
             Bubbles = Bubbles(), SpeechOn = SpeechBubbles, ThoughtsOn = ThoughtBubbles,
             Detail = Panel == PanelKind.None ? DetailKind.None : Detail, DetailId = DetailId, DetailSub = DetailSub, DetailTabs = Panel == PanelKind.None ? Array.Empty<string>() : DetailTabsOf(Detail),
@@ -1299,7 +1302,7 @@ public sealed partial class LiveShow
         string speed = Paused ? "멈춤" : $"{(SpeedOverride > 0 ? "고정 " : "")}×{rate * Time.SecondsPerTick:0} · 하루 {DayLength(rate)}";
         string hand = FollowSlow ? " · 따라 보기 (천천히)" : "";   // 손 카메라 남은 초는 화면의 연출 단추 고리가 보인다 (docs/UI.md)
         if (Holding) speed = "출항 준비 · 멈춤";
-        return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}{hand}";
+        return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · 항해 {Voyage} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}{hand}";
     }
 
     /// <summary>
