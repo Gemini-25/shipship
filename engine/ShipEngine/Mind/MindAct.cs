@@ -574,8 +574,9 @@ public sealed partial class Mind
         if (_work != null) _work.Maintained++;
         if (byEar) EarMaintained++;
         Forget(a, b => b.Kind == BeliefKind.Grind && b.Subject == dev);
+        bool noted = (Part)part == Part.Electric && c.AssignedGoal == GoalKind.Maintain && c.AssignedArg == 1 && c.AssignedUntil > t;   // 샤워 칸 알림으로 맡긴 일 (5단 C25)
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot,
-            byEar ? $"{Ko.I(NameOf(a.Id))} 소리가 이상한 {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다" : $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다",
+            noted ? $"{Ko.I(NameOf(a.Id))} 알림 받은 {_net.Devices[dev].Name}의 조절기를 갈았다" : byEar ? $"{Ko.I(NameOf(a.Id))} 소리가 이상한 {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다" : $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다",
             t, _net.Devices[dev].Cell, parent, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, part, cause, a.Id, dev);
         HandsOn(sim, a, dev, (Part)part, cause);

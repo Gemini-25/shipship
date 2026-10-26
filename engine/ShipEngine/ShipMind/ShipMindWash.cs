@@ -76,6 +76,7 @@ public sealed partial class ShipMind
             else if (clog) PostCare(sim, fu, 1, cell, person => person.C.SkRepair >= 0.2f);
             else if (_life.Flushes[fu] - _life.ScrubbedAt[fu] >= ScrubEvery) PostCare(sim, fu, 0, cell, person => true);
         }
+        ShowerNotes(sim);   // 샤워 칸 알림 → 사용 금지 · 갈기 (5단 C25)
         // 바닥에 내려놓인 오물 통 (내려놓은 이가 알린 그 통 — 물체 Id): 주워 비울 곳으로 (로봇 먼저 · 한 칸에 둘이어도 저마다)
         foreach (int id in _mind.WasteDown)
         {
@@ -102,6 +103,66 @@ public sealed partial class ShipMind
         sim.Facts.Emit(sim.Tick, FactKind.Switched, cell, 0, cut, -1, d);
         _net.SetValve(d, false); _net.SetOn(d, false); ShowersCut++;
         Say(sim, $"{RoomName(r)} 샤워 칸 물이 틀어진 채 비어 있어 잠갔다");
+    }
+
+    /// <summary>
+    /// 샤워 칸 알림 (5단 C25 — 사람이 배 안 통신으로 남긴 '뜨겁다' · '찬물'을 읽는다): 아는 것 — 알림 · 제 센서 · 제가 한 일 (전력 때문에 끈 장치) · 점검 뚜껑 출입 표. 조절기 상태 · 물 온도는 모른다.
+    /// 뜨거움 — 밸브를 잠그고 사용 금지 불 (비트 1) · '고칠 때까지 쓰지 마세요' · 1순위 미리 갈기 일감 (전기 부품 — 로봇 먼저) · 2순위 부품이 없으면 잠가 둔 채 알리고 부품이 생기면 그 분에 일감 ·
+    /// 끝: 알림 뒤 그 장치의 점검 뚜껑 기록이 생기면 불을 끄고 '고쳤습니다'. 찬물 — 제가 끈 장치 · 고장 등 · 전기 없는 방이면 일지만 · 아니면 일감 (불은 켜지 않는다).
+    /// </summary>
+    private void ShowerNotes(Sim sim)
+    {
+        var mind = _mind!;
+        if (_net == null) return;
+        int nf = L.Furniture.Count;
+        if (_showerNoteAt.Length != nf) { Array.Resize(ref _showerNoteAt, nf); Array.Resize(ref _showerNoteKind, nf); Array.Resize(ref _showerAwait, nf); }
+        foreach (var rp in mind.WashReports)
+        {
+            if (rp.Kind is not (1 or 2) || rp.Where < 0 || rp.Where >= _net.Devices.Count) continue;
+            int fu = _net.Devices[rp.Where].Furniture;
+            if (fu < 0 || fu >= nf || rp.Tick <= _showerNoteAt[fu]) continue;   // 읽은 알림
+            _showerNoteAt[fu] = rp.Tick; _showerNoteKind[fu] = rp.Kind;
+            int d = rp.Where, cell = L.Furniture[fu].Cells[0], room = L.Room[cell];
+            if (rp.Kind == 1)
+            {
+                _net.SetValve(d, false); _net.SetOn(d, false);
+                mind.SignWash(fu, 1, true);
+                Broadcast(sim, $"{RoomName(room)} 샤워 칸 물이 데일 듯 뜨겁다는 알림 — 고칠 때까지 쓰지 마세요");
+                _showerAwait[fu] = 1;   // 고칠 때까지 (일감 · 부품 기다림)
+            }
+            else
+            {
+                bool mine = d < Shed.Length && Shed[d] != 0 || d < LineShed.Length && LineShed[d] != 0;   // 제가 끈 온수기
+                bool lamp = false; for (int p = 0; p < 4; p++) lamp |= _net.Broken[d * 4 + p] != 0;   // 고장 등
+                if (mine || lamp || room < 0 || !_net.RoomPowered(room)) { Say(sim, $"{RoomName(room)} 샤워 칸 찬물 알림 — {(mine ? "전력을 아끼려 온수기를 꺼 두었다" : lamp ? "고장 등이 켜져 있다 (고치는 일로)" : "그 방에 전기가 없다")}"); _showerAwait[fu] = 0; continue; }
+                _showerAwait[fu] = 2;   // 찬물 — 불 없이 갈기
+            }
+        }
+        // 기다리는 칸: 일감을 올리거나 · 부품을 기다리거나 · 고쳤으면 불을 끈다
+        for (int fu = 0; fu < nf; fu++)
+        {
+            if (_showerAwait[fu] == 0) continue;
+            int d = WashDevice(fu);
+            if (d < 0) { _showerAwait[fu] = 0; continue; }
+            int room = L.Room[L.Furniture[fu].Cells[0]];
+            bool done = false;
+            foreach (var x in Accesses) if (x.Device == d && x.Tick > _showerNoteAt[fu]) { done = true; break; }   // 알림 뒤 점검 뚜껑을 열었다 (손본 기록)
+            if (done)
+            {
+                if (_showerAwait[fu] == 1 || (_mind!.WashSign[fu] & 2) != 0) { _mind!.SignWash(fu, 1, false); Broadcast(sim, $"{RoomName(room)} 샤워 칸을 고쳤습니다 — 다시 써도 됩니다"); }
+                _showerAwait[fu] = 0;
+                continue;
+            }
+            int k = d * 4 + (int)Part.Electric;
+            if (Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k)) continue;
+            if (!SpareKnown((int)Part.Electric))
+            {
+                if (_showerAwait[fu] != 3 && _showerAwait[fu] != 4) Broadcast(sim, $"{RoomName(room)} 샤워 칸 — 부품이 없어 잠가 둡니다 · 다른 샤워 칸이나 물수건을 쓰세요");
+                _showerAwait[fu] = (byte)(_showerAwait[fu] is 1 or 3 ? 3 : 4);   // 3 뜨거움 · 4 찬물 — 부품을 기다린다 (방송은 한 번)
+                continue;
+            }
+            Post(sim, new Job { Kind = GoalKind.Maintain, Target = k, Arg = 1 }, _net!.Devices[d].Cell, person => person.C.SkRepair >= 0.5f);   // Arg 1: 알림으로 (닳음 잣대로 끝내지 않는다)
+        }
     }
 
     private void PostCare(Sim sim, int fu, int kind, int cell, Func<Agent, bool> canPerson)

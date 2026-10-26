@@ -197,10 +197,13 @@ public sealed partial class ShipMind
     private readonly Dictionary<int, double> _litter = new();
     private readonly HashSet<int> _heavy = new();   // 둘이서 들 것이 있는 칸 (찍지 않는다 — 틱마다 다시 센다)
 
+    /// <summary>그 장치의 점검 뚜껑을 그 때 뒤에 열었나 (출입 표).</summary>
+    private bool AccessedSince(int dev, long tick) { foreach (var x in Accesses) if (x.Device == dev && x.Tick > tick) return true; return false; }
+
     private bool Done(in Job j) => j.Kind switch
     {
         GoalKind.Craft => _mind!.TotalOf(j.Arg) >= (T.People.Recipes.TryGetValue(_mind.ItemNames[j.Arg], out var r) ? r.Keep : 0),
-        GoalKind.Maintain => _net == null || _net.Wear[j.Target] < Work.MaintainAt * _net.Devices[j.Target / 4].Life((Part)(j.Target % 4)) * 0.5,
+        GoalKind.Maintain => _net == null || (j.Arg == 1 ? AccessedSince(j.Target / 4, j.Until - Time.Hours(2)) : _net.Wear[j.Target] < Work.MaintainAt * _net.Devices[j.Target / 4].Life((Part)(j.Target % 4)) * 0.5),   // 알림으로 올린 일감은 점검 뚜껑 기록으로 끝낸다 (새 부품이라 닳음 잣대로는 올리자마자 지워진다 — 5단 C25)
         GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && F.Stored(T.sWater, j.Target) < 2 && !_litter.ContainsKey(j.Target),
         GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < Work.HarvestAt * 0.5f * _life.CropArea(_net, j.Target),
         GoalKind.Restock => _work!.FoodAt(j.Target) >= Work.RestockBelow * 2 || _work.FoodAt(j.Arg) < 1,

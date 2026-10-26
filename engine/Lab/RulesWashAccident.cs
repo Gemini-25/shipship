@@ -287,5 +287,62 @@ public static partial class Program
                 off >= 0 && shut >= 0 && shut - off <= Time.Minutes(1) && m.ShowersFloated >= 1 && m.ShowersTaken == taken0,
                 $"끈 틱 {off} · 잠근 틱 {shut} ({(shut >= 0 && off >= 0 ? Time.ToSeconds(shut - off) : -1):0}초) · 떠서 그침 {m.ShowersFloated} · 샤워 {m.ShowersTaken - taken0}");
         }
+
+        // C25 샤워 칸 알림 → 사용 금지 · 갈기 (주컴퓨터): 샤워 칸 둘 + 주컴퓨터 · 로봇 독 —
+        //     (가) 가까운 칸 조절기가 붙어 A가 '뜨겁다'고 알리면: 밸브 잠금 · 불 (비트 1) · 방송 · 미리 갈기 일감 → 로봇이 전기 부품을 간다 → 불 꺼짐 · '고쳤습니다' → B가 그 칸에서 6분 씻고 데지 않는다
+        //     (나) 부품이 없으면: 불은 켜진 채 · '부품이 없어' 방송 · 일감 0 / (다) 찬물 알림: 주컴퓨터가 전력 때문에 끈 온수기면 일감 0 · 아니면 (조절기가 열린 채 굳음) 일감 1
+        //     (예전: 알림 길이 없었다)
+        {
+            var art = ShowerTwoShip.Replace("#e.....#S", "#e..c..#S").Replace("#pb....#...k.................#", "#pb....#...k......r..........#");
+            var lg = new Dictionary<char, string>(legend) { ['c'] = "MainComputer", ['r'] = "RobotDock" };
+            var cl = Worlds.Ascii(art, lg);
+            (bool sign, bool said, bool fixedOk, bool off, bool saidFixed, float burnB, long showersB, int jobs, bool noPart, bool kept) Note(int mode)   // 0 뜨거움 → 갈기 · 1 부품 없음 · 2 찬물 (전력으로 끔) · 3 찬물 (조절기)
+            {
+                var s = Worlds.Full(cl, 5);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+                var sh = cl.Furniture.Where(x => x.Type == "Shower").OrderBy(x => cl.X(x.Cells[0])).ToList();
+                int near = sh[0].Id, dn = net.Devices.First(d => d.Furniture == near).Id;
+                int r = m.AddRobot(s, Worlds.At(cl, 18, 3), AgentKind.Robot, Worlds.At(cl, 18, 3));
+                int a = m.AddPerson(s, Worlds.At(cl, 2, 1));
+                s.Run(2);
+                if (mode == 1) m[r].C.Spares = 0;
+                int cause = s.Causes.Add(CauseKind.Setup, "시험: 조절기가 고장 났다", s.Tick);
+                if (mode != 2) net.BreakThermostat(s, dn, mode is 0 or 1, cause);
+                if (mode == 2) { net.SetOn(dn, false); sm.Shed[dn] = 1; }   // 주컴퓨터가 전력 때문에 꺼 둔 온수기 — 찬물
+                void Calm(int p) { int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+                life[m[a].C.Body].Dirt = 0.8f;
+                bool sign = false, said = false, saidFixed = false, noPart = false; int jobs = 0;
+                long bc0 = sm.Broadcasts.Count;
+                for (long t = 0; t < Time.Minutes(40); t++)
+                {
+                    Calm(a); if (mode == 2) { sm.Shed[dn] = 1; net.SetOn(dn, false); }
+                    s.Step();
+                    sign |= (m.WashSign[near] & 2) != 0;
+                    jobs = Math.Max(jobs, sm.Jobs.Count(j => j.Kind == GoalKind.Maintain && j.Target / 4 == dn));
+                    foreach (var (_, text) in sm.Broadcasts) { said |= text.Contains("쓰지 마세요"); saidFixed |= text.Contains("고쳤습니다"); noPart |= text.Contains("부품이 없어"); }
+                }
+                bool fixedOk = net.ThermoFault[dn] == 0, off = (m.WashSign[near] & 2) == 0;
+                // 고친 뒤 B가 그 칸에서 씻는다
+                float burnB = 0; long showersB = 0;
+                if (mode == 0)
+                {
+                    int b = m.AddPerson(s, Worlds.At(cl, 9, 2));
+                    s.Run(2);
+                    life[m[b].C.Body].Dirt = 0.8f;
+                    float b0 = life[m[b].C.Body].Burn; long n0 = m.ShowersTaken; double meter0 = net.ShowerMeter[dn];
+                    for (long t = 0; t < Time.Minutes(20) && m.ShowersTaken == n0; t++) { Calm(a); Calm(b); s.Step(); }
+                    burnB = life[m[b].C.Body].Burn - b0; showersB = (long)((net.ShowerMeter[dn] - meter0) / Network.ShowerFlow);
+                }
+                return (sign, said, fixedOk, off, saidFixed, burnB, showersB, jobs, noPart, (m.WashSign[near] & 2) != 0);
+            }
+            var fix = Note(0); var none = Note(1); var shed = Note(2); var coldT = Note(3);
+            Check("화장실 사고 (C25) 조절기 알림 → 갈기: '뜨겁다' 알림에 주컴퓨터가 밸브를 잠그고 사용 금지 불 · '쓰지 마세요' 방송 · 미리 갈기 일감 → 로봇이 갈아 조절기가 새것 · 불 꺼짐 · '고쳤습니다' → 다른 이가 그 칸에서 씻고 데지 않는다",
+                fix.sign && fix.said && fix.jobs >= 1 && fix.fixedOk && fix.off && fix.saidFixed && fix.showersB >= 300 && fix.burnB < 0.02f,
+                $"불 {fix.sign} · 방송 {fix.said} · 일감 {fix.jobs} · 고침 {fix.fixedOk} · 불 꺼짐 {fix.off} · '고쳤습니다' {fix.saidFixed} · B 그 칸 물 {fix.showersB}초치 · 화상 {fix.burnB:0.000}");
+            Check("화장실 사고 (C25) 부품 없음: 갈 부품이 없으면 불은 켜진 채 · '부품이 없어' 방송 · 일감 0",
+                none.sign && none.kept && none.noPart && none.jobs == 0, $"불 {none.sign} · 켜진 채 {none.kept} · 방송 {none.noPart} · 일감 {none.jobs}");
+            Check("화장실 사고 (C25) 찬물 알림: 주컴퓨터가 전력 때문에 끈 온수기면 일감 0 (불도 없다) · 조절기가 열린 채 굳은 찬물이면 미리 갈기 일감 1 (불은 켜지 않는다)",
+                shed.jobs == 0 && !shed.sign && coldT.jobs >= 1 && !coldT.sign, $"끈 온수기: 일감 {shed.jobs} · 불 {shed.sign} / 조절기: 일감 {coldT.jobs} · 불 {coldT.sign}");
+        }
     }
 }
