@@ -101,5 +101,31 @@ public static partial class Program
                 drops > 10 && waste < 1 && why.Contains("떠다닌다") && why.Contains("꺼졌다") && near == fc && after == 0,
                 $"방울 +{drops:0.0}몰 · 오수 +{waste:0.0} · '{why}' · 물의 까닭 {(near == fc && fc != 0 ? "그 원인" : near.ToString())} · 돌아온 뒤 {after}");
         }
+
+        // C19 오물이 썩는다 (WashShip · 정화기 없음 · 때 0): 오물 통 28kg 2시간 → 화장실 메탄 ≥ 10ppm · 악취 0 / 봉함을 망가뜨리면 1시간 안에 악취 ≥ 0.004ppm /
+        //     변기에 0.4kg가 걸려 막히면 1시간 안에 악취 ≥ 0.004ppm · 산소가 준다
+        {
+            (double ch4, double stench, double o2drop) Rot(double tank, bool seal, double bowl, double hours)
+            {
+                var s = Worlds.Full(lay, 3);
+                var life = s.Get<Life>(); var net = s.Get<Network>(); var f = s.Get<Field>();
+                s.Run(2);
+                var toilet = lay.Furniture.Where(x => x.Type == "Toilet").OrderBy(x => lay.X(x.Cells[0])).First();
+                int room = lay.Room[toilet.Cells[0]];
+                foreach (var fu in lay.Furniture) if (fu.Type == "Toilet") life.Grime[fu.Id] = 0;
+                life.Tank[toilet.Id] = tank;
+                if (bowl > 0) { life.Bowl[toilet.Id] = bowl; life.Clog(toilet.Id, s.Causes.Add(CauseKind.Setup, "시험: 변기가 막혔다", s.Tick)); }
+                if (seal) net.Broken[net.Devices.First(d => d.Furniture == toilet.Id).Id * 4 + (int)Part.Seal] = 1;
+                double Ppm(int g) { double n = 0, all = 0; foreach (int c in lay.Rooms[room].Cells) { n += f.Gas(g, c); all += f.Moles(c); } return n / Math.Max(1e-9, all) * 1e6; }
+                double O2() { double n = 0; foreach (int c in lay.Rooms[room].Cells) n += f.Gas(f.T.gO2, c); return n; }
+                double ch40 = Ppm(f.T.gCH4), o20 = O2();
+                s.Run(Time.Hours(hours));
+                return (Ppm(f.T.gCH4) - ch40, Ppm(f.T.gStench), o20 - O2());
+            }
+            var tank = Rot(28, false, 0, 2); var seal = Rot(28, true, 0, 1); var bowl = Rot(0, false, 0.4, 1); var none = Rot(0, false, 0, 1);   // 맞수: 같은 시드 · 오물 없음 (옆 방과 섞이는 공기 몫을 뺀다)
+            Check("화장실 사고 (C19) 오물이 썩는다: 닫힌 오물 통 28kg 2시간 → 화장실 메탄 10ppm 넘게 · 악취 0 / 통의 봉함이 망가지면 1시간 안에 악취 0.004ppm 넘게 / 변기에 0.4kg가 걸려 막히면 1시간 안에 악취 0.004ppm 넘게 · 산소가 준다 (오물 없는 맞수보다)",
+                tank.ch4 >= 10 && tank.stench == 0 && seal.stench >= 0.004 && bowl.stench >= 0.004 && bowl.o2drop - none.o2drop > 0,
+                $"통 메탄 +{tank.ch4:0.0}ppm · 악취 {tank.stench:0.0000} / 봉함 악취 {seal.stench:0.0000}ppm / 걸린 것 악취 {bowl.stench:0.0000}ppm · 산소 −{(bowl.o2drop - none.o2drop) * 1000:0.00}밀리몰 (오물 없는 맞수보다)");
+        }
     }
 }

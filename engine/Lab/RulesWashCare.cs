@@ -148,8 +148,8 @@ public static partial class Program
             bool signed = false;
             for (long k = 0; k < Time.Minutes(90) && (life.Clogged[near] != 0 || m.WashSign[near] != 0 || !signed); k++) { s.Step(); signed |= m.WashSign[near] != 0; }
             Check("통이 가득 차서 막힌 변기: 주컴퓨터는 비우기부터 맡기고 그다음 뚫기 → 걸린 대변은 빈 통으로 · 불이 꺼진다",
-                signed && m.Emptied == 1 && m.Unclogged == 1 && life.Clogged[near] == 0 && m.WashSign[near] == 0 && Math.Abs(life.Tank[near] - 0.4) < 1e-9,
-                $"불 {signed} · 비움 {m.Emptied} · 뚫음 {m.Unclogged} · 막힘 {life.Clogged[near]} · 지금 불 {m.WashSign[near]} · 통 {life.Tank[near]:0.00}kg");
+                signed && m.Emptied == 1 && m.Unclogged == 1 && life.Clogged[near] == 0 && m.WashSign[near] == 0 && life.Tank[near] is > 0.399 and <= 0.4,   // 빈 통에 든 0.4kg — 닫힌 통에서 조금씩 썩어 준다 (5단 C19 · 하루 1%)
+                $"불 {signed} · 비움 {m.Emptied} · 뚫음 {m.Unclogged} · 막힘 {life.Clogged[near]} · 지금 불 {m.WashSign[near]} · 통 {life.Tank[near]:0.0000}kg");
         }
 
         // ── 전력을 줄이려 온수기를 꺼도 (주컴퓨터의 부하 덜기) 물 밸브는 그대로 — 찬물이 흘러 씻긴다 (찾아 고친 결함 — 물까지 멈춰 '씻었다'만 남았다) ──

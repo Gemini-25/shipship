@@ -118,6 +118,55 @@ public sealed partial class Life
     /// <summary>오물 통을 들어낸다 (곁의 빈 통으로 바꿔 끼운다 — 변기는 바로 다시 쓸 수 있다): 든 무게 (kg).</summary>
     public double LiftTank(int toilet) { WashArrays(); double kg = Tank[toilet]; Tank[toilet] = 0; WasteCarried += kg; return kg; }
 
+    /// <summary>오물의 썩는 유기물 몫 (포도당으로 친다) · 포도당 1몰의 질량 (kg).</summary>
+    public const double WasteOrganic = 0.2, GlucoseKg = 0.18;
+
+    /// <summary>
+    /// 오물이 썩는다 (월드 — 5단 C19 · 125틱마다): 유기물 몫 0.2를 포도당으로 쳐 하루 몫만큼 (293K 기준 10K마다 두 배) 그 칸에서 썩힌다 (<see cref="Decompose"/>) —
+    /// ① 닫힌 오물 통: 하루 1% 메탄 발효 · 통의 봉함이 망가졌으면 악취 0.5% ② 막혀 걸린 것: 하루 5% 썩음 (산소) + 악취 0.5% ③ 퇴비통: 5% (95% 썩음 · 5% 발효) · 악취 0.05% ·
+    /// ④ 때 1인 변기는 시간에 악취 2 × 10⁻⁶몰. 압축기 · 화물 상자는 봉해 두어 그대로. 썩어 나간 오물 (kg)은 <see cref="WasteRotKg"/>.
+    /// </summary>
+    public void WasteRot(Sim sim, double dt)
+    {
+        WashArrays();
+        _net ??= sim.Find<Network>();
+        double day = dt / 86400;
+        for (int fu = 0; fu < L.Furniture.Count; fu++)
+        {
+            var f = L.Furniture[fu];
+            if (f.Cells.Length == 0) continue;
+            int c = f.Cells[0];
+            if (F.RegionOf.Length <= c || F.RegionOf[c] < 0) continue;   // 떨어져 나간 · 진공 칸 (공기가 없다)
+            double t = F.Temp(c), k = Math.Pow(2, (t - 293) / 10) * day;
+            if (f.Type == "Toilet")
+            {
+                int dev = ToiletDev(fu);
+                bool leaky = dev >= 0 && _net!.IsBroken(dev, Part.Seal);
+                Tank[fu] -= Rot(sim, c, Tank[fu], 0.01 * k, _ferment, t);
+                if (leaky) Tank[fu] -= Rot(sim, c, Tank[fu], 0.005 * k, _stink, t);
+                Bowl[fu] -= Rot(sim, c, Bowl[fu], 0.05 * k, _rot, t);
+                Bowl[fu] -= Rot(sim, c, Bowl[fu], 0.005 * k, _stink, t);
+                if (Grime[fu] > 0) F.AddGas(c, T.gStench, 2e-6 * Grime[fu] * dt / 3600, t);   // 묵은 때의 냄새 (질량은 셈에 들지 않을 만큼)
+            }
+            else if (f.Type == "Composter")
+            {
+                Heap[fu] -= Rot(sim, c, Heap[fu], 0.05 * 0.95 * k, _rot, t);
+                Heap[fu] -= Rot(sim, c, Heap[fu], 0.05 * 0.05 * k, _ferment, t);
+                Heap[fu] -= Rot(sim, c, Heap[fu], 0.0005 * k, _stink, t);
+            }
+        }
+    }
+
+    /// <summary>오물 kg의 share 몫을 칸 c에서 반응 r로 썩힌다 — 썩어 나간 kg를 돌려준다 (장부 <see cref="WasteRotKg"/>).</summary>
+    private double Rot(Sim sim, int c, double kg, double share, Reaction r, double t)
+    {
+        if (kg <= 1e-9 || share <= 0) return 0;
+        double xi = Decompose(sim, c, r, kg * Math.Min(1, share) * WasteOrganic / GlucoseKg, t);
+        double gone = Math.Min(kg, xi * GlucoseKg / WasteOrganic);
+        WasteRotKg += gone;
+        return gone;
+    }
+
     /// <summary>들고 온 오물을 비울 곳(퇴비통 · 압축기 · 화물 상자)에 쏟는다.</summary>
     public void Dump(int fu, double kg)
     {

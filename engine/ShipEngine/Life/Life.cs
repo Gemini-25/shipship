@@ -182,7 +182,7 @@ public sealed partial class Life : IEngine
     private readonly Field F;
     private readonly Layout L;
     private readonly Tables T;
-    private readonly Reaction _breathe, _photo, _rot, _ferment;
+    private readonly Reaction _breathe, _photo, _rot, _ferment, _stink;
     private readonly Substance _glucose, _waterL, _fat;
     private Network? _net;
 
@@ -228,7 +228,7 @@ public sealed partial class Life : IEngine
     public Life(Field f)
     {
         F = f; L = f.L; T = f.T;
-        _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment");
+        _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment"); _stink = T.R("stink");
         _glucose = T.S("Glucose"); _waterL = T.S("H2O_l"); _fat = T.S("Fat");
         Mold = new float[L.N]; MoldCause = new int[L.N]; RoomSpore = new float[L.Rooms.Count];
         _sealed = new bool[L.N];
@@ -377,7 +377,7 @@ public sealed partial class Life : IEngine
         Ears(sim, dt);        // 소리 단계 S3: 큰 소리가 귀를 먹먹하게 한다
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
-        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); }
+        if (sim.Tick % 125 == 3) { MoldStep(sim, dt * 25); RotStep(sim, dt * 25); WasteRot(sim, dt * 25); }
         if (sim.Tick % 25 == 3) Spread(sim, dt * 5);   // 옮는 병 (1분마다)
         if (st != null) StampAirLoss(sim, st, sim.Tick % 25 == 7);
     }

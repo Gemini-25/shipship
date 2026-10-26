@@ -18,7 +18,7 @@ public sealed partial class Network
 
     private void ScrubInit()
     {
-        _carbon ??= new[] { T.gNH3, T.gHCN, T.gAroma };
+        _carbon ??= new[] { T.gNH3, T.gHCN, T.gAroma, T.gStench };   // 악취 (낙산)도 숯이 붙잡는다 (5단 C19)
         _acid ??= new[] { T.gHCl, T.gHF, T.gPF5, T.gPOF3 };
         _burnRx ??= new[] { T.R("tccs_co"), T.R("tccs_h2"), T.R("tccs_ch4") };
         _o3Rx ??= T.R("tccs_o3");
