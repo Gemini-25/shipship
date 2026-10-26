@@ -114,7 +114,17 @@ public sealed partial class Network : IEngine
     public double WaterTank;      // 물 (몰)
     public double WasteWater;     // 오수 (몰 — 오줌 · 씻은 물) — 재활용 장치가 마실 물로 되돌린다
     public double Brine;          // 버린 소금물의 물 (몰 — 장부)
-    public const double WaterRecovery = 0.94, RecyclerMolPerSec = 0.025; // 장치 하나 1.6L/시 · 새 거르개의 회수율 (낡을수록 0.85까지)
+    public const double WaterRecovery = 0.94, RecyclerMolPerSec = 0.025; // 장치 하나 1.6L/시 (도면에 처리량이 없을 때) · 새 거르개의 회수율 (낡을수록 0.85까지)
+    private double _recyclerRate = -1;   // 장치 하나의 처리량 (몰/초 — 도면의 배 전체 L/시 ÷ 재생기 수 · DF6)
+
+    /// <summary>물 재생기 하나가 거르는 빠르기 (몰/초): 도면의 처리량 (배 설계 값 — 태울 사람 수에 맞춘다)을 재생기 수로 나눈다 · 없으면 1.6L/시.</summary>
+    public double RecyclerRate()
+    {
+        if (_recyclerRate >= 0) return _recyclerRate;
+        int n = 0;
+        foreach (var d in Devices) if (d.Def.Role == "recycler") n++;
+        return _recyclerRate = L.WaterLph > 0 && n > 0 ? L.WaterLph * 55.5 / 3600 / n : RecyclerMolPerSec;
+    }
     public double WaterProcessed, WaterRecovered;   // 거른 오수 · 되찾은 물 (몰 — 회수율을 잰다)
     /// <summary>냉각 펌프 하나에 딸린 방 열교환 · 팬 (kW) — 전기가 모두 방 공기의 열이 되니 배 전력만큼은 걷어 내야 한다.</summary>
     public const double HvacShare = 1.0 / 3; // 펌프 냉각 용량의 1/3은 그 고리에 딸린 방 열교환 · 팬 몫 (90kW 펌프 → 30kW)
@@ -832,7 +842,7 @@ public sealed partial class Network : IEngine
                         // 거르개가 낡을수록 막혀 덜 흐르고 · 소금물을 덜 짜내 회수율이 94% → 85% (오줌 처리만 — ISS 첫 물 회수 장치) · 망가지면 30%만 흐른다
                         double wear = Math.Clamp(WearFraction(dev.Id, Part.Filter), 0, 1);
                         double rec = filterBad ? 0.85 : WaterRecovery - 0.09 * wear;
-                        double n = Math.Min(WasteWater, RecyclerMolPerSec * (filterBad ? 0.3 : 1 - 0.5 * wear * wear) * dt);
+                        double n = Math.Min(WasteWater, RecyclerRate() * (filterBad ? 0.3 : 1 - 0.5 * wear * wear) * dt);
                         WasteWater -= n; WaterTank += n * rec; Brine += n * (1 - rec); sim.Book.Add(Res.Water, Flow.Recycled, n * rec);
                         WaterProcessed += n; WaterRecovered += n * rec;
                     }
@@ -879,6 +889,7 @@ public sealed partial class Network : IEngine
                     {
                         double x = F.TakeStore(c, T.sFood, Math.Min(food, 0.0005 * (PanK[d] - 470) / 100 * dt));
                         F.AddGas(c, T.gSoot, 6 * x, PanK[d]); F.AddGas(c, T.gH2O, 6 * x, PanK[d]);
+                        sim.Book.Add(Res.Food, Flow.Burned, -x);   // 눌어 없어진 음식도 장부에 (예전엔 적지 않아 켜 둔 조리대 하나에 식량 장부가 0.24몰 어긋났다 — DF5)
                     }
                     if (PanK[d] > 600 && food > 0.05) F.Tf[c] = Math.Max(F.Tf[c], PanK[d]); // 눌은 음식이 불붙을 만큼 뜨겁다
                     if (kw > 0 && OnCause[d] != 0) { var chem = sim.Find<Chemistry>(); if (chem != null) chem.HeatCause[c] = OnCause[d]; }

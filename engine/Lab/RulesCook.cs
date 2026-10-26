@@ -65,6 +65,16 @@ public static partial class Program
                 bool on = net.On[stove.Id] != 0;
                 var mis = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Mistake && x.Actor == p);
                 string why = mis.Kind == FactKind.Mistake ? s.Causes.Text(mis.Cause) : "";
+                // 빠져나간 이가 조리대가 있는 통로를 벗어나면 그 통로 문을 한 시간 잠근다 — 돌아와 제가 켜 둔 조리대를 보고 끄지 않게 (DF5: 본 이는 끈다 · 이 시험은 주컴퓨터가 끈 뒤의 배움을 본다)
+                int hall = m.RoomOf(stove.Cell);
+                for (int k = 0; k < Time.Minutes(5) && on && (m.RoomOf(m[p].C.Cell) == hall || m.RoomOf(m[p].C.Cell) < 0); k++) s.Step();
+                if (on && m.RoomOf(m[p].C.Cell) != hall)
+                    for (int d = 0; d < s.Layout.Doors.Count; d++)
+                    {
+                        Span<int> nb = stackalloc int[4];
+                        s.Layout.Neighbors(s.Layout.Doors[d].Cell, nb);
+                        foreach (int j in nb) if (j >= 0 && s.Layout.Room[j] == hall) { s.Get<Structure>().LockDoor(d, s.Tick + Time.Hours(1)); break; }
+                    }
                 for (int k = 0; k < Time.Minutes(60) && net.On[stove.Id] != 0; k++) s.Step();
                 s.Run(Time.Minutes(2));
                 if (Debug) Console.WriteLine($"    성실 {consc} · 조심 {careful}: 켜짐 {on} · \"{why}\" · 지금 {net.On[stove.Id]} · 조심 {m[p].C.Careful:0.00} · 전원 내림 {sm.StovesCut} · {m.Thought(p)}");
@@ -74,7 +84,7 @@ public static partial class Program
             Check("하다 말고: 밥을 짓다 같은 방 벽에서 쉬익 소리가 나면 덜 성실한 이는 조리대를 켜 둔 채 달려 나가고 · 배운 성실한 이는 끄고 간다",
                 careless.on && careless.why.Contains("켜 둔 채") && careless.why.Contains("급한") && !careful.on && careful.why == "",
                 $"덜 성실: {(careless.on ? "켜 둔 채" : "끄고")} \"{careless.why}\" / 배운 성실: {(careful.on ? "켜 둔 채" : "끄고")}");
-            Check("실수에서 배운다: 켜 둔 조리대가 눌어 연기를 내자 주컴퓨터가 전원을 내렸다 → 켜 둔 이의 조심이 오른다 (다음엔 덜 잊는다)",
+            Check("실수에서 배운다: 켜 둔 조리대를 주컴퓨터가 껐다 (쓰는 이 없이 15분 — DF5 · 눌는 연기) → 켜 둔 이의 조심이 오른다 (다음엔 덜 잊는다)",
                 careless.cut && careless.carefulAfter >= 0.29f,
                 $"전원 내림 {careless.cut} · 조심 0 → {careless.carefulAfter:0.00}");
         }

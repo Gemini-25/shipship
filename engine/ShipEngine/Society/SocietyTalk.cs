@@ -59,7 +59,7 @@ public sealed partial class Society
         int sp = act.Actor, li = act.Target;
         if (!Awake(sp) || !Awake(li)) return;   // 그 틱에 쓰러졌다 — 말이 끊겼다
         var o = new Option(act.Topic, 1, act.Other, act.Cause, act.Cell, sp);
-        Outcome(sim, o, sp, li, act.End);
+        Outcome(sim, o, sp, li, act.End, act.Arg);
         // 함께 겪은 불 · 구멍 이야기: 들은 이는 교훈을 조금 얻고 · 말한 이는 되새긴다 (⑧에 요청)
         if (o.T is Topic.Fire or Topic.Breach)
         {
@@ -67,12 +67,13 @@ public sealed partial class Society
             _mind!.Teach(li, hz, 0.08f); _mind.Teach(sp, hz, 0.05f);
         }
         LastTalk[sp * N + li] = LastTalk[li * N + sp] = sim.Tick;
-        // 한 번 꺼낸 이야기는 둘에게 조금 가라앉는다 (같은 말만 되풀이하지 않게)
-        if (o.Cause != 0)
+        // 한 번 꺼낸 이야기는 둘에게 조금 가라앉는다 (같은 말만 되풀이하지 않게) — 좋은 일은 되새길수록 남으니 조금만 (DF7: 예전엔 축하 기억도 꺼낼 때마다 반으로) ·
+        // 방금 겪은 일 이야기는 이제 막 기억이 된 것이라 가라앉히지 않는다
+        if (o.Cause != 0 && act.Arg == 0)
             for (int k = 0; k < Memories.Count; k++)
             {
                 var m = Memories[k];
-                if ((m.Owner == sp || m.Owner == li) && m.Cause == o.Cause) { m.Weight *= 0.5f; Memories[k] = m; }
+                if ((m.Owner == sp || m.Owner == li) && m.Cause == o.Cause) { m.Weight *= Good(m.Topic) ? 0.9f : 0.5f; Memories[k] = m; }
             }
     }
 
@@ -101,8 +102,11 @@ public sealed partial class Society
         return about;
     }
 
-    /// <summary>대화가 흘러간 끝(듣는 이가 받은 것 — 마음이 정했다)의 결과 — 관계를 바꾸고 한 마디를 남긴다.</summary>
-    private void Outcome(Sim sim, Option o, int a, int b, TalkEnd end)
+    /// <summary>좋은 일의 기억 (축하 · 함께 웃음 · 화해 · 구해 줌 · 들어 줌 · 마음).</summary>
+    public static bool Good(Topic t) => t is Topic.Joy or Topic.Peace or Topic.Rescue or Topic.Troubled or Topic.Heart;
+
+    /// <summary>대화가 흘러간 끝(듣는 이가 받은 것 — 마음이 정했다)의 결과 — 관계를 바꾸고 한 마디를 남긴다 (fresh: 방금 겪은 일 — 1 알림 · 2 물음 · 3 함께 · DF7).</summary>
+    private void Outcome(Sim sim, Option o, int a, int b, TalkEnd end, int fresh = 0)
     {
         ref var ca = ref C(a); ref var cb = ref C(b);
         switch (o.T)
@@ -247,6 +251,15 @@ public sealed partial class Society
                 // 함께 겪은 일: 그때 자기를 구한 · 위기를 넘긴 상대에게 고마워했다 · 아니면 맞장구
                 bool hero = end == TalkEnd.Praise;
                 if (o.T == Topic.Hurt) { Warm(sim, a, b, 0.03f); Say(sim, b, a, o, end, Pick(sim, "다침/위로", b)); break; }
+                if (fresh != 0 && o.T is Topic.Fire or Topic.Breach)
+                {
+                    // 방금 겪은 일 (DF7): 알렸다 · 물었다 · 함께 겪은 이야기 — 둘이 그 일을 함께 기억하고 (들은 이는 옅게) · 조금 가까워진다
+                    Warm(sim, a, b, 0.03f); Warm(sim, b, a, 0.03f);
+                    string t = TalkTable.TopicName(o.T), how = fresh == 1 ? "소식" : fresh == 2 ? "물음" : "방금";
+                    Say(sim, a, b, o, end, Pick(sim, $"{t}/{how}", a), $"{Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} {(fresh == 1 ? $"방금 일을 알렸다 — {t} 이야기" : fresh == 2 ? $"방금 일을 물었다 — {t} 이야기" : $"방금 겪은 {t} 이야기를 나눴다")}");
+                    Remember(sim, a, o.T, -1, o.Cause, 0.6f, o.Cell); Remember(sim, b, o.T, -1, o.Cause, fresh == 1 ? 0.4f : 0.6f, o.Cell);
+                    break;
+                }
                 Warm(sim, a, b, hero ? 0.06f : 0.04f); Warm(sim, b, a, 0.04f);
                 if (hero) Add(TrustOf, a, b, 0.05f);
                 string key = o.T == Topic.Rescue ? RescueKey(o, a, b, hero) : $"{TalkTable.TopicName(o.T)}/{(hero ? "칭찬" : "맞장구")}";
@@ -254,11 +267,14 @@ public sealed partial class Society
                 break;
             }
             case Topic.Joy:
+            {
                 // 좋은 일 (축하 · 함께 웃은 날)을 떠올린다: 함께 웃고 · 가까워진다
                 Warm(sim, a, b, 0.03f); Warm(sim, b, a, 0.03f);
                 ca.Joy = Math.Min(1, ca.Joy + 0.05f); cb.Joy = Math.Min(1, cb.Joy + 0.05f);
-                Say(sim, a, b, o, end, Pick(sim, "좋은 일/웃음", a));
+                int line = Say(sim, a, b, o, end, Pick(sim, "좋은 일/웃음", a));
+                if (end == TalkEnd.Laugh) { RememberLaugh(sim, a, b, line, ca.Cell); RememberLaugh(sim, b, a, line, cb.Cell); }
                 break;
+            }
             case Topic.Shortage:
                 ca.Stress = Math.Min(1, ca.Stress + 0.05f); cb.Stress = Math.Min(1, cb.Stress + 0.05f);
                 Warm(sim, a, b, 0.01f);
@@ -272,7 +288,8 @@ public sealed partial class Society
                 {
                     Warm(sim, a, b, 0.03f); Warm(sim, b, a, 0.03f);
                     ca.Joy = Math.Min(1, ca.Joy + 0.05f); cb.Joy = Math.Min(1, cb.Joy + 0.05f);
-                    Say(sim, a, b, o, end, Pick(sim, end == TalkEnd.Laugh ? "잡담/웃음" : $"{t}/맞장구", a));
+                    int line = Say(sim, a, b, o, end, Pick(sim, end == TalkEnd.Laugh ? "잡담/웃음" : $"{t}/맞장구", a));
+                    if (end == TalkEnd.Laugh) { RememberLaugh(sim, a, b, line, ca.Cell); RememberLaugh(sim, b, a, line, cb.Cell); }   // 실컷 웃은 일은 좋은 일로 남는다 (DF7)
                 }
                 else if (end == TalkEnd.Friction)
                 {
@@ -285,6 +302,22 @@ public sealed partial class Society
             }
         }
         Talks++;
+    }
+
+    /// <summary>
+    /// 함께 실컷 웃었다 (DF7 — 예전엔 웃음 기억이 0): 그 사람과 웃은 좋은 일로 기억한다 — 그와 웃은 기억이 이미 있으면 (원인이 달라도) 하나로 쌓고 다시 새로워진다
+    /// (웃을 때마다 기억 칸을 하나씩 채우지 않는다).
+    /// </summary>
+    private void RememberLaugh(Sim sim, int owner, int with, int cause, int cell)
+    {
+        for (int k = 0; k < Memories.Count; k++)
+        {
+            var m = Memories[k];
+            if (m.Owner != owner || m.Topic != Topic.Joy || m.About != with) continue;
+            m.Weight = Math.Min(1, Weight(m, sim.Tick) + 0.15f); m.Tick = sim.Tick; Memories[k] = m;
+            return;
+        }
+        Remember(sim, owner, Topic.Joy, with, cause, 0.3f, cell);
     }
 
     /// <summary>

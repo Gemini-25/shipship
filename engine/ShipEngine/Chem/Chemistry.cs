@@ -179,7 +179,7 @@ public sealed class Chemistry : IEngine
         F.RebuildNow(); // 장보다 먼저 돈다 — 구역이 바뀌었으면 지금 짠다
         Array.Clear(Hrr);
         GasBurstJ.Clear();
-        Array.Clear(_sparkNext);
+        Array.Clear(_sparkNext); Array.Clear(_sparkCauseNext);   // 원인 칸도 비운다 (두 틱 전 원인을 남기면 찍지 않는 이 버퍼 때문에 되살린 세계와 다음 틱 찍기가 갈렸다 — 읽기는 늘 불씨 칸을 보고 하니 행동은 같다)
         _stamp++;
         int burning = 0;
         Span<int> nb = stackalloc int[4];

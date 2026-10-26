@@ -50,6 +50,8 @@ public sealed partial class Director
     public string Caption = "";
     public readonly List<Highlight> Highlights = new();
     public readonly List<(long tick, byte[] snap, int len)> Ring = new();   // 찍은 것은 snap의 앞 len 바이트 (칸을 다시 쓴다)
+    /// <summary>빌려 준 고리 칸 (장면 금고가 다른 일꾼에서 압축하는 동안 — 고리가 돌아도 그 칸은 다시 쓰지 않고 새로 잡는다 · 복사 없이 ≤ 1ms).</summary>
+    public readonly System.Collections.Concurrent.ConcurrentDictionary<byte[], byte> Lent = new(ReferenceEqualityComparer.Instance);
     public bool KeepRing = true;
     public long Switches;
     public double ScreenSeconds;                // 지금까지 흐른 화면 시간
@@ -93,7 +95,7 @@ public sealed partial class Director
         FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, FactKind.Meeting => 25, FactKind.Verdict => 45, FactKind.Elected => 35, FactKind.Mutiny => 60, FactKind.Devised => 30, FactKind.Consulted => 14,
         FactKind.MethodWorked => 40, FactKind.MethodFailed => 25, FactKind.ManualChanged => 30,   // 궁리 끝에 해낸 일 · 매뉴얼대로 했다가 틀어진 일 · 회의가 매뉴얼을 고친 일
         FactKind.CableCut => 8, FactKind.PipeLeak => 10, FactKind.Tumble => 40, FactKind.Crash => 70,   // ⑥ 바퀴 3 — 선이 끊겼다 (탔다 · 찢겼다 · 피복이 갈라졌다) · 관이 샌다
-        FactKind.Shattered => 8, FactKind.Toppled => 10, FactKind.ItemFell => 6, FactKind.TornLoose => 30, _ => 1,   // 물체 볼거리 (PH12 — 깨졌다는 사람 곁이면 15)
+        FactKind.Shattered => 8, FactKind.Toppled => 10, FactKind.ItemFell => 6, FactKind.TornLoose => 30, FactKind.LaidOut => 25, _ => 1,   // 물체 볼거리 (PH12 — 깨졌다는 사람 곁이면 15)
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -130,6 +132,7 @@ public sealed partial class Director
         for (int i = 0; i < Heat.Length; i++) { if (Heat[i] > 0.01f) Heat[i] *= decay; else Heat[i] = 0; if (Aux[i] > 0.01f) Aux[i] *= decay; else Aux[i] = 0; }
 
         var mind = sim.Find<Mind>(); var life = sim.Find<Life>();
+        _peopleMind = mind;
         // 사실
         Fact best = default; float bestScore = 0;
         foreach (var f in sim.Facts.Since(_cursor))
@@ -153,6 +156,7 @@ public sealed partial class Director
             }
             Watch(cell, w, rec != null && rec.Count >= 2, f.Kind, root);
             DayNote(sim, f, w, cell, AgentOf(mind, f), rec);   // ⑬ 이야기 편집 — 오늘의 장
+            PeopleNote(sim, f, AgentOf(mind, f), mind);        // 사람 일 장부 (V3 — 적기만)
             if (w >= ChainFactAt && cell >= 0) Recent(cell, root, AgentOf(mind, f), score, t);
             if (cell >= 0 && cell < Heat.Length) Heat[cell] += score;
             if (Omen(f)) OmenSeen(f, w, root, t);
@@ -160,6 +164,7 @@ public sealed partial class Director
             if (score > bestScore && cell >= 0) { bestScore = score; best = f; best.Cell = cell; }
         }
         _cursor = sim.Facts.Total;
+        if (People.MournFor >= 0) MournRead(sim, mind);   // 열린 추모 모임의 말 (말 기록 고리가 돌기 전에)
 
         // 위험한 칸의 사람 (매 틱)
         bool danger = false;
@@ -196,7 +201,7 @@ public sealed partial class Director
         {
             _ringLate = false;
             byte[]? buf = null;
-            if (Ring.Count >= RingSize) { buf = Ring[0].snap; Ring.RemoveAt(0); }   // 가장 오래된 칸에 다시 찍는다
+            if (Ring.Count >= RingSize) { buf = Ring[0].snap; Ring.RemoveAt(0); if (Lent.ContainsKey(buf)) buf = null; }   // 가장 오래된 칸에 다시 찍는다 (빌려 준 칸이면 새로)
             int len = sim.SaveInto(ref buf);
             Ring.Add((t, buf!, len));
         }
@@ -470,12 +475,19 @@ public sealed partial class Director
     /// <summary>하이라이트의 시작(첫 조짐) 직전 찍기에서 되살린 세계 — 이어 돌리면 같은 일이 그대로 일어난다. 고리에 없으면 null.</summary>
     public Sim? Replay(Sim sim, Highlight h)
     {
+        if (RingFor(h) is not { } pick) return null;
+        var w = new Sim(sim.Setup);
+        w.Load(pick.snap, pick.len);
+        return w;
+    }
+
+    /// <summary>그 하이라이트의 다시보기가 쓸 고리 찍기 — 시작(첫 조짐) 직전 · 없으면 정점 앞의 가장 오래된 것 · 그것도 없으면 null (다시보기 · 장면 금고가 함께 쓴다 — docs/OBSERVER.md §4.1).</summary>
+    public (long tick, byte[] snap, int len)? RingFor(Highlight h)
+    {
         (long tick, byte[] snap, int len)? pick = null;
         foreach (var r in Ring) if (r.tick <= h.StartTick) pick = r;
-        if (pick == null) { if (Ring.Count > 0 && Ring[0].tick <= h.Tick) pick = Ring[0]; else return null; }
-        var w = new Sim(sim.Setup);
-        w.Load(pick.Value.snap, pick.Value.len);
-        return w;
+        if (pick == null && Ring.Count > 0 && Ring[0].tick <= h.Tick) pick = Ring[0];
+        return pick;
     }
 
     /// <summary>재미 점수 재료 (Lab --fun).</summary>

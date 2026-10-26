@@ -439,12 +439,14 @@ public static partial class Program
             var n8 = s8.Get<Network>(); var l8 = s8.Get<Life>();
             int off = l8.Crops[0].Device;
             n8.SetOn(off, false);
+            var start8 = l8.Crops.Select(c => c.Biomass).ToArray();   // 출항 때 재배대마다 자람 단계가 다르다 (DF6) — 두 시간에 자란 몫을 본다
             s8.Run(Time.Hours(2)); // 자라는 빠르기는 늘 같은 틀 — 반나절을 기다리지 않는다
-            var lit = l8.Crops.Skip(1).Average(c => c.Biomass);
+            var lit = Enumerable.Range(1, l8.Crops.Count - 1).Average(k => l8.Crops[k].Biomass - start8[k]);
+            float offGrew = l8.Crops[0].Biomass - start8[0];
             double ideal = Enumerable.Range(1, l8.Crops.Count - 1).Average(k => l8.CropArea(n8, k)) * Life.CropMolPerM2Day / 12;
             // 실제 수확량: 1m²에 하루 0.1몰 (먹는 부분 18g — NASA BPC) → 두 시간에 재배대 넓이 × 0.0083몰이 다 자란 몫
-            Check("재배등이 켜진 재배대는 자라고(1m²에 하루 0.1몰 — 실제 수확량 · 사람이 없어 이산화탄소가 모자라 그 몇 할) · 꺼진 것은 거의 안 자란다 (두 시간)", lit > ideal * 0.25 && lit <= ideal * 1.0001 && l8.Crops[0].Biomass < lit * 0.3,
-                $"켜진 것 평균 {lit:0.000}몰 (다 자라면 {ideal:0.000}) · 꺼진 것 {l8.Crops[0].Biomass:0.000}몰 · 재배대 {l8.Crops.Count}");
+            Check("재배등이 켜진 재배대는 자라고(1m²에 하루 0.1몰 — 실제 수확량 · 사람이 없어 이산화탄소가 모자라 그 몇 할) · 꺼진 것은 거의 안 자란다 (두 시간)", lit > ideal * 0.25 && lit <= ideal * 1.0001 && offGrew < lit * 0.3,
+                $"켜진 것 평균 {lit:0.000}몰 (다 자라면 {ideal:0.000}) · 꺼진 것 {offGrew:0.000}몰 · 재배대 {l8.Crops.Count}");
 
             // 곰팡이: 습하고 따뜻한 방에서 자란다
             var s9 = World(w => { var f = w.Get<Field>(); f.Adiabatic = true; /* 난방 장치가 없는 글자 도면 — 얼지 않게 */ foreach (int c in lay.Rooms.First(r => r.Cells.Contains(a)).Cells) { f.AddStore(c, f.T.sWater, 80); f.AddGas(c, f.T.gH2O, 1.5, f.Temp(c)); } var net = w.Get<Network>(); for (int d = 0; d < net.Devices.Count; d++) if (net.Devices[d].Def.Role == "dehumid") net.SetOn(d, false); });
@@ -556,6 +558,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); NatureRules(); MachineRules(); SupplyChainRules(); CommsRules(); HeatVibRules(); EyeRules(); DressUseRules(); WashRules(); WashSoundRules(); WashCareRules(); LifeSoundRules(); EarRules(); MicRules(); MusicRules(); SoundWorldRules(); MapRules(); LongArcRules(); ChapterRules(); LocalRules(); LightRules(); FxRules(); PeopleArtRules(); TraceRules(); CouncilRules(); JudgmentRules(); WearyRules(); SnagRules(); GaugeRules(); ScrubRules(); MindFixRules(); HandsRules(); AssessRules(); JudgedRules(); HudRules(); ArtRules(); FarRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); PropRules(); MishapRules(); ToxRules(); GravityRules(); OrganRules(); DxRules(); MentalRules(); CultureRules(); SpeedRules(); HandRules(); HandViewRules(); LookRules(); DetailRules(); ForecastRules(); FinishRules(); Depth1Rules(); Depth2Rules(); Physics2Rules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); NatureRules(); MachineRules(); SupplyChainRules(); CommsRules(); HeatVibRules(); EyeRules(); DressUseRules(); WashRules(); WashSoundRules(); WashCareRules(); LifeSoundRules(); EarRules(); MicRules(); MusicRules(); SoundWorldRules(); MapRules(); LongArcRules(); ChapterRules(); LocalRules(); LightRules(); FxRules(); PeopleArtRules(); TraceRules(); CouncilRules(); JudgmentRules(); WearyRules(); SnagRules(); GaugeRules(); ScrubRules(); MindFixRules(); HandsRules(); AssessRules(); JudgedRules(); HudRules(); ArtRules(); FarRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); PropRules(); MishapRules(); ToxRules(); GravityRules(); OrganRules(); DxRules(); MentalRules(); CultureRules(); SpeedRules(); HandRules(); HandViewRules(); LookRules(); DetailRules(); ForecastRules(); FinishRules(); Depth1Rules(); Depth2Rules(); Depth3Rules(); Physics2Rules(); ResumeRules(); VoyageNumberRules(); RecordRules(); VaultRules();
     }
 }

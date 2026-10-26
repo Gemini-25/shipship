@@ -1243,7 +1243,7 @@ public sealed partial class ShipMind : IEngine
     /// <summary>⑪ 일감판의 일상 일 (만들기 · 정비 · 청소 · 거두기 · 식량 채워 두기 · 나르기 · 조이기 · 변기 손질 · 쓴 것 채우기 · 줍기) — 사건이 나면 놓고 온다
     /// (예전엔 나르기 · 채우기 · 줍기가 빠져 — 내려놓은 우주복을 주우러 간 로봇을 일감 기한 두 시간 동안 부르지 않았다).</summary>
     private static bool Chore(GoalKind g) => g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten
-        or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.Gather;
+        or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.Gather or GoalKind.LayOut;
 
     /// <summary>
     /// ⑩ 판단 엔진: 맡긴 로봇이 막혔나 — 로봇이 남긴 막힘(까닭 · 자리 · 대상)을 사건에 옮겨 적고 일지에 쓴다 (보낸 뒤의 문 · 길 · 물건 막힘만).
@@ -1508,10 +1508,10 @@ public sealed partial class ShipMind : IEngine
     {
         var parts = new List<string> { $"산소 {ShipO2():0.0}kPa" };
         if (power && _net != null) parts.Add($"전력 {_net.Supplied:0}kW 내고 {_net.Demanded:0}kW 씀");
-        if (sim.Find<Work>() is Work w && sim.Book.Started)
+        if (sim.Find<Work>() != null && sim.Book.Started)
         {
-            parts.Add($"식량 {DaysText(w.DaysLeft(sim, (int)Res.Food).days)}");
-            parts.Add($"물 {DaysText(w.DaysLeft(sim, (int)Res.Water).days)}");
+            parts.Add($"식량 {DaysText(FoodDaysLeft(sim))}");   // 배급 · 막힌 곳과 같은 셈 (DF6 — 예전엔 장부의 하루 빠르기로 따로 셈했다)
+            parts.Add($"물 {DaysText(WaterDaysLeft(sim))}");
         }
         return string.Join(" · ", parts);
     }

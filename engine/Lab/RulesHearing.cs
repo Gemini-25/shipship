@@ -178,12 +178,12 @@ public static partial class Program
                     if (pn.Wear[d.Id * 4 + (int)Part.Mechanical] < Work.MaintainAt * d.Life(Part.Mechanical)) { seed = sd; pumpPick = d.Id; break; }
                 }
             }
-            (bool broke, bool robotFixed, string story) Report(bool person)
+            (bool broke, bool robotFixed, string story) Report(bool person, bool withRobot = true)
             {
                 var s = Worlds.Full(layC, seed);
                 s.Run(30);
                 var m = s.Get<Mind>(); var n = s.Get<Network>();
-                int robot = m.AddRobot(s, Worlds.At(layC, 22, 8), AgentKind.Robot, Worlds.At(layC, 22, 8));
+                int robot = withRobot ? m.AddRobot(s, Worlds.At(layC, 22, 8), AgentKind.Robot, Worlds.At(layC, 22, 8)) : -9;
                 int pump = pumpPick;
                 n.AgeLeft(pump, Part.Mechanical, 1.5);
                 int p = -1;
@@ -197,8 +197,10 @@ public static partial class Program
                 bool failed = s.Facts.Since(0).Any(x => x.Kind == FactKind.MachineFail && x.Other == pump);
                 return (failed, fix.Count > 0 && !failed, fix.Count > 0 ? s.Causes.Story(fix[0].Cause) : "");
             }
-            var told = Report(true); var alone = Report(false);
-            Check("소리: 알림 — 고칠 줄 모르는 이가 곧 망가질 펌프의 끽끽을 듣고 '소리가 이상하다'고 알리면 일감판이 먼 충전대의 로봇에게 맡겨 미리 간다 (원인 사슬이 알린 사람까지) · 아무도 듣지 못하면 망가진다",
+            var patrolT = Task.Run(() => Report(false)); var told = Report(true); var alone = Report(false, withRobot: false); var patrol = patrolT.Result;
+            Check("소리: 순회 — 사람이 없어도 배를 도는 로봇이 곧 망가질 펌프 곁에서 끽끽을 듣고 미리 간다 (DF5 — 예전엔 충전독에서 놀아 망가졌다)",
+                patrol.robotFixed && !patrol.broke, $"순회: {(patrol.broke ? "망가짐" : "멀쩡")} · {patrol.story}");
+            Check("소리: 알림 — 고칠 줄 모르는 이가 곧 망가질 펌프의 끽끽을 듣고 '소리가 이상하다'고 알리면 일감판이 먼 충전대의 로봇에게 맡겨 미리 간다 (원인 사슬이 알린 사람까지) · 아무도 없으면 (사람도 로봇도) 망가진다",
                 told.robotFixed && !told.broke && told.story.Contains("알렸다") && alone.broke,
                 $"알림: {(told.broke ? "망가짐" : "멀쩡")} · {told.story} / 아무도 없음: {(alone.broke ? "망가짐" : "멀쩡")}");
         }

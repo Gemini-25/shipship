@@ -23,7 +23,7 @@ public sealed partial class ShipMind
     private long _missingSaidAt = long.MinValue / 2;
     private double _jMissing, _jProcessed, _jRecovered;      // 지난 일지 때의 셈
     /// <summary>물 셈 (한 시간마다 · 마지막 24개): 물탱크 + 오수 통 × 되찾는 몫 · 마신 물 누계 — 씻은 물 · 오줌이 오수 통에서 되찾기를 기다리는 동안은 준 것이 아니다.</summary>
-    private double[] _waterHist = new double[24], _drunkHist = new double[24];
+    private double[] _waterHist = new double[24], _drunkHist = new double[24], _wasteHist = new double[24], _procHist = new double[24];   // 오수 통 수위 · 재생기가 거른 누계 (DF6)
     private long[] _waterHistTick = new long[24];
     private int _waterN;
     /// <summary>마시는 곳 계량기로 잰 한 사람 하루 마신 양 (몰 — 배급이 없을 때 여섯 시간 넘게 잰 것 · 0: 아직 모름). 배급 몫은 이것 × 0.85 (docs/MIND.md 3단 · 함장 결정 17).</summary>
@@ -93,6 +93,7 @@ public sealed partial class ShipMind
         int k = _waterN % _waterHist.Length;
         _waterHist[k] = _net.WaterTank + (rec ? Network.WaterRecovery * _net.WasteWater : 0);
         _drunkHist[k] = -sim.Book.Of(Res.Water, Flow.Drunk);
+        _wasteHist[k] = _net.WasteWater; _procHist[k] = _net.WaterProcessed;
         _waterHistTick[k] = sim.Tick;
         _waterN++;
     }
@@ -121,6 +122,27 @@ public sealed partial class ShipMind
         loss += drunk * (1 / Math.Max(0.1f, share) - 1);
         return loss <= 1e-9 ? double.PositiveInfinity : _waterHist[now] / loss;
     }
+
+    /// <summary>
+    /// 오수가 밀리나 (오수 통 수위 · 재생기 계량기 — 한 시간마다 · DF6): 지금 30L 넘게 차 있고 세 시간 전보다 10L 넘게 늘었다 —
+    /// 그 사이의 빠르기로 하루에 드는 양 · 거르는 양 (L). 물 재생기의 처리량이 막힌 곳이다 (마시는 양이 아니다 — 예전 오진).
+    /// </summary>
+    public bool WasteBacklog(out double nowL, out double inPerDay, out double outPerDay)
+    {
+        nowL = inPerDay = outPerDay = 0;
+        if (_net == null || _waterN < 4) return false;
+        int n = _waterHist.Length, now = (_waterN - 1) % n, old = (_waterN - 4) % n;
+        double days = (_waterHistTick[now] - _waterHistTick[old]) * Time.SecondsPerTick / 86400;
+        if (days <= 0) return false;
+        nowL = _wasteHist[now] * 0.018;
+        double grew = (_wasteHist[now] - _wasteHist[old]) * 0.018, proc = (_procHist[now] - _procHist[old]) * 0.018;
+        outPerDay = proc / days; inPerDay = (grew + proc) / days;
+        return nowL > 30 && grew > 10;
+    }
+
+    /// <summary>주컴퓨터가 셈한 '보통으로 쓰면 며칠 버티나' — 배급 · 막힌 곳 · 방송 · 일지 · 판이 모두 이 값을 쓴다 (깊이 고침 DF6 — 예전엔 셋이 따로 셈해 같은 날 '387.8일 치' · '28일 치'가 나왔다).</summary>
+    public double WaterDaysLeft(Sim sim) => WaterDays(sim, RationWaterOn != 0 ? WaterShare : 1);
+    public double FoodDaysLeft(Sim sim) => Days(sim, Res.Food, RationFoodOn != 0 ? Policy.RationShare : 1);
 
     /// <summary>보통으로 쓰면 며칠 버티나: 재고 ÷ (지금 쓰는 양 ÷ 지금 몫 − 만드는 양) — 모르면 무한.</summary>
     private static double Days(Sim sim, Res k, float share)
@@ -185,6 +207,7 @@ public sealed partial class ShipMind
         w.I32(Blocked.Count); foreach (var b in Blocked) w.Str(b); w.Arr(BlockedCause.ToArray());
         w.Arr(_lkSeen); w.Arr(_lkLogged); w.F64(_missingPending); w.I64(_missingSaidAt); w.F64(_jMissing); w.F64(_jProcessed); w.F64(_jRecovered);
         w.Arr(_waterHist); w.Arr(_drunkHist); w.Arr(_waterHistTick); w.I32(_waterN); w.F64(WaterNeed);
+        w.Arr(_wasteHist); w.Arr(_procHist); w.Arr(new[] { _wasteRule });
     }
     private void LoadSupply(StateReader r)
     {
@@ -192,5 +215,6 @@ public sealed partial class ShipMind
         Blocked.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) Blocked.Add(r.Str() ?? ""); BlockedCause.Clear(); BlockedCause.AddRange(r.Arr<int>());
         _lkSeen = r.Arr<double>(); _lkLogged = r.Arr<double>(); _missingPending = r.F64(); _missingSaidAt = r.I64(); _jMissing = r.F64(); _jProcessed = r.F64(); _jRecovered = r.F64();
         _waterHist = r.Arr<double>(); _drunkHist = r.Arr<double>(); _waterHistTick = r.Arr<long>(); _waterN = r.I32(); WaterNeed = r.F64();
+        _wasteHist = r.Arr<double>(); _procHist = r.Arr<double>(); _wasteRule = r.Arr<byte>()[0];
     }
 }

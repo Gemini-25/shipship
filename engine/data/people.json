@@ -21,7 +21,7 @@
     "의무관": { "rooms": [ "Medbay", "Triage", "Quarantine" ], "devices": [ "MedBed", "DiagnosticScanner", "Console" ], "skills": { "치료": 0.9, "불끄기": 0.3 }, "knows": { "몸": 0.9, "화학": 0.5, "기압": 0.3, "구조": 0.1 } },
     "조리사": { "rooms": [ "Galley", "Mess", "Freezer" ], "devices": [ "Stove", "Oven", "MealDispenser" ], "skills": { "조리": 0.9, "불끄기": 0.4 }, "knows": { "화학": 0.4, "몸": 0.2, "기압": 0.1, "구조": 0.1 } },
     "조종사": { "rooms": [ "Bridge", "Navigation", "Comms", "BackupBridge" ], "devices": [ "Console", "NavComputer" ], "skills": { "조종": 0.9, "불끄기": 0.4 }, "knows": { "기압": 0.5, "전기": 0.4, "구조": 0.3, "몸": 0.2 } },
-    "농부":   { "rooms": [ "Hydroponics", "Garden", "AlgaeLab", "MushroomFarm", "ProteinFarm", "SeedVault" ], "devices": [ "GrowBed", "PlantWall" ], "skills": { "기르기": 0.9 }, "knows": { "화학": 0.3, "몸": 0.2, "기압": 0.1, "구조": 0.2 } },
+    "농부":   { "rooms": [ "Hydroponics", "Garden", "AlgaeLab", "MushroomFarm", "ProteinFarm", "SeedVault" ], "devices": [ "GrowBed", "PlantWall", "GrowRack", "PlantRack" ], "skills": { "기르기": 0.9 }, "knows": { "화학": 0.3, "몸": 0.2, "기압": 0.1, "구조": 0.2 } },
     "과학자": { "rooms": [ "Lab", "Observatory", "ElectronicsLab", "Comms", "ComputerRoom" ], "devices": [ "Console", "SensorArray", "Workbench" ], "skills": { "연구": 0.9, "고치기": 0.4 }, "knows": { "화학": 0.8, "기압": 0.6, "전기": 0.6, "몸": 0.4, "구조": 0.3 } },
     "정비사": { "rooms": [ "LifeSupport", "WaterPlant", "Workshop", "Recycling" ], "devices": [ "Workbench", "OxygenGenerator", "WaterRecycler", "Console" ], "skills": { "고치기": 0.7, "봉합": 0.8, "불끄기": 0.5 }, "knows": { "기압": 0.8, "구조": 0.8, "전기": 0.5, "화학": 0.4, "몸": 0.1 } }
   },

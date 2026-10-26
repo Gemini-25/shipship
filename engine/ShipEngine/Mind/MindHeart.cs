@@ -181,8 +181,14 @@ public sealed partial class Mind
         long t = sim.Tick;
         const double h = 1.0 / 60;
         foreach (var f in sim.Facts.Since(_heartCursor))
+        {
             if (f.Kind is FactKind.Extinguished or FactKind.Rescue or FactKind.Patched && f.Actor >= 0 && f.Actor < Agents.Count && Agents[f.Actor].IsPerson)
                 Agents[f.Actor].C.CopedAt = f.Tick;   // 위험에 맞섰다
+            // 도움을 받았다 (DF7 — 좋은 일): 정신이 있던 이는 안도 · 고마움이 기쁨으로 (구해졌다 0.4 · 돌봄을 받았다 0.25 — 기분에 남는다 · 기억 · 정은 사회가 셈한다)
+            if (f.Kind is FactKind.Rescue or FactKind.Treated && f.Actor >= 0 && f.Other >= 0 && f.Other < Agents.Count && f.Other != f.Actor && Agents[f.Other].IsPerson
+                && _life[Agents[f.Other].C.Body].Alive != 0 && _life[Agents[f.Other].C.Body].Conscious != 0)
+                Agents[f.Other].C.Joy = Math.Max(Agents[f.Other].C.Joy, f.Kind == FactKind.Rescue ? 0.4f : 0.25f);
+        }
         _heartCursor = sim.Facts.Total;
         foreach (var a in Agents)
         {

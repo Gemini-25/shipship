@@ -40,6 +40,7 @@ public static class Warmup
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
+                c.Find<Structure>()?.WarmForms();   // 가구 · 물건 도트 꼴 (정적 표 — 첫 위기에 든 것을 내려놓은 곳 곁 가구 꼴을 처음 짓던 멈칫)
                 var chem = c.Find<Chemistry>();
                 var room = c.Layout.Rooms.Where(r => r.Cells.Length > 20 && r.Type != "Corridor").OrderByDescending(r => r.Cells.Length).FirstOrDefault();
                 if (chem != null && room != null)

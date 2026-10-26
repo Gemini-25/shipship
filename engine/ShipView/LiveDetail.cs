@@ -10,7 +10,7 @@ public sealed partial class LiveShow
 {
     public static string[] DetailTabsOf(DetailKind k) => k switch
     {
-        DetailKind.Person => PersonTabs, DetailKind.Robot => RobotTabs, DetailKind.Computer => ComputerTabs, _ => Array.Empty<string>(),
+        DetailKind.Person => PersonTabs, DetailKind.Robot => RobotTabs, DetailKind.Computer => ComputerTabs, DetailKind.Record => RecordTabs, _ => Array.Empty<string>(),
     };
 
     /// <summary>자세히 연 이 (사람 · 로봇) — 없으면 null.</summary>
@@ -24,6 +24,7 @@ public sealed partial class LiveShow
     private string DetailTitle()
     {
         if (Detail == DetailKind.Computer) return "주컴퓨터";
+        if (Detail == DetailKind.Record) return "기록";
         var a = DetailAgent();
         var w = World; var mind = w.Find<Mind>();
         if (a == null || mind == null) return Panel == PanelKind.Robots ? "로봇 · 드론" : "사람";
@@ -37,6 +38,7 @@ public sealed partial class LiveShow
     {
         var w = World;
         if (Detail == DetailKind.Computer) return ComputerHeadLine(w);
+        if (Detail == DetailKind.Record) return RecordHeadLine();
         var a = DetailAgent();
         var mind = w.Find<Mind>();
         if (a == null || mind == null) return "";
@@ -73,6 +75,7 @@ public sealed partial class LiveShow
     private void DetailRows(List<PanelRow> rows)
     {
         if (Detail == DetailKind.Computer) { ComputerRows(rows); return; }   // 주컴퓨터 자세히 (LiveComputer.cs — U7)
+        if (Detail == DetailKind.Record) { RecordRows(rows); return; }      // 기록 (LiveRecord.cs — V3)
         var a = DetailAgent();
         var w = World; var mind = w.Find<Mind>();
         if (a == null || mind == null) { rows.Add(new PanelRow("그 이를 찾을 수 없다", "목록으로 돌아간다 (오른쪽 누르기)", false, Key: -1)); return; }

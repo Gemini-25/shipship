@@ -148,7 +148,7 @@ public sealed partial class Mind : IEngine
         HL(BeliefKind.Water, "물"); HL(BeliefKind.Spark, "합선"); HL(BeliefKind.StuckDoor, "안 열리는 문"); HL(BeliefKind.Help, "도와 달라");
         HL(BeliefKind.Grind, "기계 소리");
 
-        _g = new float[L.N]; _from = new int[L.N]; _stamp = new int[L.N];
+        _g = new float[L.N]; _from = new int[L.N]; _stamp = new int[L.N]; _fireNear = new int[L.N];
     }
 
     // ───────────────────────── 사람 · 로봇 넣기 ─────────────────────────
@@ -438,7 +438,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", GoalKind.Surgery => "수술한다", GoalKind.Attack => "주저앉아 숨을 고른다", GoalKind.Withdraw => "침대에 틀어박혀 있다", GoalKind.Counsel => "이야기를 들어 준다", GoalKind.Haul => "헌 부품을 정제기로 나른다", GoalKind.Tighten => "볼트를 조인다", GoalKind.Toilet => "화장실에 간다", GoalKind.Wash => "씻는다", GoalKind.ToiletCare => "변기를 손질한다", GoalKind.Stash => "든 것을 제자리에 둔다", GoalKind.Refill => "쓴 것을 채운다", GoalKind.Gather => "떨어진 것을 줍는다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", GoalKind.Shelter => "대피실로 간다", GoalKind.Meeting => "회의에 간다", GoalKind.Improvise => "제 궁리대로 해 본다", GoalKind.Cpr => "가슴을 누른다", GoalKind.Surgery => "수술한다", GoalKind.Attack => "주저앉아 숨을 고른다", GoalKind.Withdraw => "침대에 틀어박혀 있다", GoalKind.Counsel => "이야기를 들어 준다", GoalKind.Haul => "헌 부품을 정제기로 나른다", GoalKind.Tighten => "볼트를 조인다", GoalKind.Toilet => "화장실에 간다", GoalKind.Wash => "씻는다", GoalKind.ToiletCare => "변기를 손질한다", GoalKind.Stash => "든 것을 제자리에 둔다", GoalKind.Refill => "쓴 것을 채운다", GoalKind.Gather => "떨어진 것을 줍는다", GoalKind.SwitchOff => "켜 둔 것을 끈다", GoalKind.Patrol => "배를 돌아본다", GoalKind.LayOut => "숨진 이를 수습한다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -446,7 +446,7 @@ public sealed partial class Mind : IEngine
         BeliefKind.Fire => "불", BeliefKind.Smoke => "연기", BeliefKind.Breach => "구멍", BeliefKind.Vacuum => "공기가 빠짐", BeliefKind.Injured => "쓰러진 사람",
         BeliefKind.Dead => "죽은 사람", BeliefKind.Broken => "멈춘 장치", BeliefKind.Bang => "쾅 소리", BeliefKind.Strain => "끼익 소리", BeliefKind.Leak => "새는 소리",
         BeliefKind.SmokeSmell => "타는 냄새", BeliefKind.BadAir => "이상한 공기", BeliefKind.Water => "고인 물", BeliefKind.Spark => "불꽃", BeliefKind.StuckDoor => "안 열리는 문",
-        BeliefKind.Help => "비명", BeliefKind.Cold => "추위", BeliefKind.Hot => "더위", BeliefKind.Grind => "이상한 기계 소리", BeliefKind.GravityBack => "중력이 돌아온다", _ => "",
+        BeliefKind.Help => "비명", BeliefKind.Cold => "추위", BeliefKind.Hot => "더위", BeliefKind.Grind => "이상한 기계 소리", BeliefKind.GravityBack => "중력이 돌아온다", BeliefKind.LeftOn => "켜 둔 채 놓인 조리대", _ => "",
     };
 
     /// <summary>머릿속 한 줄 (화면의 생각 칸).</summary>
@@ -483,6 +483,13 @@ public sealed partial class Mind : IEngine
         _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>(); _work ??= sim.Find<Work>();
     }
 
+    /// <summary>
+    /// 처음부터 다 옮긴 기계어로 (마음 위기 틱 예산 고침 — <see cref="Structure"/>의 물체 길과 같은 까닭 · 셈 · 차례는 그대로라 결과가 같다):
+    /// 드물게 부르지만 한 번에 오래 도는 판단 (어울릴 자리 · 빈자리 · 이야깃거리 · 틱마다 눈여겨볼 칸)은 덜 옮긴 코드로 돌다 첫 위기 한가운데에서 고리째 다시 옮기느라 (OSR) 그 틱이 3 ~ 7ms 멈칫했고 ·
+    /// 위기 틱에 몰리는 길 (믿음 더하기 · 듣기 · 외침 · 길찾기 · 틱 한 바퀴)은 단계 번역이 늦어 첫 위기 200 ~ 400틱 동안 재는 판(계측 코드)으로 돌았다.
+    /// </summary>
+    internal const System.Runtime.CompilerServices.MethodImplOptions Hot = System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization;
+
     /// <summary>마음 안 단계별 시간 (실험실 --profile — 켜 두면 잰다 · 생각 · 걸음은 사람 · 로봇마다 모아서).</summary>
     public static Dictionary<string, double>? Prof;
     /// <summary>마음 안 단계별 새로 잡은 바이트 (Prof와 함께 · null이 아니면 잰다).</summary>
@@ -507,6 +514,7 @@ public sealed partial class Mind : IEngine
         Prof![k] = Prof.GetValueOrDefault(k) + ms;
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     public void Step(Sim sim, double dt)
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
@@ -784,8 +792,11 @@ public sealed partial class Mind : IEngine
         if (asleep) { SleepQuality(a, h); c.Sleepy = (float)Math.Max(0, c.Sleepy - h / 8.0 * 1.6 * (1 - 0.6 * c.SleepLoss)); } // 16시간 깨어 있던 졸림을 5시간 남짓 · 꽉 찬 졸림은 8시간 가까이 — 얕은 잠은 덜 풀린다 (⑦)
         else c.Sleepy = (float)Math.Min(1, c.Sleepy + h / Need("sleep", 16) * TireFactor(a)); // 앓거나 몸무게를 잃으면 빨리 지친다 (⑦)
         int others = CountNear(a, 6);
-        if (others > 0 && !asleep) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) / 1.5);
-        else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra))); // 외향일수록 사람이 빨리 그립다 (6~14시간)
+        // 외로움 (DF7): 자는 동안은 차지도 풀리지도 않는다 · 곁에서 함께 쉬고 · 먹고 · 어울리면 풀리고 (깬 곁사람 둘까지 · 시간에 0.67씩) · 곁에서 말없이 제 일만 하면 조금 (0.2씩) · 말을 나누면 더 (MindTalk) ·
+        //   혼자면 찬다 — 외향일수록 사람이 빨리 그립다 (6~14시간) · 예전엔 자는 동안 시간에 0.1씩 차고 · 말없이 곁에 둘만 있어도 시간에 1.33씩 풀렸다
+        if (asleep) { }
+        else if (others > 0) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) * (Society.Leisure(c.Goal) ? 1 / 1.5 : 0.2));
+        else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra)));
         bool resting = c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.Use; // 가는 중이 아니라 쉬는 · 어울리는 중
         if (resting) c.Bored = (float)Math.Max(0, c.Bored - h);
         else if (!asleep) c.Bored = (float)Math.Min(1, c.Bored + h / Need("fun", 8) * (c.Goal == GoalKind.Work ? 1.5 - c.Diligent : 1) * (0.6 + 0.8 * c.Open)); // 열린 사람은 새것이 빨리 고프다
@@ -801,6 +812,7 @@ public sealed partial class Mind : IEngine
         double ease = asleep || c.Goal is GoalKind.Relax or GoalKind.Socialize ? 0.3 : 0.05;
         c.Stress = (float)Math.Clamp(c.Stress + h * (load - ease), 0, 1);
         RationHunger(a, h, asleep);   // ⑪ 배급: 몫을 다 먹고도 배고프다 — 참는다
+        MoodKinetics(ref c, b.Pain, h);   // DF7 기분: 겪은 감정 · 몸 · 욕구가 며칠 가는 층으로 쌓이고 감정의 바닥이 된다 (MindMood)
     }
 
     private double Need(string k, double dflt) => P.Needs.TryGetValue(k, out var v) ? v : dflt;
@@ -872,7 +884,8 @@ public sealed partial class Mind : IEngine
         _claims[k] = v;
     }
 
-    private static bool IsTask(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Investigate or GoalKind.Cpr or GoalKind.Surgery or GoalKind.Counsel;
+    private static bool IsTask(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Investigate or GoalKind.Cpr or GoalKind.Surgery or GoalKind.Counsel
+        or GoalKind.SwitchOff or GoalKind.Patrol or GoalKind.LayOut;   // DF5: 끄기 · 순회 · 수습도 한 사람 몫 (둘이 같은 오븐 · 같은 방 · 같은 몸에 몰리지 않게)
 
     // ───────────────────────── 찍기 ─────────────────────────
 
@@ -892,7 +905,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveActs(w); SaveSecrets(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w); SaveLetters(w); SaveAhead(w); SaveWash(w); SaveHands(w);
+        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveActs(w); SaveSecrets(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w); SaveLetters(w); SaveAhead(w); SaveWash(w); SaveHands(w); SaveRounds(w);
     }
 
     public void Load(StateReader r)
@@ -915,6 +928,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadActs(r); LoadSecrets(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r); LoadLetters(r); LoadAhead(r); LoadWash(r); LoadHands(r);
+        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadActs(r); LoadSecrets(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r); LoadLetters(r); LoadAhead(r); LoadWash(r); LoadHands(r); LoadRounds(r);
     }
 }

@@ -38,7 +38,7 @@ public sealed partial class LiveShow
     }
 
     /// <summary>멈춤 · 계속 (출항 준비면 떠난다).</summary>
-    public void TogglePause() { if (Holding) { Depart(); return; } Paused = !Paused; }
+    public void TogglePause() { if (ResumeCard.Length > 0) { ResumeGo(); return; } if (EndCard.Length > 0) { EndWatch(); return; } if (Holding) { Depart(); return; } Paused = !Paused; }
 
     // ── 출항 준비 (docs/UI.md 4 — 추천 A): 띄우면 세계는 멈춘 채 항로 판이 열린다 · 항로를 누르면 고르기만 · [이대로 출항] · 멈춤 · 빠르기로 떠난다 ──
     public bool Holding;
@@ -86,6 +86,7 @@ public sealed partial class LiveShow
     {
         if (k == DetailKind.None) { DetailBack(); return; }
         if (k == DetailKind.Computer) { if (Panel != PanelKind.Journal) TogglePanel(PanelKind.Journal); return; }
+        if (k == DetailKind.Record) { OpenRecord(Math.Max(0, id)); return; }
         var mind = World.Find<Mind>();
         if (mind == null || id < 0 || id >= mind.Agents.Count) return;
         var kind = mind.Agents[id].IsPerson ? DetailKind.Person : DetailKind.Robot;
@@ -108,7 +109,7 @@ public sealed partial class LiveShow
     /// <summary>자세히 → 목록 (그 이의 줄을 고른 채) · 주컴퓨터는 목록이 없어 판을 닫는다.</summary>
     public void DetailBack()
     {
-        if (Detail == DetailKind.Computer) { ClosePanel(); return; }
+        if (Detail is DetailKind.Computer or DetailKind.Record) { ClosePanel(); return; }
         if (Detail == DetailKind.None) return;
         int id = DetailId;
         Detail = DetailKind.None; DetailId = -1; DetailSub = 0;
@@ -136,8 +137,10 @@ public sealed partial class LiveShow
         var rows = PanelRows();
         int at = Array.FindIndex(rows, r => r.Key == key);
         if (at < 0) return false;
+        long was = PanelPickKey;
         PanelPick = at; PanelPickKey = key;
         var row = rows[at];
+        if (Detail == DetailKind.Record) return RecordClick(key, was);   // 기록 판: 펼치기 · 접기 · 주인공 자세히
         if (Detail != DetailKind.None) return true;   // 자세히의 줄: 고르기 · 펼치기
         switch (Panel)
         {
@@ -167,11 +170,12 @@ public sealed partial class LiveShow
     /// <summary>줄 단추 (장면 판의 ▶ 다시보기). 못 하면 false (까닭은 알림).</summary>
     public bool PanelAct(long key)
     {
+        if (Detail == DetailKind.Record) return RecordAct(key);   // 기록 판의 ▶ (장면 · 묘비 · 결산)
         if (Panel != PanelKind.Highlights || key < KeyHighlight(0)) return false;
         int i = (int)(key - KeyHighlight(0));
         if (i < 0 || i >= Dir.Highlights.Count) return false;
         PanelPickKey = key;
-        if (!StartReplay(Dir.Highlights[i])) { Notify("그 장면은 너무 오래돼 다시 볼 수 없다 (한 시간 안의 것만)"); return false; }
+        if (!StartReplay(Dir.Highlights[i])) { Notify(PhotoWhy); return false; }
         ClosePanel();
         return true;
     }

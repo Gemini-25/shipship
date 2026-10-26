@@ -100,8 +100,8 @@ public sealed class Sound : IEngine
 
     private readonly Field F;
     private readonly Layout L;
-    /// <summary>칸 → 이번에 들린 소리들 (최근 KeepTicks 틱).</summary>
-    private readonly Dictionary<int, List<Heard>> _heard = new();
+    /// <summary>칸 → 이번에 들린 소리들 (최근 KeepTicks 틱 · 빈 목록 = 없다: 비운 목록은 그 칸에 남겨 다시 쓴다 — 위기 틱에 마흔 명이 한꺼번에 외치면 칸마다 목록을 새로 키웠다).</summary>
+    private List<Heard>?[] _heard = Array.Empty<List<Heard>?>();
     private readonly List<(long tick, int cell)> _order = new();
     private int _nextEvent;
     public long Emitted;
@@ -143,6 +143,7 @@ public sealed class Sound : IEngine
         int nr = L.Rooms.Count;
         _roomE = new double[nr]; _roomA = new double[nr]; _room4R = new double[nr];
         _peakDb = new float[L.N]; _peakTick = new long[L.N]; _peakCause = new int[L.N];
+        _heard = new List<Heard>?[L.N];
         _roomDrones = Enumerable.Range(0, nr).Select(_ => new List<int>()).ToArray();
         for (int r = 0; r < nr; r++)
         {
@@ -197,12 +198,17 @@ public sealed class Sound : IEngine
     public (float db, int cause) PeakSince(int cell, long since) =>
         (uint)cell < (uint)_peakDb.Length && _peakTick[cell] >= since && _peakTick[cell] > 0 ? (_peakDb[cell], _peakCause[cell]) : (0, 0);
 
-    private float[] _best = Array.Empty<float>();
-    private int[] _bestStamp = Array.Empty<int>();
+    /// <summary>칸마다 이번 소리의 가장 큰 크기 (Stamp가 이번 소리일 때만) · 그 칸을 건너는 몫 (CellStamp가 이번 소리일 때만 — 퍼지는 동안 세계는 그대로라 칸마다 한 번 센다:
+    /// 예전엔 이웃 넷이 저마다 압력 · 로그를 다시 셌다 · Out: 떨어져 나간 자리 · Wall: 문 · 벽 몫 · Thin: 엷은 공기 몫 — 진공이면 무한). 다시 쓰는 배열 (찍지 않는다).</summary>
+    private struct Reach { public float Best; public int Stamp; public int CellStamp; public float Wall, Thin; public bool Out; }
+    private Reach[] _reach = Array.Empty<Reach>();
     private int _bestNow;
-    private readonly PriorityQueue<int, float> _pq = new();
+    private readonly Heap4 _pq = new();   // PriorityQueue<int, float>와 같은 차례 (Heap4)
+    /// <summary>퍼짐 몫 표 (|dx| + |dy| × W → 0.6 + 구면 확산 몫 — StepLoss와 같은 셈을 미리: 이웃마다 제곱근 · 로그를 하지 않는다).</summary>
+    private float[] _spread = Array.Empty<float>();
 
     /// <summary>칸 cell에서 크기 db(1m에서의 dB)의 소리가 난다 (source: 들은 이가 아는 소리의 자리 — 없으면 cell).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Structure.Hot)]
     public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1, int source = -1, byte mat = 255, float sizeM = 0)
     {
         int src = source >= 0 ? source : cell;
@@ -212,50 +218,91 @@ public sealed class Sound : IEngine
         Logged++;
         if (Thin(cell) <= 0) return ev; // 진공: 아무도 못 듣는다
         // 다익스트라 (칸마다 가장 큰 크기 — 다시 쓰는 배열: 생활 소리로 낸 소리가 많아져 사전을 새로 만들지 않는다 · 결과는 같다)
-        if (_best.Length != L.N) { _best = new float[L.N]; _bestStamp = new int[L.N]; }
+        if (_reach.Length != L.N) _reach = new Reach[L.N];
+        if (_spread.Length != L.N) BuildSpread();
         int stamp = ++_bestNow;
         var pq = _pq; pq.Clear();
-        _best[cell] = db; _bestStamp[cell] = stamp;
+        var reach = _reach;
+        reach[cell].Best = db; reach[cell].Stamp = stamp;
         pq.Enqueue(cell, -db);
-        Span<int> nb = stackalloc int[4];
+        int W = L.W, H = L.H, sx = cell % W, sy = cell / W;
+        long now = sim.Tick;
         while (pq.TryDequeue(out int c, out float negLevel))
         {
             float lv = -negLevel;
-            if (_bestStamp[c] == stamp && _best[c] > lv + 1e-4f) continue;
-            Add(sim, c, new Heard { Event = ev, Kind = kind, Source = src, Db = lv, Cause = cause, Tick = sim.Tick, Actor = actor });
-            L.Neighbors(c, nb);
-            foreach (int j in nb)
-            {
-                if (j < 0 || F.IsOut(j)) continue;   // 떨어져 나간 자리는 우주다 — 공기도 판도 없다
-                float loss = StepLoss(c, j, cell);
-                float next = lv - loss;
-                if (next < Floor) continue;
-                if (_bestStamp[j] == stamp && _best[j] >= next) continue;
-                _best[j] = next; _bestStamp[j] = stamp;
-                pq.Enqueue(j, -next);
-            }
+            if (reach[c].Stamp == stamp && reach[c].Best > lv + 1e-4f) continue;
+            Add(now, c, new Heard { Event = ev, Kind = kind, Source = src, Db = lv, Cause = cause, Tick = now, Actor = actor });
+            // 이웃 넷 (Layout.Neighbors와 같은 차례: 왼 · 오른 · 위 · 아래) · 저마다 소리 난 칸에서 떨어진 |dx| + |dy| × W (퍼짐 몫 표의 자리)
+            int cx = c % W, cy = c / W, ax = Math.Abs(cx - sx), ay = Math.Abs(cy - sy) * W;
+            if (cx > 0) Relax(c - 1, Math.Abs(cx - 1 - sx) + ay, lv, stamp);
+            if (cx < W - 1) Relax(c + 1, Math.Abs(cx + 1 - sx) + ay, lv, stamp);
+            if (cy > 0) Relax(c - W, ax + Math.Abs(cy - 1 - sy) * W, lv, stamp);
+            if (cy < H - 1) Relax(c + W, ax + Math.Abs(cy + 1 - sy) * W, lv, stamp);
         }
         if (db >= 100 && kind is not (SoundKind.Hiss or SoundKind.Roar)) sim.Facts.Emit(sim.Tick, FactKind.LoudSound, cell, db, cause, actor, (int)kind); // 이어 나는 쉬익 · 우르릉은 5틱마다 다시 낸다 — 큰 소리 사실은 한 번 터지는 것만
         return ev;
     }
 
-    /// <summary>한 칸 건널 때 주는 크기: 거리(구면 확산을 칸마다 근사) · 흡수 · 문 · 벽 · 엷은 공기.</summary>
-    private float StepLoss(int from, int to, int source)
+    /// <summary>
+    /// 이웃 칸 j로 건넌다 (Emit의 다익스트라 한 걸음): 떨어져 나간 자리는 건너지 않고 · 한 칸 건널 때 주는 크기 (거리 — 구면 확산을 칸마다 근사 · 흡수 · 문 · 벽 · 엷은 공기)를
+    /// 차례 그대로 더한다 — 0.6 + 퍼짐 몫 (표) → + 문 · 벽 몫 → + 엷은 공기 몫 (그 칸이 아니면 0을 더한다: 값이 같다) · 짙은 대기에서도 칸마다 0.3dB는 준다.
+    /// spread: 퍼짐 몫 표의 자리 · lv: 건너오는 칸의 크기 · stamp: 이번 소리.
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private void Relax(int j, int spread, float lv, int stamp)
     {
-        float loss = 0.6f; // 흡수 · 산란
-        int dx = L.X(to) - L.X(source), dy = L.Y(to) - L.Y(source);
-        double d1 = Math.Sqrt(dx * dx + dy * dy), d0 = Math.Max(1, d1 - 1);
-        loss += (float)(20 * Math.Log10(Math.Max(1, d1) / d0)) * 0.7f;
-        var k = L.Kind[to];
-        if (k == CellKind.Wall) loss += F.Hole[to] >= 2 ? 0 : F.Hole[to] > 0 ? 15 : 45;
-        else if (k == CellKind.Door && !F.DoorPassable(L.DoorAt[to])) loss += F.DoorOpen[L.DoorAt[to]] > 0 ? 8 : 25;
-        if (L.IsSpace(to))
+        ref var r = ref _reach[j];
+        if (r.CellStamp != stamp) CellLoss(ref r, j, stamp);
+        if (r.Out) return;   // 떨어져 나간 자리는 우주다 — 공기도 판도 없다
+        float loss;
+        if (float.IsPositiveInfinity(r.Thin)) loss = 999;   // 진공 칸
+        else
         {
-            double th = Thin(to);
-            if (th <= 0) return 999;
-            loss += (float)(-20 * Math.Log10(th) * 0.5);
+            loss = _spread[spread];
+            loss += r.Wall;
+            loss += r.Thin;
+            loss = Math.Max(0.3f, loss);
         }
-        return Math.Max(0.3f, loss); // 짙은 대기에서도 소리는 칸을 건널수록 준다
+        float next = lv - loss;
+        if (next < Floor) return;
+        if (r.Stamp == stamp && r.Best >= next) return;
+        r.Best = next; r.Stamp = stamp;
+        _pq.Enqueue(j, -next);
+    }
+
+    /// <summary>그 칸이 떨어져 나갔나 · 문 · 벽 몫 · 엷은 공기 몫 (이번 소리 동안 한 번 — 진공이면 엷은 몫이 무한).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Structure.Hot)]
+    private void CellLoss(ref Reach r, int to, int stamp)
+    {
+        r.CellStamp = stamp;
+        r.Out = F.IsOut(to);
+        float wall = 0, thin = 0;
+        if (!r.Out)
+        {
+            var k = L.Kind[to];
+            if (k == CellKind.Wall) wall = F.Hole[to] >= 2 ? 0 : F.Hole[to] > 0 ? 15 : 45;
+            else if (k == CellKind.Door && !F.DoorPassable(L.DoorAt[to])) wall = F.DoorOpen[L.DoorAt[to]] > 0 ? 8 : 25;
+            if (L.IsSpace(to))
+            {
+                double th = Thin(to);
+                thin = th <= 0 ? float.PositiveInfinity : (float)(-20 * Math.Log10(th) * 0.5);
+            }
+        }
+        r.Wall = wall; r.Thin = thin;
+    }
+
+    /// <summary>퍼짐 몫 표를 짓는다 (StepLoss가 하던 셈 그대로 — 0.6 + 20·log10(d / max(1, d − 1)) × 0.7).</summary>
+    private void BuildSpread()
+    {
+        _spread = new float[L.N];
+        for (int dy = 0; dy < L.H; dy++)
+            for (int dx = 0; dx < L.W; dx++)
+            {
+                float loss = 0.6f; // 흡수 · 산란
+                double d1 = Math.Sqrt(dx * dx + dy * dy), d0 = Math.Max(1, d1 - 1);
+                loss += (float)(20 * Math.Log10(Math.Max(1, d1) / d0)) * 0.7f;
+                _spread[dx + dy * L.W] = loss;
+            }
     }
 
     /// <summary>공기가 엷은 정도 (1: 1기압 · 0: 진공).</summary>
@@ -268,28 +315,30 @@ public sealed class Sound : IEngine
         return p < 1 ? 0 : Math.Min(1.5, p / 101.3);
     }
 
-    private void Add(Sim sim, int c, Heard h)
+    [System.Runtime.CompilerServices.MethodImpl(Structure.Hot)]
+    private void Add(long now, int c, Heard h)
     {
-        if (!_heard.TryGetValue(c, out var list)) { _heard[c] = list = new List<Heard>(2); _order.Add((sim.Tick, c)); }
+        var list = _heard[c];
+        if (list == null || list.Count == 0) { list ??= _heard[c] = new List<Heard>(2); _order.Add((now, c)); }
         list.Add(h);
-        if (h.Db > _peakDb[c] || _peakTick[c] < sim.Tick - PeakWindow) { _peakDb[c] = h.Db; _peakTick[c] = sim.Tick; _peakCause[c] = h.Cause; }
+        if (h.Db > _peakDb[c] || _peakTick[c] < now - PeakWindow) { _peakDb[c] = h.Db; _peakTick[c] = now; _peakCause[c] = h.Cause; }
     }
 
     /// <summary>감각이 읽을 몇 틱(KeepTicks)보다 오래 남은 소리 수와 가장 오래된 것의 나이 (법칙 '긴 하루' — 0이어야 한다).</summary>
     public (int n, long age) Stale(long now)
     {
         int n = 0; long age = 0;
-        foreach (var list in _heard.Values)
-            foreach (var h in list)
+        foreach (var list in _heard)
+            if (list != null) foreach (var h in list)
                 if (now - h.Tick > KeepTicks + 1) { n++; age = Math.Max(age, now - h.Tick); }
         return (n, age);
     }
 
     /// <summary>지금 남아 있는 들린 소리 수.</summary>
-    public int HeardCount { get { int n = 0; foreach (var l in _heard.Values) n += l.Count; return n; } }
+    public int HeardCount { get { int n = 0; foreach (var l in _heard) if (l != null) n += l.Count; return n; } }
 
     /// <summary>이 칸에서 들린 소리들 (최근 틱).</summary>
-    public IReadOnlyList<Heard> At(int cell) => _heard.TryGetValue(cell, out var l) ? l : Array.Empty<Heard>();
+    public IReadOnlyList<Heard> At(int cell) => (uint)cell < (uint)_heard.Length && _heard[cell] is { Count: > 0 } l ? l : Array.Empty<Heard>();
 
     /// <summary>이 칸에서 들린 가장 큰 소리 (dB, 없으면 0).</summary>
     public float Loudest(int cell)
@@ -306,11 +355,10 @@ public sealed class Sound : IEngine
         while (k < _order.Count && _order[k].tick <= sim.Tick - KeepTicks)
         {
             int c = _order[k].cell;
-            if (_heard.TryGetValue(c, out var list))
+            if ((uint)c < (uint)_heard.Length && _heard[c] is { Count: > 0 } list)
             {
                 list.RemoveAll(h => h.Tick <= sim.Tick - KeepTicks);
-                if (list.Count == 0) _heard.Remove(c);
-                else _order.Add((sim.Tick, c));   // 남은 소리가 있으면 다시 줄에 선다 — 안 그러면 그 칸은 다시 정리되지 않는다 (법칙 '긴 하루')
+                if (list.Count > 0) _order.Add((sim.Tick, c));   // 남은 소리가 있으면 다시 줄에 선다 — 안 그러면 그 칸은 다시 정리되지 않는다 (법칙 '긴 하루') · 비었으면 없는 것 (목록은 남겨 다시 쓴다)
             }
             k++;
         }
@@ -475,9 +523,10 @@ public sealed class Sound : IEngine
     public void Save(StateWriter w)
     {
         w.I32(_nextEvent); w.I64(Emitted);
-        var cells = _heard.Keys.OrderBy(c => c).ToList();
-        w.I32(cells.Count);
-        foreach (int c in cells) { w.I32(c); w.List(_heard[c]); }
+        int heardCells = 0;
+        foreach (var l in _heard) if (l is { Count: > 0 }) heardCells++;
+        w.I32(heardCells);
+        for (int c = 0; c < _heard.Length; c++) if (_heard[c] is { Count: > 0 } l) { w.I32(c); w.List(l); }   // 칸 차례 (예전 사전의 열쇠를 정렬한 차례와 같다)
         w.I32(_order.Count);
         foreach (var (t, c) in _order) { w.I64(t); w.I32(c); }
         w.Tag("바탕 소음"); w.List(_drones); w.Arr(_roomE);
@@ -487,7 +536,8 @@ public sealed class Sound : IEngine
     public void Load(StateReader r)
     {
         _nextEvent = r.I32(); Emitted = r.I64();
-        _heard.Clear(); _order.Clear();
+        if (_heard.Length != L.N) _heard = new List<Heard>?[L.N]; else Array.Clear(_heard);
+        _order.Clear();
         int n = r.I32();
         for (int i = 0; i < n; i++) { int c = r.I32(); _heard[c] = r.List<Heard>(); }
         int m = r.I32();

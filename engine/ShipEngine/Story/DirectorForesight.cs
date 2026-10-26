@@ -18,6 +18,8 @@ public sealed partial class Director
     public double ForeseeMs;
     public readonly Dictionary<string, int> BrewWhy = new();
     private Sim? _ahead;
+    /// <summary>미리 보기의 앞선 세계 (읽기만 — 시험이 이어 보기 왕복을 견준다).</summary>
+    public Sim? Ahead => _ahead;
     private long _aheadCursor, _lastBrew = long.MinValue / 2, _foreHold;
     private readonly Queue<(long tick, long facts)> _aheadTotals = new();   // 앞선 세계가 그 틱을 마쳤을 때 사실 수 (어긋남 찾기)
     private readonly List<(long tick, int cell, float w, FactKind kind)> _future = new();

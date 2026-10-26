@@ -111,21 +111,27 @@ public sealed partial class ShipMind
         return n;
     }
 
-    private readonly HashSet<int> _feverSaid = new();   // 열을 알린 몸 (열이 내리면 지운다)
+    private readonly SortedDictionary<int, long> _feverFirst = new();   // 몸 → 쉬는 몸에서 처음 37.6℃ 넘게 잰 틱 (30분 뒤 다시 잰다)
+    private readonly SortedDictionary<int, long> _feverToldAt = new();  // 몸 → 마지막으로 열을 알린 틱 (사람마다 하루 한 번)
 
     /// <summary>
-    /// 사람 표의 체온: 쉬는 몸이 37.6℃를 넘으면 한 번 "열이 있습니다 — 쉬세요" (37.2℃ 아래로 내리면 다시 알릴 수 있다) ·
-    /// 힘든 일 · 운동 중이거나 운동을 마친 지 30분이 안 된 몸의 높은 체온은 열이 아니다 (몸이 데워진 것 — 병의 열은 쉬어도 내리지 않는다).
+    /// 사람 표의 체온 (깊이 고침 DF6): 쉬는 몸에서 30분 사이 두 번 재어 둘 다 37.6℃를 넘을 때만 "열이 있습니다 — 쉬세요" · 같은 사람에게는 하루 한 번.
+    /// 힘든 일 · 운동 중이거나 운동을 마친 지 30분이 안 된 몸은 재지 않는다 (몸이 데워진 것 — 병의 열은 쉬어도 내리지 않는다 · 운동 뒤 37.6℃ 아래로 33분 남짓).
+    /// 예전엔 운동 뒤 30분이 지나자마자 한 번 재어 알려 평시 하루 건강한 이에게 아홉 번 (경보의 넷 중 셋) — 진짜 앓는 이의 알림이 묻혔다.
     /// </summary>
     private void FeverWatch(Sim sim, int agent, in Body b)
     {
         ref var ac = ref _mind!.Agents[agent].C;
         int body = ac.Body;
+        long now = sim.Tick;
         double c = b.CoreK - 273.15;
-        bool exerted = b.ActivityW > 250 || ac.ExercisedAt > 0 && sim.Tick - ac.ExercisedAt < Time.Minutes(30);
-        if (c > 37.6 && b.Conscious != 0 && !exerted && _feverSaid.Add(body))
-            Say(sim, $"{_mind.NameOf(agent)}님 열이 있습니다 ({c:0.0}℃) — 쉬세요{(b.Ill == 2 ? " · 옮을 수 있으니 다른 분은 가까이 가지 마세요" : b.Infect > 0 ? " · 상처를 보이세요" : "")}");
-        else if (c < 37.2) _feverSaid.Remove(body);
+        bool exerted = b.ActivityW > 250 || ac.ExercisedAt > 0 && now - ac.ExercisedAt < Time.Minutes(30);
+        if (c <= 37.6 || b.Conscious == 0 || exerted) { _feverFirst.Remove(body); return; }   // 내렸다 · 몸을 쓴다 — 쉬는 몸에서 다시 처음부터
+        if (!_feverFirst.TryGetValue(body, out long first)) { _feverFirst[body] = now; return; }   // 첫 번째 재기
+        if (now - first < Time.Minutes(30)) return;                                                 // 30분 뒤 다시 잰다
+        if (_feverToldAt.TryGetValue(body, out long told) && now - told < Time.Hours(24)) return;   // 하루 한 번
+        _feverToldAt[body] = now;
+        Say(sim, $"{_mind.NameOf(agent)}님 열이 있습니다 ({c:0.0}℃) — 쉬세요{(b.Ill == 2 ? " · 옮을 수 있으니 다른 분은 가까이 가지 마세요" : b.Infect > 0 ? " · 상처를 보이세요" : "")}");
     }
 
     /// <summary>그 로봇이 지금 가 있는 사건 (없으면 -1).</summary>
@@ -155,13 +161,14 @@ public sealed partial class ShipMind
     {
         w.I64(Asked); w.I64(AskAccepted); w.I64(AskDeclined); w.I64(Throttles); w.I64(HeatStops); w.I64(Overloads); w.I64(Preempts); w.I64(ChartAlerts);
         w.Arr(new[] { Throttled, HeatStopped, Overloaded }); w.I32(_effectiveRead); w.F32(IntakeK);
-        w.Arr(new[] { _jT, _jH, _jO, _jA, _jY, _jN, _jP }); w.Arr(_feverSaid.OrderBy(x => x).ToArray());
+        w.Arr(new[] { _jT, _jH, _jO, _jA, _jY, _jN, _jP }); w.Arr(_feverFirst.Keys.ToArray()); w.Arr(_feverFirst.Values.ToArray()); w.Arr(_feverToldAt.Keys.ToArray()); w.Arr(_feverToldAt.Values.ToArray());
     }
     private void LoadCrew(StateReader r)
     {
         Asked = r.I64(); AskAccepted = r.I64(); AskDeclined = r.I64(); Throttles = r.I64(); HeatStops = r.I64(); Overloads = r.I64(); Preempts = r.I64(); ChartAlerts = r.I64();
         var s = r.Arr<byte>(); Throttled = s[0]; HeatStopped = s[1]; Overloaded = s[2]; _effectiveRead = r.I32(); IntakeK = r.F32();
-        var j = r.Arr<long>(); _jT = j[0]; _jH = j[1]; _jO = j[2]; _jA = j[3]; _jY = j[4]; _jN = j[5]; _jP = j[6]; _feverSaid.Clear(); foreach (int x in r.Arr<int>()) _feverSaid.Add(x);
+        var j = r.Arr<long>(); _jT = j[0]; _jH = j[1]; _jO = j[2]; _jA = j[3]; _jY = j[4]; _jN = j[5]; _jP = j[6]; _feverFirst.Clear(); { var fk = r.Arr<int>(); var fv = r.Arr<long>(); for (int i = 0; i < fk.Length; i++) _feverFirst[fk[i]] = fv[i]; }
+        _feverToldAt.Clear(); { var tk = r.Arr<int>(); var tv = r.Arr<long>(); for (int i = 0; i < tk.Length; i++) _feverToldAt[tk[i]] = tv[i]; }
     }
     private long _jT, _jH, _jO, _jA, _jY, _jN, _jP;   // 지난 일지 때의 셈 (그 뒤만 적는다)
 }

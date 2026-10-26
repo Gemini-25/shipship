@@ -34,6 +34,16 @@ public sealed partial class Structure
     /// <summary>꼴의 닿음 표본 (무게중심에서 — 껍질 꼭짓점 · 테두리 기둥 가운데) · 가장 먼 꼭짓점까지 (m) — 꼴에 한 번 세어 둔다 (<see cref="PropShape"/>).</summary>
     private static (double[] x, double[] y, double reach) SamplesOf(DotForm fm) => fm.Shape.Hit;
 
+    /// <summary>
+    /// 데우기 (ShipView.Warmup.Crisis가 복제 세계에서 부른다): 가구마다 제자리 꼴 · 물건마다 누움 꼴을 미리 짓는다 — 도트 꼴은 표에서 늘 같아 정적 표에 남는다 (세계는 그대로 · 결정론과 상관없다).
+    /// 첫 위기에 로봇이 든 것을 내려놓은 곳 곁 가구(주컴퓨터 2×2)의 꼴을 처음 짓느라 그 틱의 마음이 5ms 멈칫했다 (마음 위기 틱 예산 고침).
+    /// </summary>
+    public void WarmForms()
+    {
+        for (int fu = 0; fu < L.Furniture.Count; fu++) FurnForm(fu);
+        MaxReach();
+    }
+
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private (DotForm? form, int ox, int oy) FurnForm(int fu)
     {

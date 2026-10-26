@@ -156,7 +156,7 @@ public sealed partial class ShipMind
                 {
                     int c = L.Furniture[fu].Cells[0];
                     if (L.Room[c] != r || Math.Max(Math.Abs(L.X(c) - L.X(a.C.Cell)), Math.Abs(L.Y(c) - L.Y(a.C.Cell))) > 1) continue;
-                    foreach (var o in mind.Agents) if (o != a && o.C.Up != 0 && o.C.Cell == c) { beside = true; break; }
+                    foreach (var o in mind.Agents) if (o != a && o.IsPerson && o.C.Up != 0 && o.C.Cell == c) { beside = true; break; }   // 쓰는 이는 사람 (설비 곁을 도는 로봇이 아니다 — DF5)
                     if (beside) break;
                 }
                 if (beside) waiting.Add(a.Id);
@@ -172,7 +172,7 @@ public sealed partial class ShipMind
                 bool toilet = L.Furniture[fu].Type == "Toilet";
                 if (toilet && (!ToiletReports(fu) || _mind.WashSign[fu] != 0 || !_net!.Working(WashDevice(fu)))) continue;
                 bool busy = false;
-                foreach (var a in mind.Agents) if (a.C.Up != 0 && (a.C.Cell == c || a.IsPerson && _washSince[a.Id] != 0 && InOrAtDoor(a.C.Cell, rr) && !OnFixture(a.C.Cell))) { busy = true; break; }
+                foreach (var a in mind.Agents) if (a.IsPerson && a.C.Up != 0 && (a.C.Cell == c || _washSince[a.Id] != 0 && InOrAtDoor(a.C.Cell, rr) && !OnFixture(a.C.Cell))) { busy = true; break; }
                 if (!busy) free.Add(fu);
             }
             _washCallAt[r] = sim.Tick;
@@ -183,7 +183,7 @@ public sealed partial class ShipMind
                 int c = L.Furniture[fu].Cells[0];
                 if (L.Room[c] != r) continue;
                 bool used = L.Furniture[fu].Type == "Toilet" && (_mind.WashSign[fu] != 0 || !_net!.Working(WashDevice(fu)));   // '사용 금지' · 고장 변기는 빈 것이 아니다
-                if (!used) foreach (var a in mind.Agents) if (a.C.Up != 0 && a.C.Cell == c) { used = true; break; }
+                if (!used) foreach (var a in mind.Agents) if (a.IsPerson && a.C.Up != 0 && a.C.Cell == c) { used = true; break; }
                 if (!used && L.Furniture[fu].Type == "Toilet") toiletsFull = false;
                 if (!used && L.Furniture[fu].Type == "Shower") showersFull = false;
             }
