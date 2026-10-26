@@ -122,7 +122,7 @@ public sealed partial class Director
         else if (_dayVoyage.Count > 0) ch.Title = $"{day + 1}일째 — {Tail(_dayVoyage[0])}";
         else ch.Title = $"{day + 1}일째 — 조용한 하루";
         // 요약 줄
-        var big = Chains.Values.Concat(BestChains).Where(c => c.Last >= _dayFrom && c.First < t && c.Weight >= WatchAt).OrderByDescending(c => c.Weight * (1 + c.Count)).FirstOrDefault();
+        var big = Chains.Values.Concat(BestChains).Where(c => c.Last >= _dayFrom && c.First < t && c.Weight >= WatchAt).OrderByDescending(c => c.Weight * (1 + c.Count)).ThenBy(c => c.Root).FirstOrDefault();   // 같으면 뿌리 차례 (사전 차례에 기대지 않는다 — 이어 보기)
         if (big != null && big.Cause != 0) ch.Lines.Add($"큰 사슬 [{SpreadPath(big)}] {Ends(sim.Causes.Story(big.LineCause != 0 ? big.LineCause : big.Cause))}");
         foreach (var h in today.Where(h => h.People).OrderByDescending(h => h.Score).Take(2)) ch.Lines.Add($"사람 — {(h.Line.Length > 0 ? h.Line : Ends(h.Title))}");
         foreach (var d in _dayDeaths) ch.Lines.Add($"잃음 — {Name(d.actor)}: {(d.cause != 0 ? Ends(sim.Causes.Story(d.cause)) : "")}");

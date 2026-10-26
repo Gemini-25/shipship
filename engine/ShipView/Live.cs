@@ -243,7 +243,7 @@ public sealed partial class LiveShow
     /// <summary>화면 없이 앞으로 감기 (연출은 함께 본다 — 하이라이트 · 다시보기 고리가 쌓인다). 확인 · 화면 사진용.</summary>
     public void FastForward(long ticks)
     {
-        for (long i = 0; i < ticks; i++) { Sim.Step(); Dir.Observe(Sim); Book.Observe(Sim); }
+        for (long i = 0; i < ticks; i++) { Sim.Step(); LogHands(); Dir.Observe(Sim); Book.Observe(Sim); }
         WatchComputer(0);
         _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
     }
@@ -282,6 +282,7 @@ public sealed partial class LiveShow
                 AL("자세 · 걸음");
                 if (_replay != null) FeedReplayHand(w);   // 다시보기: 산 세계의 손을 같은 틱에 먹인다 (docs/UI2.md §2.5)
                 w.Step(); AL("세계");
+                if (_replay == null) LogHands();   // 항해 손 기록 (한 손 장부 256을 넘은 손도 — 다시보기 · 이어 보기)
                 CollectStrikes();
                 d.Observe(w); AL("연출");
                 if (_replay == null) Book.Observe(w);   // 예측 장부 (산 세계만 — 다시보기 중에는 멈춘다)
@@ -1485,9 +1486,11 @@ public sealed partial class LiveShow
         var w = Dir.Replay(Sim, h);
         if (w == null) return false;
         _replay = w; _replayOf = h;
-        // 함장의 손: 되살린 세계 (고리 찍기)에는 그 앞의 손만 있다 — 산 세계 한 손 장부에서 그 뒤의 손 (받은 차례가 되살린 세계보다 뒤)을 옮겨 두고 같은 틱에 먹인다 (docs/UI2.md §2.5)
+        // 함장의 손: 되살린 세계 (고리 찍기)에는 그 앞의 손만 있다 — 항해 손 기록에서 그 뒤의 손 (받은 차례가 되살린 세계보다 뒤)을 옮겨 두고 같은 틱에 먹인다 (docs/UI2.md §2.5 ·
+        // docs/OBSERVER.md §3.6 — 한 손 장부는 256까지라 손이 많은 한 시간이면 먼저 들어온 손을 잃었다)
         _replayHand.Clear();
-        if (Sim.Find<Hand>() is { } lh && w.Find<Hand>() is { } rh) foreach (var o in lh.Done) if (o.Seq > rh.Seq && o.Tick >= w.Tick) _replayHand.Add(o);
+        LogHands();
+        if (w.Find<Hand>() is { } rh) foreach (var o in _handLog) if (o.Seq > rh.Seq && o.Tick >= w.Tick) _replayHand.Add(o);
         Disarm();
         if (w.Find<Structure>() is { } rst) rst.Track = new MotionTrack();   // 다시보기 세계도 틱 사이를 메운다
         _replayDir = new Director(w.Layout) { KeepRing = false, AheadInBackground = true };

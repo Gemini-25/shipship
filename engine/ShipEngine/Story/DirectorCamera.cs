@@ -87,17 +87,7 @@ public sealed partial class Director
         var mind = sim.Find<Mind>(); var life = sim.Find<Life>();
         int n = L.Rooms.Count;
         if (mind == null || life == null || n == 0) { if (FocusCell < 0) FocusCell = L.Index(L.W / 2, L.H / 2); return; }
-        if (_roomAll.Length != n)
-        {
-            _roomAwake = new int[n]; _roomAll = new int[n]; _roomShown = new double[n]; _roomBox = new (int, int, int, int)[n];
-            Array.Fill(_roomShown, double.MinValue);
-            for (int r = 0; r < n; r++)
-            {
-                int x0 = int.MaxValue, y0 = int.MaxValue, x1 = -1, y1 = -1;
-                foreach (int c in L.Rooms[r].Cells) { x0 = Math.Min(x0, L.X(c)); y0 = Math.Min(y0, L.Y(c)); x1 = Math.Max(x1, L.X(c)); y1 = Math.Max(y1, L.Y(c)); }
-                _roomBox[r] = (x0, y0, x1, y1);
-            }
-        }
+        if (_roomAll.Length != n) RoomsInit(n);
         Array.Clear(_roomAwake); Array.Clear(_roomAll);
         bool anyAwake = false;
         foreach (var a in mind.Agents)
@@ -141,6 +131,19 @@ public sealed partial class Director
         FocusCell = best;
         var (bx0, by0, bx1, by1) = _roomBox[_dailyRoom];
         Zoom = Math.Clamp(Math.Max(bx1 - bx0 + 1, (by1 - by0 + 1) * 2) + 6, 14, 40);
+    }
+
+    /// <summary>방마다 일상 비춤 표 (사람 수 · 마지막으로 비춘 화면 초 · 방 상자) — 처음 일상을 비출 때 · 연출 기록을 되살릴 때.</summary>
+    private void RoomsInit(int n)
+    {
+        _roomAwake = new int[n]; _roomAll = new int[n]; _roomShown = new double[n]; _roomBox = new (int, int, int, int)[n];
+        Array.Fill(_roomShown, double.MinValue);
+        for (int r = 0; r < n; r++)
+        {
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = -1, y1 = -1;
+            foreach (int c in L.Rooms[r].Cells) { x0 = Math.Min(x0, L.X(c)); y0 = Math.Min(y0, L.Y(c)); x1 = Math.Max(x1, L.X(c)); y1 = Math.Max(y1, L.Y(c)); }
+            _roomBox[r] = (x0, y0, x1, y1);
+        }
     }
 
     /// <summary>칸 c 가까이(반경 SpotRadius · 10분 안)의 일이 지금 장면의 것인가 (같은 사슬 · 같은 주인공).</summary>

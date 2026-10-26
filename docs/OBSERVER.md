@@ -636,12 +636,14 @@ card.json: 배 · 배 이름 · 번호 · 항로 · 날 · 틱 · 산 이 · 탄
 층마다: 이 문서에 설계 → 시험 먼저 → 구현 → 관찰 → 확인 (`dotnet build engine/Lab -c Release -o build/lab` · `--law` · `tools/rules.sh` · `dotnet build game/ShipSim.csproj` · 지문 `Lab --fingerprint` · `--fingerprint flow`) → 커밋 · 푸시. 각 커밋은 늘 빌드되고 돈다. 커밋마다 한 줄 보고 · V9 끝 · V23 끝에 자세히 (전후 그림).
 화면 찍기: `--ui=장면 --shot=이름 --shots=docs/screens/observer --for=6` (처음 화면은 `--menu-shot=docs/screens/observer/이름.png`).
 
-### V1 — 저장 묶음 · 이어 보기 (화면 · 같음) · 어림 3시간
+### V1 — 저장 묶음 · 이어 보기 (화면 · 같음) · 어림 3시간 ✔
 - 무엇: §3.1 · 3.6 — 묶음 쓰기 · 읽기 · 연출 기록 · 항해 손 기록 · 다시보기 먹이기를 손 기록으로.
 - 파일 · 함수: 새 `engine/ShipView/LiveSave.cs` (`VoyageMeta` · `VoyageStore.Write/Read/Rotate/List` · `LiveShow.SaveBundle` · `LiveShow.Resume` · `HandLog`) · 새 `engine/ShipEngine/Story/DirectorRecord.cs` (`Director.SaveRecord` · `LoadRecord`) · `Live.cs` (`Advance` 틱 고리에서 손 기록 받기 · `StartReplay` · `FeedReplayHand`가 `HandLog`를) · `Sim.cs`는 그대로.
 - 시험: S1 (빨강 먼저) · S2 · S3 ('평시 하루') · S6 · S7.
 - 지문: 같음 (세계 저장 꼴 그대로 · 묶음 판은 따로). Godot: 없음 (화면은 V2).
 - 비용: 저장 한 번 작업 스레드 ≤ 6ms (새뜰 — 찍기 + 연출 기록) · 압축 · 쓰기는 다른 일꾼 · 손 기록 손마다 32바이트.
+- 지은 것 (코드와 다른 점): 되살리기는 `ShipWorld.Crewed` 대신 같은 준비 (`ShipWorld.Setup(Layout.Ship(배), 번호)`) + `Sim.Load` (다시보기와 같은 길 · 시험은 제 준비를 넘긴다) · 연출 기록은 연출의 모든 상태 (관심 · 카메라 · 하루 예산 · 사슬 · 장 · 미리 보기 — 앞선 세계는 찍기 바이트)를 담아 이어 본 연출이 바이트까지 같다 (앞선 세계가 없으면 70KB · 있으면 그 세계 찍기만큼 — 묶음에서 압축) · 사전은 열쇠 차례로 쓰고 사슬 닫기 · 하루의 큰 사슬은 뿌리 차례로 고른다 (사전 차례에 기대지 않게) · 화면 마디는 고른 빠르기 · 하루 목표 · 따라 보기 하루 · 말 기록 · 판단 일지 (☆는 V6 · 예측 장부는 새로) · 다섯 항해 정리 (`Prune`)는 V2.
+- 잰 것: 새뜰 묶음 짓기 3.8ms (데운 뒤 · 처음 40ms) · 세계 6.04MB → 압축 0.36MB (16ms · 다른 일꾼) · 이어 보기 54ms. 고친 결함: 화학의 불씨 원인 다음 버퍼를 틱마다 비우지 않아 (찍지 않는 버퍼) 되살린 세계와 다음 틱 찍기 바이트가 갈렸다 (행동은 같았다 — 이어 본 연출의 미리 보기 세계에서 드러났다).
 
 ### V2 — 항해 번호 · 처음 화면 '이어 보기' · 날마다 · 끌 때 저장 (화면 · 같음) · 어림 3시간
 - 무엇: §3.2 ~ 3.5 · 새 항해 창 · 숫자판 · 출항 준비 [다른 사람들로] · '지난번까지' 카드.

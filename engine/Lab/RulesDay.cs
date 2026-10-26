@@ -67,6 +67,7 @@ public static partial class Program
             }
             return (talks.Count, fso.Sayings.Count(y => y.Tick >= t0), fso.Sayings.Count(y => y.Tick >= t0 && y.Topic == Topic.Breach), n > 0 ? sum / n : 0, talks.Count > 0 ? $"{Time.Clock(talks[0].Tick)} {s.Causes.Text(talks[0].Line)}" : "", Topics(fso, t0));
         }
+        long ResumeAt = Time.Hours(22); Task<Chapter?>? resumed = null;
         for (int k = 0; k < Time.Hours(24); k++)
         {
             day.Step();
@@ -75,6 +76,15 @@ public static partial class Program
             if (k == FireAt) { var fork = day.Clone(); fireEve = Task.Run(() => FireEvening(fork)); }
             if (k > FireAt && k < FireAt + Time.Hours(4) && k - FireAt >= Time.Minutes(30) && (k - FireAt) % Time.Minutes(10) == 0) { eveFelt += Felt(m, life); eveN++; }
             dir.Observe(day); dir3.Observe(day); dir3off.Observe(day);
+            if (k == ResumeAt)
+            {
+                // S3 이어 보기: 날 가운데 (밤 열 시) 세계 · 연출 기록을 찍어 되살리고 다른 코어에서 날이 바뀔 때까지 — 같은 장이 지어지나 (장 재료 · 하이라이트 · 하루의 결을 담는다)
+                var rw = new StateWriter(1 << 16); dir.SaveRecord(rw);
+                var backW = new Sim(day.Setup); backW.Load(day.Save());
+                var backD = new Director(day.Layout) { KeepRing = false };
+                bool loaded = backD.LoadRecord(new StateReader(rw.ToArray()), backW);
+                resumed = Task.Run(() => { if (!loaded) return (Chapter?)null; while (backW.Tick < Time.TicksPerDay) { backW.Step(); backD.Observe(backW); } return backD.Chapters.FirstOrDefault(c => !c.Week); });
+            }
             if (day.Tick % Time.TicksPerDay == 0 && dayScreen < 0) { dayScreen = dir3.ScreenSeconds; dayScreenOff = dir3off.ScreenSeconds; }   // 첫 하루 (자정까지 — 하루 예산은 날마다)
             acts.AddRange(m.ActsSince(actCur)); actCur = m.ActsTotal;
             foreach (var f in day.Facts.Since(factCur))
@@ -267,6 +277,11 @@ public static partial class Program
             Check("하루의 장: 날이 바뀌면 지난 하루를 한 장으로 묶는다 — '1일째 — …' 제목 · 하루의 결 · 그 날의 처음부터 날이 바뀐 때까지",
                 ch != null && ch.Title.StartsWith("1일째 — ") && ch.Arc.Length > 0 && ch.From == startTick + 1 && ch.To == Time.TicksPerDay && dir.Chapters.Count(c => !c.Week) == 1,
                 ch == null ? $"장 없음 (시작 {startTick} · 끝 {day.Tick})" : $"\"{ch.Title}\" · {Time.Clock(ch.From)}~{Time.Clock(ch.To)} · 장면 {ch.Scenes.Count} · {string.Join(" / ", ch.Lines)}");
+            // S3 이어 보기 (docs/OBSERVER.md §16): 밤 열 시에 찍어 되살린 연출이 날이 바뀔 때 같은 장을 짓는다 (제목 · 줄 · 장면 · 주인공)
+            static string Of(Chapter? c) => c == null ? "" : $"{c.Title} / {string.Join(" / ", c.Lines)} / 장면 {string.Join(" ", c.Scenes.Select(h => $"{h.Tick}:{h.Title}"))} / 주인공 {string.Join(" ", c.Cast)}";
+            var back = resumed?.Result;
+            Check("이어 보기 S3: 날 가운데 (밤 열 시) 세계 · 연출 기록을 찍어 되살리면 날이 바뀔 때 같은 장 — 제목 · 줄 · 장면 · 주인공 (장 재료 · 하이라이트 · 하루의 결을 담는다)",
+                ch != null && back != null && Of(ch) == Of(back), back == null ? "되살린 연출이 장을 짓지 못했다" : Of(ch) == Of(back) ? $"같음 — 장면 {back.Scenes.Count} · 주인공 {back.Cast.Count}" : $"원래 '{Of(ch)}' ↔ 되살림 '{Of(back)}'");
         }
 
         // ── 소리 단계 S6: 열 수축의 딱 — 외판이 해를 받고 그늘에 들며 늘고 준다 (너무 잦으면 안 된다) ──

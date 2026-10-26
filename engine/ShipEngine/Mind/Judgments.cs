@@ -85,6 +85,8 @@ public sealed class Ring<T> where T : struct
         if (_n < _cap) _n++;
         Added++;
     }
+    /// <summary>지금까지 넣은 수를 옮겨 놓는다 (이어 보기 — 되살린 고리에 다시 넣은 뒤 원래의 차례 번호로: 화면 줄의 열쇠가 그대로).</summary>
+    public void Rebase(long added) { if (added >= _n) Added = added; }
     /// <summary>k번째로 새 것 (0: 가장 새 것 · k &lt; Count).</summary>
     public ref T Newest(int k) => ref _a![(_head - 1 - k + 2 * _cap) % _cap];
 }

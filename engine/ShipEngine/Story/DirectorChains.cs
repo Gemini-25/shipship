@@ -156,6 +156,7 @@ public sealed partial class Director
         List<int>? done = null;
         foreach (var (root, rec) in Chains) if (sim.Tick - rec.Last > Time.Hours(6)) (done ??= new()).Add(root);
         if (done == null) return;
+        done.Sort();   // 뿌리 차례로 닫는다 (사전의 차례는 지운 칸을 다시 쓰는 데 따라 달라진다 — 되살린 연출과 같게)
         foreach (int root in done) { Close(Chains[root]); Chains.Remove(root); }
     }
 
