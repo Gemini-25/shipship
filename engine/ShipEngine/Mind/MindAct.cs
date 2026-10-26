@@ -863,6 +863,17 @@ public sealed partial class Mind
             }
             c.MoveBudget -= L.FurnitureAt[n] >= 0 ? 1.5f : 1f;
             CloseBehind(sim, a);
+            // 젖은 바닥 (5단 C12): 든 칸의 발 디딤은 월드가 셈한다 (요청 — 기어가는 이는 미끄러지지 않는다) · 미끄러졌으면 업던 이 · 든 것을 놓고 멈춘다
+            if (a.IsPerson && _life != null && !SmokeBad(a, n))
+            {
+                int vb = c.Carrying;
+                if (_life.Footing(sim, c.Body, n, c.Speed, vb >= 0 || c.Holding != 255, false, c.Sleepy, a.Id, NameOf(a.Id), vb) != 0)
+                {
+                    if (vb >= 0) DropCarried(sim, a, false);
+                    Fallen(a, t);
+                    return;
+                }
+            }
         }
         if (a.PathIdx >= a.Path.Count) c.MoveBudget = Math.Min(c.MoveBudget, 1);
     }

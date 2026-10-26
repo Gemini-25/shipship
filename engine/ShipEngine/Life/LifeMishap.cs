@@ -125,6 +125,27 @@ public sealed partial class Life
         if (panK > 330) Scald(sim, body, (float)Math.Min(0.3, (panK - 330) / 150), cause);   // 뜨거운 물이 손 · 발에 (80℃ 0.15)
     }
 
+    /// <summary>젖은 바닥 미끄러짐 (5단 C12 — 기능 확인용 기본값): 바탕 몫 · 걸음당 상한 (셈은 <see cref="Slips"/>).</summary>
+    public double FloorSlipChance = 0.02, FloorSlipMax = 0.05;
+
+    /// <summary>
+    /// ⑧의 요청 (5단 C12 — 사람이 칸에 든다): 젖은 바닥에 미끄러지나 — 몫 = 0.02 × 젖음 (바닥 물 5 → 30몰에 0 → 1) × (빠르기 / 1.3)² × 든 것 1.5 × 조심 0.25 ×
+    /// (1 + 졸림)(1 + 흔들림) · 걸음당 상한 0.05 · 0.3g 아래는 0. 미끄러지면 넘어짐은 <see cref="Fall"/> (세기 = 그 칸 중력 · 원인 '젖은 바닥에 미끄러져' ← 그 칸 물의 원인) — 그 원인을 돌려준다 (아니면 0).
+    /// </summary>
+    public int Footing(Sim sim, int body, int cell, double speed, bool laden, bool careful, float sleepy, int actor, string name, int carried = -1)
+    {
+        if (body < 0 || body >= Bodies.Count || cell < 0 || cell >= F.Cells) return 0;
+        double water = F.Stored(T.sWater, cell);
+        if (water <= 5) return 0;   // 마른 칸 (거의 모두)
+        float g = F.Grav[cell];
+        if (g < Field.LowG || this[body].Alive == 0) return 0;
+        double wet = Math.Min(1, (water - 5) / 25), v = speed / 1.3;
+        double odds = Math.Min(FloorSlipMax, FloorSlipChance * wet * v * v * (laden ? 1.5 : 1) * (careful ? 0.25 : 1) * MishapOdds(this[body], sleepy, 0));
+        if (Rng.Unit(sim.Seed, Rng.Key("미끄러짐"), sim.Tick, (long)body * F.Cells + cell) >= odds) return 0;   // 한 틱에 여러 칸을 걷는다 — 몸 · 칸마다
+        Slips++;
+        return Fall(sim, body, g, "젖은 바닥에 미끄러져", F.WetCause[cell], actor, name, actor, false, carried);
+    }
+
     /// <summary>마려움 (0~1 — 1이면 참지 못한다): 방광 · 장 가운데 더 찬 쪽.</summary>
     public float Urge(int body)
     {

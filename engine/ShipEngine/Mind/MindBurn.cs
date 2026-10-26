@@ -97,10 +97,16 @@ public sealed partial class Mind
         int cell = a.C.Cell, vb = a.C.Carrying;
         if (vb >= 0) DropCarried(sim, a, false);   // 업던 이를 놓친다 (바닥에 부딪힌 몸은 월드가)
         _life!.Fall(sim, a.C.Body, g, how, parent, a.Id, NameOf(a.Id), a.Id, showG, vb);
+        Fallen(a, t);
+        Falls++;
+    }
+
+    /// <summary>넘어진 뒤 마음: 든 것을 떨구고 (걷던 빠르기로 원판 바깥 앞쪽에) · 멈추고 · 겁이 난다 (업던 이는 넘어지기 전에 놓았다).</summary>
+    private void Fallen(Agent a, long t)
+    {
         if (a.C.Holding != 255) { int id = PutDown(a, a.C.Holding, a.C.HoldCharge, true); if (a.C.Holding == iWaste) WasteDown.Add(id); a.C.Holding = 255; a.C.HoldCharge = 0; }   // 걷던 빠르기로 날아간다 (원판 바깥 앞쪽에서)
         a.C.MoveBudget = 0; a.C.StepStart = t;
         a.C.Fear = Math.Min(1, a.C.Fear + 0.2f);
-        Falls++;
     }
 
     /// <summary>⑩ 반가운 교신 (지나가는 배와 소식을 나눴다): 배 사람 모두 기쁨이 조금 오르고 외로움이 준다.</summary>
