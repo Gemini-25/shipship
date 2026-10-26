@@ -294,7 +294,18 @@ public static partial class Program
             static double Mid(List<double> v) { v.Sort(); return v.Count == 0 ? double.NaN : v[v.Count / 2]; }
             // 곰팡이 0 · 1을 한 장씩 번갈아 잰다 (함께 쓰는 기계의 흔들림이 두 쪽에 같게) — 32도트 곰팡이 단계 합의 가운데 값 (24장을 세 번 — 쪽마다 가장 작은 값)
             var m0s = new double[3]; var m1s = new double[3];
-            for (int k = 0; k < 40; k++) { Mold(k % 2); Near(); }
+            // 곰팡이가 처음 핀 장들 (데우기 2 ~ 25장 — 첫 곰팡이 장은 단마다 점 목록을 한 번 굽는다): 곰팡이 길은 며칠 뒤에야 처음 돈다 — 단계 번역 전 코드로 돌면 이 장들의 곰팡이 몫이 데운 뒤보다 크다
+            //    (그리기 예산 고침 — 점 섞기가 처음 0.2 ~ 0.4초를 덜 옮긴 코드로 돌아 2 ~ 3ms · CI는 그 동안 세 회차를 다 재어 4ms였다)
+            var cold0 = new List<double>(); var cold1 = new List<double>();
+            for (int k = 0; k < 40; k++)
+            {
+                Mold(k % 2);
+                bool cold = k >= 2 && k < 26;
+                if (cold) ShipView.Painter.Prof = new();
+                Near();
+                if (cold) (k % 2 == 0 ? cold0 : cold1).Add(MoldMs());
+                ShipView.Painter.Prof = null;
+            }
             for (int r = 0; r < 3; r++)
             {
                 var near0 = new List<double>(); var near1 = new List<double>();
@@ -341,6 +352,9 @@ public static partial class Program
             Check("그리기 예산: 곰팡이 핀 배 (바닥 · 문 칸 모두 곰팡이 1 · 안개도) — 32도트 곰팡이 단계 (바닥 · 벽 · 문 + 칸 덮개) +0.5ms 안 · 한 장 ≤ 6ms · 덩어리 하나 다시 굽기 +0.06ms 안 · 16 · 8도트 ≤ 8ms",
                 m1 - m0 <= 0.5 && mNear <= 6 && b1ne - b0ne <= 0.06 && mFar16 <= 8 && mFar8 <= 8,
                 $"곰팡이 칸 {moldy.Length} · 단계 {m0:0.00} → {m1:0.00}ms · 덩어리 굽기 {b0ne:0.000} → {b1ne:0.000}ms · 다시 구운 덩어리 {rebaked} · 한 장 {mNear:0.0} · {mFar16:0.0} · {mFar8:0.0}ms");
+            double coldExtra = Mid(cold1) - Mid(cold0);
+            Check("그리기 예산: 곰팡이가 처음 핀 장들 (곰팡이 길이 처음 도는 데우기 2 ~ 25장) — 32도트 곰팡이 몫이 데운 뒤보다 0.5ms 안 (드문 길도 처음부터 다 옮긴 기계어로 — 단계 번역을 기다리지 않는다)",
+                coldExtra - (m1 - m0) <= 0.5, $"처음 장들 {Mid(cold0):0.00} → {Mid(cold1):0.00}ms (+{coldExtra:0.00}) · 데운 뒤 {m0.V:0.00} → {m1.V:0.00}ms (+{m1 - m0:0.00})");
             Check("그리기 예산: 곰팡이 핀 배 넓은 보기 한 장 — 평시 판 + 1ms 안 (16 · 8도트 — 곰팡이 · 안개가 장마다 드는 몫 · 평시 판과 한 장씩 번갈아)",
                 g16 - c16 <= 1 && g8 - c8 <= 1, $"16도트 {c16:0.0} → {g16:0.0}ms · 8도트 {c8:0.0} → {g8:0.0}ms");
         }
