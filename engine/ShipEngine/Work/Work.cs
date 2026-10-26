@@ -106,7 +106,7 @@ public sealed partial class Work : IEngine
                 if (_mind != null)
                 {
                     foreach (var a in _mind.Agents) if (_mind.IsFood(a.C.Holding)) food += a.C.HoldCharge;
-                    if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && _mind.IsFood((byte)x.What)) food += x.Charge;   // 바닥에 놓인 식량 (④ 물체 장부)
+                    if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && x.State != 5 && _mind.IsFood((byte)x.What)) food += x.Charge;   // 바닥에 놓인 식량 (④ 물체 장부)
                 }
                 return food;
             }

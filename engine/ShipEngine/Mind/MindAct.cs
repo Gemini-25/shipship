@@ -549,6 +549,9 @@ public sealed partial class Mind
         JobDone(a, t);
     }
 
+    /// <summary>혼자 세울 수 있는 무게 (kg — 로봇 팔 · 사람 · PH13).</summary>
+    public const double RobotLiftKg = 40, PersonLiftKg = 25;
+
     private void CleanStep(Sim sim, Agent a, PlanStep st)
     {
         ref var c = ref a.C;
@@ -565,6 +568,16 @@ public sealed partial class Mind
                 for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++)
                     around[n++] = L.Index(x, y);
             _life?.Mop(around[..n], MopKind.Mold | MopKind.Water);
+            // 정돈 (PH13): 깨진 조각을 쓸어 담고 가루를 쓴다 · 누운 것 · 넘어진 것을 세운다 (드는 힘만큼 — 무거운 것은 두고 까닭을 일지에: 다음은 둘이서 · 사람에게)
+            if (_st != null)
+            {
+                _st.Sweep(around[..n]);
+                double can = a.IsPerson ? PersonLiftKg : RobotLiftKg;
+                _st.RightUp(around[..n], can);
+                var (_, heavy) = _st.Fallen(around[..n], can);
+                if (heavy > 0)
+                    Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = cell, Method = 255, Out = JudgeOut.Blocked, Why = SnagKind.Other, By = -1, Note = "넘어진 것이 너무 무거워 혼자 세우지 못했다" });
+            }
         }
         if (_work != null) _work.Cleaned++;
         JobDone(a, t);
@@ -681,9 +694,9 @@ public sealed partial class Mind
         ref var c = ref a.C;
         float hasty = Math.Clamp(c.Stress, 0, 1);
         string name = NameOf(a.Id);
-        _net.Handled(sim, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause);
         int cell = _net.Devices[dev].Cell;
-        _life?.WorkHazard(sim, c.Body, cell, F.Temp(cell), c.SkRepair, c.Sleepy, hasty, a.Id, name, _net.Devices[dev].Name, workCause);
+        if (_life != null) _life.HandsOn(sim, _net, c.Body, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause, cell, F.Temp(cell), _net.Devices[dev].Name);   // 몸의 흔들림은 ⑦이 셈한다 (C9)
+        else _net.Handled(sim, dev, part, c.SkRepair, c.Sleepy, hasty, a.Id, name, workCause);
     }
 
     /// <summary>에어락이 쓰이는 중인가: 문 너머 방이 에어락(바깥문이 있는 방)이고 — 그 안에서 남이 나가려고 바깥문 밸브로 비우는 중이거나 바깥문을 기다린다

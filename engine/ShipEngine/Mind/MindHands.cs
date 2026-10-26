@@ -130,7 +130,7 @@ public sealed partial class Mind
         for (int i = 0; i < props.Count; i++)
         {
             var x = props[i];
-            if (x.Kind != 0 || (x.Flags & Structure.DecorFlag) != 0) continue;   // 꾸밈 (제자리가 있다 — 탁자 위 컵 · 선반 위 책 · PH9)은 줍지 않는다
+            if (x.Kind != 0 || (x.Flags & Structure.DecorFlag) != 0 || x.State == 5) continue;   // 우주로 나간 것 (PH11) · 꾸밈 (제자리가 있다 — 탁자 위 컵 · 선반 위 책 · PH9)은 줍지 않는다
             int xc = book.CellOf(x); byte xi = (byte)x.What;
             if (xi == iWaste || x.PlugAt != 0 || HomesOf(xi).Length == 0 && !IsFood(xi)) continue;
             bool mine = assigned && x.Id == c.AssignedTarget;   // 맡긴 그 물체 (일감 대상은 물체 Id)

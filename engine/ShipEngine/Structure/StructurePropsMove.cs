@@ -16,6 +16,7 @@ public sealed partial class Structure
     public DotForm PropForm(in Prop p)
     {
         if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
+        if (p.Kind is 5 or 6) return BodyForm(p);   // 몸 물체 (PH14)
         if (p.Kind is 1 or 3) return FurnPropForm(p);   // 뜯긴 가구 · 날아간 문짝 (PH10)
         int key = p.What * 8 + p.Pose;
         if ((uint)key < (uint)_propFormAt.Length && _propFormAt[key] is { } at) return at;   // 표 차례로 곧장 (섬 짝마다 잔걸음마다 부른다 — 속도만)
@@ -107,6 +108,7 @@ public sealed partial class Structure
     /// </summary>
     public (double x, double y, double vx, double vy, double w) PropWorld(in Prop p)
     {
+        if (Flying(p)) return (p.X, p.Y, p.Vx, p.Vy, p.W);   // 세상 틀 그대로 (PH11)
         int b = Bodies.Count > 0 ? BodyOf(CellOf(p)) : -1;
         if (b < 0 || b >= Bodies.Count || Bodies[b].Mass <= 0) return (p.X, p.Y, p.Vx, p.Vy, p.W);
         var o = Bodies[b];
@@ -120,6 +122,7 @@ public sealed partial class Structure
         double px = PropPxGone, py = PropPyGone, l = PropLGone;
         foreach (var p in Props)
         {
+            if (Flying(p)) { px += p.Kg * p.Vx; py += p.Kg * p.Vy; l += p.Kg * (p.X * p.Vy - p.Y * p.Vx) + p.Inertia * p.W; continue; }   // 세상 틀로 난다 (PH11)
             if (p.State == 5) continue;
             var (m, I) = MassOf(p);
             var (x, y, vx, vy, w) = PropWorld(p);
@@ -135,8 +138,9 @@ public sealed partial class Structure
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void MoveProps(Sim sim, double dt)
     {
-        bool any = false, plugged = false, gone = false, world = Bodies.Count > 0;
+        bool any = false, plugged = false, gone = false, fly = false, world = Bodies.Count > 0;
         _windy = F.WindCells.Count > 0; _tickDt = dt;
+        FootingAfter(sim);   // 발 디딤 (PH14 — 이 틱 돌풍에 발이 떨어진 몸은 물체로 · 목록이 늘어나니 먼저)
         // 가구 (PH10): 받는 힘 (틀 · 바람 · 덜컹)이 견디는 힘을 넘으면 뜯는다 · 폭풍 (② 이 틱 기체 폭발 — 물체 · 가구 · 기체가 민 것은 바깥 몫이다) — 물체 목록이 늘어나니 먼저
         if (L.Furniture.Count > 0)
         {
@@ -147,7 +151,7 @@ public sealed partial class Structure
         if (Props.Count > 0 || L.Furniture.Count > 0) any |= GasBlasts(sim);
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 잠든 것은 베끼지 않고 상태만 본다 (조용한 틱의 거의 전부)
         if (_hostOf.Length < all.Length) GrowFrames(all.Length);   // 물체를 더할 때 (조용한 틱) 미리 — 감압 · 점화 첫 틱에 만들지 않는다
-        for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; gone |= all[i].State == 5; }
+        for (int i = 0; i < all.Length; i++) { any |= Awake(all[i]); plugged |= all[i].State == 6; gone |= all[i].State == 5 && all[i].Host != -1; fly |= Flying(all[i]); }
         _framed = false;
         if (all.Length > 0 && (world || ShipAx != 0 || ShipAy != 0)) BeginFrames(all, world);
         if (plugged) any |= Unplug(all);                     // 구멍을 덧댔거나 누르는 힘이 빠졌으면 떨어진다
@@ -170,9 +174,10 @@ public sealed partial class Structure
             plugged = false;
             foreach (var p in all) plugged |= p.State == 6;
             if (L.Furniture.Count > 0) SettleFurniture(sim);   // 잠든 가구 · 우주로 간 가구 (다시 앉음 · 연료 · 열용량 옮김 — PH10)
-            RemoveSpaced(sim, world);
-            all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         }
+        if (fly) Fly(sim, dt);   // 지난 틱까지 나간 것 (이번 틱에 나간 것은 다음 틱부터 — 날기 전에 옮기지 않는다 · PH11 검토 고침)
+        if (any || gone) Launch(sim);   // 구멍 밖으로 나간 것은 세상 틀로 난다 (PH11 — 장부 '우주로'는 300m 뒤)
+        all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 깨짐 · 다시 앉음 · 우주로가 목록을 바꿨다
         WritePlugs(all, plugged);   // 물체 막음 → 장 (다음 틱 흐름부터)
     }
 

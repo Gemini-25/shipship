@@ -237,6 +237,84 @@ public static partial class Program
         Console.WriteLine($"  props-breach: {dir}/props-breach.png ({sheet.W}×{sheet.H}) — 감압 앞 · 첫 틱 · 둘째 · 넷째 틱 (외판 0.5m² 구멍 · 물건 열)");
     }
     /// <summary>
+    /// props-space (PH11 — docs/PHYSICS.md §3-6 '빠져나간 것'): 화물칸 외판 1.5m² 구멍 밖으로 빨려 나간 물건이 세상 틀로 곧게 날며 돈다 — 배 왼쪽 우주 (별) 위에 그린다.
+    /// 감압 앞 · 첫 틱 · 둘째 · 셋째 틱.
+    /// </summary>
+    private static void PropsSpaceScene(string dir)
+    {
+        const string art = "\n              ###############\n              #.....#.......#\n              #.....D.......#\n              #.....#.......#\n              ###############";
+        var lay = Worlds.Ascii(art, Worlds.Seats);
+        var s = Worlds.Full(lay, 5);
+        var st = s.Get<Structure>(); var f = s.Get<Field>();
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        st.RequestDoor(lay.DoorAt[At(20, 2)], 1);
+        (string name, double x, double y, double th)[] put =
+        {
+            ("수리 꾸러미", 15.5, 2.5, 1.0), ("책", 15.6, 1.6, 0.8), ("컵", 16.4, 2.4, 0), ("물병", 16.5, 3.4, 0),
+        };
+        foreach (var (name, x, y, th) in put)
+        {
+            int id = Worlds.PutItem(s, name, lay.Index((int)x + 1, (int)y + 1));
+            int i = st.IndexOf(id); var p = st.Props[i]; p.X = x + 1; p.Y = y + 1; p.Th = th; st.Props[i] = p;
+        }
+        s.Run(10);   // 문이 다 열리게 (통로 공기까지 — 바람이 몇 틱 분다)
+        int hole = At(14, 2);
+        st.DamageCause[hole] = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 파편이 박혔다", s.Tick); f.SetHole(hole, 1.5f);
+        var painter = new Painter(s.Layout);
+        const int zoom = 2;
+        int[] at = { 0, 1, 2, 3 };
+        int fw = 30 * Painter.T * zoom / 2, fh = 6 * Painter.T * zoom / 2, gap = 6;
+        var sheet = new Img(2 * fw + gap, 2 * fh + gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 0;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k]) { s.Step(); done++; }
+            var img = painter.Frame(s, 0, 0, 30, 6, done);
+            sheet.Draw(img, k % 2 * (fw + gap), k / 2 * (fh + gap));
+            int fly = st.Props.Count(p => Structure.Flying(p));
+            Console.WriteLine($"  props-space {done}틱: 화물칸 {f.Pressure(At(16, 2)):0}kPa · 물체 {st.Props.Count} · 우주로 나는 것 {fly} · 장부 우주로 {st.PropSpaced}");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-space.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-space: {dir}/props-space.png ({sheet.W}×{sheet.H}) — 감압 앞 · 첫 틱 · 둘째 · 셋째 틱 (외판 1.5m² 구멍 밖으로 나간 물건이 별 위로 난다)");
+    }
+
+    /// <summary>
+    /// props-body (PH14 — docs/PHYSICS.md §8 '몸 움직임'): 화물칸 외판 1m² 구멍 둘 — 곁의 이 · 로봇은 발이 떨어져 몸 물체로 구멍 밖 우주로 날아가고 · 떨어진 이는 남아 문 쪽으로 피한다.
+    /// 감압 앞 · 첫 틱 · 둘째 · 셋째 틱.
+    /// </summary>
+    private static void PropsBodyScene(string dir)
+    {
+        const string art = "\n              ###############\n              #.....#.......#\n              #.....D.......#\n              #...c.#.......#\n              ###############";
+        var lay = Worlds.Ascii(art, Worlds.Seats);
+        var s = Worlds.Full(lay, 5);
+        var st = s.Get<Structure>(); var f = s.Get<Field>(); var m = s.Get<Mind>();
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        int near = m.AddPerson(s, At(15, 2)), far = m.AddPerson(s, At(17, 3)), bot = m.AddRobot(s, At(15, 1));
+        st.RequestDoor(lay.DoorAt[At(20, 2)], 0);
+        s.Run(3);
+        int hit = s.Causes.Add(CauseKind.Setup, "화물칸 외판에 파편이 박혔다", s.Tick);
+        foreach (int hole in new[] { At(14, 1), At(14, 2) }) { st.DamageCause[hole] = hit; f.SetHole(hole, 1.0f); }
+        var painter = new Painter(s.Layout);
+        int[] at = { 0, 1, 2, 3 };
+        int fw = 30 * Painter.T, fh = 6 * Painter.T, gap = 6;
+        var sheet = new Img(2 * fw + gap, 2 * fh + gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        int done = 0;
+        for (int k = 0; k < at.Length; k++)
+        {
+            while (done < at[k]) { s.Step(); done++; }
+            var img = painter.Frame(s, 0, 0, 30, 6, done);
+            sheet.Draw(img, k % 2 * (fw + gap), k / 2 * (fh + gap));
+            Console.WriteLine($"  props-body {done}틱: 화물칸 {f.Pressure(At(16, 2)):0}kPa · 몸 물체 {st.Props.Count(p => p.Kind is 5 or 6)} · 나는 몸 {st.Props.Count(p => p.Kind is 5 or 6 && Structure.Flying(p))} · 곁의 이 떠감 {m[near].C.Adrift} · 로봇 밀림 {st.RobotsKnocked}");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-body.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-body: {dir}/props-body.png ({sheet.W}×{sheet.H}) — 감압 앞 · 첫 틱 · 둘째 · 셋째 틱 (외판 1m² 구멍 둘 — 곁의 이 · 로봇이 별 위로 · 떨어진 이는 남는다)");
+    }
+
+    /// <summary>
     /// props-burn 틀 (PH4d — 함장 장면 '화살호 추진제 반 0.40g'의 틀 · docs/PHYSICS.md §10): 몸이 없는 배가 0.40g로 점화한다 (엔진은 +x로 민다 — 배 안의 것은 −x로 −m·a) —
     /// 마른 바닥 식량 상자 (μs 0.375)도 미끄러져 뒤 벽에 닿아 서고 · 젖은 바닥의 것은 더 빨리 · 소화기는 깨지만 (넘어짐 문턱) 정지 마찰이 붙든다 (넘어짐 · 구름 · 탁자 끝 병 낙하는 PH7) ·
     /// 탁자 · 의자 곁 것은 가구에 걸린다. 점화 앞 한 장 + 첫 틱 · 둘째 · 넷째 틱 (틱 안 메움은 PH5).

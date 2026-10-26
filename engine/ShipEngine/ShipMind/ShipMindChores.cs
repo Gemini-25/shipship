@@ -66,6 +66,7 @@ public sealed partial class ShipMind
     {
         var mind = _mind!;
         long now = sim.Tick;
+        ScanLitter();
         // 끝난 일은 내린다 · 끝나지 않은 채 기한을 넘겼거나 맡은 이가 막혀 손을 놓았으면 누가 · 왜를 적고 내린다 (일감 결과 기억 — 다음엔 다른 이에게)
         for (int i = Jobs.Count - 1; i >= 0; i--)
         {
@@ -143,13 +144,13 @@ public sealed partial class ShipMind
                 if (Jobs.Any(j => j.Kind == GoalKind.LayOut && j.Target == a.C.Body)) continue;
                 Post(sim, new Job { Kind = GoalKind.LayOut, Target = a.C.Body }, b.Cell, person => !RobotFor(GoalKind.LayOut));   // 사람에게는 그 일을 할 로봇이 배에 없을 때만 (바쁜 로봇은 기다린다)
             }
-        // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
+        // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다) · 깨진 조각 · 가루 · 넘어진 것 (PH13)
         foreach (var room in L.Rooms)
         {
             int worst = -1; double wm = 0;
             foreach (int c in room.Cells)
             {
-                double dirt = (_life != null && _life.Mold[c] > 0.3f ? _life.Mold[c] : 0) + (F.Stored(T.sWater, c) > 5 ? F.Stored(T.sWater, c) / 100 + 0.3 : 0);
+                double dirt = (_life != null && _life.Mold[c] > 0.3f ? _life.Mold[c] : 0) + (F.Stored(T.sWater, c) > 5 ? F.Stored(T.sWater, c) / 100 + 0.3 : 0) + _litter.GetValueOrDefault(c);
                 if (dirt > wm) { wm = dirt; worst = c; }
             }
             if (worst < 0 || Jobs.Any(j => j.Kind == GoalKind.Clean && L.Room[j.Target] == room.Id)) continue;
@@ -157,11 +158,34 @@ public sealed partial class ShipMind
         }
     }
 
+    /// <summary>정돈 (PH13): 카메라에 보인 깨진 조각 · 가루 · 누운 것 · 넘어진 것 (불 켜진 방) — 칸마다 치울 몫 (일감을 거두기 전에 센다: 찍지 않으니 되살린 세계도 같게).</summary>
+    private void ScanLitter()
+    {
+        _litter.Clear();
+        if (_st != null)
+        {
+            foreach (var p in _st.Props)
+            {
+                if (p.State != 0 || (p.Flags & Structure.DecorFlag) != 0) continue;
+                bool piece = p.Kind == 2, fallen = p.Kind is 0 or 1 && p.Pose != 0;
+                if (!piece && !fallen || fallen && p.Kg > Mind.RobotLiftKg) continue;   // 로봇도 못 세울 무게는 일감으로 내지 않는다 (같은 실패를 되풀이하지 않게)
+                int c = _st.CellOf(p);
+                if (c < 0 || L.Room[c] < 0 || _net != null && !_net.RoomPowered(L.Room[c])) continue;
+                _litter[c] = _litter.GetValueOrDefault(c) + (piece ? 0.4 : 0.3);
+            }
+            for (int c = 0; c < _st.Grit.Length; c++)
+                if (_st.Grit[c] > 0 && L.Room[c] >= 0 && (_net == null || _net.RoomPowered(L.Room[c]))) _litter[c] = _litter.GetValueOrDefault(c) + 0.5;
+        }
+    }
+
+    // 이번 정돈 셈의 칸마다 치울 것 (찍지 않는다 — 틱마다 장부에서 다시 센다)
+    private readonly Dictionary<int, double> _litter = new();
+
     private bool Done(in Job j) => j.Kind switch
     {
         GoalKind.Craft => _mind!.TotalOf(j.Arg) >= (T.People.Recipes.TryGetValue(_mind.ItemNames[j.Arg], out var r) ? r.Keep : 0),
         GoalKind.Maintain => _net == null || _net.Wear[j.Target] < Work.MaintainAt * _net.Devices[j.Target / 4].Life((Part)(j.Target % 4)) * 0.5,
-        GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && F.Stored(T.sWater, j.Target) < 2,
+        GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && F.Stored(T.sWater, j.Target) < 2 && !_litter.ContainsKey(j.Target),
         GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < Work.HarvestAt * 0.5f * _life.CropArea(_net, j.Target),
         GoalKind.Restock => _work!.FoodAt(j.Target) >= Work.RestockBelow * 2 || _work.FoodAt(j.Arg) < 1,
         GoalKind.Haul => HaulDone(j.Arg, j.Agent),
@@ -194,7 +218,7 @@ public sealed partial class ShipMind
         if (_st == null) return;
         foreach (var p in _st.Props)   // 바닥에 놓인 물건 (④ 물체 장부)
         {
-            if (p.Kind != 0 || (p.Flags & Structure.DecorFlag) != 0) continue;   // 꾸밈 (제자리가 있다 — PH9)은 맡기지 않는다
+            if (p.Kind != 0 || (p.Flags & Structure.DecorFlag) != 0 || p.State == 5) continue;   // 꾸밈 (제자리가 있다 — PH9)은 맡기지 않는다 · 우주로 나간 것은 배에 없다 (PH11)
             int cell = _st.CellOf(p); byte item = (byte)p.What;
             if (p.PlugAt != 0 || item == mind.iWaste || mind.ItemKg(item) < 5 || mind.HomeFor(item, cell) < 0) continue;
             int room = L.Room[cell];
