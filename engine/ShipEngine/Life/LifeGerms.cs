@@ -73,6 +73,7 @@ public sealed partial class Life
         SurfGerm[furniture] = (float)(s + TouchShare * (h - s));
         if (s > h && b.HandGerm >= GermFloor && SurfCause[furniture] != 0) b.HandCause = SurfCause[furniture];   // 손에 묻은 균의 까닭 = 그 겉면의 까닭
         if (h > s && SurfGerm[furniture] >= GermFloor && SurfCause[furniture] == 0) SurfCause[furniture] = b.HandCause;   // 손에서 옮긴 균의 까닭
+        if (b.HandGerm < GermFloor) b.HandCause = 0;   // 문턱 아래로 묽어진 손은 까닭을 놓는다 (묵은 까닭이 남지 않게 — 검토 고침)
     }
 
     /// <summary>변기 (월드가 스스로): 배탈 앓는 이가 쓰면 겉면 +1 · 손 +0.8 (원인 '배탈 앓는 이가 변기를 썼다' ← 그 배탈) · 그다음 만진다.</summary>

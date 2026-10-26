@@ -121,6 +121,8 @@ public sealed partial class Life
 
     /// <summary>오물의 썩는 유기물 몫 (포도당으로 친다) · 포도당 1몰의 질량 (kg).</summary>
     public const double WasteOrganic = 0.2, GlucoseKg = 0.18;
+    /// <summary>오물을 썩히는 미생물이 사는 온도 (K — 썩음 반응의 바닥 · 그 위는 미생물이 죽는다).</summary>
+    public const double RotMinK = 275, RotMaxK = 330;
 
     /// <summary>
     /// 오물이 썩는다 (월드 — 5단 C19 · 125틱마다): 유기물 몫 0.2를 포도당으로 쳐 하루 몫만큼 (293K 기준 10K마다 두 배) 그 칸에서 썩힌다 (<see cref="Decompose"/>) —
@@ -138,7 +140,9 @@ public sealed partial class Life
             if (f.Cells.Length == 0) continue;
             int c = f.Cells[0];
             if (F.RegionOf.Length <= c || F.RegionOf[c] < 0) continue;   // 떨어져 나간 · 진공 칸 (공기가 없다)
-            double t = F.Temp(c), k = Math.Pow(2, (t - 293) / 10) * day;
+            double t = F.Temp(c);
+            if (t < RotMinK || t > RotMaxK) continue;   // 미생물이 사는 온도에서만 (검토 고침 — 불에 달군 통이 한 번에 메탄을 뿜지 않게 · 언 통은 그대로)
+            double k = Math.Pow(2, (t - 293) / 10) * day;
             if (f.Type == "Toilet")
             {
                 int dev = ToiletDev(fu);

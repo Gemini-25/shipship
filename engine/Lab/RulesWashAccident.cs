@@ -73,6 +73,28 @@ public static partial class Program
                 $"333K 3초 {a.burn:0.000} (사실 {a.hurt} · '{a.why}') / 325K 5초 {b5.burn:0.000} ({b5.hurt}) / 60초 {b60.burn:0.000} / 313K 6분 {ok.burn:0.000} · 더러움 0.8 → {ok.dirt:0.00}");
         }
 
+        // C17 검토 고침 — 마음 길로: 조절기 접점이 붙은 샤워 칸에서 더러운 이가 끝까지 씻으면 덴다 (예전: 물을 잠그고 온수기를 끈 뒤에 물 온도를 읽어 293K — 늘 0)
+        {
+            var s = Worlds.Full(lay, 9);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            int p = m.AddPerson(s, Worlds.At(lay, 2, 1));
+            s.Run(2);
+            var shower = lay.Furniture.First(x => x.Type == "Shower");
+            int dev = net.Devices.First(d => d.Furniture == shower.Id).Id;
+            net.BreakThermostat(s, dev, true, s.Causes.Add(CauseKind.Setup, "시험: 온수기 조절기 접점이 붙었다", s.Tick, shower.Cells[0]));
+            life[m[p].C.Body].Dirt = 0.8f;
+            float burn0 = life[m[p].C.Body].Burn;
+            for (long t = 0; t < Time.Minutes(30) && m.ShowersTaken == 0; t++)
+            {
+                int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24;
+                ref var c = ref m[p].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0;
+                s.Step();
+            }
+            float burn = life[m[p].C.Body].Burn - burn0;
+            Check("화장실 사고 (C17 검토 고침): 조절기 접점이 붙은 샤워 칸 (≈ 325K)에서 더러운 이가 마음대로 끝까지 씻으면 덴다 — 물을 잠그기 전의 물 온도로",
+                m.ShowersTaken == 1 && burn > 0.1f, $"샤워 {m.ShowersTaken} · 화상 +{burn:0.000}");
+        }
+
         // C18 무중력의 샤워 물: 침실에 중력 발생기 — 밸브를 열고 발생기를 끄면 1분 뒤 샤워 물이 배수구로 가지 않고 방울로 떠 있다 (오수가 늘지 않는다) ·
         //     원인 글 '떠다닌다' (← 중력이 꺼졌다) · 그 칸 둘레 물의 까닭 (SpillNear)이 그 원인 / 발생기를 다시 켜면 원인을 지운다
         {

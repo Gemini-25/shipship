@@ -78,6 +78,21 @@ public static partial class Program
         double glu = (life.WasteRotKg - rot0) * Life.WasteOrganic / Life.GlucoseKg;
         double dch4 = Sum(T.gCH4) - ch4, dco2 = Sum(T.gCO2) - co2, dh2o = Sum(T.gH2O) - h2o, dh2 = Sum(T.gH2) - h2, dst = Sum(T.gStench) - st, do2 = o2 - Sum(T.gO2);
         double C = 6 * glu - (dch4 + dco2 + 4 * dst), H = 12 * glu - (4 * dch4 + 2 * dh2o + 2 * dh2 + 8 * dst), O = 6 * glu + 2 * do2 - (2 * dco2 + dh2o + 2 * dst);
+        // 검토 고침: 미생물이 사는 온도에서만 썩는다 — 불에 달군 칸 (600K)의 통 · 언 칸 (260K)은 썩지 않는다 (예전: 10K마다 두 배를 그대로 — 600K면 통 전체가 한 번에 메탄)
+        double Burst(double k)
+        {
+            var s2 = new Sim(new SimSetup(lay, 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); }));
+            var f2 = s2.Get<Field>(); var l2 = s2.Get<Life>();
+            f2.FillAir();
+            foreach (int c in Enumerable.Range(0, lay.N)) if (f2.Moles(c) > 0) f2.AddHeat(c, (k - f2.Temp(c)) * f2.Moles(c) * 21);
+            l2.Tank[toilet] = 28;
+            double m0 = Enumerable.Range(0, lay.N).Sum(c => f2.Gas(f2.T.gCH4, c));
+            l2.WasteRot(s2, 300);
+            return Enumerable.Range(0, lay.N).Sum(c => f2.Gas(f2.T.gCH4, c)) - m0;
+        }
+        double hot = Burst(600), cold = Burst(260), warm = Burst(300);
+        Check("썩음 (C19 검토 고침): 미생물이 사는 온도 (275 ~ 330K)에서만 — 600K로 달군 칸 · 260K 언 칸의 오물 통은 메탄을 내지 않는다 · 300K는 낸다",
+            hot == 0 && cold == 0 && warm > 0, $"600K 메탄 +{hot:0.000}몰 · 260K +{cold:0.000} · 300K +{warm:0.000000}");
         Check("썩음 (5단 C19): 닫힌 방의 오물 통 · 걸린 것 · 퇴비통을 하루씩 다섯 번 — 썩어 나간 포도당의 탄소 · 수소 · 산소 = 늘어난 메탄 · 이산화탄소 · 수증기 · 수소 · 악취 + 줄어든 산소 (1e-9)",
             glu > 0.1 && dch4 > 0 && dst > 0 && do2 > 0 && Math.Abs(C) < 1e-9 * glu * 12 && Math.Abs(H) < 1e-9 * glu * 24 && Math.Abs(O) < 1e-9 * glu * 24,
             $"썩은 포도당 {glu:0.000}몰 · 메탄 +{dch4:0.000} · 이산화탄소 +{dco2:0.000} · 악취 +{dst:0.0000} · 산소 −{do2:0.000} · 어긋남 C {C:0.0e0} · H {H:0.0e0} · O {O:0.0e0}");
