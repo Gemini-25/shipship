@@ -116,6 +116,13 @@ public sealed class LiveFrame
     public bool PhotoActOn, PhotoMode;
     /// <summary>☆ 눈여겨보는 이 (마음 번호 — V6): 사람 카드 · 자세히 머리의 ☆를 채운다.</summary>
     public int[] Stars = Array.Empty<int>();
+    // ── 놓치지 않게 (docs/OBSERVER.md §6.3 ~ 6.6 — V7): 멈춤 카드 글 · '그사이' 카드 줄 · 길잡이 한 줄 (알파) · 메뉴의 갈래 고르기 (큰 일 멈춤 갈래 켬 · 창이 뒤로 가면) ──
+    public string StopLine = "";
+    public string[] AwayCard = Array.Empty<string>();
+    public string Hint = "";
+    public float HintAlpha;
+    public bool[] StopKinds = Array.Empty<bool>();
+    public int AwayMode = 2;
 }
 
 /// <summary>사람 · 로봇이 그려진 자리 (칸 · 가운데) — 메인 스레드가 누른 · 올린 사람을 찾는다 (<see cref="LiveShow.Nearest"/>).</summary>
@@ -233,6 +240,7 @@ public sealed partial class LiveShow
         Photos = new PhotoBook(Painter);   // 정점 · 마지막 사진은 화면 화가로 (V5)
         _photoFacts = sim.Facts.Total; _diedSeen = sim.Facts.CountOf(FactKind.Died);
         _starFacts = sim.Facts.Total;   // ☆ 알림은 띄운 뒤의 사실만 (V6)
+        _stopFacts = sim.Facts.Total;   // 큰 일 멈춤 · 첫 불 길잡이도 띄운 뒤의 사실만 (V7)
         if (sim.Find<Structure>() is { } sst) sst.Track ??= new MotionTrack();   // 틱 안 기록 (보기용 — 세계를 바꾸지 않는다 · 연출의 미리 보기 세계는 켜지 않는다)
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
@@ -269,6 +277,7 @@ public sealed partial class LiveShow
     {
         for (long i = 0; i < ticks; i++) { Sim.Step(); LogHands(); Dir.Observe(Sim); Book.Observe(Sim); VaultTick(); PhotoTick(); }
         _starFacts = Sim.Facts.Total;   // 감은 동안의 ☆ 일은 알리지 않는다
+        _stopFacts = Sim.Facts.Total;   // 감은 동안의 큰 일에는 멈추지 않는다 (V7)
         WatchComputer(0);
         _lastHighlights = Dir.Highlights.Count; _lastTitle = _lastHighlights > 0 ? Dir.Highlights[^1].Title : "";   // 감은 동안의 하이라이트를 첫 장에 띄우지 않는다
         _chaptersSeen = Dir.Chapters.Count;   // 감은 동안 지난 날의 장 카드도
@@ -314,6 +323,7 @@ public sealed partial class LiveShow
                 d.Observe(w); AL("연출");
                 if (_replay == null) Book.Observe(w);   // 예측 장부 (산 세계만 — 다시보기 중에는 멈춘다)
                 ran++;
+                if (_replay == null && CheckStops(w)) break;   // 큰 일 멈춤 (V7): 켠 갈래의 큰 일이 난 그 틱에서 멈춘다 (산 세계만)
                 if (_replay != null && w.Tick >= _replayEnd) break;
                 if (SpeedOverride <= 0 && _replay == null && d.Speed < v0 * 0.5) break;   // 묶음 가운데 분위기가 무거워졌다 — 그 틱에서 멈춘다 (빨리 지나치지 않게)
             }
@@ -336,9 +346,11 @@ public sealed partial class LiveShow
         {
             _lastHighlights = Dir.Highlights.Count; _lastTitle = Dir.Highlights[^1].Title;
             Banner = _lastTitle; BannerLeft = BannerSec;
+            ShowHint("star");   // 첫 ★ 길잡이 (V7)
         }
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         TickNotice(realSec);
+        TickHint(realSec); WatchTouch();   // 길잡이 5초 · 손이 끊기면 그사이 표 (V7)
         WatchHand();
         WatchComputer(realSec);
         WatchSpeech(realSec);
@@ -892,6 +904,8 @@ public sealed partial class LiveShow
             Photo = photo, PhotoVersion = _photoVer, PhotoCaption = photo != null ? _photoShown!.Caption : "", PhotoAct = photo != null && _photoShown!.Scene != null ? "▶ 다시보기" : "",
             PhotoActOn = photo != null && _photoShown!.Scene is { } pscene && CanReplay(pscene), PhotoWhy = PhotoWhy, PhotoMode = PhotoMode,
             Stars = Dir.Starred,   // ☆ (V6 — 켜고 끌 때만 새 배열)
+            // 놓치지 않게 (V7): 멈춤 카드 · 그사이 카드 · 길잡이 · 메뉴 갈래 고르기 (바뀔 때만 새 배열)
+            StopLine = _stopLine, AwayCard = AwayCard, Hint = Hint, HintAlpha = HintAlpha, StopKinds = _stopKinds, AwayMode = _prefs.Away,
         };
     }
 

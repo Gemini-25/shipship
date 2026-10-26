@@ -24,7 +24,7 @@ public sealed partial class LiveShow
         SpeedPick = at; FixedPick = -1;
         if (at < DayMinutesAt.Length) { DayMinutes = DayMinutesAt[at]; SpeedOverride = 0; }
         else SpeedOverride = 1 / Time.SecondsPerTick;
-        Paused = false;
+        StopGo(); Paused = false;   // 멈춤 카드가 떠 있으면 닫고 간다 (V7)
     }
 
     /// <summary>브레이크 없는 고정 빠르기 (×1 · ×10 · ×60 · ×600 · ×3600) — 불이 나도 그 빠르기로 지나간다.</summary>
@@ -33,12 +33,12 @@ public sealed partial class LiveShow
         if (i < 0 || i >= FixedGameSecPerSec.Length) return;
         if (Holding) Depart();
         SpeedPick = -2; FixedPick = i;
-        SpeedOverride = FixedGameSecPerSec[i] / Time.SecondsPerTick; Paused = false;
+        SpeedOverride = FixedGameSecPerSec[i] / Time.SecondsPerTick; StopGo(); Paused = false;
         Notify($"고정 빠르기 ×{FixedGameSecPerSec[i]:0} — 일이 나도 늦추지 않는다 (빠르기 단추로 연출에 맡긴다)");
     }
 
     /// <summary>멈춤 · 계속 (출항 준비면 떠난다).</summary>
-    public void TogglePause() { if (ResumeCard.Length > 0) { ResumeGo(); return; } if (EndCard.Length > 0) { EndWatch(); return; } if (Holding) { Depart(); return; } Paused = !Paused; }
+    public void TogglePause() { if (_stopLine.Length > 0) { StopGo(); return; } if (ResumeCard.Length > 0) { ResumeGo(); return; } if (EndCard.Length > 0) { EndWatch(); return; } if (Holding) { Depart(); return; } Paused = !Paused; }
 
     // ── 출항 준비 (docs/UI.md 4 — 추천 A): 띄우면 세계는 멈춘 채 항로 판이 열린다 · 항로를 누르면 고르기만 · [이대로 출항] · 멈춤 · 빠르기로 떠난다 ──
     public bool Holding;
@@ -57,6 +57,7 @@ public sealed partial class LiveShow
     {
         bool was = Holding;
         Holding = Paused = false;
+        if (was) ShowHint("depart");   // 처음 출항 길잡이 (V7)
         if (was && (Panel == PanelKind.Route || Panel == PanelKind.People && Detail == DetailKind.None)) ClosePanel();   // 항로 판 · 출항 소개는 떠나면 닫는다
     }
 
