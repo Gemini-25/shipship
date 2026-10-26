@@ -98,6 +98,8 @@ public sealed class VoyageBundle
     public byte[]? Record, Hands, Screen;             // 마디 '연출' · '손 기록' · '화면' (없으면 null)
     /// <summary>모르는 마디 (뒤의 묶음 판이 더한 것 — 읽고 그대로 둔다).</summary>
     public readonly Dictionary<string, byte[]> Other = new();
+    /// <summary>항해 폴더에 따로 쓰는 파일 (장면 금고 vault/ — V4): 이름 → 바이트 · 압축했나 · 날것 길이 (묶음 바이트에는 넣지 않는다 · 이미 있는 파일은 다시 쓰지 않는다).</summary>
+    public readonly Dictionary<string, (byte[] data, bool packed, int raw)> Files = new();
 
     /// <summary>틀 · 압축 (다른 일꾼에서 — 화면 60프레임 · Brotli 빠르게).</summary>
     public byte[] ToBytes()
@@ -121,14 +123,16 @@ public sealed class VoyageBundle
         return ms.ToArray();
     }
 
-    private static byte[] Pack(byte[] raw)
+    internal static byte[] Pack(byte[] raw) => Pack(raw, raw.Length);
+
+    internal static byte[] Pack(byte[] raw, int length)
     {
-        var o = new MemoryStream(raw.Length / 3 + 64);
-        using (var z = new BrotliStream(o, CompressionLevel.Fastest, leaveOpen: true)) z.Write(raw);
+        var o = new MemoryStream(length / 3 + 64);
+        using (var z = new BrotliStream(o, CompressionLevel.Fastest, leaveOpen: true)) z.Write(raw, 0, length);
         return o.ToArray();
     }
 
-    private static byte[] Unpack(byte[] packed, int rawLength)
+    internal static byte[] Unpack(byte[] packed, int rawLength)
     {
         var raw = new byte[rawLength];
         using var z = new BrotliStream(new MemoryStream(packed), CompressionMode.Decompress);
@@ -268,9 +272,35 @@ public sealed class VoyageStore
         foreach (var slot in SlotNames) serial = Math.Max(serial, SerialOf(SlotPath(folder, slot)) ?? 0);
         b.Meta.Slot = Rotate(b.Meta); b.Meta.Serial = serial + 1;
         b.Meta.WorldVersion = Sim.SaveVersion; b.Meta.BundleVersion = VoyageBundle.Version;
+        WriteVault(folder, b);   // 금고 파일이 먼저 (저장 칸이 없는 파일을 가리키지 않게)
         WriteSafe(SlotPath(folder, b.Meta.Slot), b.ToBytes());
         WriteSafe(Path.Combine(folder, CardFile), System.Text.Encoding.UTF8.GetBytes(b.Meta.ToJson()));
         return b.Meta;
+    }
+
+    public const string VaultFolder = "vault";
+
+    /// <summary>장면 금고 파일 (vault/k-틱.bin · d-날.bin — 압축 바이트): 없는 것만 쓰고 · 이번 목록에 없는 옛 파일은 지운다 (앞선 저장 칸이 가리키던 칸은 이어 볼 때 건너뛴다).</summary>
+    private static void WriteVault(string folder, VoyageBundle b)
+    {
+        string dir = Path.Combine(folder, VaultFolder);
+        if (b.Files.Count == 0 && !Directory.Exists(dir)) return;
+        Directory.CreateDirectory(dir);
+        foreach (var (name, (data, packed, _)) in b.Files)
+        {
+            string path = Path.Combine(dir, name);
+            if (!File.Exists(path)) WriteSafe(path, packed ? data : VoyageBundle.Pack(data));
+        }
+        foreach (var f in Directory.GetFiles(dir, "*.bin"))
+            if (!b.Files.ContainsKey(Path.GetFileName(f))) try { File.Delete(f); } catch (IOException) { }
+    }
+
+    /// <summary>그 항해의 금고 파일 (압축 바이트 — 없거나 못 읽으면 null).</summary>
+    public byte[]? VaultFile(VoyageMeta m, string name)
+    {
+        if (name.Contains('/') || name.Contains('\\') || name.Contains("..")) return null;
+        string path = Path.Combine(FolderOf(m), VaultFolder, name);
+        try { return File.Exists(path) ? File.ReadAllBytes(path) : null; } catch (IOException) { return null; }
     }
 
     /// <summary>임시 이름에 쓴 뒤 바꾼다 (쓰다 꺼져도 옛 파일은 멀쩡 — 남은 임시 파일은 읽지 않는다).</summary>
@@ -368,6 +398,7 @@ public sealed partial class LiveShow
         var rw = new StateWriter(1 << 16); Dir.SaveRecord(rw); b.Record = rw.ToArray();
         var hw = new StateWriter(1 << 12); hw.Tag("손 기록"); hw.List(_handLog); b.Hands = hw.ToArray();
         b.Screen = SaveScreen();
+        if (Vault.Scenes.Count + Vault.DayWorlds.Count > 0) b.Other[SceneVault.Part] = Vault.SaveIndex(Dir.Highlights, b.Files);   // 장면 금고 목록 (바이트는 vault/ 파일 — V4)
         var mind = Sim.Find<Mind>(); var life = Sim.Find<Life>();
         int aboard = 0, alive = 0, robots = 0;
         if (mind != null)
@@ -460,7 +491,7 @@ public sealed partial class LiveShow
         foreach (var (_, b, w) in store.ReadEach(meta))
         {
             if (b == null) { last = w; continue; }
-            try { return Resume(b); }
+            try { return Resume(b, null, name => store.VaultFile(meta, name)); }
             catch (Exception e) when (e is InvalidDataException or IOException or EndOfStreamException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { last = "저장이 깨졌다"; }
         }
         why = last.Contains("판") ? last : VoyageStore.BrokenText;
@@ -468,7 +499,7 @@ public sealed partial class LiveShow
     }
 
     /// <summary>묶음에서 이어 본다 (setup: 세계 준비 — 없으면 배 열쇠 · 번호로 짓는다): 세계 → 새 화면 → 연출 기록 · 손 기록 · 화면 마디. 빠진 마디는 한 줄씩 <see cref="ResumeNotes"/>에.</summary>
-    public static LiveShow Resume(VoyageBundle b, SimSetup? setup = null)
+    public static LiveShow Resume(VoyageBundle b, SimSetup? setup = null, Func<string, byte[]?>? files = null)
     {
         var m = b.Meta;
         setup ??= ShipWorld.Setup(Layout.Ship(m.Ship, Tables.Default), (ulong)m.Voyage);
@@ -491,6 +522,12 @@ public sealed partial class LiveShow
         show.LogHands();   // 세계의 한 손 장부에만 있는 손 (손 기록이 없던 묶음)
         if (b.Screen != null) show.LoadScreen(b.Screen);
         else show.ResumeNotes.Add("화면 설정은 옮겨 오지 못했다");
+        if (b.Other.TryGetValue(SceneVault.Part, out var vault))
+        {
+            // 장면 금고 (V4): 곳간의 vault/ 파일 · 아니면 묶음이 쥔 파일 (시험 · 곧바로 이어 보기)
+            files ??= name => b.Files.TryGetValue(name, out var f) ? (f.packed ? f.data : VoyageBundle.Pack(f.data)) : null;
+            if (show.Vault.LoadIndex(vault, show.Dir.Highlights, files) < 0) show.ResumeNotes.Add("지난 장면 금고는 옮겨 오지 못했다");
+        }
         show._lastHighlights = show.Dir.Highlights.Count; show._lastTitle = show._lastHighlights > 0 ? show.Dir.Highlights[^1].Title : "";   // 이어 본 첫 장에 지난 하이라이트를 띄우지 않는다
         show._chaptersSeen = show.Dir.Chapters.Count;   // 지난 날의 장 카드도
         return show;

@@ -121,7 +121,7 @@ public sealed partial class LiveShow
     {
         if (DetailSub == 0) NowChapter();
         int sig = HashCode.Combine(DetailSub, Dir.Chapters.Count, PanelPickKey, _recordShut, Dir.Highlights.Count, Dir.Ring.Count > 0 ? Dir.Ring[0].tick : -1, _nowVer,
-            HashCode.Combine((int)Ended, Sim.Facts.CountOf(FactKind.Died), Dir.People.Logs.Count, Dir.People.MournSeen, DetailSub == 3 ? Sim.Tick / 25 : 0));
+            HashCode.Combine((int)Ended, Sim.Facts.CountOf(FactKind.Died), Dir.People.Logs.Count, Dir.People.MournSeen, DetailSub == 3 ? Sim.Tick / 25 : 0, Vault.Scenes.Count, Vault.DayWorlds.Count));
         if (sig != _recSig || _recRows.Length == 0)
         {
             var l = new List<PanelRow>();
@@ -141,8 +141,8 @@ public sealed partial class LiveShow
 
     private string AgentName(int a) { var m = Sim.Find<Mind>(); return m != null && a >= 0 && a < m.Agents.Count ? m.NameOf(a) : "누군가"; }
     private string RoleOf(int a) { var m = Sim.Find<Mind>(); return m != null && a >= 0 && a < m.Agents.Count && m.Agents[a].IsPerson && m.Agents[a].C.Role < m.RoleNames.Length ? m.RoleNames[m.Agents[a].C.Role] : ""; }
-    private string SceneMain(Highlight h) => $"{(CanReplay(h) ? "●" : "○")} {HourMin(h.Tick)}  {h.Title}";
-    private PanelRow SceneRow(Highlight h, long key) { bool can = CanReplay(h); return new PanelRow(SceneMain(h), can ? "" : "한 시간 넘게 지나 다시 볼 수 없다", false, Key: key, Act: "▶ 다시보기", ActOn: can, Why: "한 시간 넘게 지나 다시 볼 수 없다 (한 시간 안의 것만)"); }
+    /// <summary>장면 줄: 표 (● 고리 · 금고 · ◐ 감아 · ○ 사진만 — 도형으로 그린다) · 때 · 제목 · ▶.</summary>
+    private PanelRow SceneRow(Highlight h, long key) { var (mark, sub, can) = WayRow(h); return new PanelRow($"{HourMin(h.Tick)}  {h.Title}", sub, false, Key: key, Act: "▶ 다시보기", ActOn: can, Why: PhotoWhy, Mark: mark); }
 
     /// <summary>날마다: '오늘 지금까지' → 장 (새것 위) · 고른 장은 펼친다 (요약 줄 · 다시볼 장면 · 주인공).</summary>
     private void DayRows(List<PanelRow> rows)
@@ -218,7 +218,7 @@ public sealed partial class LiveShow
             var h = DeathScene(a, at);
             bool can = h != null && CanReplay(h);
             rows.Add(new PanelRow($"{AgentName(a)}{(role.Length > 0 ? " · " + role : "")}", string.Join("\n", sub), false, Face: FaceSlotOf(a), Key: KeyTomb(a),
-                Act: h != null ? "▶ 다시보기" : "", ActOn: can, Why: "한 시간 넘게 지나 다시 볼 수 없다 (한 시간 안의 것만)"));
+                Act: h != null ? "▶ 다시보기" : "", ActOn: can, Why: PhotoWhy, Mark: h != null ? WayRow(h).mark : (byte)0));
         }
         if (rows.Count == 0) rows.Add(new PanelRow("아무도 잃지 않았다", "숨진 이가 생기면 여기에 묘비가 선다", false, Key: -1));
     }
@@ -318,7 +318,7 @@ public sealed partial class LiveShow
         var h = RecordScene(key);
         if (h == null) return false;
         PanelPickKey = key;
-        if (!StartReplay(h)) { Notify("그 장면은 너무 오래돼 다시 볼 수 없다 (한 시간 안의 것만)"); return false; }
+        if (!StartReplay(h)) { Notify(PhotoWhy); return false; }
         ClosePanel();
         return true;
     }

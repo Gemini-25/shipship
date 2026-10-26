@@ -50,6 +50,8 @@ public sealed partial class Director
     public string Caption = "";
     public readonly List<Highlight> Highlights = new();
     public readonly List<(long tick, byte[] snap, int len)> Ring = new();   // 찍은 것은 snap의 앞 len 바이트 (칸을 다시 쓴다)
+    /// <summary>빌려 준 고리 칸 (장면 금고가 다른 일꾼에서 압축하는 동안 — 고리가 돌아도 그 칸은 다시 쓰지 않고 새로 잡는다 · 복사 없이 ≤ 1ms).</summary>
+    public readonly System.Collections.Concurrent.ConcurrentDictionary<byte[], byte> Lent = new(ReferenceEqualityComparer.Instance);
     public bool KeepRing = true;
     public long Switches;
     public double ScreenSeconds;                // 지금까지 흐른 화면 시간
@@ -199,7 +201,7 @@ public sealed partial class Director
         {
             _ringLate = false;
             byte[]? buf = null;
-            if (Ring.Count >= RingSize) { buf = Ring[0].snap; Ring.RemoveAt(0); }   // 가장 오래된 칸에 다시 찍는다
+            if (Ring.Count >= RingSize) { buf = Ring[0].snap; Ring.RemoveAt(0); if (Lent.ContainsKey(buf)) buf = null; }   // 가장 오래된 칸에 다시 찍는다 (빌려 준 칸이면 새로)
             int len = sim.SaveInto(ref buf);
             Ring.Add((t, buf!, len));
         }
@@ -473,12 +475,19 @@ public sealed partial class Director
     /// <summary>하이라이트의 시작(첫 조짐) 직전 찍기에서 되살린 세계 — 이어 돌리면 같은 일이 그대로 일어난다. 고리에 없으면 null.</summary>
     public Sim? Replay(Sim sim, Highlight h)
     {
+        if (RingFor(h) is not { } pick) return null;
+        var w = new Sim(sim.Setup);
+        w.Load(pick.snap, pick.len);
+        return w;
+    }
+
+    /// <summary>그 하이라이트의 다시보기가 쓸 고리 찍기 — 시작(첫 조짐) 직전 · 없으면 정점 앞의 가장 오래된 것 · 그것도 없으면 null (다시보기 · 장면 금고가 함께 쓴다 — docs/OBSERVER.md §4.1).</summary>
+    public (long tick, byte[] snap, int len)? RingFor(Highlight h)
+    {
         (long tick, byte[] snap, int len)? pick = null;
         foreach (var r in Ring) if (r.tick <= h.StartTick) pick = r;
-        if (pick == null) { if (Ring.Count > 0 && Ring[0].tick <= h.Tick) pick = Ring[0]; else return null; }
-        var w = new Sim(sim.Setup);
-        w.Load(pick.Value.snap, pick.Value.len);
-        return w;
+        if (pick == null && Ring.Count > 0 && Ring[0].tick <= h.Tick) pick = Ring[0];
+        return pick;
     }
 
     /// <summary>재미 점수 재료 (Lab --fun).</summary>

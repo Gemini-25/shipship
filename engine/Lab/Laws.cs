@@ -569,6 +569,7 @@ public static partial class Program
         Physics2Laws();   // 물리 세계 뒤 커밋 (LawsPhysics2.cs — docs/PHYSICS.md PH11~)
         BodyPropLaws();   // 몸 물체 (PH14)
         ResumeLaws();   // 이어 보기 (LawsResume.cs — docs/OBSERVER.md §16 S1 · S2)
+        VaultLaws();    // 장면 금고 (LawsResume.cs — docs/OBSERVER.md §16 K1 · K2)
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>

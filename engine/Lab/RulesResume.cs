@@ -239,4 +239,154 @@ public static partial class Program
                 $"자리표 {layouts}가지 · 어긋남 {bad.Count} {string.Join(" | ", bad.Take(3))} · 작은 자리 {small.Count} {string.Join(" | ", small.Take(2))} · 숫자판 '{typed}' {ok4} → '{five5}' · 지움 {empty} · 뽑기 {drawn} · 뒤로 {back} · 글자 {glyph.Count}");
         }
     }
+
+    /// <summary>
+    /// 장면 금고 (docs/OBSERVER.md §4 · §16 K3 ~ K5 — 묶음 '장면 금고'): 하루 다섯 (무게 순) · 이레 · 0시 세계 이레 · 넘치면 하루 셋 · 그래도 넘치면 가벼운 것부터 ·
+    /// 시작이 당겨지면 더 앞의 찍기로 · 줄 표 ● (고리 · 금고) ◐ (닻 + 감기 어림 초) ○ (사진만) · 화면만 (금고를 켠 화면과 끈 화면의 세계 바이트가 같다).
+    /// </summary>
+    private static void VaultRules()
+    {
+        if (!Do("장면 금고")) return;
+        Console.WriteLine("\n[장면 금고 — 하루 다섯 · 이레 · 바이트 한도 · 줄 표 · 화면만]");
+        if (Environment.GetEnvironmentVariable("VAULT_BENCH") is { Length: > 0 } ship)
+        {
+            // 재기 (판정하지 않는다): 그 배의 찍기 — 금고 복사 (작업 스레드) · 압축 (다른 일꾼) · 풀기 · 하이라이트 하나의 압축 크기
+            var s = LiveShow.Crewed(ship, 5); s.FastForward(30);
+            var hb = new Highlight { Tick = s.Sim.Tick, StartTick = s.Sim.Tick, Last = s.Sim.Tick, Score = 100 };
+            var snap = s.Dir.RingFor(hb)!.Value;
+            var lend = new SceneVault();
+            lend.Pin(new Highlight { Tick = hb.Tick, StartTick = hb.StartTick, Score = 1 }, snap, s.Dir); lend.WaitPacked();   // 데우기 (첫 일꾼 · 첫 압축)
+            var sw1 = System.Diagnostics.Stopwatch.StartNew(); lend.Pin(hb, snap, s.Dir); double pin = sw1.Elapsed.TotalMilliseconds * 1000;
+            lend.WaitPacked(); Thread.Sleep(20); bool returned = !s.Dir.Lent.ContainsKey(snap.snap);
+            var vb = new SceneVault { PackLater = false };
+            var sw2 = System.Diagnostics.Stopwatch.StartNew(); vb.Pin(hb, snap); double pack = sw2.Elapsed.TotalMilliseconds;
+            sw2.Restart(); var back = vb.Raw(vb.Scenes[0]); double unpack = sw2.Elapsed.TotalMilliseconds;
+            Console.WriteLine($"    (금고 재기) {ship} 찍기 {snap.len / 1e6:0.00}MB · 금고에 넣기 (고리 칸을 빌린다) {pin:0}µs · 돌려받음 {returned} · 복사 + 압축 {pack:0}ms → {vb.Bytes / 1e6:0.00}MB · 풀기 {unpack:0}ms · 이레 서른다섯 장면 + 0시 세계 일곱 ≈ {vb.Bytes * 42 / 1e6:0}MB");
+        }
+        // K3: 금고 셈 — 아흐레 · 하루 일곱 장면 (점수 갈래) · 0시 세계 아홉 → 하루 다섯 (무게 순) · 이레 · 0시 세계 일곱 / 바이트 한도 → 하루 셋 → 가벼운 것부터 / 시작이 당겨지면 앞의 찍기 / 풀면 같은 바이트
+        {
+            static byte[] Snap(int seed, int n) { var b = new byte[n]; var r = new Random(seed); for (int i = 0; i < n; i++) b[i] = (byte)(i % 7 == 0 ? r.Next(256) : i % 13); return b; }
+            var v = new SceneVault { PackLater = false };
+            var all = new List<Highlight>();
+            for (int d = 0; d < 9; d++)
+            {
+                for (int k = 0; k < 7; k++)
+                {
+                    long t = d * Time.TicksPerDay + 1000 + k * 100;
+                    var h = new Highlight { Tick = t, StartTick = t - 30, Last = t, Score = 80 + (k * 37 + d * 11) % 100, Title = $"{d}/{k}" };
+                    all.Add(h);
+                    var raw = Snap(d * 10 + k, 4000);
+                    v.Pin(h, (t - 40, raw, raw.Length));
+                }
+                v.DayWorld(d * Time.TicksPerDay, Snap(900 + d, 4000));
+                v.Trim(d);
+            }
+            var byDay = v.Scenes.GroupBy(e => e.Day).ToDictionary(g => g.Key, g => g.Select(e => e.H!).ToList());
+            bool five = byDay.Count == 7 && byDay.Keys.Min() == 2 && byDay.All(kv => kv.Value.Count == 5
+                && kv.Value.Min(h => h.Score) >= all.Where(h => (int)(h.Tick / Time.TicksPerDay) == kv.Key).OrderByDescending(h => h.Score).Skip(4).First().Score);
+            bool days = v.DayWorlds.Count == 7 && v.DayWorlds.Min(e => e.Day) == 2;
+            bool roundTrip = false, keptOld = false, moved = false;
+            if (v.Scenes.Count > 0)
+            {
+                var first = v.Scenes[0];
+                roundTrip = v.Raw(first).AsSpan().SequenceEqual(Snap((first.Day * 10) + int.Parse(first.H!.Title.Split('/')[1]), 4000)) && first.Packed;
+                // 시작이 당겨졌다 (더 앞의 찍기) · 뒤의 찍기는 바꾸지 않는다
+                var hx = first.H!; var earlier = Snap(4242, 4000); var later = Snap(4343, 4000);
+                long t0 = first.Tick;
+                v.Pin(hx, (t0 + 10, later, later.Length)); keptOld = v.Scenes.First(e => e.H == hx).Tick == t0;
+                v.Pin(hx, (t0 - 50, earlier, earlier.Length)); moved = v.Scenes.First(e => e.H == hx).Tick == t0 - 50 && v.Raw(v.Scenes.First(e => e.H == hx)).AsSpan().SequenceEqual(earlier);
+            }
+            // 바이트 한도: 하루 셋 → 그래도 넘치면 가벼운 것부터
+            var tight = new SceneVault { PackLater = false };
+            foreach (var h in all.Where(h => h.Tick / Time.TicksPerDay >= 2)) { var raw = Snap((int)h.Tick, 4000); tight.Pin(h, (h.StartTick - 10, raw, raw.Length)); }
+            long one = tight.Scenes.Count > 0 ? tight.Bytes / tight.Scenes.Count : 1;
+            tight.MaxBytes = one * 24; tight.Trim(8);
+            var tday = tight.Scenes.GroupBy(e => e.Day).Select(g => g.Count()).ToList();
+            bool three = tday.All(c => c <= 3) && tight.Bytes <= tight.MaxBytes;
+            float lightKept = tight.Scenes.Count > 0 ? tight.Scenes.Min(e => e.H!.Score) : 0, heavyGone = all.Where(h => h.Tick / Time.TicksPerDay >= 2 && !tight.Has(h)).Select(h => h.Score).DefaultIfEmpty(0).Max();
+            Check("장면 금고 K3: 아흐레 × 하루 일곱 → 하루 다섯 (무게 순) · 이레 (앞의 둘째 날까지 놓는다) · 0시 세계도 이레 · 풀면 같은 바이트 (다른 일꾼이 압축) / 시작이 당겨지면 더 앞의 찍기로 (뒤의 찍기로는 바꾸지 않는다) / 바이트 한도를 넘으면 하루 셋 → 그래도 넘치면 가벼운 것부터",
+                five && days && roundTrip && keptOld && moved && three && tight.Scenes.Count > 0,
+                $"날 {string.Join(" ", byDay.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:{kv.Value.Count}"))} · 0시 세계 {v.DayWorlds.Count} (첫 {(v.DayWorlds.Count > 0 ? v.DayWorlds.Min(e => e.Day) : -1)}) · 풀기 {roundTrip} · 뒤 찍기 그대로 {keptOld} · 앞 찍기로 {moved} · 한도 {tight.Bytes}/{tight.MaxBytes} 날마다 {string.Join(",", tday)} · 남은 가장 가벼운 {lightKept} / 놓은 가장 무거운 {heavyGone}");
+        }
+        // K4: 장면 판 줄 표 — ● 고리 · ● 금고 · ◐ 닻 (0시 세계) + 감기 어림 초 · ○ 사진만 (▶ 옅게 · 까닭) / 기록 판 장의 장면도 같은 표
+        {
+            var show = new LiveShow(HandShip(75), "디딤호");
+            show.Advance(0.2); show.Paused = true;
+            long now = show.Sim.Tick;
+            var ring = new Highlight { Tick = now, StartTick = now, Last = now, Score = 100, Title = "고리 장면" };
+            var kept = new Highlight { Tick = -500, StartTick = -520, Last = -500, Score = 100, Title = "금고 장면" };
+            var wound = new Highlight { Tick = -300, StartTick = -320, Last = -300, Score = 100, Title = "감을 장면" };
+            var photo = new Highlight { Tick = -900, StartTick = -950, Last = -900, Score = 100, Title = "사진만 남은 장면" };
+            var bytes = show.Sim.Save();
+            show.Vault.Pin(kept, (-530, bytes, bytes.Length));
+            show.Vault.DayWorld(-400, bytes);
+            show.Dir.Highlights.AddRange(new[] { photo, kept, wound, ring });
+            var ch = new Chapter { Day = 0, Title = "1일째 — 장면 넷" }; ch.Scenes.AddRange(new[] { photo, kept, wound, ring }); show.Dir.Chapters.Add(ch);
+            show.TogglePanel(PanelKind.Highlights);
+            var rows = show.PanelRows();
+            PanelRow Row(Highlight h) => rows.FirstOrDefault(r => r.Main.Contains(h.Title));
+            var (r1, r2, r3, r4) = (Row(ring), Row(kept), Row(wound), Row(photo));
+            bool marks = r1.Mark == 1 && r1.ActOn && r2.Mark == 1 && r2.ActOn && r3.Mark == 2 && r3.ActOn && (r3.Sub ?? "").Contains("초 감는다") && r4.Mark == 3 && !r4.ActOn && r4.Why.Contains("사진");
+            var w3 = show.WayOf(wound, out double sec3);
+            show.ClosePanel(); show.TogglePanel(PanelKind.Record); show.PanelClick(LiveShow.KeyChapter(0));
+            var rec = show.PanelRows().Where(r => r.Act.Length > 0).Select(r => r.Mark).ToList();
+            bool record = rec.SequenceEqual(new byte[] { 3, 1, 2, 1 });
+            // 감기: ◐ 장면을 누르면 다른 일꾼이 감고 (산 세계는 멈춘다) '감는 중' 띠 · 끝나면 다시보기 / 감는 중 띠 자리 — 여섯 창 × 글 100 · 150% (겹침 · 밖 0 · [그만] 띠 안)
+            show.ClosePanel();
+            long d0 = show.Sim.Tick;
+            show.Vault.DayWorld(d0, show.Sim.Save());
+            show.FastForward(40);
+            var later = new Highlight { Tick = d0 + 30, StartTick = d0 + 20, Last = d0 + 30, Score = 100, Title = "0시 세계 뒤 장면" };
+            show.Dir.Highlights.Add(later); show.Dir.Ring.Clear();
+            long liveAt = show.Sim.Tick;
+            bool begun = show.WayOf(later, out _) == SceneWay.Rewind && show.StartReplay(later);
+            var fw = show.Render();
+            bool band = begun && show.Rewinding && fw.Rewind.Contains("감는 중") && !fw.Replaying;
+            show.WaitRewind(60_000); show.Advance(0.01);
+            bool replay = show.Replaying && show.ReplayOf == later && show.World.Tick == later.StartTick && show.Sim.Tick == liveAt;
+            show.StopReplay();
+            var hud = new Hud(); var bad = new List<string>();
+            foreach (var (pw, ph) in new[] { (1920, 1080), (1920, 1010), (1600, 900), (1366, 768), (1280, 720), (2560, 1440) })
+                foreach (float scale in new[] { 1f, 1.5f })
+                {
+                    var f = FakeFrame(12, true); f.Rewind = "감는 중 — 약 12초 (40%) · 3일 07:04 식당 불 → 박서연이 쓰러졌다"; f.Replaying = false; f.Replay = "";
+                    HudLayout.Build(f, new HudState(), pw, ph, (t, px, b) => Hud.Approx(t, px, b) * scale, (t, px, w, k) => Hud.ApproxLines(t, (int)(px * scale), w, k), hud);
+                    var area = hud.Area("감기 띠"); var stop = hud.Hits.FirstOrDefault(x => x.Act == UiAct.RewindStop);
+                    if (area.Empty || stop == null || !InsideR(stop.R, area) || stop.R.W < 32 || stop.R.H < 32) bad.Add($"{pw}×{ph} {scale * 100:0}%: 띠 {area} · [그만] {stop?.R}");
+                    foreach (var o in hud.Overlaps()) bad.Add($"{pw}×{ph}: {o}");
+                    foreach (var o in hud.Outside()) bad.Add($"{pw}×{ph}: 밖 {o}");
+                }
+            Check("장면 금고 K4: 장면 판 줄 표 — 고리 안 ● · 금고에 든 것 ● · 0시 세계에서 감을 것 ◐ ('약 n초 감는다') · 닻이 없는 것 ○ (▶ 옅게 · '사진만') / 기록 판 장의 장면도 같은 표 / ◐를 누르면 '감는 중' 띠 (산 세계는 멈춘다) → 다시보기 · 띠 자리 (여섯 창 × 글 둘 — 겹침 · 밖 0)",
+                marks && w3 == SceneWay.Rewind && sec3 >= 0 && record && band && replay && bad.Count == 0,
+                $"표 {r1.Mark}/{r2.Mark}/{r3.Mark}/{r4.Mark} · ▶ {r1.ActOn}/{r2.ActOn}/{r3.ActOn}/{r4.ActOn} · ◐ '{r3.Sub}' ({sec3:0.0}초) · ○ '{r4.Why}' · 기록 판 {string.Join(",", rec)} · 감기 띠 {band} '{fw.Rewind}' · 다시보기 {replay} (산 세계 {liveAt}→{show.Sim.Tick}) · 자리 {bad.Count} {string.Join(" | ", bad.Take(2))}");
+        }
+        // K5: 화면만 — 금고를 켠 화면 (장면마다 찍기 복사 · 0시 세계)과 끈 화면을 불씨 하나 낀 30분 나란히: 세계 바이트 · 연출 기록이 같다
+        {
+            var a = new LiveShow(HandShip(76), "디딤호"); var b = new LiveShow(HandShip(76), "디딤호");
+            b.Vault.On = false;
+            foreach (var x in new[] { a, b }) { var aim = HandTargets(x.Sim); x.FastForward(20); x.Sim.Get<Hand>().Enqueue(Order(HandKind.Fire, aim.Bed, 2)); x.FastForward(Time.Minutes(15)); }
+            a.Vault.DayWorld(a.Sim.Tick, a.Sim.Save());
+            a.FastForward(Time.Minutes(15)); b.FastForward(Time.Minutes(15));
+            bool world = a.Sim.Save().AsSpan().SequenceEqual(b.Sim.Save());
+            // 하이라이트 · 장 (연출 기록 바이트 통째는 아니다 — 미리 보기 세계를 다른 코어에서 받는 틱이 벽시계라 부하에 따라 갈린다 · 금고와 상관없이)
+            bool record = HighlightsOf(a.Dir) == HighlightsOf(b.Dir) && a.Dir.ChapterNow(a.Sim).Title == b.Dir.ChapterNow(b.Sim).Title && a.Dir.Chapters.Count == b.Dir.Chapters.Count;
+            // 저장 왕복: 곳간에 쓰면 금고 찍기는 vault/ 파일로 · 이어 보면 금고가 그대로 (같은 장면 · 같은 바이트 · 같은 길)
+            string dir = TempVoyages(); bool kept = false; int files = 0;
+            try
+            {
+                var store = new VoyageStore(dir);
+                a.Vault.WaitPacked();
+                var meta = store.Write(a.SaveBundle(SaveKind.Quit));
+                files = Directory.Exists(Path.Combine(store.FolderOf(meta), VoyageStore.VaultFolder)) ? Directory.GetFiles(Path.Combine(store.FolderOf(meta), VoyageStore.VaultFolder)).Length : 0;
+                var back = LiveShow.Resume(store, store.Latest() ?? meta, out _);
+                kept = back != null && back.Vault.Scenes.Count == a.Vault.Scenes.Count && back.Vault.DayWorlds.Count == a.Vault.DayWorlds.Count
+                    && back.Vault.Scenes.Zip(a.Vault.Scenes).All(p => p.First.Tick == p.Second.Tick && p.First.H!.Title == p.Second.H!.Title && back.Vault.Raw(p.First).AsSpan().SequenceEqual(a.Vault.Raw(p.Second)))
+                    && a.Dir.Highlights.Select((h, i) => a.WayOf(h, out _) == back.WayOf(back.Dir.Highlights[i], out _)).All(x => x);
+            }
+            finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch (IOException) { } }
+            Check("장면 금고 K5: 화면만 — 금고를 켠 화면 (장면 찍기 복사 · 0시 세계)과 끈 화면이 불씨 하나 낀 30분 뒤 세계 바이트 · 하이라이트 · 장이 같다 · 곳간에 쓰면 금고는 vault/ 파일로 — 이어 보면 같은 장면 · 같은 바이트 · 같은 길",
+                world && record && a.Vault.Scenes.Count > 0 && b.Vault.Scenes.Count == 0 && kept && files == a.Vault.Scenes.Select(e => e.File).Distinct().Count() + a.Vault.DayWorlds.Count,
+                $"세계 같음 {world} · 하이라이트 · 장 같음 {record} · 금고 {a.Vault.Scenes.Count}/{b.Vault.Scenes.Count} · 0시 세계 {a.Vault.DayWorlds.Count} · 하이라이트 {a.Dir.Highlights.Count} · 파일 {files} · 이어 봄 {kept}");
+        }
+    }
 }

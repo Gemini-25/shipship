@@ -175,7 +175,7 @@ public sealed partial class LiveShow
         int i = (int)(key - KeyHighlight(0));
         if (i < 0 || i >= Dir.Highlights.Count) return false;
         PanelPickKey = key;
-        if (!StartReplay(Dir.Highlights[i])) { Notify("그 장면은 너무 오래돼 다시 볼 수 없다 (한 시간 안의 것만)"); return false; }
+        if (!StartReplay(Dir.Highlights[i])) { Notify(PhotoWhy); return false; }
         ClosePanel();
         return true;
     }

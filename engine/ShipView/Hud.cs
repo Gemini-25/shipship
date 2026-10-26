@@ -22,6 +22,8 @@ public enum UiAct
     VoyageKey, VoyageShip, Recrew, ResumeGo, StartResume, StartOther, StartNew, StartPick, StartRenew, StartDelete, StartChoice, StartQuit,
     // 기록 (docs/OBSERVER.md §5 — V3): 장 카드 (누르면 기록 그 장) · 날 띠의 칸 · 메뉴 [항해 끝내기] · 결산 카드 [같은 배로 새 항해] [그대로 지켜보기]
     ChapterCard, DayCell, MenuEnd, EndNew, EndWatch,
+    // 장면 금고 (docs/OBSERVER.md §4.3 — V4): '감는 중' 띠의 [그만]
+    RewindStop,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -438,6 +440,15 @@ public static class HudLayout
             h.Blocks.Add(("다시보기 띠", r));
             cy = r.Bottom + 8;
         }
+        if (f.Rewind.Length > 0)
+        {
+            // 감는 중 띠 (V4 — 금고에서 놓친 장면을 0시 세계에서 감는다 · 산 세계는 멈춘다): 글 · [그만]
+            var r = Center(Math.Min(colW, Tw(f.Rewind, 16, true) + 40 + 112 + 12), 40);
+            h.Areas["감기 띠"] = r;
+            h.Hits.Add(new UiHit(new RectF(r.Right - 8 - 112, r.Y + 4, 112, 32), UiAct.RewindStop, 0, false, true, "감기를 그만두고 돌아오기 (B)"));
+            h.Blocks.Add(("감기 띠", r));
+            cy = r.Bottom + 8;
+        }
         if (f.EndCard.Length > 0)
         {
             // 결산 카드 (docs/OBSERVER.md §5.6 — 멈춘다): 제목 · 사람마다 한 줄 · 큰 장면 · [같은 배로 새 항해 — 새 사람들] [그대로 지켜보기] — 칸이 좁으면 단추를 두 줄로 · 낮으면 줄을 덜 보인다
@@ -744,6 +755,9 @@ public static class HudLayout
         }
     }
 
+    /// <summary>판 줄 머리의 장면 표 (● ◐ ○ — 도형) 자리 폭.</summary>
+    public const float MarkW = 22;
+
     /// <summary>사고 판의 크기 칩이 붙는 줄 (크기가 있는 갈래).</summary>
     private static bool HandChips(LiveFrame f, PanelRow r) => f.Panel == PanelKind.Hand && r.Key >> 40 == 5 && LiveShow.HandSized((HandKind)(r.Key - LiveShow.KeyHandKind(HandKind.None)));
 
@@ -759,7 +773,7 @@ public static class HudLayout
         float RowH(PanelRow r)
         {
             float face = r.Face >= 0 ? 56 : 0;
-            float main = th((r.On ? "● " : "") + r.Main, 16, inner - face - (r.Act.Length > 0 ? 104 : HandChips(f, r) ? 184 : 0), 2);
+            float main = th((r.On ? "● " : "") + r.Main, 16, inner - face - (r.Mark != 0 ? MarkW : 0) - (r.Act.Length > 0 ? 104 : HandChips(f, r) ? 184 : 0), 2);
             float sub = r.Sub.Length > 0 ? th(r.Sub, 15, inner - face, 8) + 4 : 0;
             return Math.Max(Math.Max(28, r.Face >= 0 ? 54 : 0), 10 + main + (r.Bars is { Length: > 0 } ? 16 : 0) + (r.Boards is { Length: > 0 } ? BoardH + 6 : 0) + sub + 4);
         }

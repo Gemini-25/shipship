@@ -563,6 +563,16 @@ void fragment() {
             case "record": s.OpenRecord(sub); break;
             case "chapter": if (s.Dir.Chapters.Count > 0) s.DayTurned(s.Dir.Chapters[^1]); break;
             case "end": s.EndVoyage(VoyageEnd.Quit); break;
+            case "rewind":
+            {
+                // 감는 중 (V4): 0시 세계 뒤의 가장 늦은 장면을 금고에서 놓고 (◐ — 고리 안이면 고리도 비운다) 다시보기 — 다른 일꾼이 0시 세계에서 감는다
+                var pick = s.Dir.Highlights.Where(h => s.Vault.DayWorlds.Any(d => d.Tick <= h.StartTick)).OrderBy(h => s.Dir.RingFor(h) == null ? 0 : 1).ThenByDescending(h => h.StartTick).FirstOrDefault();
+                if (pick == null) break;
+                s.Vault.Drop(pick);
+                if (s.Dir.RingFor(pick) != null) s.Dir.Ring.Clear();
+                s.StartReplay(pick);
+                break;
+            }
             case "computer": s.OpenDetail(DetailKind.Computer, -1); s.SetDetailSub(sub); break;
             case "scenes":
             {
@@ -1191,6 +1201,16 @@ void fragment() {
             DrawString(_bold, new Vector2(r.Position.X + 14 * U, r.Position.Y + r.Size.Y / 2 + Fs(16) * 0.36f), "다시보기 · " + f.Replay, HorizontalAlignment.Left, r.Size.X - 140 * U, Fs(16), new Color(1f, 0.88f, 0.62f));
             foreach (var h in _hud.Hits) if (h.Act == UiAct.ReplayStop) { DrawButton(h, "   돌아오기", 15); var p = R(h.R).Position; DrawRect(new Rect2(p + new Vector2(14, 11) * U, new Vector2(10, 10) * U), film); }
         }
+        if (_hud.Areas.TryGetValue("감기 띠", out var wb))
+        {
+            // 감는 중 띠 (V4): 옛 필름 빛 · 흐르는 줄 (감는 중) · [그만]
+            var r = R(wb); var film = new Color(0.95f, 0.78f, 0.45f);
+            DrawRect(r, new Color(0.08f, 0.06f, 0.03f, 0.9f)); DrawRect(r, film, false, 2);
+            float phase = (float)(Godot.Time.GetTicksMsec() % 1200 / 1200.0);
+            for (int k = 0; k < 3; k++) { float x = r.Position.X + 12 * U + ((phase + k / 3f) % 1f) * 18 * U; DrawRect(new Rect2(x, r.Position.Y + 13 * U, 3 * U, 14 * U), new Color(film, 0.5f + 0.5f * k / 2f)); }
+            DrawString(_bold, new Vector2(r.Position.X + 40 * U, r.Position.Y + r.Size.Y / 2 + Fs(16) * 0.36f), f.Rewind, HorizontalAlignment.Left, r.Size.X - 170 * U, Fs(16), new Color(1f, 0.88f, 0.62f));
+            foreach (var h in _hud.Hits) if (h.Act == UiAct.RewindStop) DrawButton(h, "그만", 15);
+        }
         if (_hud.Areas.TryGetValue("출항 띠", out var hb))
         {
             var r = R(hb);
@@ -1546,6 +1566,16 @@ void fragment() {
             bool act = row.Act.Length > 0;
             bool dim = f.Panel == PanelKind.Route && row.Key >= 1 && !row.ActOn || f.Panel == PanelKind.Hand && row.Key >> 40 == 5 && !row.ActOn;
             var head = dim ? new Color(0.55f, 0.58f, 0.66f) : row.On ? new Color(1f, 0.88f, 0.55f) : new Color(0.9f, 0.92f, 0.97f);
+            if (row.Mark != 0)
+            {
+                // 장면 표 (V4 — 글꼴에 ◐가 없어 도형으로): ● 바로 · ◐ 감아 · ○ 사진만
+                var c = new Vector2(x0 + lx + 8 * U, y + 6 * U + Fs(16) * 0.55f); float rad = 6 * U;
+                var mc = row.Mark == 3 ? new Color(0.6f, 0.64f, 0.72f) : new Color(1f, 0.86f, 0.55f);
+                if (row.Mark == 1) DrawCircle(c, rad, mc);
+                else if (row.Mark == 2) { DrawArc(c, rad - 0.75f * U, 0, Mathf.Tau, 24, mc, 1.5f * U); DrawPolygon(Enumerable.Range(0, 13).Select(k => c + new Vector2(0, -rad).Rotated(Mathf.Pi * k / 12f)).Prepend(c).ToArray(), new[] { mc }); }
+                else DrawArc(c, rad - 0.75f * U, 0, Mathf.Tau, 24, mc, 1.5f * U);
+                lx += HudLayout.MarkW * U;
+            }
             float mainW = r.Size.X - 24 * U - lx - (act ? 104 * U : 0);
             DrawMultilineString(_bold, new Vector2(x0 + lx, y + 6 * U + Fs(16) * 0.9f), (row.On ? "● " : "") + row.Main, HorizontalAlignment.Left, mainW, Fs(16), 2, head);
             float mh = MeasureHB((row.On ? "● " : "") + row.Main, Fs(16), mainW, 2);
@@ -1803,7 +1833,8 @@ void fragment() {
             case UiAct.ZoomOut: _cmds.Enqueue(s => s.ZoomBy(1 / 0.85)); break;
             case UiAct.OverlayMenu: _hs.Open = _hs.Open == HudOpen.Overlay ? HudOpen.None : HudOpen.Overlay; break;
             case UiAct.Overlay: { var o = (Overlay)k; _cmds.Enqueue(s => s.SetOverlay(o)); _hs.Open = HudOpen.None; break; }
-            case UiAct.ReplayLast: _cmds.Enqueue(s => { if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
+            case UiAct.ReplayLast: _cmds.Enqueue(s => { if (s.Rewinding) s.StopRewind(); else if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
+            case UiAct.RewindStop: _cmds.Enqueue(s => s.StopRewind()); break;   // 감기 그만 (V4)
             // 기록 (V3): 장 카드 → 기록 그 장 · 날 띠의 칸 → 그날 · [항해 끝내기] (확인 창) · 결산 카드
             case UiAct.ChapterCard: _cmds.Enqueue(s => s.ChapterCardGo()); break;
             case UiAct.DayCell: _cmds.Enqueue(s => s.DayCellGo(k)); break;

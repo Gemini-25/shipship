@@ -128,4 +128,81 @@ public static partial class Program
             try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch (IOException) { }
         }
     }
+
+    /// <summary>쌍둥이: 같은 배 · 같은 번호를 처음부터 — 항해 손 기록의 손을 그 틱에 먹여 tick까지 (다시보기 · 감기와 같은 먹이기).</summary>
+    private static byte[] TwinAt(ulong seed, IReadOnlyList<HandOrder> log, long tick)
+    {
+        var s = HandShip(seed); var hand = s.Get<Hand>();
+        while (s.Tick < tick) { foreach (var o in log) if (o.Tick == s.Tick) hand.Enqueue(o); s.Step(); }
+        s.Get<ShipMind>().WaitThoughts();
+        return s.Save();
+    }
+
+    /// <summary>
+    /// 장면 금고 법칙 (docs/OBSERVER.md §4 · §16 K1 · K2 — 묶음 '장면 금고'): 고리 (한 시간)에서 빠진 장면을 금고 찍기에서 되살려 정점까지 돌리면 쌍둥이와 바이트가 같다 ·
+    /// 금고에도 없는 장면은 0시 세계에서 감아 (한 손 장부 256을 넘긴 손까지 항해 손 기록에서 먹인다) 정점까지 — 쌍둥이와 바이트가 같다.
+    /// </summary>
+    private static void VaultLaws()
+    {
+        if (!Do("장면 금고")) return;
+        Console.WriteLine("\n[장면 금고 — 금고 찍기 · 0시 세계에서 감기 = 산 세계]");
+        int keep = Par.Threads;
+        try
+        {
+            Par.Threads = 1;
+            // K1: 손 셋 (불씨 · 헛손 둘) → 하이라이트 → 금고에 그 장면의 고리 찍기 → 한 시간 넘게 지나 고리에서 빠진다 → ● 금고에서 되살려 정점 틱까지 = 쌍둥이
+            {
+                var show = new LiveShow(HandShip(73), "디딤호") { FrameBudget = 1000 };
+                var aim = HandTargets(show.Sim); var hand = show.Sim.Get<Hand>();
+                show.FastForward(20); hand.Enqueue(Order(HandKind.Fire, aim.Bed, 2));
+                show.FastForward(40); hand.Enqueue(Order(HandKind.PowerCut, -1));
+                show.FastForward(40); hand.Enqueue(Order(HandKind.PowerCut, -1));
+                show.FastForward(Time.Minutes(10));
+                var h = show.Dir.Highlights.OrderByDescending(x => x.Score).FirstOrDefault();
+                bool pinned = h != null && show.Vault.Has(h);
+                show.FastForward(Time.Hours(1) + Time.Minutes(10));
+                bool outOfRing = h != null && show.Dir.RingFor(h) == null;
+                var way = h != null ? show.WayOf(h, out _) : SceneWay.Photo;
+                show.SpeedOverride = 1;
+                bool started = h != null && show.StartReplay(h);
+                while (show.Replaying && h != null && show.World.Tick < h.Tick) show.Advance(1);
+                if (show.Replaying) show.World.Get<ShipMind>().WaitThoughts();
+                bool at = show.Replaying && h != null && show.World.Tick == h.Tick;
+                bool same = at && show.World.Save().AsSpan().SequenceEqual(TwinAt(73, show.HandLog, h!.Tick));
+                Check("장면 금고 K1: 손 셋 낀 장면이 금고에 든다 → 한 시간 넘게 지나 고리에서 빠져도 ● (금고) → 금고 찍기에서 되살려 정점 틱까지 돌린 세계 = 처음부터 손을 먹인 쌍둥이 (바이트)",
+                    h != null && pinned && outOfRing && way == SceneWay.Now && started && same && show.HandLog.Count == 3,
+                    h == null ? "하이라이트 없음" : $"'{h.Title}' 정점 {h.Tick} · 금고 {pinned} · 고리 밖 {outOfRing} · 길 {way} · 다시보기 {started} · 정점 {at} · 같음 {same} · 손 {show.HandLog.Count}");
+                if (show.Replaying) show.StopReplay();
+            }
+            // K2: 0시 세계 → 헛손 300 (한 손 장부 256을 넘긴다) + 불씨 → 하이라이트 → 고리 · 금고에서 놓친다 → ◐ 0시 세계에서 감아 정점 틱까지 = 쌍둥이
+            //     (손을 한 손 장부에서만 먹이면 앞의 손 45개를 잃는다 — V1이 항해 손 기록을 두었다 · 감기도 그것을 먹인다)
+            {
+                var show = new LiveShow(HandShip(74), "디딤호") { FrameBudget = 1000 };
+                var aim = HandTargets(show.Sim); var hand = show.Sim.Get<Hand>();
+                show.FastForward(10);
+                show.Vault.DayWorld(show.Sim.Tick, show.Sim.Save());
+                int junk = 0;
+                while (junk < 300) { if (hand.Waiting.Count == 0) for (int k = 0; k < Hand.MaxWaiting && junk < 300; k++, junk++) hand.Enqueue(Order(HandKind.PowerCut, -1)); show.FastForward(1); }
+                show.FastForward(5); hand.Enqueue(Order(HandKind.Fire, aim.Bed, 2));
+                show.FastForward(Time.Minutes(10));
+                var h = show.Dir.Highlights.OrderByDescending(x => x.Score).FirstOrDefault();
+                show.Dir.Ring.Clear();
+                foreach (var x in show.Dir.Highlights) show.Vault.Drop(x);   // 고리 · 금고에서 놓친 장면 (닻은 0시 세계뿐)
+                var way = h != null ? show.WayOf(h, out double sec) : SceneWay.Photo;
+                show.SpeedOverride = 1;
+                bool started = h != null && show.StartReplay(h);
+                bool rewound = started && show.WaitRewind(120_000);
+                show.Advance(0);   // 감기가 끝났다 — 다시보기로
+                while (show.Replaying && h != null && show.World.Tick < h.Tick) show.Advance(1);
+                if (show.Replaying) show.World.Get<ShipMind>().WaitThoughts();
+                bool at = show.Replaying && h != null && show.World.Tick == h.Tick;
+                bool same = at && show.World.Save().AsSpan().SequenceEqual(TwinAt(74, show.HandLog, h!.Tick));
+                Check("장면 금고 K2: 0시 세계 뒤 헛손 300 (한 손 장부 256을 넘긴다) + 불씨 → 고리 · 금고에서 놓친 장면은 ◐ → 0시 세계에서 감아 (항해 손 기록을 그 틱에 먹인다) 정점 틱까지 = 쌍둥이 (바이트)",
+                    h != null && way == SceneWay.Rewind && started && rewound && same && show.HandLog.Count == 301 && hand.Done.Count <= Hand.Keep,
+                    h == null ? "하이라이트 없음" : $"'{h.Title}' 정점 {h.Tick} · 길 {way} · 감기 {started}/{rewound} · 정점 {at} · 같음 {same} · 손 기록 {show.HandLog.Count} (한 손 장부 {hand.Done.Count})");
+                if (show.Replaying) show.StopReplay();
+            }
+        }
+        finally { Par.Threads = keep; }
+    }
 }

@@ -122,7 +122,7 @@ public static partial class Program
             var head = rows.FirstOrDefault(r => r.Key == LiveShow.KeyChapter(0));
             var scenes = rows.Where(r => r.Act.Length > 0 && r.Key >> 8 == LiveShow.KeyChapter(0) >> 8).ToList();
             var faces = rows.Where(r => r.Face >= 0 && r.Key >> 8 == LiveShow.KeyChapter(0) >> 8).ToList();
-            bool marks = scenes.Count == 2 && scenes[0].Main.StartsWith("○") && !scenes[0].ActOn && scenes[1].Main.StartsWith("●") && scenes[1].ActOn;
+            bool marks = scenes.Count == 2 && scenes[0].Mark == 3 && !scenes[0].ActOn && scenes[1].Mark == 1 && scenes[1].ActOn;   // 표는 도형 (V4 — ● 1 · ◐ 2 · ○ 3)
             bool faced = faces.Count == 1 && rows.Any(r => r.Key >> 8 == LiveShow.KeyChapter(0) >> 8 && r.Main.Contains("로봇") && r.Face < 0);
             bool person = faces.Count == 1 && show.PanelClick(faces[0].Key) && show.Detail == DetailKind.Person && show.DetailId == 1;
             show.ClosePanel(); show.TogglePanel(PanelKind.Record); show.PanelClick(LiveShow.KeyChapter(0));
@@ -130,7 +130,7 @@ public static partial class Program
             if (show.Replaying) show.StopReplay();
             Check("기록 G3: 장을 누르면 펼친다 — 요약 줄 · 장면 (다시 볼 수 있으면 ● · 지난 것은 ○ · ▶ 다시보기) · 주인공 (사람은 얼굴 — 누르면 그 사람 자세히 · 로봇은 이름만) · 펼치기 전에는 머리 줄만",
                 closed == 0 && (head.Sub ?? "").Contains("큰 사슬") && marks && faced && person && replay,
-                $"닫힘 {closed} · 머리 '{head.Main}' / '{(head.Sub ?? "").Replace('\n', '/')}' · 장면 {string.Join(" | ", scenes.Select(r => $"{r.Main} {r.ActOn}"))} · 얼굴 {faces.Count} · 자세히 {person} · 다시보기 {replay}");
+                $"닫힘 {closed} · 머리 '{head.Main}' / '{(head.Sub ?? "").Replace('\n', '/')}' · 장면 {string.Join(" | ", scenes.Select(r => $"{r.Mark} {r.Main} {r.ActOn}"))} · 얼굴 {faces.Count} · 자세히 {person} · 다시보기 {replay}");
         }
 
         // G4: 묘비 — 함께한 날 · 한 일 (구함 · 끔 · 덧댐) · 원인 사슬 · 추모 말 (추모 모임 동안 — 말 기록 고리가 돌아도 남는다) · ▶ 그 장면
