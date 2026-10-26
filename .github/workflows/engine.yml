@@ -58,3 +58,5 @@ jobs:
           timeout 300 $G --headless --path game --import > /dev/null 2>&1 || true
           timeout 120 $G --headless --path game -- --new --ship=Didim --seed=18 --for=10 2>&1 | tee godot.log | grep -E "화면|ERROR|Exception" || true
           grep -qE "화면 [0-9]+초 · 그림 [1-9][0-9]*장" godot.log
+          # 띄운 동안 오류 · 예외가 한 줄이라도 있으면 빨강 (10-26: 좁은 창의 자리표 예외가 장마다 856번 났는데 위 줄만 봐서 초록이었다)
+          if grep -qE "ERROR|Exception" godot.log; then grep -E "ERROR|Exception" godot.log | sort | uniq -c | sort -rn | head -5; exit 1; fi
