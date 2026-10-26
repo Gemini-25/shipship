@@ -51,7 +51,7 @@ public sealed partial class Structure
         public double M, In, Rho, Jw, LastKey, NextJolt, H, FloorL, Ffx, Ffy, Ffw, Tvx, Tvy, Tw;   // 바닥 마찰: 이 잔걸음 한도 μk m g' h · 쌓인 충격량 (운동량 둘 · 돎) · 닿음 목표를 정하는 빠르기 (마찰 뒤)
         public bool Active, Done, Velo, Paired, Kicked, Walked;   // Kicked: 이 틱 원판에 차였다 (원인 마디를 한 번만) · Walked: 곁을 걷는 원판이 있다 (이 틱엔 자지 않는다)
         // 잔걸음 셈값
-        public double PreX, PreY, PreTh, PreVx, PreVy, PreW, Gp, MuK, Room, Speed, Fx, Fy, Tq, Wfx, Wfy, Wtq, Wb, Ax, Ay, Al, Acc, Px0, Py0, L0, Lw, StopAt;
+        public double PreX, PreY, PreTh, PreVx, PreVy, PreW, Gp, MuK, Room, Speed, Fx, Fy, Tq, Wfx, Wfy, Wtq, Wb, Ax, Ay, Al, Acc, Px0, Py0, L0, Lw, StopAt, Kd, Kdw;
         public bool Windy, Framed, Blown;
         // 높이 (PH7): 떠 있음 (떨어지는 중 · 무중력) · 이 잔걸음이 닿는 때로 끝난다 · 받침 높이 · 받침 · 재질 · 수직 중력 · 넘어지는 힘 (그 쪽 몫 · 높이) · 구름 (축)
         public bool Air, Roll;
@@ -134,7 +134,7 @@ public sealed partial class Structure
             int end = _islAt[r], p0 = pp;
             while (pp < _pairs.Count && (int)(_pairs[pp] >> 42) == r) pp++;
             StepIsland(sim, all, start, end - start, p0, pp - p0, dt, world);
-            start = end; roots--;
+                start = end; roots--;
         }
         if (Pairs) CountMisses(all, world);
     }
@@ -663,7 +663,8 @@ public sealed partial class Structure
                 if (gap <= 2 * DotForm.Dot + rel * h) pile = true;
             }
             if (pile) h = Math.Min(h, MaxPileH);
-            if (++steps >= (PropDetail > 0 ? MaxPropSteps : LightPropSteps)) h = Math.Min(rem, Math.Max(1e-9, nextJolt - tau));
+            if (++steps >= (PropDetail > 0 ? Math.Max(LightPropSteps, Math.Min(MaxPropSteps, PropWork / (_icount + _ipairs.Count))) : LightPropSteps)) h = Math.Max(h, Math.Min(PropDetail > 0 ? Math.Min(rem, MaxPropH) : rem, Math.Max(1e-9, nextJolt - tau)));   // 잔걸음 상한 — 섬이 크면 (물체 + 짝이 256 넘게) 그만큼 줄인다 (셈을 붙드는 상한) · 넘으면 0.1초씩 (남은 틱을 한 걸음에 가면 닿음이 2초 넘는 한 걸음에 수백 m/s를 지어냈다)
+            for (int k = 0; k < _icount; k++) if (_runs[k].Active && !_runs[k].Done && _runs[k].Windy && (_runs[k].Kd > 0 || _runs[k].Kdw > 0)) WindShareRun(ref _runs[k], h);   // 끌림은 상대 빠르기를 줄이기만 한다 (섬의 잔걸음 그대로)
             GrowContacts(4 * _icount + 2 * _ipairs.Count + 4);
             // ── 2. 닿음: 바닥 · 벽 · 가구 (깨어 있는 것마다 — 받은 힘만큼 빨라진 길로) · 물체끼리 (껍질) ──
             int nStage = 0;
@@ -753,18 +754,28 @@ public sealed partial class Structure
             }
             // 차례 (작은 Id, 큰 Id, 점 번호): Id 차례로 물체마다 제 정적 닿음 → 제가 작은 쪽인 짝 (큰 쪽 Id 차례)
             _nic = 0;
+            // 짝 닿음은 (작은 쪽 차례 · 큰 쪽 차례 · 놓인 차례)로 한 번 줄 세운다 (예전: 물체 둘마다 짝 닿음을 다 훑었다 — 조각 수천 섬이면 잔걸음마다 몇 분 · 차례는 같다)
+            int nps = 0;
+            if (nPair > 0 && nStage > pStage)
+            {
+                if (_rank.Length < _icount) _rank = new int[2 * _icount];
+                for (int o = 0; o < _icount; o++) _rank[_iord[o]] = o;
+                if (_pairOrd.Length < nStage - pStage) _pairOrd = new long[2 * (nStage - pStage)];
+                for (int c = pStage; c < nStage; c++)
+                {
+                    int ra = _rank[_icStage[c].A], rb = _rank[_icStage[c].B];
+                    if (rb <= ra || !_runs[_icStage[c].A].Paired || !_runs[_icStage[c].B].Paired) continue;
+                    _pairOrd[nps++] = (long)ra << 42 | (long)rb << 21 | (long)(c - pStage);
+                }
+                Array.Sort(_pairOrd, 0, nps);
+            }
+            int pOrd = 0;
             for (int o = 0; o < _icount; o++)
             {
                 int k = _iord[o];
                 for (int c = 0; c < _runs[k].Ns + _runs[k].Na; c++) _ic[_nic++] = _icStage[_runs[k].S0 + c];
                 _runs[k].S0 = _nic - _runs[k].Ns - _runs[k].Na;
-                if (nPair == 0 || !_runs[k].Paired) continue;   // 짝 닿음이 없는 것은 제 정적 닿음뿐
-                for (int o2 = o + 1; o2 < _icount; o2++)
-                {
-                    int k2 = _iord[o2];
-                    if (!_runs[k2].Paired) continue;
-                    for (int c = pStage; c < nStage; c++) if (_icStage[c].A == k && _icStage[c].B == k2) _ic[_nic++] = _icStage[c];
-                }
+                while (pOrd < nps && (int)(_pairOrd[pOrd] >> 42) == o) _ic[_nic++] = _icStage[pStage + (int)(_pairOrd[pOrd++] & 0x1FFFFF)];
             }
             // ── 3. 빠르기: 닿을 것이 없는 것은 마찰의 정확한 걸음 · 벽 · 가구에만 닿는 것은 마찰 빠르기 (PH4 그대로) ·
             //    물체끼리 닿는 것은 받은 힘만큼 (pk) — 바닥 마찰은 충격량 고리에서 함께 푼다 (눌린 것끼리 비트는 몫을 정지 마찰이 붙든다). 닿음 목표는 마찰 뒤 빠르기로 ──
@@ -1012,8 +1023,8 @@ public sealed partial class Structure
         r.Radius = r.Roll ? r.Fm.Hc : 0;
         double v = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy), w = Math.Abs(p.W), speed = v + w * sm.reach;
         // 바람 · 구멍 입 · 몸의 틀 (−a · 원심 · 오일러 — 잔걸음 처음 때 · 코리올리는 빠르기를 돌린다) — 놓인 채 정지 타원 안이면 그대로
-        double wfx = 0, wfy = 0, wtq = 0, wb = 0, ffx = 0, ffy = 0, ftq = 0;
-        bool windy = _windy && WindForce(p, r.Fm, tau, out wfx, out wfy, out wtq);
+        double wfx = 0, wfy = 0, wtq = 0, wb = 0, ffx = 0, ffy = 0, ftq = 0, kd = 0, kdw = 0;
+        bool windy = _windy && WindForce(p, r.Fm, tau, out wfx, out wfy, out wtq, out kd, out kdw);
         bool framed = _framed && FrameForce(p, host, tau, r.Jw, m, I, out ffx, out ffy, out ftq, out wb);
         if (p.State == 4 && AirForce(p, r.Fm, c, out double afx, out double afy)) { wfx += afx; wfy += afy; windy = true; }   // 떠 있으면 공조 바람에 흘러간다
         double fx = wfx + ffx, fy = wfy + ffy, tq = wtq + ftq;
@@ -1077,9 +1088,26 @@ public sealed partial class Structure
         if (r.Air && r.Hz < h) h = r.Hz;   // 받침 · 바닥 · 천장에 닿는 때 (정확히)
         r.Steps++;
         r.H = h; r.Gp = gp; r.MuK = muK; r.Room = room; r.Speed = speed;
-        r.Fx = fx; r.Fy = fy; r.Tq = tq; r.Wfx = wfx; r.Wfy = wfy; r.Wtq = wtq; r.Wb = wb; r.Ax = ax; r.Ay = ay; r.Al = al; r.Acc = acc;
+        r.Fx = fx; r.Fy = fy; r.Tq = tq; r.Wfx = wfx; r.Wfy = wfy; r.Wtq = wtq; r.Wb = wb; r.Ax = ax; r.Ay = ay; r.Al = al; r.Acc = acc; r.Kd = windy ? kd : 0; r.Kdw = windy ? kdw : 0;
         r.Windy = windy; r.Framed = framed; r.Blown = blown;
         return true;
+    }
+
+    /// <summary>
+    /// 이 잔걸음 (h — 섬이 정한 길이 · 잔걸음 상한에 닿으면 남은 틱 전부)의 바람 힘 몫 (<see cref="WindShare"/> — 닫힌 꼴 · 공기 빠르기를 넘지 않는다): 바람 몫만 줄이고 가속을 다시 센다.
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
+    private static void WindShareRun(ref PropRun r, double h)
+    {
+        double sh = WindShare(r.Kd, r.M, h), shw = WindShare(r.Kdw, r.In, h);   // 옮김 · 돎 (돎은 제 돎을 줄이는 몫 kd·r² / I — 작은 조각은 옮김보다 훨씬 빠르다)
+        if (sh >= 1 && shw >= 1) return;
+        double fx = r.Fx - r.Wfx, fy = r.Fy - r.Wfy, tq = r.Tq - r.Wtq;   // 틀의 힘 몫
+        r.Wfx *= sh; r.Wfy *= sh; r.Wtq *= shw;
+        r.Fx = fx + r.Wfx; r.Fy = fy + r.Wfy; r.Tq = tq + r.Wtq;
+        double ax = r.Fx / r.M, ay = r.Fy / r.M;
+        if (r.Roll) { double au = ax * r.RAx + ay * r.RAy, aq = (-ax * r.RAy + ay * r.RAx) / RollMass; ax = au * r.RAx - aq * r.RAy; ay = au * r.RAy + aq * r.RAx; }
+        r.Ax = ax; r.Ay = ay; r.Al = r.Tq / r.In;
+        r.Kd = r.Kdw = 0;   // 한 번만 (같은 잔걸음)
     }
 
     /// <summary>잔걸음 끝 (물체 하나의 걸음 그대로): 장부 · 바로잡음 (정적 · 짝) · 원판 맞음 · 틱 안 기록 · 구멍 · 잠 (잠들면 쉬는 짝으로 섬에 남는다).</summary>
@@ -1167,14 +1195,18 @@ public sealed partial class Structure
     private void WarmStart(Span<Prop> all, double h)
     {
         if (_wkN == 0 || _warmH <= 0) return;
-        double scale = h / _warmH;
+        double scale = Math.Min(WarmGrow, h / _warmH);   // 따뜻한 시작은 지난 잔걸음 충격량의 네 배까지 (잔걸음이 0.0001초에서 2.2초로 늘면 22,000배로 밀어 — 몇 번 되풀이로 되돌리지 못해 4천만 m/s · 모자라면 되풀이가 더한다)
         for (int c = 0; c < _nic; c++)
         {
             ref var ct = ref _ic[c];
             ref var a = ref all[_runs[ct.A].I];
             long key = WarmKey(a.Id, ct.B >= 0 ? all[_runs[ct.B].I].Id : 0, ct.Key);
             int at = c < _wkN && _wkKey[c] == key ? c : -1;
-            for (int q = 0; q < _wkN && at < 0; q++) if (_wkKey[q] == key) at = q;
+            if (at < 0)
+            {
+                if (_wkAtStale) { _wkAt.Clear(); for (int q = 0; q < _wkN; q++) _wkAt.TryAdd(_wkKey[q], q); _wkAtStale = false; }   // 어긋난 첫 번에만 세운다
+                if (!_wkAt.TryGetValue(key, out at)) at = -1;
+            }   // 차례가 어긋났으면 열쇠로 (첫 것 — 예전 줄 훑기는 닿음이 수십만이면 잔걸음마다 그 제곱이었다)
             if (at < 0) continue;
             ct.Jn = _wkJn[at] * scale; ct.Jt = _wkJt[at] * scale;
             double tx = -ct.Ny, ty = ct.Nx, px = ct.Jn * ct.Nx + ct.Jt * tx, py = ct.Jn * ct.Ny + ct.Jt * ty;
@@ -1182,6 +1214,12 @@ public sealed partial class Structure
             else { ref var r = ref _runs[ct.A]; a.Vx += px / r.M; a.Vy += py / r.M; a.W += (ct.Rx * py - ct.Ry * px) / r.In; }
         }
     }
+
+    private const double WarmGrow = 4;
+    private int[] _rank = Array.Empty<int>();
+    private long[] _pairOrd = Array.Empty<long>();   // 짝 닿음 줄 (찍지 않는다 — 잔걸음마다 다시)
+    private bool _wkAtStale = true;
+    private readonly Dictionary<long, int> _wkAt = new();   // 따뜻한 시작 열쇠 → 차례 (찍지 않는다 — 차례가 어긋난 잔걸음에만 다시 세운다)
 
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void KeepWarm(Span<Prop> all, double h)
@@ -1194,6 +1232,7 @@ public sealed partial class Structure
         }
         (_wkKey, _wkKeyNext) = (_wkKeyNext, _wkKey); (_wkJn, _wkJnNext) = (_wkJnNext, _wkJn); (_wkJt, _wkJtNext) = (_wkJtNext, _wkJt);
         _wkN = _nic; _warmH = h;
+        _wkAtStale = true;
     }
 
     /// <summary>닿음 열쇠: 작은 Id (24비트 위) · 큰 Id (벽 · 가구면 0 — 물체 Id는 1부터) · 닿음 (16비트 — 짝: 뒤집힘 · 기준 변 · 맞은 변 · 잘린 끝 / 가운데 점: + b 기준 변 / 벽: 표본 사분면).</summary>

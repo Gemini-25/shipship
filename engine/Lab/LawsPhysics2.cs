@@ -95,4 +95,41 @@ public static partial class Program
             moved > 0 && hit > Structure.BodyHitJ && Math.Abs(book1.px - book0.px) < 1e-9 * size && Math.Abs(book1.py - book0.py) < 1e-9 * size && Math.Abs(book1.l - book0.l) < 1e-9 * size * 10,
             $"선 틱 {moved} · 맞음 {hit:0}J · 장부 어긋남 ({book1.px - book0.px:0.0e0}, {book1.py - book0.py:0.0e0}, {book1.l - book0.l:0.0e0}) / 크기 {size:0}");
     }
+
+    /// <summary>법칙 — 바람 끌림은 공기 빠르기를 넘지 못한다 (가볍고 넓은 것 · 긴 잔걸음): 끌림은 상대 빠르기를 줄이기만 한다 (닫힌 꼴 — 옮김 · 돎).</summary>
+    private static void WindCapLaws()
+    {
+        if (!Do("바람 끌림 법칙")) return;
+        Console.WriteLine("\n[바람 끌림 — 공기 빠르기를 넘지 않는다]");
+        (double v, double air) Run(int detail)
+        {
+            var lay = Worlds.Ascii(SpaceRoom, Worlds.Seats);
+            var s = Worlds.Full(lay, 1);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            st.Debris = false; st.Breakage = false; st.PropDetail = detail;
+            foreach (var (name, x, y) in new[] { ("접시", 1, 1), ("접시", 1, 3), ("컵", 1, 2), ("책", 2, 1), ("접시", 2, 3), ("컵", 3, 2) }) Worlds.PutItem(s, name, Worlds.At(lay, x, y));
+            for (int y = 1; y <= 3; y++) for (int x = 1; x <= 7; x++) f.AddGas(Worlds.At(lay, x, y), f.T.gCO2, 200, 293.15);   // 이산화탄소를 더해 세 기압 언저리 (벽은 버틴다 — 짙은 기체: 밀도 5kg/m³)
+            s.Run(1);
+            f.SetHole(Worlds.At(lay, 0, 2), 1.0f);
+            double vMax = 0, air = 0;
+            for (int k = 0; k < 3; k++)
+            {
+                s.Step();
+                for (int c = 0; c < f.Cells; c++) if (f.WindPa[c] > 0 && f.WindRho[c] > 0) air = Math.Max(air, Math.Sqrt(2 * f.WindPa[c] / f.WindRho[c]));
+                var o = st.Bodies.Count > 0 ? st.Bodies[0] : default;
+                foreach (var p in st.Props)
+                {
+                    double vx = p.Vx, vy = p.Vy;
+                    if (Structure.Flying(p)) { vx -= o.Vx; vy -= o.Vy; }
+                    vMax = double.IsNaN(vx + vy) ? double.PositiveInfinity : Math.Max(vMax, Math.Sqrt(vx * vx + vy * vy));
+                }
+            }
+            return (vMax, air);
+        }
+        var full = Run(1); var light = Run(0);
+        const double sound = 343;
+        Check("바람 끌림: 세 기압 이산화탄소 방 외판 1m² 구멍 곁 접시 · 컵 · 책 (가볍고 넓다) — 빨려 나가는 바람에 밀려도 (배에 대해) 소리 빠르기를 넘지 않는다 · 온전한 셈도 · 가벼운 셈 (주컴퓨터 상상 — 한 틱 네 잔걸음)도 (예전: 끌림을 앞으로 셈해 λh > 2면 상대 빠르기가 부호를 바꾸며 불었다)",
+            full.v > 1 && full.v <= sound && light.v > 1 && light.v <= sound,
+            $"가장 빠른 물체 — 온전 {full.v:0.0}m/s · 가벼운 셈 {light.v:0.0}m/s · 가장 센 돌풍 {Math.Max(full.air, light.air):0}m/s · 소리 빠르기 {sound:0}m/s");
+    }
 }

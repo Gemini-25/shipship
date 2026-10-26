@@ -178,6 +178,50 @@ public static partial class Program
                     life[body].Blunt > 0.05f && story.Contains("끌려가다 부딪혔다") && st.RagdollOf(body) < 0 && m[who].C.Cell == Worlds.At(lay, 7, 2),
                     $"타박 {life[body].Blunt:0.00} · \"{story}\" · 몸 물체 {st.RagdollOf(body)} · 칸 x {lay.X(m[who].C.Cell)}");
             }
+            // (다) 검토 고침: 끌려가는 동안 그 이는 아무것도 하지 않는다 (마음이 서 있다고 여겨 걷고 · 줍고 · 넘어짐을 거듭 세던 결함) · 무중력에서 끌려간 몸도 느려지면 다시 제 힘으로 (예전: 떠 있는 몸 물체가 끝나지 않았다)
+            {
+                var lay = Worlds.Ascii(SpaceRoom);
+                (bool idle, long pulled, bool ended) Slide(bool zeroG)
+                {
+                    var s = Worlds.Full(lay, 1);
+                    var st = s.Get<Structure>(); var m = s.Get<Mind>(); var f = s.Get<Field>();
+                    int who = m.AddPerson(s, Worlds.At(lay, 2, 2));
+                    void Grav() { if (zeroG) for (int c = 0; c < lay.N; c++) f.Grav[c] = 0; }
+                    Grav(); s.Run(2);
+                    int body = m[who].C.Body;
+                    st.Ragdoll(s, body, m[who].C.Cell, false, false, s.Causes.Add(CauseKind.Setup, "시험 — 센 바람에 발이 떨어졌다", s.Tick), zeroG ? 1.5 : 8, 0);
+                    bool idle = true, ended = false;
+                    for (int k = 0; k < (zeroG ? 200 : 6); k++)
+                    {
+                        Grav(); s.Step();
+                        if (st.RagdollOf(body) >= 0) idle &= m[who].C.Up == 0 && m[who].Path.Count == 0;
+                        else { ended = true; break; }
+                    }
+                    return (idle, m.PeoplePulled, ended);
+                }
+                var g1 = Slide(false); var g0 = Slide(true);
+                Check("몸 물체 (다) 검토 고침: 끌려가는 동안 그 이는 서지도 걷지도 않고 (넘어짐은 한 번) 멈추면 다시 제 힘으로 · 무중력에서 1.5m/s로 끌려간 몸도 느려지면 몸 물체를 거둔다 (200틱 안)",
+                    g1.idle && g1.pulled == 1 && g1.ended && g0.idle && g0.pulled == 1 && g0.ended,
+                    $"1g: 가만 {g1.idle} · 넘어짐 {g1.pulled} · 거둠 {g1.ended} / 무중력: 가만 {g0.idle} · 넘어짐 {g0.pulled} · 거둠 {g0.ended}");
+            }
+            // (라) 검토 고침: 장이 흐른 뒤 (이 틱 돌풍) 발이 떨어진 몸은 이번 틱 걷는 원판에서 빠진다
+            {
+                var lay = Worlds.Ascii(SpaceRoom);
+                var s = FieldStructure(lay);
+                var st = s.Get<Structure>(); var f = s.Get<Field>();
+                s.Run(2);
+                int c = Worlds.At(lay, 2, 2);
+                f.AddStore(c, f.T.sWater, 3000);   // 젖은 바닥 (발 마찰 0.1 — 구멍 곁이 아니어도 돌풍에 발이 떨어진다)
+                var who = new[] { new PropActor { Tag = 0, Cell = c, R = Structure.ActorR, Kg = 70, H = 1.7f } };
+                st.SetActors(who);
+                f.SetHole(Worlds.At(lay, 0, 2), 1.0f);
+                st.Footing(s, who);   // 장이 흐르기 전: 구멍 곁이 아니니 서 있다
+                bool before = st.RagdollOf(0) < 0;
+                s.Step();
+                Check("몸 물체 (라) 검토 고침: 외판 1m² 구멍에서 두 칸 · 젖은 바닥에 선 이는 장이 흐른 뒤 이 틱 돌풍에 발이 떨어지고 — 이번 틱 걷는 원판에서 빠진다 (제 몸 물체와 닿지 않게 — 예전: 한 틱에 제 몸과 27번 닿았다)",
+                    before && st.RagdollOf(0) >= 0 && st.PeopleKnocked == 1 && st.ActorCount == 0,
+                    $"흐르기 전 서 있음 {before} · 흐른 뒤 몸 물체 {st.RagdollOf(0)} · 발이 떨어짐 {st.PeopleKnocked} · 남은 원판 {st.ActorCount}");
+            }
             // (나) 외판 1m² 구멍 곁의 이는 빨려 나가 10틱 (24초) 뒤 배에서 5m 넘게 멀어진다 · 찍고 되살린 세계와 같다 / 곁의 로봇도 미끄러져 나간다
             {
                 var lay = Worlds.Ascii(SpaceRoom);
@@ -210,9 +254,10 @@ public static partial class Program
                 var m2 = s2.Get<Mind>();
                 s2.Run(3);
                 double db = Away(s2, -1 - m2[bot].C.Mech);
-                Check("몸 물체 (나): 외판 1m² 구멍 곁의 이는 빨려 나가 10틱 (24초) 뒤 배에서 5m 넘게 멀어진다 (떠감) · 나는 동안 찍고 되살린 세계와 같다 / 곁의 로봇도 바람에 밀려 구멍 밖으로",
-                    d > 5 && m1[who1].C.Adrift != 0 && same && s2.Get<Structure>().RobotsKnocked >= 1 && db > 1,
-                    $"사람 {d:0.0}m · 떠감 {m1[who1].C.Adrift} · 되살림 같음 {same} / 로봇 밀림 {s2.Get<Structure>().RobotsKnocked} · {db:0.0}m");
+                int flung = s1.Facts.Since(0).Count(x => x.Kind == FactKind.ObjectFlung);
+                Check("몸 물체 (나): 외판 1m² 구멍 곁의 이는 빨려 나가 10틱 (24초) 뒤 배에서 5m 넘게 멀어진다 (떠감) · 나는 동안 찍고 되살린 세계와 같다 · '물건이 날아갔다'로 세지 않는다 (검토 고침) / 곁의 로봇도 바람에 밀려 구멍 밖으로",
+                    d > 5 && m1[who1].C.Adrift != 0 && same && flung == 0 && s2.Get<Structure>().RobotsKnocked >= 1 && db > 1,
+                    $"사람 {d:0.0}m · 떠감 {m1[who1].C.Adrift} · 되살림 같음 {same} · 물건 날아감 사실 {flung} / 로봇 밀림 {s2.Get<Structure>().RobotsKnocked} · {db:0.0}m");
             }
         }
 }

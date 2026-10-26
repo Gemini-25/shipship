@@ -79,9 +79,13 @@ public sealed partial class Structure
     /// 힘 (N) · 무게중심 둘레 돌림힘 (N·m) — 바람이 없으면 거짓.
     /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private bool WindForce(in Prop p, DotForm fm, double tau, out double fx, out double fy, out double tq)
+    private bool WindForce(in Prop p, DotForm fm, double tau, out double fx, out double fy, out double tq) => WindForce(p, fm, tau, out fx, out fy, out tq, out _, out _);
+
+    /// <summary>바람 힘 · 끌림 계수 kd = Σ ½ρ|w|·Cd·A (N·s/m — 힘 = kd × 상대 빠르기) · 돎의 끌림 계수 kdw = Σ kd·r² (N·m·s — 돌림힘이 제 돎을 줄이는 몫): 잔걸음이 넘지 않게 닫힌 꼴로 줄인다 (<see cref="WindShare"/>).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
+    private bool WindForce(in Prop p, DotForm fm, double tau, out double fx, out double fy, out double tq, out double kd, out double kdw)
     {
-        fx = fy = tq = 0;
+        fx = fy = tq = kd = kdw = 0;
         var (xs, ys) = FootOf(fm);
         double cs = Math.Cos(p.Th), sn = Math.Sin(p.Th);
         int n = 0, total = 0;
@@ -139,10 +143,21 @@ public sealed partial class Structure
             rx += cop * (cs * bx - sn * by); ry += cop * (sn * bx + cs * by);
             double k2 = 0.5 * rho * wl1 * fm.Cd * area * _wn[g] / total;
             double f1 = k2 * wx, f2 = k2 * wy;
+            kd += k2; kdw += k2 * (rx * rx + ry * ry);
             fx += f1; fy += f2; tq += rx * f2 - ry * f1;
             any = true;
         }
         return any;
+    }
+
+    /// <summary>
+    /// 잔걸음 h 동안 바람 힘의 몫: 끌림은 상대 빠르기 w를 dw/dt = −(kd/m)·w로 줄이기만 한다 — 닫힌 꼴 w(h) = w₀e^(−λh) (λ = kd/m)의 평균 힘 = 처음 힘 × (1 − e^(−λh)) / (λh).
+    /// 그래서 한 잔걸음에 공기 빠르기를 넘지 않는다 (짙은 기체 · 가벼운 것 · 긴 잔걸음 — 예전 앞으로 셈은 λh > 2에서 상대 빠르기가 부호를 바꾸며 불었다).
+    /// </summary>
+    internal static double WindShare(double kd, double m, double h)
+    {
+        double x = m > 0 ? kd / m * h : 0;
+        return x > 1e-9 ? (1 - Math.Exp(-x)) / x : 1;
     }
 
     /// <summary>힘 · 돌림힘이 정지 타원 안인가 ((|F|/μsN)² + (|τ|/(μsNρ))² ≤ 1 — 무중력이면 어떤 힘이든 밖).</summary>
@@ -213,6 +228,7 @@ public sealed partial class Structure
             if (face > F.Hole[hole] * PlugMargin)
             {
                 p.State = 6; p.PlugAt = hole + 1; p.Vx = p.Vy = p.W = 0; p.Still = 0; p.Since = _now;
+                if (p.Kind is 5 or 6) return true;   // 몸 (PH14): 사실 · 원인은 ⑧이 그 몸을 따르며 낸다 (빨려 붙었다 — 물건이 날아간 것이 아니다)
                 int pc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(name)} 구멍에 빨려 붙었다 — 새는 것을 거의 막았다", sim.Tick, hole, p.Cause);
                 sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, CellOf(p), p.Kg, pc, other: p.What);
                 PropPlugged++;
@@ -222,6 +238,7 @@ public sealed partial class Structure
             OutThrough(p, hole, face, tau);
         }
         p.State = 5;
+        if (p.Kind is 5 or 6) return true;   // 몸 (PH14): 우주로 빨려 나간 사실은 ⑧이 낸다
         int sc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(name)} 구멍 밖 우주로 빨려 나갔다", sim.Tick, hole, p.Cause);
         sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, hole >= 0 ? hole : Math.Max(0, CellOf(p)), p.Kg, sc, other: p.What);
         return true;
@@ -263,6 +280,11 @@ public sealed partial class Structure
         if (c < 0 || p.Kg <= 0) return;
         int nx = Math.Sign(L.X(hole) - L.X(c)), ny = nx == 0 ? Math.Sign(L.Y(hole) - L.Y(c)) : 0;
         double push = Math.Sqrt(2 * Math.Max(0, SuckNet(p, hole, face, tau)) * 0.5 / p.Kg);
+        // 나가는 기체보다 빠를 수 없다: 구멍의 빠르기 min(소리 빠르기, √(2ΔP/ρ)) (그때 기압으로 되짚은 이쪽 칸)
+        double back = tau >= 0 ? Math.Exp(F.WindK[c] * Math.Max(0, _tickDt - tau)) : 1, pc = F.Pressure(c) * back, temp = Math.Max(1, F.Temp(c));
+        double rho = pc * 1000 * Field.AirMolar / (Field.R * temp), dp = Math.Max(0, pc - F.Outside.KPa) * 1000;
+        double vGas = Math.Min(343 * Math.Sqrt(temp / 293.15), rho > 0 ? Math.Sqrt(2 * dp / rho) : 0);
+        push = Math.Min(push, vGas);
         _outKick.Add((p.Id, nx, ny, push));
     }
     /// <summary>이번 틱 구멍 밖으로 나간 것의 미는 쪽 · 적어도 빠르기 (찍지 않는다 — 같은 틱 Launch가 쓰고 비운다).</summary>

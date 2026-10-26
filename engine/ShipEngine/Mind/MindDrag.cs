@@ -137,7 +137,8 @@ public sealed partial class Mind
             return;
         }
         if (c.PinAt != 0) c.PinAt = 0;   // 물체가 구멍에서 떨어졌다 (누르는 힘이 무게 아래)
-        if (p.State == 0) _st.EndRagdoll(c.Body);   // 멈췄다 — 다시 제 힘으로
+        if (c.Adrift != 0) c.Adrift = 0;   // 날던 몸이 배의 트인 칸에 다시 들었다 (④가 실었다)
+        if (Settled(p)) _st.EndRagdoll(c.Body);   // 멈췄다 — 다시 제 힘으로
     }
 
     /// <summary>바람에 밀린 로봇 (PH14 — 발 디딤은 ④가 셈한다: 끌림이 바퀴 · 발 마찰을 넘으면 몸 물체 Kind 6)을 따른다 — 몸의 칸은 물체의 칸 · 멈추면 다시 제 힘으로 · 날면 우주에서 떠내려간다.</summary>
@@ -153,9 +154,12 @@ public sealed partial class Mind
             int at = Structure.Flying(p) ? _st.SpaceCellOf(p) : _st.CellOf(p);
             if (at >= 0) c.Cell = at;
             a.Path.Clear(); a.PathIdx = 0;
-            if (p.State == 0) _st.EndRagdoll(tag);
+            if (Settled(p)) _st.EndRagdoll(tag);
         }
     }
+
+    /// <summary>몸 물체가 멈췄나: 놓였다 · 무중력에서 떠 있는 채 느려졌다 (0.05m/s 아래 — 그 뒤는 떠다님으로).</summary>
+    private static bool Settled(in Prop p) => p.State == 0 || p.State == 4 && p.Vx * p.Vx + p.Vy * p.Vy < 0.05 * 0.05 && Math.Abs(p.W) < 0.5;
 
     /// <summary>곁(제 칸 · 여덟 이웃)에 붙잡을 것이 있나: 설비 · 문틀.</summary>
     private bool HandholdNear(int cell)

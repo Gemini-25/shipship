@@ -52,11 +52,11 @@ public sealed partial class Structure
         {
             var a = _feet[k];
             int c = a.Cell;
-            if (c < 0 || c >= L.N || !F.Passable(c) || RagdollOf(a.Tag) >= 0) continue;
+            if (c < 0 || c >= L.N || !F.Passable(c) || F.Grav[c] < Field.LowG) continue;   // 무중력에서 떠 있는 몸은 ⑧이 떠다님으로 셈한다 (발 디딤이 없다)
             double wx = F.WindX[c], wy = F.WindY[c], pa = Math.Sqrt(wx * wx + wy * wy) >= 0.5 ? F.WindPa[c] : 0;
             double qm = F.HoleMouthPa(c, out int mouth, afterFlow ? Math.Exp(F.WindK[c] * _tickDt) : 1);
             if (qm > pa && mouth >= 0) { pa = qm; wx = L.X(mouth) - L.X(c); wy = L.Y(mouth) - L.Y(c); }
-            if (pa < 1) continue;
+            if (pa < 1 || RagdollOf(a.Tag) >= 0) continue;
             bool robot = a.Tag < 0;
             double drag = pa * BodyCd * (a.Low != 0 ? LowArea : StandArea);
             double mu = robot ? RobotFootMu : F.Stored(T.sWater, c) > WetMol ? WetFootMu : FootMu;
@@ -67,14 +67,37 @@ public sealed partial class Structure
             double v = Math.Sqrt(2 * (drag - grip - hold) / a.Kg), wl = Math.Sqrt(wx * wx + wy * wy);
             Ragdoll(sim, a.Tag, c, robot, a.Low != 0, cause, wl > 0 ? v * wx / wl : 0, wl > 0 ? v * wy / wl : 0);
             if (robot) RobotsKnocked++; else PeopleKnocked++;
+            if (afterFlow) DropActor(a.Tag);
         }
+    }
+
+    /// <summary>이번 틱 걷는 원판에서 그 꼬리표를 뺀다 (장이 흐른 뒤 몸 물체가 된 몸 — ⑧이 틱 끝에 알린 원판이 제 몸 물체에 부딪히지 않게 · 다음 틱 ⑧은 몸 물체인 이를 알리지 않는다).</summary>
+    private void DropActor(int tag)
+    {
+        int n = 0;
+        for (int i = 0; i < _nActors; i++) if (_actors[i].Tag != tag) _actors[n++] = _actors[i];
+        _nActors = n;
     }
 
     /// <summary>그 꼬리표의 몸 물체 (목록 차례 · 없으면 −1).</summary>
     public int RagdollOf(int tag)
     {
-        for (int i = 0; i < Props.Count; i++) if (Props[i].Kind is 5 or 6 && Props[i].Spare0 == tag) return i;
+        if (BodyProps() == 0) return -1;   // 몸 물체가 없으면 훑지 않는다 (평시 — 사람마다 틱에 여러 번 묻는다)
+        var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
+        for (int i = 0; i < all.Length; i++) if (all[i].Kind is 5 or 6 && all[i].Spare0 == tag) return i;
         return -1;
+    }
+
+    private int _nBodyProps, _bodyPropsAt = -1;   // 몸 물체 수 · 그때 물체 수 (찍지 않는다 — 물체 수가 바뀌면 다시 센다: 날아가 지워짐 · 깨짐 · 되살림)
+    private int BodyProps()
+    {
+        if (_bodyPropsAt != Props.Count)
+        {
+            _nBodyProps = 0;
+            foreach (ref readonly var p in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props)) if (p.Kind is 5 or 6) _nBodyProps++;
+            _bodyPropsAt = Props.Count;
+        }
+        return _nBodyProps;
     }
 
     /// <summary>요청 (⑧): 그 몸이 제 힘을 잃었다 — 칸 가운데에 몸 물체를 세운다 (이미 있으면 그것) · 누웠으면 누운 꼴 · 원인 (끌려간 까닭) · 발이 떨어진 순간의 빠르기 (끌림이 이긴 만큼). Id를 돌려준다.</summary>
@@ -93,7 +116,9 @@ public sealed partial class Structure
         PropPxGone -= m * vx0; PropPyGone -= m * vy0; PropLGone -= m * (x * vy0 - y * vx0) + inertia * w0;
         GasPx -= m * (wx - vx0); GasPy -= m * (wy - vy0); GasL -= m * (x * (wy - vy0) - y * (wx - vx0));
         PlugNow(sim, ref p, cell);
+        BodyProps();
         Props.Add(p);
+        _nBodyProps++; _bodyPropsAt = Props.Count;
         return p.Id;
     }
 
@@ -134,7 +159,9 @@ public sealed partial class Structure
         var (m, inertia) = MassOf(p);
         var (x, y, vx, vy, w) = PropWorld(p);
         PropPxGone += m * vx; PropPyGone += m * vy; PropLGone += m * (x * vy - y * vx) + inertia * w;
+        BodyProps();
         Props.RemoveAt(i);
+        _nBodyProps--; _bodyPropsAt = Props.Count;
     }
 
     /// <summary>몸 물체의 꼴 (사람 · 로봇 · 누움).</summary>

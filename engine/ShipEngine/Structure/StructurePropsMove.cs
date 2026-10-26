@@ -92,7 +92,7 @@ public sealed partial class Structure
     internal const System.Runtime.CompilerServices.MethodImplOptions Hot = System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization;
 
     public const double Gravity = 9.8, WetShare = 0.33, WetMol = 50, SleepV = 1e-3, SleepW = 0.01, SleepSec = 0.5, MaxPropH = 0.1, MaxPropTurn = 0.1;
-    public const int MaxPropSteps = 1024, LightPropSteps = 4;   // 섬마다 한 틱 잔걸음 상한 (온전 · 가벼운 셈 — 상상 복제)
+    public const int MaxPropSteps = 1024, LightPropSteps = 4, PropWork = 1024 * 256;   // 섬 하나의 한 틱 일 상한 (잔걸음 × (물체 + 짝) — 깨짐이 깨짐을 불러 조각이 수천인 섬도 틱이 몇 초를 넘지 않게)   // 섬마다 한 틱 잔걸음 상한 (온전 · 가벼운 셈 — 상상 복제)
 
     /// <summary>물체의 질량 · 회전관성 (아직 깨지 않아 몸 값이 비었으면 꼴에서).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -168,6 +168,7 @@ public sealed partial class Structure
         }
         if (world && all.Length > 0) Reactions(all);
         if (_breakHits.Count > 0) { long tb = Prof.Start(); Breaks(sim, world); Prof.Lap("구조:깨짐", tb); }       // 깨짐 · 이음매 · 찌그러짐 · 쏟음 (PH8 — 몸이 되받은 뒤 · 맞은 그 때의 상태에서)
+        if (Props.Count > PieceCap) Crumble(world);   // 작은 조각이 너무 많으면 가장 가벼운 것부터 가루로 (셈을 붙드는 상한)
         if (_noises.Count > 0) { long tn = Prof.Start(); EmitNoises(sim); Prof.Lap("구조:물체 소리", tn); }       // 물체 소리 (방마다 · 갈래마다 한 번)
         if (any || gone)
         {
