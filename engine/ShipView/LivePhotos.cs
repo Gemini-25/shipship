@@ -22,7 +22,8 @@ public sealed class Photo
     public string Title = "";      // 사진첩 줄 글
     internal byte[]? Raw, Png;     // RGBA (PNG를 짓는 동안) · PNG 바이트 (다른 일꾼이 짓는다)
     internal int Stamp;            // 다시 찍을 때마다 오른다 (크게 연 그림을 새로)
-    public string File => $"p-{Id}.png";
+    /// <summary>곳간 파일 이름 (번호 · 찍은 틱 — 다시 찍으면 이름이 바뀐다: 곳간은 없는 파일만 쓰니 옛 그림이 같은 이름으로 남지 않게).</summary>
+    public string File => $"p-{Id}-{Tick}.png";
 }
 
 /// <summary>
