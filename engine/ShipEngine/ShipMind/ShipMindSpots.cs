@@ -131,6 +131,17 @@ public sealed partial class ShipMind
         if (cell < 0 || cell >= L.N) return res;
         if (L.Room[cell] >= 0) res.Add(L.Room[cell]);
         else if (L.Kind[cell] == CellKind.Door) { int d = L.DoorAt[cell]; res.AddRange(DoorRooms(d)); if (L.Doors[d].External && eva) res.Add(L.Rooms.Count); }
+        else if (L.Kind[cell] == CellKind.Wall)   // 벽 칸 (외판 구멍 · 벽 틈): 그 벽에 붙은 방에서 · 외판이면 바깥에서 닿는다 (DF10: 예전엔 자리가 없어 막힌 문을 지나야 하는 외판 구멍에 거듭 보냈다)
+        {
+            Span<int> nb = stackalloc int[4];
+            L.Neighbors(cell, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0) continue;
+                if (L.Room[j] >= 0 && !res.Contains(L.Room[j])) res.Add(L.Room[j]);
+                else if (L.Kind[j] == CellKind.Outside && eva && !res.Contains(L.Rooms.Count)) res.Add(L.Rooms.Count);
+            }
+        }
         else if (L.Kind[cell] == CellKind.Outside && eva) res.Add(L.Rooms.Count);
         return res;
     }

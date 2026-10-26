@@ -18,6 +18,9 @@ public static partial class Program
         ['p'] = "PowerPanel", ['U'] = "CoolantPump", ['b'] = "Battery", ['c'] = "MainComputer", ['r'] = "RobotDock",
     };
 
+    /// <summary>다 풀리기 hours시간 전의 풀림 (지금 떨림으로 — 풀림 빠르기가 바뀌어도 시험의 때가 그대로).</summary>
+    internal static float NearLoose(Network net, int d, double hours) => (float)(1 - hours / Network.LooseHours * Math.Pow(net.VibMPa(d) / Network.VibBaseMPa, 2));
+
     private static void HeatVibRules()
     {
         if (!Do("볼트")) return;
@@ -37,14 +40,14 @@ public static partial class Program
             return (s, net, pump);
         }
 
-        // ── 풀림: 돌아가는 펌프의 볼트는 시간당 (세기 ÷ 4MPa)² ÷ 200만큼 풀린다 · 다 풀리면 덜컹거린다 (사실 · 소리 · 원인) ──
+        // ── 풀림: 돌아가는 펌프의 볼트는 시간당 (세기 ÷ 4MPa)² ÷ 3,000만큼 풀린다 (DF10 — 예전 ÷ 200) · 다 풀리면 덜컹거린다 (사실 · 소리 · 원인) ──
         {
             var (s, net, pump) = Make(1);
             double a = net.VibMPa(pump), l0 = net.Loose[pump];
             s.Run(Time.Hours(2));
             double want = 2 / Network.LooseHours * Math.Pow(a / Network.VibBaseMPa, 2);
             double got = net.Loose[pump] - l0;
-            net.Loose[pump] = 0.998f;
+            net.Loose[pump] = NearLoose(net, pump, 0.2);   // 다 풀리기 12분 전
             s.Run(Time.Minutes(30));
             var fact = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Rattle && x.Other == pump);
             string story = fact.Kind == FactKind.Rattle ? s.Causes.Story(fact.Cause) : "";
@@ -81,7 +84,7 @@ public static partial class Program
             var (s, net, pump) = Make(4, (s, net, pump) =>
             {
                 s.Get<Mind>().AddRobot(s, At(12, 1), AgentKind.Robot, At(12, 1));
-                net.Loose[pump] = 0.999f;
+                net.Loose[pump] = NearLoose(net, pump, 0.2);
             });
             long t0 = s.Tick;
             s.Run(Time.Minutes(40));

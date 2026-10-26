@@ -320,7 +320,9 @@ public static partial class Program
             {
                 // (DF7 뒤 씨 2 → 1: 그 밤 깨어 있던 이 · 있던 곳이 달라져 씨 2는 궁리할 일이 없다. 이 장면은 이제 두 갈래 고침을 함께 꺼도 씨 1~64 어느 것도 같은 계획을 되풀이하지 않는다 —
                 //  DF7 앞 코드도 씨 1~24에서 같다 · 막힌 곳 기억 · 같은 방의 다음 안이 먼저 막는다. 여기서는 궁리가 서고 되풀이되지 않는지를 본다)
-                var runs = new[] { 1UL, 3UL }.AsParallel().AsOrdered().Select(seed =>
+                // (DF10 뒤 씨 1 · 3 → 6 · 5: 깬 이가 나쁜 공기에서 다시 잠들지 못하고 · 산소 포화 곡선과 숨참을 알아채는 문턱이 바뀌어 그 밤의 일이 달라졌다 —
+                //  씨 1 · 3은 첫 방법으로 다 막아 궁리할 일이 없다 · 씨 6은 궁리 둘 · 씨 5는 셋 · 씨 1~14 어느 것도 같은 계획을 둘 넘게 세우지 않는다)
+                var runs = new[] { 6UL, 5UL }.AsParallel().AsOrdered().Select(seed =>
                 {
                     var s = ShipWorld.Crewed("Didim", seed, 6, 3);
                     s.Run(Time.Minutes(80));   // 새벽 한 시 스무 분 — 모두 잠들었다

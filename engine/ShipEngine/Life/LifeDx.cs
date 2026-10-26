@@ -27,7 +27,7 @@ public sealed partial class Life
         if (b.COHb > 0.08f || b.CN > 0.2f || b.Ill == 2) s |= Sym.Headache;
         if (b.COHb > 0.12f || b.Liver > 0.2f || b.RadRecent > 1 || OpioidEffect(b) > 15) s |= Sym.Nausea;
         if (b.Appendix > 0.3f) s |= Sym.Nausea;
-        if (b.SpO2 < 0.85f || b.LungDamage > 0.3f || b.Heart > 0.35f || b.BloodL < 4) s |= Sym.Breathless;
+        if (b.SpO2 < 0.89f || b.LungDamage > 0.3f || b.Heart > 0.35f || b.BloodL < 4) s |= Sym.Breathless;   // 피의 산소 0.89 아래 (DF10 실측 곡선 — 예전 0.85와 같은 공기 · 산소 13kPa 언저리)
         if (b.Hypoxia > 0.2f || b.COHb > 0.25f || b.CN > 0.4f || b.Brain > 0.1f || b.BloodL < 3.5f) s |= Sym.Confused;
         if (b.Ill == 2 || b.LungDamage > 0.2f || b.Spore > SporeCough) s |= Sym.Cough;   // 곰팡이 포자는 마시는 동안 곧 기침 (DF1)
         if (b.Heart > 0.2f) s |= Sym.ChestPain;

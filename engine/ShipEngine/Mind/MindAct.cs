@@ -187,7 +187,10 @@ public sealed partial class Mind
         }
         c.Failed++;
         a.LastFail = $"{c.Goal}: {why}";
-        if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + Time.Minutes(5) });
+        // 같은 일을 다시 해 보는 때: 5분 — 로봇이 제 판단으로 나선 일이 문에 막혔으면 30분 (주컴퓨터를 거쳐 문의 상태를 안다 · 같은 까닭으로 같은 문에 거듭 가지 않는다 —
+        // DF10: 예전엔 5분마다 진공 문에 다시 갔다 · 맡은 일은 주컴퓨터가 문이 열리는 때를 보고 다시 맡긴다)
+        bool own = c.AssignedUntil <= sim.Tick || c.AssignedGoal != c.Goal;
+        if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + (!a.IsPerson && own && DoorSnag(snag) ? Time.Minutes(30) : Time.Minutes(5)) });
         if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
         EndPlan(a);
         if (c.Mode == 0) c.Goal = GoalKind.Idle;
@@ -230,7 +233,9 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         var use = (UseKind)st.Arg;
-        if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
+        // 잠이 든다: 몸이 깨울 것 (추위 · 더위 · 숨참 · 찌르는 기체 · 아픔)이 있으면 누워 뒤척인다 — 가라앉으면 그때 든다 (DF10 · 보고서 §4-15:
+        // 예전엔 누운 틱에 잠들고 다음 감각에 다시 깼다 — 추운 침실 두 시간 '깼다' 1,000건 · 새뜰호 열흘 16만 건)
+        if (use == UseKind.Sleep && a.IsPerson && _life![c.Body].Asleep == 0 && (t <= c.StepStart || c.SleptAt < c.StepStart) && !BodyRouses(a, c.Cell)) { _life[c.Body].Asleep = 1; c.SleptAt = t; }
         Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
         if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }

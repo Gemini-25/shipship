@@ -660,7 +660,7 @@ public sealed partial class Mind
                     plan.Add(new PlanStep { Kind = StepKind.Seal, Cell = wall });
                     return true;
                 }
-                int stand = TapeAssigned(a, wall) ? StandOnMySide(a, wall) : StandBeside(wall);   // 맡긴 문틈 막기: 제 쪽에서 (임시 에어락 — 비울 방 안에 남는다)
+                int stand = TapeAssigned(a, wall) ? StandOnMySide(a, wall) : L.Kind[wall] == CellKind.Door ? StandAirSide(wall) : StandBeside(wall);   // 맡긴 문틈 막기: 제 쪽에서 (임시 에어락 — 비울 방 안에 남는다) · 그 밖의 문틈은 공기 쪽에서 (DF10: 건너편 진공 쪽 칸을 골라 그 문에 막혔다)
                 if (stand < 0) return false;
                 if (a.IsPerson)
                 {
@@ -1205,6 +1205,16 @@ public sealed partial class Mind
         int room = RoomOf(a.C.Cell);
         foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor && room >= 0 && RoomOf(j) == room) return j;
         return StandBeside(wall);
+    }
+
+    /// <summary>문틈 곁 칸 가운데 기압이 가장 높은 쪽 (새는 문틈은 공기가 있는 쪽에서 막는다 — 건너편은 그 문을 지나야 닿는다).</summary>
+    private int StandAirSide(int door)
+    {
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(door, nb);
+        int best = -1; double bp = double.MinValue;
+        foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor && F.Pressure(j) > bp) { bp = F.Pressure(j); best = j; }
+        return best >= 0 ? best : StandBeside(door);
     }
 
     private int StandBeside(int wall)

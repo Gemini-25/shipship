@@ -208,6 +208,26 @@ public sealed partial class Life : IEngine
     /// <summary>산소 1몰에서 나오는 에너지 (J · 물이 액체인 열량 — 식품 열량과 같은 기준): 포도당 467kJ · 지방 434kJ.</summary>
     public const double CropMolPerM2Day = 0.1;     // 작물 1m²가 하루에 내는 양분 (몰 — 밝은 재배등 · 알맞은 온도 · 이산화탄소)
     public const double GlucoseJPerO2 = 2803e3 / 6, FatJPerO2 = 9978e3 / 23;
+    /// <summary>온몸의 피 (L) · 잃은 부피가 e로 줄어드는 시간 (초 — 하루).</summary>
+    public const double BloodFull = 5, BloodRefillS = 86400;
+    /// <summary>쉬는 몸이 숨 쉬는 데 모자람이 없는 산소 포화 (건강한 이의 해수면 값 언저리 — 이보다 낮으면 그만큼 덜 받는다).</summary>
+    public const double SatFull = 0.97;
+
+    /// <summary>
+    /// 피의 산소 포화 (DF10 · 보고서 §4-19): 들이쉰 공기의 산소 분압 pO2 (kPa) · 그 공기의 압력 p (kPa).
+    /// 기관에서 37℃ 수증기 (6.3kPa)로 젖고 → 폐꽈리에서 이산화탄소와 나눈다 (폐꽈리 가스 식 — 호흡 몫 0.8 · 이산화탄소 5.3kPa, 산소가 모자라면 숨이 깊어져
+    /// 2.5kPa까지 내려간다) → 세버링하우스 해리 곡선. 고산 실측 (처음 오른 이 · 쉴 때)에 맞춘다: 해수면 0.98 · 2,500m 0.92 · 4,500m 0.83 · 6,500m 0.71 · 8,000m 0.60.
+    /// 예전 곡선 (들이쉰 분압의 힐 곡선 · P50 7kPa)은 해수면이 0.95로 늘 2~3점 낮았다.
+    /// </summary>
+    public static double Saturation(double pO2, double p)
+    {
+        if (p <= 6.3 || pO2 <= 0) return 0;
+        double pi = pO2 / p * (p - 6.3);                                       // 젖은 들숨의 산소 분압
+        double lack = Math.Max(0, 19.9 - pi), pa = Math.Max(1.5, 5.3 - 0.02 * lack * lack);   // 폐꽈리 이산화탄소 (모자라면 숨이 깊어진다)
+        double mm = (pi - 1.2 * pa) * 7.50062;                                   // 폐꽈리 산소 (mmHg)
+        return mm <= 0 ? 0 : 1 / (1 + 23400 / (mm * mm * mm + 150 * mm));
+    }
+
     /// <summary>탄수화물로 태우는 몫 (산소 기준): 쉴 때 0.3(호흡 몫 0.79) → 힘들수록 → 813W에서 1(호흡 몫 1.0).</summary>
     public static double CarbShare(double w) => Math.Clamp(0.3 + 0.7 * (w - 80) / 730, 0.3, 1.0);
     // 장부 (재미 측정 · 시험): 지금까지 숨으로 쓴 산소 · 낸 이산화탄소 (몰) · 대사 에너지 (J) · 오줌 (몰)
@@ -254,7 +274,7 @@ public sealed partial class Life : IEngine
         Bodies.Add(new Body
         {
             Cell = cell, Alive = 1, Conscious = 1, ActivityW = 90, Reserve = GlycogenMax * 0.8, Fat = Fat0, Water = 42 * 55.5, SpO2 = 0.97f,
-            CoreK = BodyTemp, BloodL = 5, LastKPa = (float)F.Pressure(cell),
+            CoreK = BodyTemp, BloodL = (float)BloodFull, LastKPa = (float)F.Pressure(cell),
             CprAt = long.MinValue / 2, ShockAt = long.MinValue / 2, EpiAt = long.MinValue / 2, OpioidAt = long.MinValue / 2, HypnoticAt = long.MinValue / 2,
         });
         return Bodies.Count - 1;
@@ -495,11 +515,10 @@ public sealed partial class Life : IEngine
         double watts = b.ActivityW + shiver; // 잠의 대사량은 ⑧ 마음이 잠 77W로 준다 (여기서 또 줄이지 않는다)
         double fc = b.Reserve <= 0.01 ? 0 : b.Fat <= 0.01 ? 1 : CarbShare(watts); // 탄수화물 몫 (글리코겐이 바닥나면 지방만)
         double vo2 = watts / (fc * GlucoseJPerO2 + (1 - fc) * FatJPerO2) * dt; // 필요한 산소 (몰)
-        double hill(double x) => Math.Pow(x, 2.7) / (Math.Pow(x, 2.7) + Math.Pow(7, 2.7));
         // 산소 요법: 치료 침대에 누우면 마스크로 거의 순수한 산소를 마신다 — 상한 폐로도 피에 산소가 들어간다
         bool therapy = !own && p > 30 && OnTherapy(sim, c);
         double pO2e = therapy ? Math.Max(pO2, 0.9 * Math.Min(p, 101.3)) : mask ? Math.Max(pO2, 0.95 * Math.Min(p, 101.3)) : pO2;
-        double sat = hill(pO2e) * (1 - b.COHb) * (1 - Math.Min(0.9, b.LungDamage * (therapy ? 0.5 : 1)));
+        double sat = Saturation(pO2e, suit ? 101.3 : Math.Max(p, pO2e)) * (1 - b.COHb) * (1 - Math.Min(0.9, b.LungDamage * (therapy ? 0.5 : 1)));
         double resp = RespDepression(b);   // ⑦ 진통제를 너무 많이 맞으면 숨이 얕아진다
         if (resp > 0) sat *= 1 - resp;
         b.SpO2 = (float)sat;
@@ -508,8 +527,8 @@ public sealed partial class Life : IEngine
         bool cpr = b.Arrest != 0 && ArrestStep(sim, id, ref b, dt);
         if (b.Arrest != 0) { o2Got = 0; b.SpO2 = cpr ? (float)Math.Min(sat, 0.3) : 0; }
         else if (suit) { o2Got = Math.Min(vo2, b.SuitO2); b.SuitO2 -= (float)o2Got; if (b.SuitO2 <= 0) b.SpO2 = 0; }
-        else if (mask) { o2Got = Math.Min(vo2 * Math.Min(1, sat / 0.95), b.MaskO2); b.MaskO2 -= (float)o2Got; if (b.MaskO2 <= 0) b.Mask = 0; }
-        else o2Got = p > 1 ? Math.Min(vo2 * Math.Min(1, sat / 0.95), F.Gas(T.gO2, c) * 0.5) : 0;
+        else if (mask) { o2Got = Math.Min(vo2 * Math.Min(1, sat / SatFull), b.MaskO2); b.MaskO2 -= (float)o2Got; if (b.MaskO2 <= 0) b.Mask = 0; }
+        else o2Got = p > 1 ? Math.Min(vo2 * Math.Min(1, sat / SatFull), F.Gas(T.gO2, c) * 0.5) : 0;
         // 숨: 포도당 + 6O₂ → 6CO₂ + 6H₂O · 지방(팔미트산) + 23O₂ → 16CO₂ + 16H₂O — 섞어 태운다 (호흡 몫 0.79 ~ 1.0)
         double xg = Math.Min(o2Got * fc / 6, b.Reserve), xf = Math.Min(o2Got * (1 - fc) / 23, b.Fat);
         if (xg + xf > 0)
@@ -695,6 +714,9 @@ public sealed partial class Life : IEngine
 
         // ── 피 · 물 · 양분 ──
         b.BloodL -= (float)((b.Bleed + b.BleedIn) * dt / 3600);
+        // 피가 다시 찬다 (DF10 · 보고서 §4-19): 심장이 뛰는 산 몸은 잃은 피의 부피를 몸 안의 물로 하루에 셋 중 둘쯤 되찾는다 (모세혈관 재충전 —
+        // 헌혈 0.5L의 부피는 하루 이틀 · 붉은 피톨은 몇 주라 여기 셈에 없다) · 몸 물 장부는 그대로 (몸 안에서 핏줄로 옮겨 온다) · 예전엔 흘린 피가 나흘 그대로
+        if (b.Alive != 0 && b.Arrest == 0 && b.BloodL < BloodFull) b.BloodL = (float)Math.Min(BloodFull, b.BloodL + (BloodFull - b.BloodL) * (1 - Math.Exp(-dt / BloodRefillS)));
         InsideStep(sim, id, ref b, dt);   // ⑦ (라) 속 출혈 · 맹장염
         b.Bleed = (float)(b.Bleed * Math.Exp(-dt / 1800)); // 굳는다
         // 상처가 낫는다: 타박 · 화상은 살아 있으면 천천히 (가벼운 타박 1~2주 · 화상 2~3주 — e로 줄어드는 날 7일 · 14일) — 아주 큰 상처는 돌봄을 받아야 낫는다

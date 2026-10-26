@@ -674,6 +674,7 @@ public static partial class Program
         PropLaws(); PropBookLaws();
         HandLaws();   // 함장의 손 (LawsHand.cs — docs/UI2.md §8 H1~H5)
         Depth2Laws();   // 사고의 물리 (LawsDepth2.cs — docs/DEPTH_FIX.md DF9)
+        Depth3Laws();   // 기록 소음 · 몸 숫자 (LawsDepth3.cs — docs/DEPTH_FIX.md DF10)
         Physics2Laws();   // 물리 세계 뒤 커밋 (LawsPhysics2.cs — docs/PHYSICS.md PH11~)
         BodyPropLaws();   // 몸 물체 (PH14)
         ResumeLaws();   // 이어 보기 (LawsResume.cs — docs/OBSERVER.md §16 S1 · S2)

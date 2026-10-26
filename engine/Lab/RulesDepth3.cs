@@ -242,5 +242,38 @@ public static partial class Program
                     $"축하 {soc.Celebrations} ({(done > 0 ? Time.Clock(done) : "-")}) · 두 시간 뒤 기쁨 가장 낮은 이 {joyMin:0.00} · 좋은 기억 가장 옅은 이 {memMin:0.00}");
             }
         }
+
+        // ── DF10 기록 소음 (보고서 §4-15): 몸이 깨울 것 (추위 · 더위 · 숨참 · 찌르는 기체 · 아픔)이 있으면 잠이 들지 않는다 — 누워 뒤척이다 가라앉으면 잠든다
+        //    (예전엔 누운 틱에 잠들고 다음 감각에 다시 깼다 — 추운 침실 두 시간 '깼다' 1,000건 · 새뜰호 열흘 16만 건) ──
+        if (Do("기록 소음"))
+        {
+            Console.WriteLine("\n[기록 소음 — 추운 침실에서는 잠들지 못한다 · 데워지면 잠든다]");
+            var lay = Worlds.Ascii(CultureShip, new Dictionary<char, string> { ['m'] = "MealDispenser", ['a'] = "Seat", ['e'] = "Bed" });
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            int beds = lay.Room[At(2, 2)];
+            lay.Rooms[beds].Name = "침실";
+            var s = Worlds.Full(lay, 3); var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>();
+            int p = m.AddPerson(s, At(3, 1), bed: At(3, 1));
+            s.Run(2);
+            // 침실을 5℃로 붙든다 (난방이 꺼진 밤) — 졸린 이 (배고프지 않다)
+            void Hold(double k)
+            {
+                foreach (int c in lay.Rooms[beds].Cells) { double gc = f.GasC(c); if (gc > 50) f.AddHeat(c, gc * (k - f.Temp(c))); }
+                ref var z = ref m[p].C; z.Hunger = 0; z.Sleepy = Math.Max(z.Sleepy, 0.9f);
+            }
+            int woke = 0; long lying = 0, cur = s.Facts.Total;
+            for (long k = 0; k < Time.Hours(2); k++)
+            {
+                Hold(278.15); s.Step();
+                foreach (var x in s.Facts.Since(cur)) if (x.Kind == FactKind.Woke && x.Actor == p) woke++;
+                cur = s.Facts.Total;
+                if (m[p].C.Goal == GoalKind.Sleep && life[m[p].C.Body].Asleep == 0) lying++;
+            }
+            bool slept = false;
+            for (long k = 0; k < Time.Minutes(30) && !slept; k++) { Hold(295.15); s.Step(); slept = life[m[p].C.Body].Asleep != 0; }
+            Check("추운 침실 (5℃)의 졸린 이: 두 시간 '깼다' 2건 아래 — 잠들지 못하고 누워 뒤척인다 (예전 1,000건 · 7초마다) · 22℃로 데우면 30분 안에 잠든다",
+                woke <= 2 && slept && life[m[p].C.Body].Alive != 0,
+                $"깸 {woke} · 잠자리에 누워 깨어 있던 {lying * Time.SecondsPerTick / 60:0}분 · 데운 뒤 잠 {slept} · {m.Thought(p)}");
+        }
     }
 }

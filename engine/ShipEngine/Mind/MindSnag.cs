@@ -47,9 +47,19 @@ public sealed partial class Mind
         bool same = c.Snag == k && c.SnagSubject == subject && c.SnagGoal == c.Goal && c.SnagTarget == c.GoalTarget && t - c.SnagTick < Time.Minutes(10);
         c.Snag = k; c.SnagCell = cell; c.SnagSubject = subject; c.SnagTick = t; c.SnagGoal = c.Goal; c.SnagTarget = c.GoalTarget;
         if (same || !Telling(k)) return;
+        if (!a.IsPerson && (c.AssignedUntil <= t || c.AssignedGoal != c.Goal) && DoorSnag(k) && ToldDoor(sim, a.Id, k, subject, t)) return;   // 제 판단으로 나선 로봇이 10분 안에 같은 문 · 같은 까닭으로 또 막혔다 — 이미 알린 막힘 (DF10 기록 소음)
         Snags++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {PlaceOf(cell)}에서 막혔다 — {SnagText(k)}", t, cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Blocked, cell, (float)k, cause, a.Id, subject);
+    }
+
+    /// <summary>그 몸이 10분 안에 같은 문에서 같은 까닭으로 막혔다고 이미 알렸나 (사실 흐름의 최근 것 — 저장에 든다).</summary>
+    private static bool ToldDoor(Sim sim, int actor, SnagKind k, int door, long t)
+    {
+        if (door < 0) return false;
+        foreach (var f in sim.Facts.Recent(512))
+            if (f.Kind == FactKind.Blocked && f.Actor == actor && f.Other == door && (int)f.Size == (int)k && t - f.Tick < Time.Minutes(10)) return true;
+        return false;
     }
 
     /// <summary>그 칸의 자리 이름 (방 · 문 · 벽이면 곁의 방).</summary>

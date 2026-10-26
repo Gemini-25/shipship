@@ -235,9 +235,7 @@ public sealed partial class Mind
             // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹 · 코와 목을 찌르는 기체(암모니아 50ppm · 오존 1ppm · 염화수소 20ppm · 플루오린화수소 10ppm — 시안화수소는 아니다) · 아픔
             // 연기 냄새로는 잘 깨지 않는다 (그래서 경보가 있다)
             double p = F.Pressure(cell);
-            ref var sb = ref _life![c.Body];
-            if (F.Partial(T.gO2, cell) < 15 || F.Ppm(T.gCO2, cell) > 30000 || F.Temp(cell) < 283 || F.Temp(cell) > 315 || Math.Abs(p - c.LastKPa) > 3
-                || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || F.Ppm(T.gHCl, cell) > 20 || F.Ppm(T.gHF, cell) + 2 * F.Ppm(T.gPOF3, cell) + 3 * F.Ppm(T.gPF5, cell) > 10 || sb.Pain > 0.5f)
+            if (BodyRouses(a, cell) || Math.Abs(p - c.LastKPa) > 3)
                 Wake(sim, a, "몸이 깨웠다");
             c.LastKPa = (float)p;
             Decay(a, t, dt);
@@ -647,6 +645,12 @@ public sealed partial class Mind
         sim.Facts.Emit(sim.Tick, FactKind.Warned, b.Cell, b.Conf, b.Cause, a.Id, (int)b.Kind);
     }
 
+    /// <summary>몸이 깨울 것이 있는가 (잠든 이를 깨우고 · 누운 이를 잠들지 못하게 한다): 숨참 (산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 ·
+    /// 코와 목을 찌르는 기체 (암모니아 50ppm · 오존 1ppm · 염화수소 20ppm · 플루오린화수소 10ppm — 시안화수소는 아니다) · 아픔. 기압이 갑자기 바뀌는 것 (귀 먹먹)은 깨울 때만.</summary>
+    private bool BodyRouses(Agent a, int cell)
+        => F.Partial(T.gO2, cell) < 15 || F.Ppm(T.gCO2, cell) > 30000 || F.Temp(cell) < 283 || F.Temp(cell) > 315
+            || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || F.Ppm(T.gHCl, cell) > 20 || F.Ppm(T.gHF, cell) + 2 * F.Ppm(T.gPOF3, cell) + 3 * F.Ppm(T.gPF5, cell) > 10 || _life![a.C.Body].Pain > 0.5f;
+
     private void Wake(Sim sim, Agent a, string why, int cause = 0, int by = -1)
     {
         ref var body = ref _life![a.C.Body];
@@ -686,8 +690,12 @@ public sealed partial class Mind
         if (a.IsPerson && _life![a.C.Body].Suit != 0) return false;
         if (a.IsPerson && _life![a.C.Body].Mask != 0 && F.Pressure(cell) >= 25) return false;   // 마스크로 숨 쉰다
         // 몸은 산소가 모자란 것을 바로 느끼지 못한다 (숨이 찬 것은 이산화탄소 때문) — 낮은 기압 · 이산화탄소가 본능을 깨우고 ·
-        // 피의 산소가 0.8 아래로 떨어지면 어지럽고 숨이 가빠 알아챈다 (저산소증 증상 — 판단은 흐려져도 몸은 안다)
-        return F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000 || a.IsPerson && _life![a.C.Body].SpO2 < 0.8f + 0.1f * Math.Max(a.C.LessonAir, a.C.LessonBreach);   // 겪어 본 이는 더 일찍 안다
+        // 피의 산소가 0.85 아래로 떨어지면 어지럽고 숨이 가빠 알아챈다 (저산소증 증상 — 판단은 흐려져도 몸은 안다 · DF10 포화 곡선을 실측대로 고쳐 0.8 → 0.85: 알아채는 공기는 그대로 산소 12kPa 언저리)
+        // 일산화탄소에 빼앗긴 몫은 느끼지 못한다 (숨을 재촉하는 것은 피의 산소 분압이다 — 그래서 일산화탄소는 모르는 사이에 쓰러뜨린다)
+        if (F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000) return true;
+        if (!a.IsPerson) return false;
+        ref var lb = ref _life![a.C.Body];
+        return lb.SpO2 / Math.Max(0.05f, 1 - lb.COHb) < 0.85f + 0.08f * Math.Max(a.C.LessonAir, a.C.LessonBreach);   // 겪어 본 이는 더 일찍 안다
     }
 
     private bool HeatBad(int cell) => F.Temp(cell) > 330 || BurningNear(cell, 1);
