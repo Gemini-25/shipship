@@ -7,6 +7,32 @@ public static partial class Program
 {
     private static void Physics2Rules()
     {
+        // ── PH11 우주의 물체: 외판 구멍 밖으로 나간 수리 꾸러미는 틱마다 배에서 멀어지고 · 300m 뒤 장부 '우주로' (예전: 나간 그 틱에 장부로 지워졌다) ──
+        if (Do("우주의 물체"))
+        {
+            Console.WriteLine("\n[우주의 물체 — 구멍 밖 물건이 멀어진다]");
+            var lay = Worlds.Ascii(FlingRooms, Worlds.Seats);
+            var s = Worlds.Full(lay, 1);
+            var st = s.Get<Structure>(); var m = s.Get<Mind>();
+            byte kit = (byte)m.ItemIndex("수리 꾸러미");
+            Worlds.PutItem(s, kit, Worlds.At(lay, 1, 2));
+            st.RequestDoor(lay.DoorAt[Worlds.At(lay, 6, 2)], 1);
+            s.Run(10);
+            s.Get<Field>().SetHole(Worlds.At(lay, 0, 2), 1.5f);
+            var dist = new List<double>(); long goneAt = -1; int id = -1;
+            for (int k = 0; k < 120 && goneAt < 0; k++)
+            {
+                s.Step();
+                int i = id > 0 ? st.IndexOf(id) : st.Props.FindIndex(p => Structure.Flying(p) && p.What == kit);
+                if (i >= 0 && Structure.Flying(st.Props[i])) { var p = st.Props[i]; id = p.Id; var o = st.Bodies[0]; dist.Add(Math.Sqrt((p.X - o.X) * (p.X - o.X) + (p.Y - o.Y) * (p.Y - o.Y))); }
+                else if (id > 0) goneAt = s.Tick;
+            }
+            bool away = dist.Count >= 3 && dist.Zip(dist.Skip(1)).All(z => z.Second > z.First);
+            Check("우주의 물체: 외판 구멍 밖으로 나간 수리 꾸러미는 틱마다 배에서 멀어지고 (세 틱 넘게 날며) · 300m를 넘으면 장부 '우주로' (그때 목록에서 빠진다)",
+                away && goneAt > 0 && dist[^1] < 300 && s.Book.OfItem(kit, Flow.Spaced) == -1 && !st.Props.Any(p => p.What == kit && p.Kind == 0),
+                $"난 틱 {dist.Count} · 거리 {string.Join(" → ", dist.Take(6).Select(x => x.ToString("0")))}… {(dist.Count > 0 ? dist[^1] : 0):0}m · 우주로 틱 {goneAt} · 장부 {s.Book.OfItem(kit, Flow.Spaced)}");
+        }
+
         // ── PH12 물체 볼거리: 카메라 안에서 컵이 깨지면 그 틱들을 천천히 (화면 1초에 1틱) — 하루 느린 예산 안 ──
         if (Do("물체 볼거리"))
         {

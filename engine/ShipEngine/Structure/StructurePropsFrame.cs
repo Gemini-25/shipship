@@ -228,11 +228,10 @@ public sealed partial class Structure
         for (int i = 0; i < all.Length; i++)
         {
             int b = _hostOf[i];
-            if (b < 0 && all[i].State == 5) { var q = all[i]; PropPxGone += q.Kg * q.Vx; PropPyGone += q.Kg * q.Vy; PropLGone += q.Kg * (q.X * q.Vy - q.Y * q.Vx) + q.Inertia * q.W; }   // 몸 밖 칸에서 나간 것 (도면 틀 그대로)
             if (b < 0 || !_stepped[i] && !moved[b]) continue;
             var o = Bodies[b];
             var (px, py, l) = WorldMomentum(all[i], o.X, o.Y, o.Th, o.Vx, o.Vy, o.W, o.Lx, o.Ly);
-            if (all[i].State == 5) { PropPxGone += px; PropPyGone += py; PropLGone += l; }   // 우주로 — 세상 틀로 가져갔다
+            // 우주로 나간 것 (State 5)은 틱 끝에 세상 틀로 난다 (PH11 — 가져간 몫은 그 물체에 남는다: 장부 '우주로'는 300m 뒤)
             _rJ[3 * b] += px - _pw0[3 * i]; _rJ[3 * b + 1] += py - _pw0[3 * i + 1]; _rJ[3 * b + 2] += l - _pw0[3 * i + 2];
         }
         for (int b = 0; b < nb; b++)

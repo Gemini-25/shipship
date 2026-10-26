@@ -105,11 +105,12 @@ public static partial class Program
             st.Track = new MotionTrack();
             var lost = new List<Prop>();
             for (int k = 0; k < 3; k++) { s.Step(); lost.AddRange(st.Track.Gone.Where(x => x.Kind == 1)); }
+            lost.AddRange(st.Props.Where(x => x.Kind == 1 && Structure.Flying(x)));   // 우주로 나는 가구 물체 (PH11 — 300m 뒤 장부)
             double kg = st.FurnitureKg(0);
             var gone = s.Facts.Since(0).Where(x => x.Kind == FactKind.TornLoose).ToList();
             bool whole = lost.Count == 1 && Rel(lost[0].Kg, kg) < 1e-6 && lost[0].What == 0 && !st.Shards.Any(x => Math.Abs(x.Kg - kg) < 1e-3);
             Check("설비 덩어리: 떨어져 나간 칸의 냉각 펌프는 그 꼴의 물체 (Kind 1 · 질량 = 설비)가 되어 우주로 — 점 알갱이가 아니다 (예전엔 145kg 알갱이 하나)",
-                st.FurnPlaced[0] == 0 && st.PropSpaced > spaced0 && whole && gone.Count == 1,
+                st.FurnPlaced[0] == 0 && whole && gone.Count == 1,
                 $"설비 {kg:0}kg · 제자리 {st.FurnPlaced[0]} · 우주로 간 가구 물체 {lost.Count} ({(lost.Count > 0 ? lost[0].Kg : 0):0}kg) · 뜯김 사실 {gone.Count}");
         }
     }

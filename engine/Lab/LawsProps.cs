@@ -44,11 +44,11 @@ public static partial class Program
         return (s, st);
     }
 
-    /// <summary>몸 + 물체 + 부스러기 + 우주로 간 기체 − 점화 (운동량 · 원점에 대한 각운동량 — 닫힌 계면 늘 같다).</summary>
+    /// <summary>몸 + 물체 + 부스러기 + 우주로 간 기체 − 점화 − 운석 (운동량 · 원점에 대한 각운동량 — 닫힌 계면 늘 같다).</summary>
     private static (double px, double py, double l) WorldBook(Structure st)
     {
         var (bx, by, bl, _) = st.BodyMomentum(); var (px, py, pl) = st.PropMomentum(); var (sx, sy, sl) = st.ShardMomentum();
-        return (bx + px + sx + st.GasPx - st.BurnPx, by + py + sy + st.GasPy - st.BurnPy, bl + pl + sl + st.GasL - st.BurnL);
+        return (bx + px + sx + st.GasPx - st.BurnPx - st.RockPx, by + py + sy + st.GasPy - st.BurnPy - st.RockPy, bl + pl + sl + st.GasL - st.BurnL - st.RockL);   // 운석이 넣은 몫 (DF9)도 바깥 몫
     }
 
     /// <summary>

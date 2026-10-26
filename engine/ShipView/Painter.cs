@@ -63,6 +63,13 @@ public sealed partial class Painter
         foreach (var it in st.Props)
         {
             if (it.Kind is not (0 or 1 or 2 or 3)) continue;   // 물건 · 뜯긴 가구 · 조각 · 문짝 (PH8 · PH10)
+            if (Structure.Flying(it))   // 우주로 나는 것 (PH11 — 세상 틀): 배 틀로 옮겨 별 위에
+            {
+                if (st.Bodies.Count == 0) { yield return (it, it.X, it.Y, it.Th); continue; }
+                var (lx, ly) = st.LocalOf(0, it.X, it.Y);
+                yield return (it, lx, ly, it.Th - st.Bodies[0].Th);
+                continue;
+            }
             if (PropAt == null) { yield return (it, it.X, it.Y, it.Th); continue; }
             var (ok, x, y, th) = PropAt(it.Id);
             if (ok) yield return (it, x, y, th);

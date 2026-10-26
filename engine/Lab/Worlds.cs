@@ -135,7 +135,7 @@ public static class Worlds
     public static IEnumerable<FloorItem> Items(Sim s)
     {
         var st = s.Get<Structure>();
-        foreach (var p in st.Props) if (p.Kind == 0) yield return new FloorItem(p.Id, (byte)p.What, st.CellOf(p), p.Charge, p.PlugAt);
+        foreach (var p in st.Props) if (p.Kind == 0 && p.State != 5) yield return new FloorItem(p.Id, (byte)p.What, st.CellOf(p), p.Charge, p.PlugAt);
     }
 
     /// <summary>바닥 물건을 모두 치운다 (시험 차림).</summary>

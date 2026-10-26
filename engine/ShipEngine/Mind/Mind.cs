@@ -393,7 +393,7 @@ public sealed partial class Mind : IEngine
     public int CountAll(int item)
     {
         int n = TotalOf(item);
-        if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && x.What == item) n++;   // 바닥에 놓인 것 (④ 물체 장부)
+        if (_st != null) foreach (var x in _st.Props) if (x.Kind == 0 && x.What == item && x.State != 5) n++;   // 바닥에 놓인 것 (④ 물체 장부)
         return n;
     }
 

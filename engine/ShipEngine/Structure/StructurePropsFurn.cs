@@ -519,7 +519,7 @@ public sealed partial class Structure
         int why = sim.Causes.Add(CauseKind.Breach, $"떨어져 나간 뼈대 조각에 실린 {Ko.I(e.Name)} 함께 날아갔다", sim.Tick, c0, cause);
         FurnPlaced[f] = 0;
         if (e.AnchorG > 0 && FurnBroken[f] == 0) { FurnBroken[f] = 1; FurnCause[f] = why; }
-        var p = new Prop { Id = NextPropId++, Kind = 1, What = (short)f, X = wx, Y = wy, Th = o.Th, Vx = vx, Vy = vy, W = o.W, Cause = why, Since = sim.Tick, State = 5 };
+        var p = new Prop { Id = NextPropId++, Kind = 1, What = (short)f, X = wx, Y = wy, Th = o.Th, Vx = vx, Vy = vy, W = o.W, Cause = why, Since = sim.Tick, State = 5, Host = -1 };   // 이미 세상 틀 (PH11)
         FillBody(ref p);
         Props.Add(p);
         FurnProp[f] = p.Id;

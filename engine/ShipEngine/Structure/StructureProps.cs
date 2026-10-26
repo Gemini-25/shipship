@@ -119,6 +119,7 @@ public sealed partial class Structure
     /// <summary>물체의 칸 (자리의 floor — 도면 밖이면 −1).</summary>
     public int CellOf(in Prop p)
     {
+        if (p.State == 5 && p.Host == -1) return -1;   // 세상 틀로 난다 — 배의 칸이 아니다 (PH11)
         double x = Math.Floor(p.X), y = Math.Floor(p.Y);
         return x >= 0 && y >= 0 && x < L.W && y < L.H ? L.Index((int)x, (int)y) : -1;
     }

@@ -263,23 +263,6 @@ public sealed partial class Structure
         return best;
     }
 
-    /// <summary>우주로 간 것을 목록에서 뺀다 (장부 '우주로' · 가져간 운동량 · 각운동량 — Id 차례 그대로 · 몸이 있으면 세상 틀 몫은 반작용에서 이미 셌다).</summary>
-    [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private void RemoveSpaced(Sim sim, bool world)
-    {
-        bool any = false;
-        foreach (var p in Props)
-        {
-            if (p.State != 5) continue;
-            any = true;
-            if (!world) { PropPxGone += p.Kg * p.Vx; PropPyGone += p.Kg * p.Vy; PropLGone += p.Kg * (p.X * p.Vy - p.Y * p.Vx) + p.Inertia * p.W; }
-            if (p.Kind == 0) sim.Book.AddItem(p.What, Flow.Spaced, -1);
-            PropSpaced++;
-            Track?.Gone.Add(p);   // 그리는 쪽이 나간 때까지 그린다
-        }
-        if (any) Props.RemoveAll(p => p.State == 5);
-    }
-
     /// <summary>구멍에 빨려 붙은 것: 구멍을 덧대거나 (끊겼거나) 누르는 힘 (기압 차 × 덮은 넓이)이 무게 아래가 되면 떨어진다 (깨어 — 남은 바람에 다시 밀릴 수 있다).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool Unplug(Span<Prop> all)
