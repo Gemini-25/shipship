@@ -165,4 +165,33 @@ public static partial class Program
             hits >= 5 && worst <= 1.0001,
             $"맞음 {hits} · 가장 큰 몫 {worst:0.000} ({at})");
     }
+
+    /// <summary>
+    /// 법칙 — 바람의 줄어드는 빠르기 (WindK)는 구역 전체의 몫: 이 틱에 차오른 구역은 0 · 빠진 구역은 처음/끝 몰의 로그 — ④가 그것으로 틱 처음 기압을 되짚는다 (구멍 입 · 빨림 · 나가는 빠르기).
+    /// 끓는 행성 (92기압)에 내린 디딤호 두 틱: 이 틱에 기압이 오른 칸은 WindK가 0 (예전: 그 칸 돌풍이 가장 센 틈 하나의 몫을 써 101kPa에서 9.2MPa로 차오른 방을 비는 방으로 되짚어 22MPa — 구멍 곁 컵에 13MPa 빨림).
+    /// </summary>
+    private static void RegionDecayLaws()
+    {
+        if (!Do("구역 되짚기 법칙")) return;
+        Console.WriteLine("\n[구역 되짚기 — 차오르는 방은 비는 방이 아니다]");
+        var s = ShipWorld.Create("Didim", 3);
+        var f = s.Get<Field>();
+        s.Get<Outside>().Land("venuslike", s.Tick);
+        int bad = 0, seen = 0; string at = "";
+        var p0 = new double[f.Cells];
+        for (int k = 0; k < 2; k++)
+        {
+            for (int c = 0; c < f.Cells; c++) p0[c] = f.Pressure(c);
+            s.Step();
+            for (int c = 0; c < f.Cells; c++)
+            {
+                if (f.RegionOf[c] < 0 || f.WindPa[c] <= 0) continue;
+                seen++;
+                if (f.WindK[c] > 0 && f.Pressure(c) > 1.01 * p0[c]) { if (bad++ == 0) at = $"틱 {k} 칸 {c} {p0[c]:0} → {f.Pressure(c):0}kPa · K {f.WindK[c]:0.00} (되짚음 {f.Pressure(c) * Math.Exp(f.WindK[c] * Time.SecondsPerTick):0}kPa)"; }
+            }
+        }
+        Check("구역 되짚기: 끓는 행성 (92기압)에 내린 디딤호 두 틱 — 돌풍이 분 칸 가운데 이 틱에 기압이 오른 칸은 줄어드는 빠르기가 0 (되짚은 틱 처음 기압이 끝보다 높지 않다)",
+            seen > 100 && bad == 0,
+            $"돌풍 칸 {seen} · 어긋남 {bad}{(bad > 0 ? " (" + at + ")" : "")}");
+    }
 }

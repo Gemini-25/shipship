@@ -10,6 +10,7 @@ public sealed partial class Field
     public bool Adiabatic { get; set; }
 
     // 구역 합계 (틈 흐름 동안 이어서 고친다)
+    private double[] _rn0 = Array.Empty<double>();
     private double[] _rn = Array.Empty<double>(), _rU = Array.Empty<double>(), _rC = Array.Empty<double>(), _rM = Array.Empty<double>();
     private double[] _parcel = Array.Empty<double>();
     private int[] _distBuf = Array.Empty<int>();
@@ -122,6 +123,8 @@ public sealed partial class Field
     {
         if (Links.Count == 0) return;
         RegionTotals();
+        if (_rn0.Length < Regions.Count) _rn0 = new double[_rn.Length];
+        Array.Copy(_rn, _rn0, Regions.Count);   // 틱 처음 구역 몰 (바람의 줄어드는 빠르기는 구역 전체의 몫)
         if (_parcel.Length != G) _parcel = new double[G];
         double h = dt / FlowSubsteps;
         // 지난 틱에 크게 흐른 틈만 잘게 나눠 (틈끼리 서로 영향을 주는 빠른 흐름) — 나머지는 한 번에 (정확한 지수식이라 넘치지 않는다)
@@ -419,6 +422,9 @@ public sealed partial class Field
             double gMid = Math.Max(0.05, 1 + 0.5 * q * dt / nEnd), gStart = Math.Max(0.05, 1 + q * dt / nEnd); // 이 틱에 잃은(+) · 얻은(−) 몫
             // 돌풍: 잃는 쪽은 처음 흐름이 평균의 ln(r)·r/(r−1)배 (r = n₀/n₁ — 지수로 줄었다) · 얻는 쪽은 평균 그대로
             double peak = gStart > 1.0001 ? Math.Log(gStart) * gStart / (gStart - 1) : 1;
+            // 줄어드는 빠르기 (④가 틱 처음 기압을 되짚는다): 구역 전체의 처음/끝 몰 — 이 틈 하나의 몫이 아니라 (차오르며 옆 방으로 새는 방은 0 · 예전: 그 틈 몫으로 차오른 방을 비는 방으로 되짚었다)
+            double gNet = region < _rn0.Length ? _rn0[region] / nEnd : 1;
+            float kNet = gNet > 1 ? (float)(Math.Log(gNet) / dt) : 0;
             if (cache == null)
             {
                 if (_distBuf.Length != Cells) _distBuf = new int[Cells];
@@ -449,7 +455,7 @@ public sealed partial class Field
                 {
                     // 가장 센 틈의 돌풍: 그 줄어드는 빠르기 (잃는 쪽 — 몰 수가 지수로 준 만큼) · 처음 밀도 (④가 같은 틱에 읽는다)
                     if (WindPa[c] == 0) WindCells.Add(c);
-                    WindPa[c] = q0; WindK[c] = gStart > 1 ? (float)(Math.Log(gStart) / dt) : 0; WindRho[c] = (float)rho0;
+                    WindPa[c] = q0; WindK[c] = kNet; WindRho[c] = (float)rho0;
                 }
                 double dx = 0, dy = 0;
                 if (d == 0) { dx = L.X(k.Via) - L.X(c); dy = L.Y(k.Via) - L.Y(c); if (dx == 0 && dy == 0) ExteriorDir(c, out dx, out dy); }
