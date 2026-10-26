@@ -121,6 +121,8 @@ public sealed class Acoustics
         SoundKind.Knock => "덜그럭",
         SoundKind.Shatter => "쨍그랑 — 깨지는 소리",
         SoundKind.Scrape => "드르륵 — 미끄러지는 소리",
+        SoundKind.Flush => "쉬익 — 변기 물 내림",
+        SoundKind.Faucet => "쏴 — 손 씻는 물",
         _ => "",
     };
 
@@ -349,6 +351,9 @@ public sealed class Acoustics
             case SoundKind.Knock: return new Hit(ObjMat(w, e), MathF.Pow(10, (e.Db - 55) / 10f) / 1000, seed, Size(e)) { Send = 0.25f };
             case SoundKind.Shatter: return new Shatter(ObjMat(w, e), MathF.Pow(10, (e.Db - 61) / 10f) / 1000, seed, e.SizeM) { Send = 0.3f };
             case SoundKind.Scrape: return new Scrape(ObjMat(w, e), seed);
+            // ── 화장실 물소리 (5단 C7) ──
+            case SoundKind.Flush: return new Whoosh(seed);
+            case SoundKind.Faucet: return new FaucetVoice(seed);
             // ── 생활 소리 (소리 단계 S2) ──
             case SoundKind.Clink: return new Clink(seed, e.Db >= 55 ? 1.6f : e.Db < 47 ? 0.8f : 1f);   // 냄비 · 식기 · 컵
             case SoundKind.Tool: return new Ratchet(seed, e.Db < 62 ? 1.3f : 1f);                        // 렌치 · 작은 드라이버

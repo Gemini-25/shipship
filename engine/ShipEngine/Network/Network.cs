@@ -348,7 +348,8 @@ public sealed partial class Network : IEngine
         return f <= 0.6 ? 0 : (float)(12 * Math.Pow((f - 0.6) / 0.4, 2));
     }
     /// <summary>돌아가는 장치가 1m에서 내는 소리 (dB — 표의 크기 + 낡은 몫 · 멈췄으면 0).</summary>
-    public float NoiseDb(int d) => Devices[d].Def.Db > 0 && Working(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0;
+    public float NoiseDb(int d) => Devices[d].Type == "Shower" ? (ShowerRunning(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0)   // 샤워 칸은 물 흐름을 따른다 (온수기와 상관없이 — 5단 C7)
+        : Devices[d].Def.Db > 0 && Working(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0;
     /// <summary>끽끽 · 덜컹을 내기 시작하는 낡은 몫 (dB — 마모 0.8 남짓).</summary>
     public const float GrindFromDb = 3;
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;

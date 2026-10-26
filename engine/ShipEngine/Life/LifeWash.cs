@@ -59,6 +59,9 @@ public sealed partial class Life
     /// 아니면 오줌은 오수로 (물 재생기가 되돌린다) · 대변은 그 변기의 오물 통으로 — 흡입 팬이 돌지 않거나 (망가짐 · 전기) · 통이 가득 찼거나 ·
     /// 0.4% (통이 90% 넘게 찼으면 20%)로 관에 걸리면 막힌다 (원인 마디 '변기가 막혔다 — 까닭'). 돌려준다: 넘쳤으면 참.
     /// </summary>
+    /// <summary>쉬익 (변기 물 내림 — 1m에서 dB) · 쏴 (손 씻는 물).</summary>
+    public const float FlushDb = 72, FaucetDb = 55;
+
     public bool Flush(Sim sim, int body, int toilet, int cell)
     {
         WashArrays();
@@ -70,6 +73,8 @@ public sealed partial class Life
         if (stool > 0) { b.Bowel = 0; SewageKg += stool; }
         Voids++; Flushes[toilet]++;
         Grime[toilet] = Math.Min(1, Grime[toilet] + (stool > 0 ? 0.06f : 0.03f));
+        int fan = ToiletDev(toilet);
+        if (fan < 0 || _net!.Working(fan)) sim.Find<Sound>()?.Emit(sim, cell, FlushDb, SoundKind.Flush, 0, Sound.BodyActor(body));   // 쉬익 — 흡입 팬이 돌면 (망 없는 시험 배도) · 낸 이는 그 몸 (5단 C7)
         if (Clogged[toilet] != 0)
         {
             int cause = sim.Causes.Add(CauseKind.Machine, "막힌 변기를 모르고 써서 넘쳤다", sim.Tick, cell, ClogCause[toilet]);
@@ -163,6 +168,13 @@ public sealed partial class Life
         double steam = waterK > 305 ? water * 0.01 : 0;   // 따뜻한 물의 1%가 김으로 (8L면 80mL)
         if (steam > 0 && cell >= 0) { F.AddGas(cell, T.gH2O, steam, waterK); F.AddHeat(cell, water * 75.3 * (waterK - F.Temp(cell)) * 0.15); }
         if (_net != null) _net.WasteWater += water - steam;
+    }
+
+    /// <summary>손을 씻는다 (월드 — 세면대): 물 water몰 (망의 물탱크에서 이미 꺼낸 것)로 씻고 · 물이 나왔으면 세면대 칸에서 쏴 (낸 이는 그 몸 — 5단 C7).</summary>
+    public void HandWash(Sim sim, int body, double water, int cell)
+    {
+        Wash(sim, body, water, 300, cell);
+        if (water > 0 && cell >= 0) sim.Find<Sound>()?.Emit(sim, cell, FaucetDb, SoundKind.Faucet, 0, Sound.BodyActor(body));
     }
 
     /// <summary>샤워 칸에서 흐른 물로 씻긴다 (월드 — 물은 ⑥ 샤워 칸이 이미 흘려 오수로 보냈다): 더러움이 water/ShowerMol만큼 · 지린 옷도 (물 200몰 넘게).</summary>

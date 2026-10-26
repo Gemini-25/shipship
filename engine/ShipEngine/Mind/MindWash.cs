@@ -326,7 +326,7 @@ public sealed partial class Mind
                 if (_net != null && !_net.WaterAt(st.Target)) break;   // 물관이 끊겼다 — 물이 나오지 않는다 (씻지 못했다)
                 double got = _net != null ? Math.Min(_net.WaterTank, HandWater) : HandWater;
                 if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
-                _life!.Wash(sim, c.Body, got, 300, -1);
+                _life!.HandWash(sim, c.Body, got, st.Target >= 0 && st.Target < L.Furniture.Count ? L.Furniture[st.Target].Cells[0] : -1);   // 손 씻는 물 (월드 — 세면대 칸에서 쏴)
                 c.HandsAt = t; HandWashes++;
                 break;
             }
