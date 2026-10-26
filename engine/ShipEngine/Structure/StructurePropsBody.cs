@@ -164,6 +164,19 @@ public sealed partial class Structure
         _nBodyProps--; _bodyPropsAt = Props.Count;
     }
 
+    /// <summary>
+    /// 그 꼬리표의 몸이 구멍에 빨려 붙어 있으면 누르는 힘 (N — 그 칸과 구멍 너머의 기압 차 × 덮은 넓이 · 아니면 0): ⑦이 빨린 자리의 멍으로 읽는다 (PH16).
+    /// </summary>
+    public double PinForce(int tag)
+    {
+        int i = RagdollOf(tag);
+        if (i < 0) return 0;
+        var p = Props[i];
+        if (p.State != 6 || p.PlugAt == 0) return 0;
+        int h = p.PlugAt - 1;
+        return Suction(HoleSide(p, h), h, MinFace(PropForm(p)));
+    }
+
     /// <summary>몸 물체의 꼴 (사람 · 로봇 · 누움).</summary>
     private DotForm BodyForm(in Prop p) => DotForge.Make(T, p.Kind == 5 ? "사람 몸" : "로봇 몸", lie: p.Pose);
 

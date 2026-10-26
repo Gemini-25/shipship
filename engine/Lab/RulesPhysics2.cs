@@ -90,6 +90,36 @@ public static partial class Program
             }
         }
 
+        // ── PH16 둘이서 들기: 넘어진 45kg 책장 — 로봇이 둘이면 주컴퓨터가 둘을 함께 보내 세우고 · 하나뿐이면 맡기지 않는다 (같은 실패를 되풀이하지 않게) ──
+        if (Do("판단 — 둘이서 들기"))
+        {
+            Console.WriteLine("\n[판단 — 둘이서 들기 (PH16)]");
+            var legend = new Dictionary<char, string> { ['e'] = "Bed", ['p'] = "PowerPanel", ['b'] = "Battery", ['r'] = "RobotDock", ['c'] = "MainComputer", ['k'] = "Bookshelf" };
+            var lay = Worlds.Ascii("\n##############\n#e....k.....c#\n#............#\n#pb........rr#\n##############", legend);
+            (bool up, int righted, int posted) Run(int robots)
+            {
+                var s = Worlds.Full(lay, 1);
+                var st = s.Get<Structure>(); var m = s.Get<Mind>();
+                for (int k = 0; k < robots; k++) m.AddRobot(s, Worlds.At(lay, 10 + k, 3), AgentKind.Robot, Worlds.At(lay, 10 + k, 3));
+                s.Run(3);
+                int shelf = lay.Furniture.FindIndex(f => f.Type == "Bookshelf");
+                int id = st.TearLoose(s, shelf, 0, 0, 0, s.Causes.Add(CauseKind.Setup, "시험 — 책장이 넘어졌다", s.Tick), "볼트가 풀린");
+                { int i = st.IndexOf(id); var q = st.Props[i]; q.X = Worlds.At(lay, 6, 2) % lay.W + 0.5; q.Y = lay.Y(Worlds.At(lay, 6, 2)) + 0.5; q.Pose = 1; q.State = 0; q.Vx = q.Vy = q.W = 0; st.Props[i] = q; st.ClutterChanged(); }
+                int posted = 0;
+                for (int k = 0; k < (int)Time.Minutes(90); k++)
+                {
+                    s.Step();
+                    posted = Math.Max(posted, m.Agents.Count(a => !a.IsPerson && a.C.AssignedGoal == GoalKind.Clean));
+                }
+                int j = st.IndexOf(id);
+                return (j >= 0 && st.Props[j].Pose == 0, (int)st.Righted, posted);
+            }
+            var two = Run(2); var one = Run(1);
+            Check("둘이서 들기 (PH16): 넘어진 45kg 책장 (로봇 하나는 40kg까지) — 로봇이 둘이면 주컴퓨터가 둘을 함께 보내 한 시간 반 안에 세우고 · 하나뿐이면 맡기지 않는다",
+                two.up && two.righted >= 1 && two.posted >= 2 && !one.up && one.posted == 0,
+                $"로봇 둘: 세움 {two.up} ({two.righted}) · 함께 맡은 {two.posted} / 하나: 세움 {one.up} · 맡은 {one.posted}");
+        }
+
         // ── 5단 C9 흔들림: 약 기운에 손이 무디다 — 같은 몸 둘 (하나만 진통제 기운 1) · 공구 미끄러질 몫 1로 한 번씩 ──
         if (Do("일상 물리 — 흔들림"))
         {
@@ -127,6 +157,21 @@ public static partial class Program
             var a = Cl(st); var b = Cl(r.Get<Structure>());
             Check("세운 가구의 길 값 (PH13 검토 고침): 누운 선반을 세우면 길 값이 선 꼴로 바뀌고 · 찍고 되살린 세계와 같다",
                 up == 1 && a.SequenceEqual(b) && !a.SequenceEqual(lying), $"세움 {up} · 누운 길 값 {lying.Count}칸 → 지금 {a.Count}칸 · 되살린 {b.Count}칸");
+            // (PH16) 깨진 유리 가루 · 판 조각이 흩어진 칸은 +2 — 같은 길이면 돌아간다 (바로 가면 넷 + 흩어진 셋 × 2 = 10 · 돌아가면 6)
+            bool Clear(int x, int y) => Free(x, y) && st.ClutterAt(L.Index(x, y)) == 0;
+            int mid2 = Enumerable.Range(0, L.N).First(c => L.Room[c] >= 0 && Enumerable.Range(-2, 5).All(dx => Clear(L.X(c) + dx, L.Y(c)) && Clear(L.X(c) + dx, L.Y(c) - 1) && Clear(L.X(c) + dx, L.Y(c) + 1)));
+            int row = L.Y(mid2), x0 = L.X(mid2);
+            st.EnsureBody();
+            foreach (int dx in new[] { -1, 0 }) st.Grit[L.Index(x0 + dx, row)] += 1f;
+            int plate = st.ThrowPlate(s, x0 + 1.5, row + 0.5, 0, 0, 20, 0);
+            { int i = st.IndexOf(plate); var q = st.Props[i]; q.State = 0; q.Host = 0; st.Props[i] = q; st.ClutterChanged(); }
+            var m = s.Get<Mind>();
+            int who = m.Agents.First(x => x.IsPerson).Id;
+            var path = m.PathOf(who, L.Index(x0 - 2, row), L.Index(x0 + 2, row));
+            bool round = path.Count > 0 && !path.Contains(L.Index(x0 - 1, row)) && !path.Contains(L.Index(x0, row)) && !path.Contains(L.Index(x0 + 1, row));
+            Check("깨진 것의 길 값 (PH16): 가루 1kg 두 칸 · 판 조각 한 칸이 흩어진 줄은 +2 — 같은 줄 양 끝을 오가는 이는 그 셋을 밟지 않고 옆 줄로 돌아간다",
+                st.ClutterAt(L.Index(x0, row)) == Structure.LitterCost && st.ClutterAt(L.Index(x0 + 1, row)) == Structure.LitterCost && round,
+                $"길 값 가루 {st.ClutterAt(L.Index(x0, row))} · 판 조각 {st.ClutterAt(L.Index(x0 + 1, row))} · 길 {path.Count}칸 · 돌아감 {round}");
         }
 
         // ── PH12 물체 볼거리: 카메라 안에서 컵이 깨지면 그 틱들을 천천히 (화면 1초에 1틱) — 하루 느린 예산 안 ──

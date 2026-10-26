@@ -67,6 +67,7 @@ public sealed partial class Structure
             GritKg += m;
             Props.RemoveAt(i);
             Crumbled++;
+            _clutterDirty = true;
         }
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         for (int b = 0; b < nb; b++)
@@ -91,6 +92,7 @@ public sealed partial class Structure
             SweptPieces++;
         }
         SweptKg += kg;
+        if (kg > 0) _clutterDirty = true;   // 치운 칸의 길 값
         return kg;
     }
 

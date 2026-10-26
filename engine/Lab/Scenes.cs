@@ -204,6 +204,7 @@ public static partial class Program
             case "props-space": PropsSpaceScene(dir); return;   // 우주의 물체 (PH11)
             case "props-body": PropsBodyScene(dir); return;   // 몸 물체 (PH14)
             case "props-plate": PropsPlateScene(dir); return;   // 판 조각 (PH15)
+            case "props-lift": PropsLiftScene(dir); return;   // 둘이서 들기 (PH16)
             case "props-burn": PropsBurnScene(dir); return;
             case "topple": ToppleScene(dir); return;
             case "props-zerog": PropsZeroGScene(dir); return;

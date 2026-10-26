@@ -315,6 +315,40 @@ public static partial class Program
     }
 
     /// <summary>
+    /// props-lift (PH16 — docs/PHYSICS.md §7 '둘이서 들기'): 넘어진 45kg 책장 (로봇 하나는 40kg까지) — 주컴퓨터가 로봇 둘을 함께 보내 둘이서 세운다.
+    /// 넘어진 뒤 · 첫 로봇이 곁에 · 둘이 다 곁에 · 세운 뒤.
+    /// </summary>
+    private static void PropsLiftScene(string dir)
+    {
+        var legend = new Dictionary<char, string> { ['e'] = "Bed", ['p'] = "PowerPanel", ['b'] = "Battery", ['r'] = "RobotDock", ['c'] = "MainComputer", ['k'] = "Bookshelf" };
+        var lay = Worlds.Ascii("\n##############\n#e....k.....c#\n#............#\n#pb........rr#\n##############", legend);
+        var s = Worlds.Full(lay, 1);
+        var st = s.Get<Structure>(); var m = s.Get<Mind>();
+        for (int k = 0; k < 2; k++) m.AddRobot(s, Worlds.At(lay, 10 + k, 3), AgentKind.Robot, Worlds.At(lay, 10 + k, 3));
+        s.Run(3);
+        int shelf = lay.Furniture.FindIndex(f => f.Type == "Bookshelf"), at = Worlds.At(lay, 6, 2);
+        int id = st.TearLoose(s, shelf, 0, 0, 0, s.Causes.Add(CauseKind.Setup, "책장이 넘어졌다", s.Tick), "볼트가 풀린");
+        { int i = st.IndexOf(id); var q = st.Props[i]; q.X = at % lay.W + 0.5; q.Y = lay.Y(at) + 0.5; q.Pose = 1; q.State = 0; q.Vx = q.Vy = q.W = 0; st.Props[i] = q; st.ClutterChanged(); }
+        int Near() => m.Agents.Count(a => !a.IsPerson && Math.Abs(lay.X(a.C.Cell) - 6) <= 2 && Math.Abs(lay.Y(a.C.Cell) - 2) <= 2);
+        bool Up() { int j = st.IndexOf(id); return j >= 0 && st.Props[j].Pose == 0; }
+        Func<bool>[] when = { () => true, () => Near() >= 1, () => Near() >= 2, Up };
+        var painter = new Painter(s.Layout);
+        int fw = 14 * Painter.T, fh = 5 * Painter.T, gap = 6;
+        var sheet = new Img(2 * fw + gap, 2 * fh + gap);
+        sheet.Fill(0, 0, sheet.W, sheet.H, Rgba.Hex("#1c2027"));
+        for (int k = 0, n = 0; k < when.Length; k++)
+        {
+            while (!when[k]() && n < (int)Time.Minutes(90)) { s.Step(); n++; }
+            var img = painter.Frame(s, 0, 0, 14, 5, (int)s.Tick);
+            sheet.Draw(img, k % 2 * (fw + gap), k / 2 * (fh + gap));
+            Console.WriteLine($"  props-lift 틱 {s.Tick}: 곁의 로봇 {Near()} · 세움 {Up()} · 세운 수 {st.Righted}");
+        }
+        Directory.CreateDirectory(dir);
+        Png.WriteRgba(Path.Combine(dir, "props-lift.png"), sheet.W, sheet.H, sheet.Px);
+        Console.WriteLine($"  props-lift: {dir}/props-lift.png ({sheet.W}×{sheet.H}) — 넘어진 책장 · 첫 로봇 · 둘이 곁에 · 세운 뒤");
+    }
+
+    /// <summary>
     /// props-plate (PH15 — docs/PHYSICS.md §5-4): 공기 찬 화물칸 외판 셋이 뜯겨 나간다 — 떨어져 나온 잔칸이 강철 판 조각이 되어 빠지는 공기에 밀려 별 위로 날며 돈다.
     /// 뜯긴 틱의 0.02 · 0.06 · 0.11 · 0.18 (틱 사이 장 — 한 틱 2.4초에 판 조각은 수십 m를 난다).
     /// </summary>

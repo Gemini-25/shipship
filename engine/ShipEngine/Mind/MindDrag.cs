@@ -185,7 +185,7 @@ public sealed partial class Mind
         b.Cell = j; c.Cell = j;
     }
 
-    /// <summary>구멍에 빨려 붙은 이: 기압 차 × 구멍 넓이에 눌려 있다 — 빨린 자리에 멍이 들고 · 힘이 300N 아래가 되거나 구멍을 덧대면 몸을 뗀다.</summary>
+    /// <summary>구멍에 빨려 붙은 이: 기압 차 × 구멍 넓이에 눌려 있다 — 힘이 300N 아래가 되거나 구멍을 덧대면 몸을 뗀다 (판단 — 멍은 ⑦).</summary>
     private void Pinned(Sim sim, Agent a, ref Body b, double dt)
     {
         ref var c = ref a.C;
@@ -198,9 +198,7 @@ public sealed partial class Mind
             sim.Facts.Emit(sim.Tick, FactKind.Rescue, b.Cell, 0, fc, a.Id);
             return;
         }
-        // 빨린 자리: 1kN에 30분이면 타박 1 (깊은 멍 · 부기)
-        b.Blunt += (float)(force / 1000 * dt / 1800);
-        b.Pain = Math.Min(1, b.Pain + (float)(force / 1000 * dt / 600));
+        // 빨린 자리의 멍 · 아픔은 ⑦이 ④의 누르는 힘으로 셈한다 (PH16) — 마음은 붙어 있는 동안 움직이지 못한다
         a.Path.Clear(); a.PathIdx = 0; c.MoveBudget = 0;
     }
 

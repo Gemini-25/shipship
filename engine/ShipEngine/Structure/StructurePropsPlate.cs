@@ -76,6 +76,7 @@ public sealed partial class Structure
                 else { PropPxGone += m * vx; PropPyGone += m * vy; PropLGone += m * (x * vy - y * vx) + inertia * w; PlateKgLost += m; PropSpaced++; }
                 Props.RemoveAt(i--);
                 over--;
+                _clutterDirty = true;
             }
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         for (int b = 0; b < nb; b++)

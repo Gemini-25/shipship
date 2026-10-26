@@ -14,7 +14,9 @@ public sealed partial class Structure
     /// <summary>덜컹을 힘으로 보는 때 (초 — m Δv / 0.1초) · 다시 앉는 거리 (m) · 각 (rad).</summary>
     public const double AnchorJoltSec = 0.1, ReseatM = 0.2, ReseatRad = 10 * Math.PI / 180;
     /// <summary>조각의 부모가 가구 (Flags 8 — What = 가구 번호) · 쓰러진 가구 · 문짝이 차지한 칸의 길 값 (⑧ 길찾기가 더한다 — 곁 줄로 돌아갈 만큼).</summary>
-    public const byte FurnPieceFlag = 8, ClutterCost = 4;
+    public const byte FurnPieceFlag = 8, ClutterCost = 4, LitterCost = 2;
+    /// <summary>길 값에 드는 가루 (kg — 그 칸 바닥의 깨진 유리 · 쇳가루).</summary>
+    public const float LitterGritKg = 0.05f;
 
     /// <summary>가구의 연료 · 열용량이 든 곳 (−1: 도면의 제자리 칸들 · −2: 배를 떠났다 · 그 밖은 그 칸 하나) — 찍는다.</summary>
     public int[] FurnAt = Array.Empty<int>();
@@ -85,6 +87,14 @@ public sealed partial class Structure
                 for (int x = Math.Max(0, (int)Math.Floor(x0 + 0.1)); x <= Math.Min(L.W - 1, (int)Math.Floor(x1 - 0.1)); x++)
                     _clutter[L.Index(x, y)] = ClutterCost;
         }
+        // 깨진 조각 · 판 조각 · 가루가 흩어진 칸은 +2 (밟으면 미끄럽고 다친다 — 같은 길이면 돌아간다 · PH16)
+        foreach (var p in Props)
+        {
+            if (p.Kind is not (2 or 4) || p.State != 0) continue;
+            int c = CellOf(p);
+            if (c >= 0 && _clutter[c] < LitterCost) _clutter[c] = LitterCost;
+        }
+        for (int c = 0; c < L.N && c < Grit.Length; c++) if (Grit[c] > LitterGritKg && _clutter[c] < LitterCost) _clutter[c] = LitterCost;
         _clutterDirty = false;
     }
 

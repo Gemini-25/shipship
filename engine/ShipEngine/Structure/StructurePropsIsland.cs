@@ -581,6 +581,8 @@ public sealed partial class Structure
     private int[] _imem = new int[8], _iord = new int[8];
     private int _icount, _root;
     private readonly List<(int a, int b)> _ipairs = new();
+    private readonly HashSet<long> _ipairSet = new();   // _ipairs의 짝 열쇠 (이미 짝인가 — 줄 훑기 대신 · 끝난 것과의 짝은 빼지 않는다: 끝난 것은 다시 묻지 않는다)
+    private static long PairKey(int a, int b) => a < b ? (long)a << 32 | (uint)b : (long)b << 32 | (uint)a;
     private double[] _cb = new double[32];
 
     /// <summary>
@@ -594,7 +596,7 @@ public sealed partial class Structure
     {
         GrowMembers(count + 8);
         _wkN = 0; _warmH = 0;   // 닿음 캐시는 섬마다 · 틱마다 새로 (찍지 않는다)
-        _icount = count; _ipairs.Clear(); _root = Find(_mem[first]);
+        _icount = count; _ipairs.Clear(); _ipairSet.Clear(); _root = Find(_mem[first]);
         for (int k = 0; k < count; k++)
         {
             int i = _mem[first + k];
@@ -611,7 +613,7 @@ public sealed partial class Structure
         {
             long pr = _pairs[p0 + q];
             int ia = (int)(pr >> 21 & 0x1FFFFF), ib = (int)(pr & 0x1FFFFF);
-            _ipairs.Add((Local(first, count, ia), Local(first, count, ib)));
+            { int la = Local(first, count, ia), lb = Local(first, count, ib); _ipairs.Add((la, lb)); _ipairSet.Add(PairKey(la, lb)); }
         }
         var tr = Track;
         double rem = dt;
@@ -923,7 +925,7 @@ public sealed partial class Structure
             ref var q = ref all[ij];
             double e = _runs[j].Reach + 2 * DotForm.Dot + (_runs[j].Active ? _runs[j].Speed * _runs[j].H : 0);
             if (q.X + e < x0 || q.X - e > x1 || q.Y + e < y0 || q.Y - e > y1) continue;
-            _ipairs.Add(i < ij ? (k, j) : (j, k));
+            _ipairs.Add(i < ij ? (k, j) : (j, k)); _ipairSet.Add(PairKey(k, j));
         }
         double pad = MaxReach() + 2 * DotForm.Dot;
         int nCand = Gather(all, x0 - pad, y0 - pad, x1 + pad, y1 + pad);
@@ -944,7 +946,7 @@ public sealed partial class Structure
             int o = kn;   // Id 차례로 끼운다
             while (o > 0 && _imem[_iord[o - 1]] > j) { _iord[o] = _iord[o - 1]; o--; }
             _iord[o] = kn;
-            _ipairs.Add(i < j ? (k, kn) : (kn, k));
+            _ipairs.Add(i < j ? (k, kn) : (kn, k)); _ipairSet.Add(PairKey(k, kn));
         }
         _cb[4 * k] = Math.Min(_cb[4 * k], x0); _cb[4 * k + 1] = Math.Min(_cb[4 * k + 1], y0); _cb[4 * k + 2] = Math.Max(_cb[4 * k + 2], x1); _cb[4 * k + 3] = Math.Max(_cb[4 * k + 3], y1);
     }
@@ -953,8 +955,7 @@ public sealed partial class Structure
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool PairedIn(int a, int b)
     {
-        foreach (var (x, y) in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_ipairs)) if (x == a && y == b || x == b && y == a) return true;
-        return false;
+        return _ipairSet.Contains(PairKey(a, b));   // 예전: 짝 줄을 다 훑었다 (조각 수천 섬이면 잔걸음마다 물체 × 짝)
     }
 
     /// <summary>섬 차례 (_mem[first ..]에서 그 목록 차례를 반으로 나눠 찾는다 — 차례대로 늘어섰다).</summary>

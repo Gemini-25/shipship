@@ -331,6 +331,13 @@ public sealed partial class Life : IEngine
 
     public void Bind(Sim sim) => _net ??= sim.Find<Network>();
 
+    /// <summary>구멍에 빨려 붙은 몸 (④ 누르는 힘 — PH16 · 예전 ⑧이 셈했다): 1kN에 30분이면 타박 1 (빨린 자리의 깊은 멍 · 부기) · 10분이면 아픔 1.</summary>
+    private static void Pinned(ref Body b, double force, double dt)
+    {
+        b.Blunt += (float)(force / 1000 * dt / 1800);
+        b.Pain = Math.Min(1, b.Pain + (float)(force / 1000 * dt / 600));
+    }
+
     public void Step(Sim sim, double dt)
     {
         var st = sim.Find<Structure>();
@@ -346,6 +353,7 @@ public sealed partial class Life : IEngine
             ref var body = ref span[b];
             if (body.Alive == 0) continue;
             StepBody(sim, b, ref body, dt, st, outside, chem);
+            if (st != null && st.PinForce(b) is double pin and > 0) Pinned(ref body, pin, dt);
         }
         if (st != null) { Array.Clear(st.ImpactJ); Array.Clear(st.ImpactTakenJ); }
         Array.Clear(_shardJ);
