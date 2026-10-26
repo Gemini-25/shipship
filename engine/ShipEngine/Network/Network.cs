@@ -272,6 +272,18 @@ public sealed partial class Network : IEngine
         return take;
     }
     public const double PanFill = 55.5;   // 냄비 물 1L (몰)
+    /// <summary>냄비를 쏟는다 (⑦의 요청 — 5단 C10): 냄비 물의 share를 조리대 칸 바닥으로 (원인) · 그 물이 지닌 열 (냄비 온도 − 칸 온도)은 그 칸 겉면으로. 쏟은 몰 · 냄비 온도를 돌려준다.</summary>
+    public (double mol, double panK) SpillPan(Sim sim, int device, double share, int cause)
+    {
+        float before = PanWater[device];
+        PanWater[device] = (float)(before * (1 - Math.Clamp(share, 0, 1)));
+        double mol = before - (double)PanWater[device];   // 냄비 눈금은 float — 바닥에 둔 몫과 바이트까지 같게
+        int cell = Devices[device].Cell;
+        if (mol <= 0 || cell < 0) return (0, PanK[device]);
+        F.AddStore(cell, F.T.sWater, mol, cause);
+        F.AddSurfaceHeat(cell, mol * 75.3 * (PanK[device] - F.Temp(cell)));   // 물 몰 열용량 75.3 J/K
+        return (mol, PanK[device]);
+    }
     public const double AromaFromK = 350, AromaPerSec = 1e-4 / 2.4;   // 음식 향이 오르는 냄비 온도 · 빠르기 (몰/초 — 예전 마음이 내던 틱마다 1e-4)
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; if (BreakerWeld[feeder] != 0) BreakerStuck[feeder] = 1; }   // 상한 접점은 올리는 순간 눌어붙는다
     /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>

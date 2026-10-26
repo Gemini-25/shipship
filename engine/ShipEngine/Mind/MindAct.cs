@@ -280,9 +280,7 @@ public sealed partial class Mind
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterAllowed(a.Id));   // ⑪ 배급: 오늘 몫 안에서만 (몸의 물이 3% 넘게 모자라면 의료 몫)
-                double got = _net != null ? Math.Min(_net.WaterTank, want) : want;
-                if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Drunk, -got); }
-                _life!.Drink(c.Body, got);
+                var (got, _, _) = _life!.Drink(sim, c.Body, st.Target, want, c.Sleepy, Math.Clamp(c.Stress, 0, 1), c.Careful, a.Id, NameOf(a.Id));   // 월드 요청 (5단 C10 — 탱크에서 빼고 · 쏟음을 셈한다)
                 CountDrank(a, got);
                 WaterDrunk += got;
                 c.DrankAt = t; Drinks++;

@@ -37,6 +37,35 @@ public static partial class Program
         Check("물 보존: 탱크 · 오수 · 냄비 · 공기의 김 · 바닥 물 (+ 음식 속 물 6배)의 합이 끓이고 졸아 눌어도 같다 (조리대 40분)", boiled > 1 && Math.Abs(w1 - w0) < 1e-6 * w0,
             $"졸아든 물 {boiled:0.0}몰 · 합 {w0:0.000} → {w1:0.000}몰 ({w1 - w0:+0.0e0;-0.0e0;0})");
 
+        // 쏟음 (5단 C10): 목마른 이가 컵을 쏟아도 (몫 1) 탱크 · 오수 · 바닥 물 · 공기의 김 · 컵 물의 합이 줄어든 만큼이 마신 물이다 (쏟은 물은 바닥에 남는다)
+        {
+            var s3 = Worlds.Full(Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend), 1);
+            var n3 = s3.Get<Network>(); var f3 = s3.Get<Field>(); var m3 = s3.Get<Mind>(); var l3 = s3.Get<Life>();
+            var lay3 = s3.Layout;
+            int p3 = m3.AddPerson(s3, Worlds.At(lay3, 3, 7));
+            s3.Run(2);
+            l3.CupFumble = 1;
+            double W3()
+            {
+                double w = n3.WaterTank + n3.WasteWater + f3.Total(f3.T.gH2O);
+                for (int c = 0; c < lay3.N; c++) w += f3.Stored(f3.T.sWater, c) + f3.Drops[f3.T.sWater * lay3.N + c] + 6 * f3.Stored(f3.T.sFood, c);
+                foreach (var d in n3.Devices) w += n3.PanWater[d.Id];
+                foreach (var p in s3.Get<Structure>().Props) w += p.Liquid;
+                return w;
+            }
+            long d0 = m3.Drinks;
+            double drunk0 = m3.WaterDrunk, sp0 = l3.Spills, v0 = 0, v1 = 0;
+            for (int k = 0; k < (int)Time.Minutes(20) && m3.Drinks == d0; k++)
+            {
+                ref var c = ref m3[p3].C; c.Thirst = 1; c.Hunger = 0; c.Sleepy = 0;
+                v0 = W3(); s3.Step(); v1 = W3();
+            }
+            double drunk = m3.WaterDrunk - drunk0;
+            Check("물 보존: 컵을 쏟아도 (5단 C10 · 몫 1) 그 틱에 물의 합이 줄어든 만큼이 마신 물이다 — 쏟은 물은 바닥에 남는다",
+                m3.Drinks == d0 + 1 && l3.Spills == sp0 + 1 && Math.Abs((v0 - v1) - drunk) < 1e-6 * v0,
+                $"마신 물 {drunk:0.0}몰 · 합 {v0:0.000} → {v1:0.000} (줄어듦 {v0 - v1:0.000}) · 쏟음 {l3.Spills - sp0}");
+        }
+
         // 쓴 소화기 채우기 (docs/MIND.md 3단 — 손): 채우는 물은 물탱크에서 · 장부 '소화기에 담았다' · 탱크 + 소화기 물의 합은 같다 · 이산화탄소는 모아 둔 것에서 · 산소는 방 공기에서
         {
             var s2 = Worlds.Full(Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend), 1);

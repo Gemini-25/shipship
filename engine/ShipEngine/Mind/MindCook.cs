@@ -96,6 +96,7 @@ public sealed partial class Mind
             if (_net.On[d] == 0) _net.SetOn(d, true);
             _net.FillPan(sim, d);
         }
+        if (done && a.IsPerson) _life?.HandlePan(sim, c.Body, d, c.Sleepy, Math.Clamp(c.Stress, 0, 1), c.Careful, a.Id, NameOf(a.Id));   // 냄비를 내린다 (월드가 쏟음을 셈한다 — 5단 C10)
         if (done) { Cooked++; if (a.IsPerson) a.C.SkCook = Math.Min(1, a.C.SkCook + 0.003f * Practice(a.C, "조리") * UseSkill(a, 4, sim.Tick)); FinishCook(sim, a, false); }
     }
 
