@@ -33,6 +33,63 @@ public static partial class Program
                 $"난 틱 {dist.Count} · 거리 {string.Join(" → ", dist.Take(6).Select(x => x.ToString("0")))}… {(dist.Count > 0 ? dist[^1] : 0):0}m · 우주로 틱 {goneAt} · 장부 {s.Book.OfItem(kit, Flow.Spaced)}");
         }
 
+        // ── PH13 판단 — 물체: 날아드는 것을 비킨다 (보이면) · 로봇이 깨진 조각 · 가루를 치우고 넘어진 것을 세운다 (DF5 정돈 몫) ──
+        if (Do("판단 — 물체"))
+        {
+            Console.WriteLine("\n[판단 — 물체: 비키기 · 치우기 · 세우기]");
+            var tall = Worlds.Ascii("\n#########\n#.......#\n#.......#\n#.......#\n#.......#\n#.......#\n#.......#\n#########");
+            // 비키기: 남쪽을 보고 선 이에게 남쪽 4m에서 식량 상자가 6m/s로 — 밝으면 비켜 안 맞는다 · 등 뒤에서 오면 · 연기가 차면 못 비켜 맞는다
+            (int hits, long dodges, float blunt) Throw(bool back, bool smoke)
+            {
+                var s = Worlds.Full(tall, 1);
+                var m = s.Get<Mind>(); var st = s.Get<Structure>(); var life = s.Get<Life>(); var f = s.Get<Field>();
+                int who = m.AddPerson(s, Worlds.At(tall, 4, 1)), body = m[who].C.Body;
+                s.Run(5);   // 빛을 한 번 잰 뒤 (빛은 5틱마다)
+                if (back) { m[who].C.FaceX = 0; m[who].C.FaceY = -1; }
+                if (smoke) foreach (int c in tall.Rooms[0].Cells) f.AddGas(c, f.T.gSoot, 0.3, 293);
+                int id = Worlds.PutItem(s, "식량 상자", Worlds.At(tall, 4, 6));
+                var p = st.Props[st.IndexOf(id)]; var fm = st.PropForm(p);
+                st.Shove(id, 0, -fm.Mass * 7, 0, s.Causes.Add(CauseKind.Setup, "누가 식량 상자를 걷어찼다", s.Tick));
+                int n = 0;
+                for (int k = 0; k < 3; k++) { s.Step(); n = Math.Max(n, st.PropHits.Count(h => h.Tag == body)); }
+                s.Run(5);
+                return (n, m.Dodges, life[body].Blunt);
+            }
+            var lit = Throw(false, false); var behind = Throw(true, false); var smoky = Throw(false, true);
+            Check("비키기: 남쪽을 보고 선 이에게 남쪽 5m에서 식량 상자가 7m/s로 날아들면 옆 칸으로 비켜 안 맞는다 · 등 뒤에서 오거나 연기가 차 안 보이면 못 비켜 맞는다",
+                lit.hits == 0 && lit.dodges >= 1 && lit.blunt == 0 && behind.hits > 0 && behind.dodges == 0 && smoky.hits > 0 && smoky.dodges == 0,
+                $"밝음: 맞음 {lit.hits} · 비킴 {lit.dodges} · 타박 {lit.blunt:0.00} / 등 뒤: 맞음 {behind.hits} · 비킴 {behind.dodges} / 연기: 맞음 {smoky.hits} · 비킴 {smoky.dodges}");
+
+            // 치우기 · 세우기: 사람 없는 배 · 로봇 하나 — 떨어져 깨진 컵의 조각 · 가루와 누운 소화기를 로봇이 맡아 치우고 세운다 (주컴퓨터가 카메라로 본다)
+            {
+                var t = Tables.Default;
+                int cup = t.People.Items.Keys.ToList().IndexOf("컵"), ext = t.People.Items.Keys.ToList().IndexOf("소화기");
+                var legend = new Dictionary<char, string> { ['e'] = "Bed", ['p'] = "PowerPanel", ['b'] = "Battery", ['r'] = "RobotDock", ['c'] = "MainComputer" };
+                var lay = Worlds.Ascii("\n##############\n#e..........c#\n#............#\n#pb.........r#\n##############", legend);
+                Sim? s = null; Structure? st = null; bool broke = false;
+                for (ulong seed = 1; seed <= 10 && !broke; seed++)
+                {
+                    s = Worlds.Full(lay, seed);
+                    st = s.Get<Structure>();
+                    s.Get<Mind>().AddRobot(s, Worlds.At(lay, 11, 2), AgentKind.Robot, Worlds.At(lay, 11, 2));
+                    s.Run(3);
+                    st.PutItem(cup, 0, Worlds.At(lay, 6, 1), 0.75f);
+                    s.Run(4);
+                    broke = st.Shattered > 0;
+                }
+                int fx = st!.PutItem(ext, 1, Worlds.At(lay, 4, 2));
+                { int i = st.IndexOf(fx); var q = st.Props[i]; q.Pose = 1; st.Props[i] = q; }   // 넘어져 누운 소화기
+                int pieces0 = st.Props.Count(p => p.Kind == 2);
+                float grit0 = st.Grit.Sum();
+                s!.Run((int)Time.Minutes(60));
+                int pieces = st.Props.Count(p => p.Kind == 2);
+                int fallen = st.Props.Count(p => p.Kind == 0 && p.Pose != 0);
+                Check("치우기 · 세우기 (정돈): 사람 없는 배에서 떨어져 깨진 컵의 조각 · 가루와 넘어져 누운 소화기를 — 주컴퓨터가 카메라로 보고 로봇에게 맡겨 한 시간 안에 쓸어 담고 세운다",
+                    broke && pieces0 > 0 && pieces == 0 && st.Grit.Sum() == 0 && fallen == 0 && st.SweptPieces >= pieces0 && st.Righted >= 1,
+                    $"깨짐 {broke} · 조각 {pieces0} → {pieces} · 가루 {grit0 * 1000:0}g → {st.Grit.Sum() * 1000:0}g · 누운 것 {fallen} · 쓸어 담음 {st.SweptPieces}조각 {st.SweptKg * 1000:0}g · 세움 {st.Righted}");
+            }
+        }
+
         // ── PH12 물체 볼거리: 카메라 안에서 컵이 깨지면 그 틱들을 천천히 (화면 1초에 1틱) — 하루 느린 예산 안 ──
         if (Do("물체 볼거리"))
         {

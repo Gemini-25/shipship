@@ -246,6 +246,7 @@ public sealed partial class Mind
         double radius = SightRadius(a, cell);
         if (room >= 0)
         {
+            if (a.IsPerson && c.Up != 0) Dodge(sim, a, room, radius);   // 날아드는 것을 비킨다 (PH13 — 본 것만)
             SeeRoom(sim, a, room, radius);
             foreach (int x in _roomDoors[room]) SeeCell(sim, a, x, radius);
             for (int k = _holeStart[room], end = _holeStart[room + 1]; k < end; k++)
@@ -478,6 +479,52 @@ public sealed partial class Mind
             a.Beliefs[i] = b;
             a.Doubts.RemoveAll(d => d.Until <= t);
             if (a.Doubts.Count < 8) a.Doubts.Add(new Doubt { Kind = b.Kind, Cell = b.Cell, Until = t + Time.Minutes(3) });
+        }
+    }
+
+    /// <summary>비킬 만큼 빠른 물체 (m/s) · 비킬 만큼 가까이 지나는 거리 (m — 원판 0.25 + 물체).</summary>
+    public const double DodgeV = 2, DodgeMiss = 0.7, DodgeFront = 0.5;
+    public long Dodges;
+
+    /// <summary>
+    /// 같은 방에서 바라보는 쪽 앞에 보이는 (밝고 연기가 없는 — 보는 거리 안) 물체가 2m/s 넘게 다가와 한 틱 안에 곁 0.7m로 지나가면 옆 칸으로 비킨다 (가는 쪽에 수직 · 트인 칸 · 그 방).
+    /// 어둡거나 연기가 차면 보지 못해 비키지 못한다. 길은 다시 찾는다.
+    /// </summary>
+    private void Dodge(Sim sim, Agent a, int room, double radius)
+    {
+        if (_st == null || _st.Props.Count == 0) return;
+        ref var c = ref a.C;
+        double ax = L.X(c.Cell) + 0.5, ay = L.Y(c.Cell) + 0.5, dt = Time.SecondsPerTick;
+        foreach (var p in _st.Props)
+        {
+            if (!Structure.Awake(p)) continue;
+            double v2 = p.Vx * p.Vx + p.Vy * p.Vy;
+            if (v2 < DodgeV * DodgeV) continue;
+            int pc = _st.CellOf(p);
+            if (pc < 0 || L.Room[pc] != room || !Visible(a, pc, room, radius)) continue;
+            double rx = ax - p.X, ry = ay - p.Y, along = (rx * p.Vx + ry * p.Vy) / v2;   // 가장 가까이 오는 때 (초)
+            double fx = c.FaceX, fy = c.FaceX == 0 && c.FaceY == 0 ? 1 : c.FaceY, fl = Math.Sqrt(fx * fx + fy * fy), rl = Math.Sqrt(rx * rx + ry * ry);
+            if (rl > 0 && -(rx * fx + ry * fy) / (rl * fl) < DodgeFront) continue;   // 바라보는 쪽 앞 (±60°)에서 오는 것만 본다 — 등 뒤 · 옆에서 오는 것은 못 비킨다
+            if (along <= 0 || along > dt) continue;
+            double mx = rx - p.Vx * along, my = ry - p.Vy * along;
+            if (mx * mx + my * my > DodgeMiss * DodgeMiss) continue;
+            // 옆으로: 가는 쪽에 수직인 두 칸 가운데 트인 칸 (지나는 줄에서 먼 쪽 먼저)
+            double v = Math.Sqrt(v2), nx = -p.Vy / v, ny = p.Vx / v;
+            if (mx * nx + my * ny < 0) { nx = -nx; ny = -ny; }
+            foreach (var (sx, sy) in new[] { (nx, ny), (-nx, -ny) })
+            {
+                int dx = Math.Abs(sx) >= Math.Abs(sy) ? Math.Sign(sx) : 0, dy = dx == 0 ? Math.Sign(sy) : 0;
+                int x = L.X(c.Cell) + dx, y = L.Y(c.Cell) + dy;
+                if (!L.In(x, y)) continue;
+                int n = L.Index(x, y);
+                if (L.Room[n] != room || !F.Passable(n) || L.FurnitureAt[n] >= 0) continue;
+                Move(a, n);
+                if ((uint)a.Id < (uint)_walkN.Length) { _walk[WalkMax * a.Id] = n; _walkN[a.Id] = 1; }   // 옆걸음은 빠르다 — 이 틱 걸음 길은 새 칸에서 (④가 원판을 그 자리에 둔다)
+                a.Path.Clear(); a.PathIdx = 0;
+                Dodges++;
+                Jot(a, new Judgment { Tick = sim.Tick, Goal = c.Goal, Target = p.Id, Cell = n, Method = 255, Out = JudgeOut.Done, Why = SnagKind.None, By = -1, Note = "날아드는 것을 보고 비켰다" });
+                return;
+            }
         }
     }
 

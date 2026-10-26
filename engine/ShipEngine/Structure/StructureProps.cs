@@ -335,7 +335,7 @@ public sealed partial class Structure
     {
         w.Tag("물체"); w.List(Props); w.List(Masks); w.List(MaskBits);
         w.Arr(Grit); w.Arr(GritMat); w.Arr(FurnPlaced); w.Arr(FurnAnchor); w.Arr(FurnProp); w.Arr(FurnAt); w.Arr(DoorLeafOut); w.List(PropHits);
-        w.F64(PropPxGone); w.F64(PropPyGone); w.F64(PropLGone); w.F64(FixL); w.F64(ToHostPx); w.F64(ToHostPy); w.F64(ToHostL); w.F64(BrokenKg); w.F64(GritKg);
+        w.F64(PropPxGone); w.F64(PropPyGone); w.F64(PropLGone); w.F64(FixL); w.F64(ToHostPx); w.F64(ToHostPy); w.F64(ToHostL); w.F64(BrokenKg); w.F64(GritKg); w.F64(SweptKg); w.I64(SweptPieces); w.I64(Righted);
         w.I32(NextPropId); w.I64(PropSteps); w.I64(Bounces); w.I64(Shattered); w.I64(Toppled); w.I64(TornLoose); w.I64(Rolled); w.I64(IslandMiss);
         SaveActors(w);
     }
@@ -344,7 +344,7 @@ public sealed partial class Structure
     {
         r.Tag("물체"); Props.Clear(); Props.AddRange(r.List<Prop>()); Masks.Clear(); Masks.AddRange(r.List<PropMask>()); MaskBits.Clear(); MaskBits.AddRange(r.List<ulong>());
         r.ArrInto(Grit); r.ArrInto(GritMat); r.ArrInto(FurnPlaced); r.ArrInto(FurnAnchor); r.ArrInto(FurnProp); r.ArrInto(FurnAt); r.ArrInto(DoorLeafOut); PropHits.Clear(); PropHits.AddRange(r.List<PropHit>());
-        PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64();
+        PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64(); SweptKg = r.F64(); SweptPieces = r.I64(); Righted = r.I64();
         NextPropId = r.I32(); PropSteps = r.I64(); Bounces = r.I64(); Shattered = r.I64(); Toppled = r.I64(); TornLoose = r.I64(); Rolled = r.I64(); IslandMiss = r.I64();
         LoadActors(r);
         _pieceForms.Clear();   // 조각 가면 번호 → 꼴 (다른 세계의 가면일 수 있다)
