@@ -8,13 +8,13 @@ public readonly record struct EpisodeDot(float At, byte Kind);
 /// <summary>
 /// 사건 경과 카드 · 결산 띠 (docs/OBSERVER.md §7.1 · 7.2 — V8 · 화면만 · 연출 장부 <see cref="Director.Episodes"/>를 읽기만):
 /// 왼쪽 카드 자리에 경과 하나 (머리 · 가로 시계 · 마디마다 'm:ss' · 늦은 까닭 · 아는 이 · 다친 이 · 견줌 · [▶ 다시보기]) — 사건 띠 줄 · 결산 띠를 누르거나 함장의 손이 일으킨 일이면 연다 ·
-/// 경과가 끝나면 가운데 칸에 결산 띠 6초 ('침실 둘 불 — 11분 · 다친 이 1 · 끈 이 로봇 1' — 누르면 그 카드). 감은 동안 끝난 경과는 띠를 띄우지 않는다.
+/// 경과가 끝나면 가운데 칸에 결산 띠 6초 ('침실 둘 불 — 11분 · 다친 이 1 · 끈 이 로봇 1' — 누르면 그 카드). 감은 동안 · 이어 보기 앞에 끝난 경과는 띠를 띄우지 않는다 · 다시 열렸다가 다시 끝나면 또 띄운다 (끝마다 한 번).
 /// </summary>
 public sealed partial class LiveShow
 {
     public const double TallySec = 6;
     private int _episodeRoot;                         // 연 경과 카드 (뿌리 — 0 없음 · 카드 자리는 하나)
-    private readonly HashSet<int> _tallied = new();   // 결산 띠를 띄운 (또는 감은 동안 끝난) 경과
+    private readonly HashSet<(int root, long end)> _tallied = new();   // 결산 띠를 띄운 (또는 감은 동안 · 이어 보기 앞에 끝난) 경과 — 뿌리와 끝 틱 (다시 열렸다가 다시 끝나면 새 짝 — 띠가 또 선다)
     private readonly List<int> _handRoots = new();    // 함장의 손이 일으킨 뿌리 — 그 경과가 열리면 카드를 띄운다 (손 카메라 8초 뒤에도 결과까지)
     private string _tally = "";
     private int _tallyRoot;
@@ -62,10 +62,10 @@ public sealed partial class LiveShow
         for (int i = 0; i < eps.Count; i++)
         {
             var e = eps[i];
-            if (e.End < 0 || !_tallied.Add(e.Root)) continue;
+            if (e.End < 0 || !_tallied.Add((e.Root, e.End))) continue;
             if (show) { _tally = TallyText(e); _tallyRoot = e.Root; _tallyLeft = TallySec; }
         }
-        if (_tallied.Count > 4 * Director.MaxEpisodes) _tallied.IntersectWith(eps.Select(e => e.Root));
+        if (_tallied.Count > 4 * Director.MaxEpisodes) _tallied.IntersectWith(eps.Select(e => (e.Root, e.End)));
         for (int i = _handRoots.Count - 1; i >= 0; i--)
         {
             if (Dir.EpisodeOf(_handRoots[i]) is not { } he) continue;
@@ -73,6 +73,9 @@ public sealed partial class LiveShow
             _handRoots.RemoveAt(i);
         }
     }
+
+    /// <summary>이어 볼 때: 저장 앞에 끝난 경과는 띠를 띄운 것으로 적는다 (이어 본 첫 장에 지난 결산 띠를 다시 띄우지 않는다 — 그 뒤 다시 열렸다가 끝나면 새 짝이라 띠가 선다).</summary>
+    private void TallySeen() { foreach (var e in Dir.Episodes) if (e.End >= 0) _tallied.Add((e.Root, e.End)); }
 
     /// <summary>손이 일으킨 뿌리를 적는다 (항해 손 기록에 옮길 때 — 일어난 손만).</summary>
     private void NoteHandRoot(int cause) { if (cause == 0) return; _handRoots.Add(cause); if (_handRoots.Count > 8) _handRoots.RemoveAt(0); }
