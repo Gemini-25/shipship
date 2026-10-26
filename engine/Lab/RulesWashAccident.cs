@@ -72,5 +72,34 @@ public static partial class Program
                 a.burn is >= 0.1f and <= 0.35f && a.hurt == 1 && a.why.Contains("뜨거웠다") && a.why.Contains("조절기") && b5.burn == 0 && b5.hurt == 0 && b60.burn is >= 0.15f and <= 0.2f && ok.burn == 0 && ok.dirt < 0.1f,
                 $"333K 3초 {a.burn:0.000} (사실 {a.hurt} · '{a.why}') / 325K 5초 {b5.burn:0.000} ({b5.hurt}) / 60초 {b60.burn:0.000} / 313K 6분 {ok.burn:0.000} · 더러움 0.8 → {ok.dirt:0.00}");
         }
+
+        // C18 무중력의 샤워 물: 침실에 중력 발생기 — 밸브를 열고 발생기를 끄면 1분 뒤 샤워 물이 배수구로 가지 않고 방울로 떠 있다 (오수가 늘지 않는다) ·
+        //     원인 글 '떠다닌다' (← 중력이 꺼졌다) · 그 칸 둘레 물의 까닭 (SpillNear)이 그 원인 / 발생기를 다시 켜면 원인을 지운다
+        {
+            var lg = new Dictionary<char, string>(legend) { ['G'] = "GravityGenerator" };
+            var glay = Worlds.Ascii(WashShip.Replace("#e.....#T", "#e..G..#T"), lg);
+            var s = Worlds.Full(glay, 3);
+            var net = s.Get<Network>(); var f = s.Get<Field>();
+            var shower = glay.Furniture.First(x => x.Type == "Shower");
+            int dev = net.Devices.First(d => d.Furniture == shower.Id).Id, sc = shower.Cells[0];
+            int gen = net.Devices.First(d => d.Type == "GravityGenerator").Id;
+            s.Run(Time.Minutes(1));
+            net.SetOn(gen, false);
+            s.Run(6);
+            net.SetValve(dev, true);
+            double drops0 = Enumerable.Range(0, glay.N).Sum(c => f.Drops[f.T.sWater * glay.N + c]), waste0 = net.WasteWater;
+            s.Run(Time.Minutes(1));
+            double drops = Enumerable.Range(0, glay.N).Sum(c => f.Drops[f.T.sWater * glay.N + c]) - drops0, waste = net.WasteWater - waste0;
+            int fc = dev < net.ShowerFloatCause.Length ? net.ShowerFloatCause[dev] : 0;
+            string why = fc != 0 ? s.Causes.Story(fc) : "";
+            int near = net.SpillNear(sc);
+            net.SetValve(dev, false);
+            net.SetOn(gen, true);
+            s.Run(Time.Minutes(1));
+            int after = dev < net.ShowerFloatCause.Length ? net.ShowerFloatCause[dev] : 0;
+            Check("화장실 사고 (C18) 무중력 샤워 물: 밸브를 열고 중력 발생기를 끄면 1분 뒤 샤워 물이 방울로 떠 있다 (오수가 늘지 않는다) · 원인 '떠다닌다' ← '꺼졌다' · 그 칸 물의 까닭 = 그 원인 · 중력이 돌아오면 지운다",
+                drops > 10 && waste < 1 && why.Contains("떠다닌다") && why.Contains("꺼졌다") && near == fc && after == 0,
+                $"방울 +{drops:0.0}몰 · 오수 +{waste:0.0} · '{why}' · 물의 까닭 {(near == fc && fc != 0 ? "그 원인" : near.ToString())} · 돌아온 뒤 {after}");
+        }
     }
 }

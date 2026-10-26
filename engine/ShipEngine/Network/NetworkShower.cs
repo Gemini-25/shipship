@@ -79,7 +79,13 @@ public sealed partial class Network
         ShowerMeter[d] += flow;
         double steam = waterK > 305 ? flow * 0.01 : 0;   // 따뜻한 물의 1%가 김으로 (8L면 80mL)
         if (steam > 0) F.AddGas(dev.Cell, T.gH2O, steam, waterK);
-        WasteWater += flow - steam;
+        if (F.Grav[dev.Cell] < Field.LowG)   // 무중력 (5단 C18): 물이 배수구로 빠지지 않고 방울로 떠다닌다 (원인 ← 중력이 무너진 까닭)
+        {
+            if (ShowerFloatCause.Length != Devices.Count) Array.Resize(ref ShowerFloatCause, Devices.Count);
+            if (ShowerFloatCause[d] == 0) ShowerFloatCause[d] = sim.Causes.Add(CauseKind.Machine, "무중력에 샤워 물이 배수구로 빠지지 않고 떠다닌다", sim.Tick, dev.Cell, GravityCauses(dev.Cell).lost);
+            F.AddDrops(dev.Cell, T.sWater, flow - steam);
+        }
+        else WasteWater += flow - steam;
         if (hot) HeatInto(dev, kw * 1000 * 0.15 * dt);   // 데운 물의 열은 거의 다 배수구로 — 칸에는 김 · 젖은 벽으로 15%
     }
 
@@ -92,6 +98,7 @@ public sealed partial class Network
     private void ShowerDrain(int d, double dt)
     {
         int c = Devices[d].Cell;
+        if (c >= 0 && d < ShowerFloatCause.Length && ShowerFloatCause[d] != 0 && F.Grav[c] >= Field.LowG) ShowerFloatCause[d] = 0;   // 중력이 돌아왔다 — 떠다닌 까닭을 지운다 (떠 있던 방울은 장이 떨어뜨린다)
         if (c < 0 || F.Grav[c] < Field.LowG || F.Severed[c] != 0) return;
         double have = F.Stored(T.sWater, c);
         if (have <= 0) return;

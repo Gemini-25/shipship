@@ -1243,6 +1243,12 @@ public sealed partial class Network : IEngine
             int d = Math.Abs(L.X(dev.Cell) - L.X(cell)) + Math.Abs(L.Y(dev.Cell) - L.Y(cell));
             if (d < bd) { bd = d; best = SealLeakCause[dev.Id]; }
         }
+        foreach (var dev in Devices)   // 무중력에 떠다닌 샤워 물 (5단 C18 — 같은 방 샤워 칸)
+        {
+            if (dev.Id >= ShowerFloatCause.Length || ShowerFloatCause[dev.Id] == 0 || dev.Room != room) continue;
+            int d = Math.Abs(L.X(dev.Cell) - L.X(cell)) + Math.Abs(L.Y(dev.Cell) - L.Y(cell));
+            if (d < bd) { bd = d; best = ShowerFloatCause[dev.Id]; }
+        }
         return best;
     }
 
