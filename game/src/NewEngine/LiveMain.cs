@@ -810,7 +810,7 @@ void fragment() {
             foreach (var l in lines) w = Math.Max(w, MeasureW(l, fs, false));
             var size = new Vector2(w + 18 * U, lines.Length * lineH + 10 * U);
             float top = head.Y - size.Y - 10 * U, gap = 6 * U;
-            Rect2 Fit(float x, float y) => new(new Vector2(Math.Clamp(x, 4, vp.X - size.X - 4), y), size);
+            Rect2 Fit(float x, float y) => new(new Vector2(Math.Clamp(x, 4, Math.Max(4, vp.X - size.X - 4)), y), size);   // 창보다 넓은 풍선은 왼쪽 끝에 (예전엔 오른쪽 끝이 왼쪽 끝 밑으로 내려가 Math.Clamp가 예외를 던졌다)
             bool Free(Rect2 r) => _bubblePlaced.TrueForAll(p => !p.box.Grow(2 * U).Intersects(r));
             var box = Fit(head.X - size.X / 2, top);
             if (!Free(box))
@@ -833,14 +833,14 @@ void fragment() {
             if (inner)
             {
                 var fill = new Color(0.86f, 0.92f, 1f, 0.82f * a);
-                var foot = new Vector2(Math.Clamp(head.X, box.Position.X + 10 * U, box.End.X - 10 * U), box.End.Y);
+                var foot = new Vector2(Math.Clamp(head.X, box.Position.X + 10 * U, Math.Max(box.Position.X + 10 * U, box.End.X - 10 * U)), box.End.Y);
                 DrawCircle(foot.Lerp(head, 0.35f), 3.2f * U, fill);
                 DrawCircle(foot.Lerp(head, 0.7f), 2f * U, fill);
             }
             else
             {
                 var fill = new Color(0.98f, 0.97f, 0.93f, 0.95f * a);
-                float tx = Math.Clamp(head.X, box.Position.X + 10 * U, box.End.X - 10 * U);
+                float tx = Math.Clamp(head.X, box.Position.X + 10 * U, Math.Max(box.Position.X + 10 * U, box.End.X - 10 * U));   // 빈 말 (너비 18 < 20) 풍선에서도 꼬리 자리가 뒤집히지 않게
                 DrawColoredPolygon(new[] { new Vector2(tx - 5 * U, box.End.Y - 1), new Vector2(tx + 5 * U, box.End.Y - 1), new Vector2(head.X, head.Y - 2 * U) }, fill);
             }
         }

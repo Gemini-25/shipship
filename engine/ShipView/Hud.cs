@@ -356,7 +356,7 @@ public static class HudLayout
             float lh = 0;
             for (int i = 0; i < f.Card.Length; i++) lh += Math.Max(26, Th(f.Card[i], i == 0 ? 19 : 16, CardW - 28, i == 0 ? 1 : 2) + 6);
             bool thing = f.CardIs == CardKind.Thing, more = !thing && f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] · 물건 카드: [사고 ›] (docs/UI2.md §5.4)
-            var card = new RectF(Side, leftY, CardW, Math.Min(20 + lh + 8 + (more ? 36 : 0), lowTop - leftY - 40));
+            var card = new RectF(Side, leftY, CardW, Math.Max(0, Math.Min(20 + lh + 8 + (more ? 36 : 0), lowTop - leftY - 40)));   // 아주 낮은 창에서는 0 (음수 높이를 그리지 않는다)
             if (more) h.Hits.Add(new UiHit(new RectF(Side + 8, card.Bottom - 36, CardW - 16, 28), UiAct.DetailOpen, 0, false, true, "자세히 보기 — 몸 · 마음 · 하는 일 · 아는 것 · 일지"));
             h.Areas["카드"] = card;
             h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28, leftY + 6, 28, 28), UiAct.CardClose, 0, false, true, "놓기 (Esc · 오른쪽 누르기)"));
@@ -383,7 +383,7 @@ public static class HudLayout
             float pw = f.Detail != DetailKind.None ? Math.Clamp(W - 32 - LeftCol - 300, 560, 920) : Math.Clamp(W - 32 - LeftCol - 560, 420, 640);   // 자세한 판은 넓게 (docs/UI2.md §5.2)
             panelLeft = W - Side - pw;
             float bottom = Math.Min(f.Show != Overlay.None ? legendBottom : view.Y - 8, crewRightEdge > panelLeft ? crewTop - 8 : float.MaxValue);   // 판 아래 끝: 가로로 겹치는 것 (범례 · 보기 묶음 · 사람 줄) 가운데 가장 위의 것 − 8
-            LayoutPanel(f, s, h, new RectF(panelLeft, 96, pw, bottom - 96), Tw, Th);
+            LayoutPanel(f, s, h, new RectF(panelLeft, 96, pw, Math.Max(0, bottom - 96)), Tw, Th);
         }
 
         // ── 주컴퓨터 말 창 (판이 닫혔을 때 · 탭 밑 오른쪽 · 누르면 주컴퓨터 판) ──
@@ -400,7 +400,8 @@ public static class HudLayout
         // ── 가운데 칸: 다시보기 띠 → 출항 준비 띠 → ★ → 알림 ──
         float colL = LeftCol, colR = (f.Panel != PanelKind.None || f.Talk.Length > 0 ? panelLeft : W) - Side, cy = 96;
         float colW = Math.Max(200, colR - colL);
-        RectF Center(float w, float hgt) { w = Math.Min(w, colW); float cx = Math.Clamp(W / 2 - w / 2, colL, colR - w); return new RectF(cx, cy, w, hgt); }
+        // 칸이 200보다 좁으면 (작은 창 · 넓은 자세한 판 · 화면 없이 띄운 창 64×64) 오른쪽 끝이 왼쪽 끝 밑으로 내려간다 — 칸 왼쪽에 붙인다 (예전엔 Math.Clamp가 장마다 예외를 던져 자리표가 비었다)
+        RectF Center(float w, float hgt) { w = Math.Min(w, colW); float cx = Math.Clamp(W / 2 - w / 2, colL, Math.Max(colL, colR - w)); return new RectF(cx, cy, w, hgt); }
         if (f.Replaying)
         {
             var r = Center(Math.Min(colW, Tw("다시보기 · " + f.Replay, 16, true) + 40 + 112 + 12), 40);

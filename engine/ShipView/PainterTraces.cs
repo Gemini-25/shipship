@@ -139,7 +139,10 @@ public sealed partial class Painter
         if (MoldMarksAt(life, c) is { } dots) MoldPut(img, dots, px, py);
     }
 
-    /// <summary>점 목록을 칸 (px, py)에 섞는다 — 불투명한 바탕은 정수로 반올림해 섞고 (Blend의 버림과 한 단 안) · 투명한 바탕 (문짝 위 얼룩 판)은 Blend 그대로.</summary>
+    /// <summary>점 목록을 칸 (px, py)에 섞는다 — 불투명한 바탕은 정수로 반올림해 섞고 (Blend의 버림과 한 단 안) · 투명한 바탕 (문짝 위 얼룩 판)은 Blend 그대로.
+    /// 처음부터 다 옮긴 기계어로 (그리기 예산 고침 — 물체 길 Structure.Hot과 같은 까닭): 곰팡이는 며칠 뒤에야 피어 이 고리가 처음 도는 때가 늦다 — 단계 번역이 그 뒤 몇 초를
+    /// 덜 옮긴 코드 (점마다 X · Y · R · G · B · A 읽기가 따로 부르기)로 돌려 곰팡이 1인 배 32도트 곰팡이 단계가 코어 하나에서 +2.6ms (단계 번역을 끄면 +0.5ms) · CI에서 +0.8 ~ +4.1ms였다. 그림은 그대로다.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
     private static void MoldPut(Img img, MoldDot[] dots, int px, int py)
     {
         var d = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(img.Px.AsSpan());

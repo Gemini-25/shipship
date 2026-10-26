@@ -70,6 +70,59 @@ public static partial class Program
         return f;
     }
 
+    /// <summary>자리표가 어느 창 · 어느 판에서도 무너지지 않는다 (묶음 '화면' — CI 띄워 보기 결함: 화면 없이 띄운 창 64×64에서 가운데 칸의 왼쪽 끝이 오른쪽 끝을 넘어
+    /// Math.Clamp가 장마다 예외를 던져 자리표가 비었다 · 1024×600의 자세한 판에서도 같았다). 가운데 칸이 모자라면 칸 왼쪽에 붙인다.</summary>
+    private static void HudFitRules()
+    {
+        var hud = new Hud();
+        var states = Enum.GetValues<PanelKind>().Select(k => (k, DetailKind.None))
+            .Concat(new[] { (PanelKind.People, DetailKind.Person), (PanelKind.Robots, DetailKind.Robot), (PanelKind.Journal, DetailKind.Computer) }).ToArray();
+        var talk = new[] { new TalkLine("09:12 로봇 2 → 식당 불", 1, 1), new TalkLine("09:12 식당 봉쇄 (사람이 안에 있다)", 2, 1), new TalkLine("09:13 식당 히터 전원을 내렸다 — 불이 났다", 0, 1) };
+        // 한 판: 그림을 차리고 셈한다 — 예외 · 넓이나 높이가 음수인 자리 · (inside면) 화면 밖 자리를 bad에 적는다
+        int Sweep(IEnumerable<(int W, int H)> sizes, bool inside, List<string> thrown, List<string> bad)
+        {
+            int layouts = 0;
+            foreach (var (pw, ph) in sizes)
+                foreach (int n in new[] { 3, 100 })
+                    foreach (var (kind, detail) in states)
+                        foreach (bool withTalk in new[] { false, true })
+                            foreach (bool replay in new[] { false, true })
+                                foreach (bool hold in new[] { false, true })
+                                {
+                                    var f = FakeFrame(n, true, true, kind == PanelKind.None ? PanelKind.People : kind, detail);
+                                    if (kind == PanelKind.None) { f.Panel = PanelKind.None; f.PanelTitle = ""; f.Detail = DetailKind.None; f.DetailTabs = Array.Empty<string>(); }
+                                    f.Talk = withTalk ? talk : Array.Empty<TalkLine>();
+                                    f.Replaying = replay; if (!replay) f.Replay = "";
+                                    f.Holding = hold;
+                                    string tag = $"{pw}×{ph} 사람 {n} 판 {kind}{(detail != DetailKind.None ? "·" + detail : "")}{(withTalk ? " · 말" : "")}{(replay ? " · 다시보기" : "")}{(hold ? " · 출항 준비" : "")}";
+                                    layouts++;
+                                    try { HudLayout.Build(f, new HudState(), pw, ph, Hud.Approx, Hud.ApproxLines, hud); }
+                                    catch (Exception e) { thrown.Add($"{tag}: {e.GetType().Name} {e.Message}"); continue; }
+                                    var all = hud.Areas.Select(a => (a.Key, a.Value)).Concat(hud.Blocks.Select(b => ("가림 " + b.Name, b.R))).Concat(hud.Hits.Select(x => ($"{x.Act}", x.R)))
+                                        .Concat(hud.PanelLines.Select(l => ($"판 줄 {l.Row}", l.R))).Concat(hud.CrewSlots.Select(c => ($"사람 칸 {c.Id}", c.R)));
+                                    foreach (var (name, r) in all)
+                                    {
+                                        if (float.IsNaN(r.X + r.Y + r.W + r.H) || r.W < -0.01f || r.H < -0.01f) bad.Add($"{tag}: {name} {r.W:0.#}×{r.H:0.#}");
+                                        else if (inside && (r.X < -0.5f || r.Y < -0.5f || r.Right > hud.W + 0.5f || r.Bottom > hud.H + 0.5f)) bad.Add($"{tag}: {name} 밖 ({r.X:0},{r.Y:0} {r.W:0}×{r.H:0} / {hud.W:0}×{hud.H:0})");
+                                    }
+                                }
+            return layouts;
+        }
+        {
+            var thrown = new List<string>(); var bad = new List<string>();
+            int layouts = Sweep(new[] { (1024, 600), (1152, 648), (1280, 720), (1366, 768), (1920, 1080), (2560, 1440) }, true, thrown, bad);
+            Check("화면 자리표 크기 (CI 띄워 보기 결함): 여섯 창 (1024×600 · 1152×648 · 1280×720 · 1366×768 · 1920×1080 · 2560×1440) × 판 갈래 모두 (닫힘 · 장면 · 항로 · 주컴퓨터 · 사슬 · 사람 · 로봇 · 사고 · 자세한 판 셋) × 주컴퓨터 말 있음 · 없음 × 다시보기 · 아님 × 출항 준비 · 아님 × 사람 3 · 100 — 셈이 예외를 던지지 않고 · 모든 자리의 넓이 · 높이가 0 이상 · 화면 안",
+                thrown.Count == 0 && bad.Count == 0, $"자리표 {layouts}가지 · 예외 {thrown.Count} {string.Join(" | ", thrown.Take(2))} · 무너진 자리 {bad.Count} {string.Join(" | ", bad.Take(3))}");
+        }
+        {
+            // 화면 없이 띄운 창 (Godot --headless: 64×64) · 아주 작은 창 — 단추가 다 들어가지 않아도 셈은 예외 없이 끝나고 넓이 · 높이가 음수인 자리가 없다
+            var thrown = new List<string>(); var bad = new List<string>();
+            int layouts = Sweep(new[] { (64, 64), (320, 200), (640, 360), (800, 600) }, false, thrown, bad);
+            Check("화면 자리표 작은 창: 화면 없이 띄운 창 64×64 (CI 띄워 보기 — 장마다 '462 cannot be greater than -456.7'였다) · 320×200 · 640×360 · 800×600 × 판 갈래 모두 × 말 · 다시보기 · 출항 준비 — 셈이 예외를 던지지 않고 넓이 · 높이가 음수인 자리가 없다",
+                thrown.Count == 0 && bad.Count == 0, $"자리표 {layouts}가지 · 예외 {thrown.Count} {string.Join(" | ", thrown.Take(2))} · 음수 자리 {bad.Count} {string.Join(" | ", bad.Take(3))}");
+        }
+    }
+
     private static void HudRules()
     {
         if (!Do("마우스")) return;
