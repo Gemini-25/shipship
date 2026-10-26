@@ -590,6 +590,7 @@ public sealed partial class LiveShow
         }
         show._lastHighlights = show.Dir.Highlights.Count; show._lastTitle = show._lastHighlights > 0 ? show.Dir.Highlights[^1].Title : "";   // 이어 본 첫 장에 지난 하이라이트를 띄우지 않는다
         show._chaptersSeen = show.Dir.Chapters.Count;   // 지난 날의 장 카드도
+        show.TallySeen();   // 저장 앞에 끝난 경과의 결산 띠도 (V8)
         return show;
     }
 }

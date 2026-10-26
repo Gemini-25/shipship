@@ -591,6 +591,8 @@ card.json: 배 · 배 이름 · 번호 · 항로 · 날 · 틱 · 산 이 · 탄
 | E1 | 경과 | 불씨 손 → 마디 차례 (일어남 ≤ 처음 안 이 ≤ 주컴퓨터 ≤ 맡김 ≤ 닿음 ≤ 끔) · 머리 '함장이 일으킨 불씨' · ▶ (디딤 · 로봇 2) |
 | E2 | 경과 | 늦은 까닭: 무선 방 '무선 센서 — 36초마다 읽는다' · 센서 선 끊긴 방 · 막힌 로봇 |
 | E3 | 경과 | 결산 띠 6초 · 견줌 줄 (같은 갈래 셋 넘을 때) · 사건 띠 줄 → 그 카드 |
+| E4 | 경과 | 감은 동안 끝난 경과 → 저장 · 이어 보기 → 멈춘 첫 장에 그 결산 띠가 다시 뜨지 않는다 |
+| E5 | 경과 | 같은 뿌리의 일이 다시 나 경과가 다시 열렸다가 끝나면 (이어 본 뒤) 결산 띠가 또 선다 · 6초 뒤 다시 뜨지 않는다 |
 | A1 | 연출 | 여운: 위험이 끝난 30초 뒤 빠르기 < 조용함의 반 · 5분 뒤 조용함 · 하루 예산 안 · 고정 빠르기면 없음 |
 | A2 | 연출 | 사람 순간: 추모 사실 → 그 방으로 · 조짐 빠르기 20초 · 예산 안 |
 | A3 | 연출 | 까닭 한 줄: 공기 조짐 → '느리게 — 화물칸 기압이 빨리 떨어진다' · 개발 말 0 |
@@ -701,7 +703,7 @@ card.json: 배 · 배 이름 · 번호 · 항로 · 날 · 틱 · 산 이 · 탄
 ### V8 — 경과 카드 · 결산 띠 · 손 결과 이름표 (화면 · 같음) · 어림 3시간 ✔
 - 무엇: §7.1 ~ 7.3.
 - 파일 · 함수: 새 `engine/ShipEngine/Story/DirectorEpisodes.cs` (`Episode` · `Director.Episodes` · `EpisodeNote` — `Observe` 사실 고리 · 맡은 이 닿음 · 끝 · 견줌) · 새 `engine/ShipView/LiveEpisode.cs` (`OpenEpisode(root)` · 카드 줄 · `Tally`) · `LiveLook.cs` (`CardKind.Episode`) · `Live.cs` (`Feed` — `FeedItem`에 `Root`) · `LiveHand.cs` (`HandAimNow` 이름표) · `DirectorRecord.cs` (경과 마디) · `Hud.cs` · `LiveMain.cs` (`DrawCard` 경과 · 가로 시계).
-- 시험: E1 ~ E3 · M5.
+- 시험: E1 ~ E5 · M5 (E4 · E5 — 검토 고침: 결산 띠는 뿌리와 끝 틱마다 한 번 · 이어 볼 때 저장 앞에 끝난 경과는 띠를 띄운 것으로 적는다).
 - 지문: 같음. Godot: `v8_episode.png` (`--ignite --ui=episode`) · `v8_tally.png` · `v8_hand_label.png`.
 - 비용: 열린 경과만 ≤ 3µs/틱 · 카드 짓기 ≤ 0.05ms.
 

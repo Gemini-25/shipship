@@ -193,6 +193,42 @@ public static partial class Program
                 bad.Count == 0, bad.Count == 0 ? $"'{fshow?.Dir.Episodes.LastOrDefault()?.Name}'" : string.Join(" | ", bad));
         }
 
+        // E4 · E5 (V7 · V8 검토): 감은 동안 끝난 경과 → 저장 · 이어 보기 → 첫 장에 그 결산 띠가 다시 뜨지 않는다 /
+        // 같은 뿌리의 일이 다시 나 (꺼진 불이 다시 붙었다) 경과가 다시 열렸다가 다시 끝나면 결산 띠가 또 선다 (뿌리마다 한 번이 아니라 끝마다 한 번 — 이어 본 뒤에도)
+        {
+            var show = new LiveShow(HandShip(126), "디딤호") { FrameBudget = 1000 };
+            var s = show.Sim; var aim = HandTargets(s);
+            show.FastForward(5);
+            s.Get<Hand>().Enqueue(Order(HandKind.Fire, aim.Bed, 1));
+            Episode? e = null;
+            for (int i = 0; i < 40 && (e = show.Dir.Episodes.LastOrDefault()) is not { End: >= 0 }; i++) show.FastForward(Time.Minutes(0.5));
+            string ffTally = show.Tally;   // 감은 동안 끝났다 — 띠 없음
+            var back = LiveShow.Resume(show.SaveBundle(SaveKind.Quit), s.Setup);
+            back.Paused = true; back.Advance(0.05);   // 이어 본 첫 장 (멈춘 채)
+            string first = back.Tally;
+            Check("경과 E4: 감은 동안 끝난 경과 (띠 없이 적힘) → 저장 · 이어 보기 → 멈춘 채 첫 장에 그 경과의 결산 띠가 다시 뜨지 않는다",
+                e is { End: >= 0 } && ffTally.Length == 0 && first.Length == 0,
+                e == null ? "경과가 없다" : $"끝 {e.End} · 감은 뒤 띠 '{ffTally}' · 이어 본 첫 장 띠 '{first}'");
+
+            var be = e == null ? null : back.Dir.EpisodeOf(e.Root);
+            long end0 = be?.End ?? -1; string before = "", again = "", after = "";
+            if (be is { End: >= 0 })
+            {
+                back.Advance(LiveShow.TallySec + 0.2);   // (멈춘 채) 앞 띠가 있었으면 사라지게 — 다시 끝난 띠만 본다
+                before = back.Tally;
+                var bs = back.Sim;
+                bs.Facts.Emit(bs.Tick, FactKind.Ignition, be.Cell, 0, be.Root);   // 같은 뿌리의 일이 다시 났다 — 경과를 잇는다
+                back.SetFixed(4);
+                for (int i = 0; i < 60 && be.End <= end0; i++) back.Advance(0.2);   // 다시 열려 (끝 −1) 다시 끝날 때까지 (끝이 앞 끝보다 늦다)
+                again = back.Tally;
+                back.Paused = true; back.Advance(LiveShow.TallySec + 0.2); back.Advance(0.05);
+                after = back.Tally;   // 6초 뒤 사라지고 다시 뜨지 않는다 (끝마다 한 번)
+            }
+            Check("경과 E5: 같은 뿌리의 일이 다시 나 경과가 다시 열렸다가 다시 끝나면 (이어 본 뒤) 결산 띠가 또 선다 ('…불 — n분 · …') · 6초 뒤 사라지고 다시 뜨지 않는다",
+                be != null && before.Length == 0 && be.End > end0 && again.StartsWith(be.Name + " — ") && after.Length == 0,
+                be == null ? "이어 본 경과가 없다" : $"앞 띠 '{before}' · 끝 {end0} → {be.End} · 띠 '{again}' · 6초 뒤 '{after}'");
+        }
+
         // 손 결과 이름표 (§7.3): 겨눌 때 '불씨 · 보통 — 침실 둘 침대 · 이 방 사람 2 (1명 잠) · 가장 가까운 소화기 4m'
         {
             var show = new LiveShow(HandShip(125), "디딤호") { FrameBudget = 1000 };
