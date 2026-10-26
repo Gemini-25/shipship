@@ -555,7 +555,7 @@ public sealed partial class Field : IEngine
         Outside.Save(w);
         // 칸 고체 열용량(설비를 앉히며 늘었다) · 구역별 '아직 고를 차이' · 겉면을 매 틱 다룬 때 · 구역을 지은 때의 문 · 구멍 — 다음 틱의 계산을 바꾸므로 찍는다
         w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole); w.Arr(DoorTaped); w.Arr(_topoTaped); w.Arr(DoorBleed); w.Arr(_topoBleed);
-        w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore);
+        w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore); w.Arr(_topoSevered);
         w.Tag("중력"); w.Arr(Grav); w.Arr(Drops); w.Arr(Airflow);
         w.Tag("층"); w.Arr(Strat); w.Arr(PlugBody); w.Arr(PlugProp);
         w.Tag("바람 압력"); w.Arr(WindPa);   // 마음(끌림 · 날림)이 장보다 먼저 지난 틱의 바람 압력을 읽는다 — 찍지 않으면 되살린 세계는 첫 틱에 0으로 읽어 갈라졌다
@@ -569,7 +569,7 @@ public sealed partial class Field : IEngine
         VentedTotal = r.F64();
         Outside.Load(r);
         r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>(); r.ArrInto(DoorTaped); _topoTaped = r.Arr<byte>(); r.ArrInto(DoorBleed); _topoBleed = r.Arr<byte>();
-        r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore);
+        r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore); _topoSevered = r.Arr<byte>();
         r.Tag("중력"); r.ArrInto(Grav); r.ArrInto(Drops); r.ArrInto(Airflow); _dropsAny = Drops.Any(v => v > 0);
         r.Tag("층"); r.ArrInto(Strat); r.ArrInto(PlugBody); r.ArrInto(PlugProp);
         r.Tag("바람 압력"); r.ArrInto(WindPa);

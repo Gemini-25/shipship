@@ -33,12 +33,14 @@ public sealed partial class Structure
         foreach (var a in who) _feet.Add(a);
         Footing(sim, false);
     }
+    /// <summary>셈 (찍지 않는다 — 물체 예산 시험): 발 디딤을 본 몸 수 (흐르기 전 · 뒤 합).</summary>
+    public long FootChecks;
     private readonly List<PropActor> _feet = new();   // 이번 틱 선 몸 (⑧ 요청 — 찍지 않는다: 같은 틱에 쓰고 ④가 틱 끝에 비운다)
 
     /// <summary>④ (장이 흐른 뒤): 같은 선 몸들을 이 틱 돌풍 · 틱 처음으로 되짚은 구멍 입으로 다시 본다 (한 틱 안에 빈 방의 돌풍도 놓치지 않는다) · 요청을 비운다.</summary>
     private void FootingAfter(Sim sim)
     {
-        if (_feet.Count > 0) Footing(sim, true);
+        if (_feet.Count > 0 && PropDetail > 0) Footing(sim, true);   // 상상 복제 (가벼운 셈 — §4-2)는 ⑧이 흐르기 전에 본 것만 (물체 예산 고침: 사람마다 틱에 두 번 훑던 몫)
         _feet.Clear(); _holds.Clear();
     }
 
@@ -48,12 +50,15 @@ public sealed partial class Structure
     /// </summary>
     private void Footing(Sim sim, bool afterFlow)
     {
+        FootChecks += _feet.Count;
         for (int k = 0; k < _feet.Count; k++)
         {
             var a = _feet[k];
             int c = a.Cell;
-            if (c < 0 || c >= L.N || !F.Passable(c) || F.Grav[c] < Field.LowG) continue;   // 무중력에서 떠 있는 몸은 ⑧이 떠다님으로 셈한다 (발 디딤이 없다)
-            double wx = F.WindX[c], wy = F.WindY[c], pa = Math.Sqrt(wx * wx + wy * wy) >= 0.5 ? F.WindPa[c] : 0;
+            if (c < 0 || c >= L.N) continue;
+            double wx = F.WindX[c], wy = F.WindY[c], pa = wx * wx + wy * wy >= 0.25 ? F.WindPa[c] : 0;
+            if (pa < 1 && !F.NearMouth(c)) continue;   // 바람도 구멍 입도 없는 칸 (거의 모두 — 물체 예산 고침: 상상 복제의 감압 틱마다 사람마다 기압 셈을 하지 않는다)
+            if (!F.Passable(c) || F.Grav[c] < Field.LowG) continue;   // 무중력에서 떠 있는 몸은 ⑧이 떠다님으로 셈한다 (발 디딤이 없다)
             double qm = F.HoleMouthPa(c, out int mouth, afterFlow ? Math.Exp(F.WindK[c] * _tickDt) : 1);
             if (qm > pa && mouth >= 0) { pa = qm; wx = L.X(mouth) - L.X(c); wy = L.Y(mouth) - L.Y(c); }
             if (pa < 1 || RagdollOf(a.Tag) >= 0) continue;

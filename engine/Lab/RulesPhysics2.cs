@@ -208,6 +208,24 @@ public static partial class Program
         if (Do("몸 물체"))
         {
             Console.WriteLine("\n[몸 물체 — 끌려가는 몸 (PH14)]");
+            // (0) 물체 예산 고침: 상상 복제 (가벼운 셈 — §4-2)는 발 디딤을 ⑧이 흐르기 전에 본 것만 (사람마다 틱에 한 번) · 참 세계는 장이 흐른 뒤 한 번 더 (두 번)
+            {
+                var s = ShipWorld.Crewed("Didim", 7, 6, 2);
+                s.Run(5);
+                var L = s.Layout; var f = s.Get<Field>();
+                int hull = Enumerable.Range(0, L.N).First(i => L.Hull[i] && L.Kind[i] == CellKind.Wall && L.Room[i] < 0 && Enumerable.Range(0, 4).Any(d => { int x = L.X(i) + (d == 0 ? 1 : d == 1 ? -1 : 0), y = L.Y(i) + (d == 2 ? 1 : d == 3 ? -1 : 0); return L.In(x, y) && L.Kind[L.Index(x, y)] == CellKind.Floor && L.Room[L.Index(x, y)] >= 0; }));
+                f.SetHole(hull, 0.5f);
+                var r = new Sim(s.Setup); r.Load(s.Save()); ShipMind.Imagined(r);
+                var st = s.Get<Structure>(); var rt = r.Get<Structure>();
+                long a0 = st.FootChecks, b0 = rt.FootChecks;
+                const int n = 10;
+                for (int k = 0; k < n; k++) { s.Step(); r.Step(); }
+                int crew = s.Get<Mind>().Agents.Count;
+                long real = st.FootChecks - a0, imag = rt.FootChecks - b0;
+                Check("몸 물체 (0) 물체 예산 고침: 외판 구멍 열 틱 — 상상 복제는 발 디딤을 사람 · 로봇마다 틱에 한 번만 보고 · 참 세계는 장이 흐른 뒤 한 번 더 본다 (예전: 복제도 두 번 — 감압 125틱 물체 몫 +35%)",
+                    imag > 0 && imag <= (long)n * crew && real > imag,
+                    $"참 세계 {real} · 상상 복제 {imag} (몸 {crew} × {n}틱 = {n * crew})");
+            }
             // (가) 바람에 발이 떨어져 8m/s로 끌려간 이가 3.5m 앞 벽에 부딪힌다 — 남은 운동 에너지만큼 타박 (원인 '끌려가다 부딪혔다') · 멈추면 다시 제 힘으로
             {
                 var lay = Worlds.Ascii(SpaceRoom);

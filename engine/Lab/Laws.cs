@@ -681,6 +681,7 @@ public static partial class Program
         WindCapLaws();    // 바람 끌림은 공기 빠르기를 넘지 않는다
         PairArmLaws();    // 짝 닿음의 팔은 제 껍질까지
         RegionDecayLaws();   // 바람의 줄어드는 빠르기는 구역 전체의 몫
+        VenusSaveLaws();   // 큰 기압 변화 뒤 찍고 되살림
         PlateLaws();      // 판 조각 600 상한 · 장부 (PH15)
     }
 
