@@ -567,7 +567,7 @@ public sealed partial class Painter
             int sc = L.Furniture[i].Cells[0];
             if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 2 || !Mine(sc)) continue;   // 김은 두 칸 위까지 오른다 (화면 아래 두 줄의 샤워 칸 김도)
             int d = DeviceOf(net, i);
-            if (d < 0 || !net.ShowerRunning(d) || !net.Working(d)) continue;   // 찬물 (온수기가 꺼졌다 · 전기가 없다)은 김이 없다
+            if (d < 0 || !net.ShowerRunning(d) || net.ShowerWaterK(d) <= 305) continue;   // 찬물 (온수기가 꺼졌다 · 전기가 없다 · 조절기가 열린 채 굳었다)은 김이 없다
             Steam(img, f.RelHumidity(sc), L.Room[sc], SteamHead(sc), (bx - x0) * T, (by - y0) * T - WashRise(3), x0 * T, y0 * T, frame, i, k);
         }
     }

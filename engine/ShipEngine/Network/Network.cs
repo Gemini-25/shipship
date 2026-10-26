@@ -409,7 +409,8 @@ public sealed partial class Network : IEngine
     public int BrokenCause(int device, Part p) => Broken[device * 4 + (int)p] != 0 && _brokeCause.TryGetValue(device * 4 + (int)p, out int bc) ? bc : 0;
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { if (p == Part.Filter) EmptyBed(device); Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
+    public void Repair(int device, Part p) { if (p == Part.Electric && device < ThermoFault.Length) { ThermoFault[device] = 0; ThermoCause[device] = 0; }   // 전기 부품을 갈면 온수기 조절기도 새것 (5단 C16)
+        if (p == Part.Filter) EmptyBed(device); Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -575,6 +576,7 @@ public sealed partial class Network : IEngine
             if (ef < 0 || On[d] == 0 || Broken[d * 4] != 0) continue;
             if (dev.Def.Role is "reactor" or "aux" or "battery") continue;
             if (_dropCut[d]) continue;   // 가지선이 끊겼다 — 그 장치로는 전류가 흐르지 않는다
+            if (d < ThermoFault.Length && ThermoFault[d] == 2) continue;   // 온수기 조절기가 열린 채 굳었다 — 데우지 않는다 (5단 C16)
             double kw = dev.Def.Kw * (dev.Def.Role == "o2gen" ? Math.Max(0.1, Duty[d]) : 1); // 산소 발생기는 일 몫만큼 (팬 · 정화는 늘 10%)
             load[ef] += kw;
             if (dev.Room >= 0) _roomLoad[dev.Room] += kw;
