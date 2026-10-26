@@ -4,7 +4,7 @@ using ShipView;
 namespace Lab;
 
 /// <summary>
-/// 예측 장부 (docs/UI2.md §4.5 · §8 F1 ~ F5 — 묶음 '예측 장부'): 주컴퓨터의 화면용 예측 고리 (봉쇄 상상 · 미리 돌려 보기 · 걸음 시간 · 물자 · 대피)를
+/// 예측 장부 (docs/UI2.md §4.5 · §8 F1 ~ F6 — 묶음 '예측 장부'): 주컴퓨터의 화면용 예측 고리 (봉쇄 상상 · 미리 돌려 보기 · 걸음 시간 · 물자 · 대피)를
 /// 관객의 장부가 맞댈 때 실제와 맞댄다 · 끼어든 일은 맞음 몫에서 뺀다 · 센서는 읽은 틱마다 방 하나씩 · 화면만 (쌍둥이 세계와 찍기 바이트가 같다).
 /// </summary>
 public static partial class Program
@@ -74,20 +74,33 @@ public static partial class Program
         }
 
         Lap("F1 · F5");
-        // ── F3 끼어든 일: 상상한 뒤 함장의 손 (폭발)을 끼우면 '끼어든 일' · 맞음 몫에서 빠진다 ──
+        // ── F3 끼어든 일: 상상한 뒤 함장의 손 (폭발)을 끼우면 '끼어든 일' · 맞음 몫에서 빠진다 / 헛손 (배 밖을 누름 — 일어나지 않았다)은 끼어든 일이 아니다 ──
+        (LiveShow show, Forecast? seal, HandOrder? done) HandWorld(int cell)
         {
             bool armed = false;
             var (show, _, _) = SealWorld((s, k) =>
             {
                 if (armed || s.Get<ShipMind>().Guesses is not { Count: > 0 } g || g.Newest(0).Kind != GuessKind.Seal) return;
                 armed = true;
-                s.Get<Hand>().Enqueue(new HandOrder { Kind = HandKind.Blast, Cell = At(18, 2), Size = 0 });   // 다른 방 (오른쪽 방)
+                s.Get<Hand>().Enqueue(new HandOrder { Kind = HandKind.Blast, Cell = cell, Size = 0 });
             });
-            var seal = show.Book.Closed.FirstOrDefault(x => x.G.Kind == GuessKind.Seal);
+            HandOrder? done = null;
+            foreach (var o in show.Sim.Get<Hand>().Done) if (o.Kind == HandKind.Blast) { done = o; break; }
+            return (show, show.Book.Closed.FirstOrDefault(x => x.G.Kind == GuessKind.Seal), armed ? done : null);
+        }
+        {
+            var (show, seal, done) = HandWorld(At(18, 2));   // 다른 방 (오른쪽 방)
             var (right, total) = show.Book.Summary();
-            Check("예측 장부 F3 끼어든 일: 봉쇄 상상 뒤 다른 방에 함장이 일으킨 폭발 — 그 예측은 '끼어든 일'로 따로 두고 맞음 몫 (맞음 / 맞댐)에서 뺀다",
-                armed && seal != null && seal.State == ForecastState.Interfered && seal.Why.Contains("함장이 일으킨") && show.Book.Interfered[(int)GuessKind.Seal] == 1 && total == show.Book.Right.Sum() + show.Book.Wrong.Sum(),
-                $"손 {armed} · {seal?.State} '{seal?.Why}' · 맞음 {right}/{total}");
+            Check("예측 장부 F3 끼어든 일: 봉쇄 상상 뒤 다른 방에 함장이 일으킨 폭발 (원인 마디가 붙은 손) — 그 예측은 '끼어든 일'로 따로 두고 맞음 몫 (맞음 / 맞댐)에서 뺀다",
+                done is { Cause: > 0 } && seal != null && seal.State == ForecastState.Interfered && seal.Why.Contains("함장이 일으킨") && show.Book.Interfered[(int)GuessKind.Seal] == 1 && total == show.Book.Right.Sum() + show.Book.Wrong.Sum(),
+                $"손 {(done == null ? "없음" : $"원인 마디 {done.Value.Cause}")} · {seal?.State} '{seal?.Why}' · 맞음 {right}/{total}");
+        }
+        {
+            var (show, seal, done) = HandWorld(-7);   // 배 밖 — 판정에 걸려 일어나지 않는다 (원인 마디 없이 손 장부에만)
+            string why = done is { } d ? Hand.Why(show.Sim, d) : "";
+            Check("예측 장부 F3 헛손: 봉쇄 상상 뒤 함장의 손이 판정에 걸려 일어나지 않았다 (원인 마디 0 · 세계 그대로) — 끼어든 일이 아니다 · 그 예측은 맞음 · 틀림으로 맞댄다",
+                done is { Cause: 0 } && why.Length > 0 && seal != null && seal.State is ForecastState.Right or ForecastState.Wrong && seal.Interrupt.Length == 0 && show.Book.Interfered.Sum() == 0,
+                $"손 {(done == null ? "없음" : $"원인 마디 {done.Value.Cause} '{why}'")} · {seal?.State} '{seal?.Why}'");
         }
 
         Lap("F3");
@@ -156,6 +169,32 @@ public static partial class Program
             Check("예측 장부 F4 센서 맞대기: 주컴퓨터가 읽은 틱마다 방 하나씩 그 틱 앞 참값과 견준다 — 선으로 읽은 방은 어긋남 0 (같은 셈 · 외판 구멍으로 기압이 움직이는 동안) · 못 본 방은 따로 센다 (전선을 끊은 뒤)",
                 power >= 0 && book.SensorWire > 8 && book.SensorWireRight == book.SensorWire && book.SensorBlind > 0,
                 $"선 {book.SensorWireRight}/{book.SensorWire} · 무선 {book.SensorRadioRight}/{book.SensorRadio} · 못 봄 {book.SensorBlind} · 장부 틱마다 {obsUs:0.0}µs (방 {L.Rooms.Count})");
+        }
+
+        // ── F6 물자 날: 주컴퓨터가 한 시간마다 셈해도 장부는 하루에 하나 (하루 창이 겹치지 않게) · 지금 하는 예측에 물자 한 줄 (마지막 셈) · 넉넉한 날도 하루에 한 줄 ──
+        {
+            var s = Worlds.Full(lay, 2);
+            var show = new LiveShow(s, "시험호");
+            var sm = s.Get<ShipMind>(); var book = show.Book;
+            long t0 = s.Tick;
+            // 하루를 돌리지 않고 화면용 고리에 한 시간마다의 셈을 넣는다 (장부는 고리와 틱만 읽는다): 첫날은 줄어드는 셈 스물넷 · 이튿날은 넉넉한 셈 스물넷
+            for (int h = 0; h < 48; h++)
+            {
+                bool rich = h >= 24;
+                (sm.Guesses ??= new Ring<Guess>(128)).Add(new Guess { Tick = t0 + h * Time.TicksPerHour, Kind = GuessKind.Supply, Room = -1, Obj = 2, Incident = -1, A = rich ? 999 : 40 - h, B = rich ? 999 : 15, Verdict = 0 });
+                book.Observe(s);
+                if (h == 23)
+                {
+                    var rows = Predict(show);
+                    int open = book.Open.Count(x => x.G.Kind == GuessKind.Supply), lines = rows.Count(x => x.Main.StartsWith("물자 —"));
+                    bool last = rows.Any(x => x.Main.StartsWith("물자 —") && x.Main.Contains("식량 17일"));   // 마지막 셈 (40 − 23)
+                    Check("예측 장부 F6 물자 날: 한 시간마다 셈해도 장부가 받는 것은 하루에 하나 (하루 창이 겹치지 않게) · 지금 하는 예측에 물자 줄 하나 (마지막 셈의 날)",
+                        open == 1 && lines == 1 && last, $"열린 물자 {open} · 물자 줄 {lines} · 마지막 셈 {last} ({string.Join(" | ", rows.Where(x => x.Main.StartsWith("물자")).Take(2).Select(x => x.Main))})");
+                }
+            }
+            int closed = book.Closed.Count(x => x.G.Kind == GuessKind.Supply);
+            Check("예측 장부 F6 넉넉한 날: 넉넉한 셈 (맞대지 않는 것)도 장부에는 하루에 한 줄 — 지난 예측과 장부 200줄을 물자가 밀어내지 않는다",
+                closed == 1 && book.Unmatched[(int)GuessKind.Supply] == 1, $"지난 물자 줄 {closed} · 맞댈 수 없는 것 {book.Unmatched[(int)GuessKind.Supply]}");
         }
     }
 }

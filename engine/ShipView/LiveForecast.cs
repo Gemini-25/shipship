@@ -55,6 +55,10 @@ public sealed class ForecastBook
     private double _truthKPa, _truthO2;
     private int _handSeen;
     private long _factsSeen;
+    /// <summary>물자 날을 다시 받을 틱: 주컴퓨터는 한 시간마다 셈하지만 하루 창이 겹치는 셈 스물넷은 같은 하루를 맞대므로 장부는 하루에 하나만 받는다 (지난 예측 · 장부 200줄을 물자가 밀어내지 않게).</summary>
+    private long _supplyFrom = long.MinValue;
+    /// <summary>마지막 물자 셈 (장부가 받지 않은 것도 — '지금 하는 예측'의 물자 줄은 이 날을 보인다).</summary>
+    public Guess? LastSupply;
 
     /// <summary>그 칸의 방 (벽 · 문 칸은 곁의 첫 방 — 없으면 -1).</summary>
     private static int RoomNear(Layout L, int c)
@@ -124,14 +128,14 @@ public sealed class ForecastBook
         }
     }
 
-    /// <summary>끼어든 일: 함장의 손 (받은 손이 적용됐다) · 다른 곳의 새 사고 (불 · 벽 뚫림 · 관 샘).</summary>
+    /// <summary>끼어든 일: 함장의 손 (받은 손이 실제로 일어났다 — 원인 마디가 붙은 것만) · 다른 곳의 새 사고 (불 · 벽 뚫림 · 관 샘).</summary>
     private void Interruptions(Sim w, ShipMind sm, long now)
     {
         if (w.Find<Hand>() is { } hand && hand.Done.Count > 0 && hand.Done[^1].Seq != _handSeen)   // 새로 적용된 손이 있을 때만 훑는다
         {
             if (hand.Done[^1].Seq < _handSeen) _handSeen = 0;
             foreach (var o in hand.Done)
-                if (o.Seq > _handSeen && o.Kind != HandKind.Route) _events.Add((o.Tick, -1, "함장이 일으킨 " + LiveShow.HandName(o.Kind), true));
+                if (o.Seq > _handSeen && o.Kind != HandKind.Route && o.Cause != 0) _events.Add((o.Tick, -1, "함장이 일으킨 " + LiveShow.HandName(o.Kind), true));   // 헛손 (판정에 걸려 일어나지 않았다 — 원인 마디 0)은 세계를 바꾸지 않았다
             _handSeen = hand.Done[^1].Seq;
         }
         // 새 사고의 시작 (월드 사실 — 불이 붙었다 · 벽이 터졌다 · 관이 샌다): 같은 사고가 번진 것 (옆 방으로 새는 공기 · 쓰러짐)은 상상이 이미 셈한 미래라 끼어든 일이 아니다
@@ -211,6 +215,12 @@ public sealed class ForecastBook
             if (g.Verdict == 1) { OffSum[(int)GuessKind.Step] += st.ActA / Math.Max(0.1, st.G.A); OffN[(int)GuessKind.Step]++; }
             Close(st, ok ? ForecastState.Right : ForecastState.Wrong, ok ? "" : g.Verdict == 0 ? (st.ByPerson ? "사람이 계획대로 하지 못했다 — 막혔다 · 시간을 넘겼다" : "막혔다 · 시간을 넘겼다") : st.BlindSeen ? "못 본 방이 있었다 — 더 오래 걸렸다" : "더 오래 걸렸다", g.Tick);
             return;
+        }
+        if (g.Kind == GuessKind.Supply)
+        {
+            LastSupply = g;
+            if (g.Tick < _supplyFrom) return;   // 받은 하루 창 안의 셈 — 같은 하루를 맞댄다
+            _supplyFrom = g.Tick + Time.TicksPerDay;
         }
         var fc = new Forecast { G = g, Seq = ++Seq, BlindSeen = AnyBlind(w, sm) };
         switch (g.Kind)
@@ -414,7 +424,8 @@ public sealed partial class LiveShow
                 case GuessKind.Supply:
                 {
                     long next = now + ((37 - now % Time.TicksPerHour) % Time.TicksPerHour + Time.TicksPerHour) % Time.TicksPerHour;
-                    rows.Add(new PanelRow($"물자 — 보통으로 쓰면 식량 {(g.A < 999 ? $"{g.A:0}일" : "줄지 않음")} · 물 {(g.B < 999 ? $"{g.B:0}일" : "줄지 않음")}", $"하루 뒤 ({HourMin(fc.Due)}) 실제로 쓴 양과 맞댄다 · 다음 셈 {HourMin(next)}", false, Key: DK(1000 + fc.Seq)));
+                    var last = book.LastSupply ?? g;   // 마지막 셈의 날 (장부가 받은 것은 하루에 하나 — 그 셈의 때에 맞댄다)
+                    rows.Add(new PanelRow($"물자 — 보통으로 쓰면 식량 {(last.A < 999 ? $"{last.A:0}일" : "줄지 않음")} · 물 {(last.B < 999 ? $"{last.B:0}일" : "줄지 않음")}", $"{HourMin(g.Tick)} 셈을 하루 뒤 ({HourMin(fc.Due)}) 실제로 쓴 양과 맞댄다 · 다음 셈 {HourMin(next)}", false, Key: DK(1000 + fc.Seq)));
                     break;
                 }
                 case GuessKind.Shelter:
