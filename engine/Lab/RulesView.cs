@@ -51,6 +51,7 @@ public static partial class Program
         LiveRules(lay);
         ArtKeyRules();   // 그림 열쇠 — 물건 아이콘 · 드론 · 가구 빛 (RulesArt.cs)
         WorkerClockRules();   // 일꾼을 기다리는 그림 시계 (LawsWorker.cs)
+        HudFitRules();   // 자리표가 어느 창 · 어느 판에서도 무너지지 않는다 (RulesHud.cs)
     }
 
     /// <summary>관전 화면 (Godot 장면의 속): 연출의 빠르기를 따르고 · 멈춤 · 밀린 것은 버림 · 카메라가 일 난 곳으로 · 세계는 그대로.</summary>
