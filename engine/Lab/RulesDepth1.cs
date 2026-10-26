@@ -41,6 +41,30 @@ public static partial class Program
             float dLo = lo.life[lo.b].LungDamage, dHi = hi.life[hi.b].LungDamage, d0 = none.life[none.b].LungDamage;
             Check("포자 농도에 비례: 곰팡이 0.8 방의 폐 손상이 0.1 방의 네 배 넘게 · 곰팡이 없는 마른 방은 손상 0 (계단이 아니다 — 0.31이든 1.0이든 같던 독)",
                 dHi > dLo * 4 && dLo > 0 && d0 == 0, $"0.1 → {dLo:0.00000} · 0.8 → {dHi:0.00000} · 0 → {d0:0.00000}");
+
+            // 원인이 다른 두 얼룩 (왼쪽 · 오른쪽 물관 샘) 사이를 10분마다 오간다 (두 시간 · 열두 번 — 중간에 저장 · 되살림): 알림은 얼룩마다 한 번 — 다쳤다 둘
+            //   (DF1 검토 고침 — 예전: 마지막에 알린 얼룩 하나만 기억해 오갈 때마다 다시 '다쳤다' 열두 번 · 원망 · 기록 소음)
+            {
+                var sw = new Sim(new SimSetup(Worlds.Ascii(Worlds.Symmetric), 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); }));
+                var f = sw.Get<Field>(); f.Adiabatic = true; f.FillAir(humidity: 0.7);
+                var l = sw.Get<Life>();
+                int left = sw.Causes.Add(CauseKind.Leak, "왼쪽 물관 이음매가 샜다", sw.Tick), right = sw.Causes.Add(CauseKind.Leak, "오른쪽 물관 이음매가 샜다", sw.Tick);
+                for (int x = 1; x <= 9; x++)
+                    for (int y = 1; y <= 5; y++)
+                        if (x <= 3 || x >= 7) { int c = Worlds.At(sw.Layout, x, y); f.AddStore(c, f.T.sWater, 80); f.WetCause[c] = x <= 3 ? left : right; l.Mold[c] = 0.4f; }
+                sw.Run(130);
+                int body = l.AddBody(Worlds.At(sw.Layout, 2, 3));
+                for (int k = 0; k < 12; k++)
+                {
+                    if (k == 6) { sw = sw.Clone(); l = sw.Get<Life>(); }
+                    l.Move(body, Worlds.At(sw.Layout, k % 2 == 0 ? 2 : 8, 3));
+                    sw.Run(Time.Minutes(10));
+                }
+                var hurts = sw.Facts.Since(0).Where(x => x.Kind == FactKind.Hurt && x.Actor == body).Select(x => sw.Causes.Story(x.Cause)).ToList();
+                Check("원인이 다른 두 얼룩 사이를 열두 번 오가도 (중간에 저장 · 되살림) '다쳤다'는 얼룩마다 한 번 — 둘 (왼쪽 물관 샘 · 오른쪽 물관 샘에 하나씩)",
+                    hurts.Count == 2 && hurts.Count(h => h.StartsWith("왼쪽 물관")) == 1 && hurts.Count(h => h.StartsWith("오른쪽 물관")) == 1,
+                    $"다쳤다 {hurts.Count}번 · {string.Join(" / ", hurts.Take(3))}");
+            }
         }
 
         // ── DF1 원인 사슬 (보고서 §4-15): 쓰러짐 · 죽음마다 원인 마디가 있고 · 그 까닭을 이름으로 · 뿌리까지 / 빈 이름을 채운다 ──
@@ -89,6 +113,18 @@ public static partial class Program
             Check("까닭을 이름으로: 앞서 쌓인 산소 부족 → '숨이 모자라 쓰러졌다' (앞서 다친 일에 잇는다) · 뜨거운 방의 힘든 일 → 체온이 올라 '몸이 너무 뜨거워' 쓰러진다",
                 sbS.StartsWith("연기 찬 방에 오래 갇혀 있었다") && sbS.Contains("숨이 모자라") && downC.Kind == FactKind.Collapsed && scS.Contains("뜨거워"),
                 $"산소 '{sbS}' · 더위 '{scS}' (체온 {lc[bc].CoreK - 273.15:0.0}℃)");
+
+            // (다-2) 맑은 20℃ 방에서 곪은 상처 (감염 0.95) · 앓음의 열: 설정점이 40℃를 넘어 쓰러진다 — '열이 너무 올라 쓰러졌다' · 사슬이 곪은 상처에 닿는다
+            //   (DF1 검토 고침 — 예전: 체온만 보고 '몸이 너무 뜨거워졌다' — 뿌리 없음 · 둘레에 달군 장치 · 멈춘 냉각이 있으면 그것을 탓했다)
+            var sf = BodyWorld(); var lf = sf.Get<Life>(); int bf = lf.AddBody(Worlds.At(sf.Layout, 5, 3));
+            int sore = sf.Causes.Add(CauseKind.Biology, "다리 상처가 곪았다", sf.Tick);
+            for (long k = 0; k < Time.Hours(12) && lf[bf].Conscious != 0; k++) { lf[bf].Infect = 0.95f; lf[bf].InfectCause = sore; lf[bf].Ill = 2; sf.Step(); }
+            var downF = sf.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Collapsed && x.Actor == bf);
+            string sfS = downF.Cause != 0 ? sf.Causes.Story(downF.Cause) : "";
+            Audit(sf, "열");
+            Check("감염 · 앓음의 열로 쓰러지면 (맑은 20℃ 방) '열이 너무 올라 쓰러졌다' — 사슬이 곪은 상처에 닿는다 · '몸이 너무 뜨거워'(바깥 열)가 아니다",
+                downF.Kind == FactKind.Collapsed && sfS.StartsWith("다리 상처가 곪았다") && sfS.Contains("열이 너무 올라") && !sfS.Contains("너무 뜨거워"),
+                $"'{sfS}' (체온 {lf[bf].CoreK - 273.15:0.0}℃ · {Time.Clock(sf.Tick)})");
             Check("모든 쓰러짐 · 죽음 사실에 원인 마디가 있고 그 글이 까닭을 말한다 (그냥 '쓰러졌다' 마디가 사슬에 없다)", audit.Count == 0,
                 audit.Count == 0 ? "빠진 것 없음" : string.Join(" / ", audit.Take(4)));
 
