@@ -914,8 +914,10 @@ public sealed partial class Mind
     private readonly float[] _g;
     private readonly int[] _from, _stamp;
     private int _stampId;
-    private readonly PriorityQueue<int, float> _pq = new();
-    private readonly List<int> _dangerFire = new(), _dangerVac = new();
+    private readonly Heap4 _pq = new();   // PriorityQueue<int, float>와 같은 차례 (Heap4)
+    private readonly List<int> _dangerFire = new(), _dangerVac = new(), _fireOdd = new();
+    private int[] _fireNear = Array.Empty<int>();   // 칸 → 이 길에서 불이라 믿는 곳 둘레면 그 길 번호 (찍지 않는다)
+    private int _fireNearId;
 
     public const int MaxExpand = 40000;
     /// <summary>길찾기 셈 (재기 — 찍지 않는다): 부른 수 · 못 찾은 수 · 펼친 칸 수.</summary>
@@ -932,6 +934,7 @@ public sealed partial class Mind
     }
 
     /// <summary>4방향 A*: 가구 +0.5 · 쓰러진 가구 · 문짝 +4 · 닫힌 문 +2 · 안 열린다고 믿는 문은 막힘 · 불이라 믿는 곳 둘레 +15 · 진공이라 믿는 구역 +25.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private bool FindPath(Agent a, int from, int to, int near, bool throughStuck = false)
     {
         a.Path.Clear(); a.PathIdx = 0;
@@ -948,20 +951,38 @@ public sealed partial class Mind
             else if (b.Kind == BeliefKind.Vacuum && a.IsPerson && !suit && F.RegionOf.Length > b.Cell && F.RegionOf[b.Cell] >= 0) _dangerVac.Add(F.RegionOf[b.Cell]);
         }
         if (++_stampId == int.MaxValue) { Array.Clear(_stamp); _stampId = 1; }
+        // 불이라 믿는 곳 둘레 (두 칸 — Dist ≤ 2인 칸)를 길마다 한 번 적는다: 펼친 칸의 이웃마다 믿는 불을 다 훑지 않는다 (위기 틱 길 셈 — 더하는 값 · 차례는 같다)
+        if (++_fireNearId == int.MaxValue) { Array.Clear(_fireNear); _fireNearId = 1; }
+        _fireOdd.Clear();
+        foreach (int fc in _dangerFire)
+        {
+            if ((uint)fc >= (uint)L.N) { _fireOdd.Add(fc); continue; }   // 칸 밖 (없어야 한다 — 예전 셈 그대로 Dist로)
+            int fx = L.X(fc), fy = L.Y(fc);
+            for (int y = Math.Max(0, fy - 2); y <= Math.Min(L.H - 1, fy + 2); y++)
+                for (int x = Math.Max(0, fx - 2); x <= Math.Min(L.W - 1, fx + 2); x++)
+                    _fireNear[L.Index(x, y)] = _fireNearId;
+        }
         _pq.Clear();
         _g[from] = 0; _from[from] = -1; _stamp[from] = _stampId;
         _pq.Enqueue(from, H(from, to, near));
-        Span<int> nb = stackalloc int[4];
+        // 칸의 x · y는 펼친 칸에서 한 번 (이웃은 ±1 — H · Goal · Layout.Neighbors가 칸마다 나누던 것을 덜어 · 같은 값)
+        int W = L.W, Hh = L.H, tx = to % W, ty = to / W;
+        Span<int> nb = stackalloc int[4], nx = stackalloc int[4], ny = stackalloc int[4];
         int expanded = 0, goal = -1;
         while (_pq.TryDequeue(out int cur, out float f))
         {
-            if (Goal(cur, to, near)) { goal = cur; break; }
+            int cx = cur % W, cy = cur / W;
+            if (near == 0 ? cur == to : Math.Max(Math.Abs(cx - tx), Math.Abs(cy - ty)) <= near) { goal = cur; break; }   // 닿았다 (near 0: 그 칸 · 아니면 Dist ≤ near)
             if (++expanded > MaxExpand) break;
             float gc = _g[cur];
-            if (f - H(cur, to, near) > gc + 1e-3f) continue; // 낡은 항목
-            L.Neighbors(cur, nb);
-            foreach (int j in nb)
+            if (f - HAt(cx, cy, tx, ty, near) > gc + 1e-3f) continue; // 낡은 항목
+            nb[0] = cx > 0 ? cur - 1 : -1; nx[0] = cx - 1; ny[0] = cy;   // Layout.Neighbors 차례 (왼 · 오른 · 위 · 아래)
+            nb[1] = cx < W - 1 ? cur + 1 : -1; nx[1] = cx + 1; ny[1] = cy;
+            nb[2] = cy > 0 ? cur - W : -1; nx[2] = cx; ny[2] = cy - 1;
+            nb[3] = cy < Hh - 1 ? cur + W : -1; nx[3] = cx; ny[3] = cy + 1;
+            for (int n = 0; n < 4; n++)
             {
+                int j = nb[n];
                 if (j < 0 || F.Severed[j] != 0) continue;   // 떨어져 나간 자리는 우주다 (조각 사이를 걸어 건널 수 없다)
                 if (keepOut && L.Room[j] >= 0 && L.Room[j] != fromRoom && KeptOut(a, L.Room[j])) continue;   // ⑩ 출입 금지 방으로는 길을 잡지 않는다 (따르는 이)
                 bool outside = !L.IsSpace(j);
@@ -979,12 +1000,13 @@ public sealed partial class Mind
                         if (!suit && Believes(a, BeliefKind.Leak, j, 0) > 0.4f) cost += 30; // 쉬익대는 닫힌 문 너머는 빠졌을지 모른다
                     }
                 }
-                foreach (int fc in _dangerFire) if (Dist(j, fc) <= 2) { cost += 15; break; }
+                if (_fireNear[j] == _fireNearId) cost += 15;
+                else foreach (int fc in _fireOdd) if (Dist(j, fc) <= 2) { cost += 15; break; }
                 if (_dangerVac.Count > 0 && j < F.RegionOf.Length && F.RegionOf[j] >= 0 && _dangerVac.Contains(F.RegionOf[j]) && !_dangerVac.Contains(F.RegionOf[from] < 0 ? -2 : F.RegionOf[from])) cost += 25;
                 float ng = gc + cost;
                 if (_stamp[j] == _stampId && _g[j] <= ng) continue;
                 _stamp[j] = _stampId; _g[j] = ng; _from[j] = cur;
-                _pq.Enqueue(j, ng + H(j, to, near));
+                _pq.Enqueue(j, ng + HAt(nx[n], ny[n], tx, ty, near));
             }
         }
         PathCalls++; PathExpanded += expanded;
@@ -994,6 +1016,7 @@ public sealed partial class Mind
         return true;
     }
 
-    private bool Goal(int c, int to, int near) => near == 0 ? c == to : Dist(c, to) <= near;
     private float H(int c, int to, int near) => Math.Max(0, Manhattan(c, to) - near);
+    /// <summary>H와 같은 값 — 칸의 x · y를 이미 알 때.</summary>
+    private static float HAt(int x, int y, int tx, int ty, int near) => Math.Max(0, Math.Abs(x - tx) + Math.Abs(y - ty) - near);
 }

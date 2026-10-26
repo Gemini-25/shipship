@@ -148,7 +148,7 @@ public sealed partial class Mind : IEngine
         HL(BeliefKind.Water, "물"); HL(BeliefKind.Spark, "합선"); HL(BeliefKind.StuckDoor, "안 열리는 문"); HL(BeliefKind.Help, "도와 달라");
         HL(BeliefKind.Grind, "기계 소리");
 
-        _g = new float[L.N]; _from = new int[L.N]; _stamp = new int[L.N];
+        _g = new float[L.N]; _from = new int[L.N]; _stamp = new int[L.N]; _fireNear = new int[L.N];
     }
 
     // ───────────────────────── 사람 · 로봇 넣기 ─────────────────────────
@@ -483,6 +483,13 @@ public sealed partial class Mind : IEngine
         _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>(); _work ??= sim.Find<Work>();
     }
 
+    /// <summary>
+    /// 처음부터 다 옮긴 기계어로 (마음 위기 틱 예산 고침 — <see cref="Structure"/>의 물체 길과 같은 까닭 · 셈 · 차례는 그대로라 결과가 같다):
+    /// 드물게 부르지만 한 번에 오래 도는 판단 (어울릴 자리 · 빈자리 · 이야깃거리 · 틱마다 눈여겨볼 칸)은 덜 옮긴 코드로 돌다 첫 위기 한가운데에서 고리째 다시 옮기느라 (OSR) 그 틱이 3 ~ 7ms 멈칫했고 ·
+    /// 위기 틱에 몰리는 길 (믿음 더하기 · 듣기 · 외침 · 길찾기 · 틱 한 바퀴)은 단계 번역이 늦어 첫 위기 200 ~ 400틱 동안 재는 판(계측 코드)으로 돌았다.
+    /// </summary>
+    internal const System.Runtime.CompilerServices.MethodImplOptions Hot = System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization;
+
     /// <summary>마음 안 단계별 시간 (실험실 --profile — 켜 두면 잰다 · 생각 · 걸음은 사람 · 로봇마다 모아서).</summary>
     public static Dictionary<string, double>? Prof;
     /// <summary>마음 안 단계별 새로 잡은 바이트 (Prof와 함께 · null이 아니면 잰다).</summary>
@@ -507,6 +514,7 @@ public sealed partial class Mind : IEngine
         Prof![k] = Prof.GetValueOrDefault(k) + ms;
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     public void Step(Sim sim, double dt)
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;

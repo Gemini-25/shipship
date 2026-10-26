@@ -42,6 +42,7 @@ public sealed partial class Mind
     // ───────────────────────── 믿음 ─────────────────────────
 
     /// <summary>믿음을 더하거나 고친다 — 같은 종류가 가까우면(3칸 · 대상이 있으면 같은 대상) 합친다. 새 믿음이면 참.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     public bool Learn(Agent a, long tick, BeliefKind kind, int cell, int subject, float conf, BeliefSource src, int cause = 0, float size = 0)
     {
         if (src is BeliefSource.Told or BeliefSource.Screen)
@@ -146,6 +147,7 @@ public sealed partial class Mind
     public static bool SmellsAlmond(ulong seed, int person) => Rng.Mix(Rng.Mix(seed ^ Rng.Key("아몬드")) ^ (ulong)person) % 10 < 6;
 
     /// <summary>이 사람이 그 종류를 그 칸 근처(r칸)에 믿나 — 가장 확신하는 것.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     public float Believes(Agent a, BeliefKind kind, int cell, int r = 3)
     {
         float best = 0;
@@ -374,6 +376,7 @@ public sealed partial class Mind
     }
 
     /// <summary>매 틱 한 번: 불꽃(합선) 칸 · 장치 칸 표.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void PrepareSenses()
     {
         _sparks.Clear();
@@ -560,6 +563,7 @@ public sealed partial class Mind
     /// <summary>먹먹한 귀(일시 청력 손실) 때문에 못 들은 소리 수 (확인용 — 찍지 않는다).</summary>
     public long Deafened;
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void Hear(Sim sim, Agent a, in Heard h)
     {
         long t = sim.Tick;
@@ -598,19 +602,41 @@ public sealed partial class Mind
                 Learn(a, t, BeliefKind.Help, h.Source, h.Actor, 0.8f, BeliefSource.Heard, h.Cause); break;
             case SoundKind.Alarm:
             case SoundKind.Voice when h.Actor != a.Id:
-                foreach (var (ev, _, sp, b) in _said)
-                    if (ev == h.Event && sp != a.Id)
-                    {
-                        float clarity = (float)Math.Clamp((h.Db - 25) / 30, 0.2, 1);
-                        float heed = sp != Computer && a.IsPerson && _soc != null ? _soc.Heed(a.Id, sp) : 1; // 말한 이를 믿는 만큼 · 나를 이끄는 이의 말은 더 (⑨)
-                        Learn(a, t, b.Kind, b.Cell, b.Subject, Math.Min(1, b.Conf * 0.8f * clarity * heed), sp == Computer ? BeliefSource.Screen : BeliefSource.Told, b.Cause, b.Size);
-                        if (a.IsPerson && Urgent(b.Kind)) a.C.Fear = Math.Max(a.C.Fear, 0.3f * (1 - a.C.Brave));
-                    }
+            {
+                int si = SaidIndex(h.Event);   // 그 소리로 한 말 (사건마다 많아야 하나)
+                if (si < 0) break;
+                var (_, _, sp, b) = _said[si];
+                if (sp != a.Id)
+                {
+                    float clarity = (float)Math.Clamp((h.Db - 25) / 30, 0.2, 1);
+                    float heed = sp != Computer && a.IsPerson && _soc != null ? _soc.Heed(a.Id, sp) : 1; // 말한 이를 믿는 만큼 · 나를 이끄는 이의 말은 더 (⑨)
+                    Learn(a, t, b.Kind, b.Cell, b.Subject, Math.Min(1, b.Conf * 0.8f * clarity * heed), sp == Computer ? BeliefSource.Screen : BeliefSource.Told, b.Cause, b.Size);
+                    if (a.IsPerson && Urgent(b.Kind)) a.C.Fear = Math.Max(a.C.Fear, 0.3f * (1 - a.C.Brave));
+                }
                 break;
+            }
         }
     }
 
+    /// <summary>
+    /// 소리 사건 ev로 한 말의 자리 (없으면 −1): 한 말은 소리를 낸 차례로 쌓여 사건 번호가 오르는 차례다 (소리는 사건마다 새 번호 · 외침 · 방송은 낸 그 사건으로 하나씩) — 반씩 나눠 찾는다
+    /// (위기 틱에 마흔 명이 외치면 듣는 이마다 들은 말마다 한 말 목록을 다 훑었다 · 찾는 것은 같다).
+    /// </summary>
+    private int SaidIndex(int ev)
+    {
+        var said = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_said);
+        int lo = 0, hi = said.Length - 1;
+        while (lo <= hi)
+        {
+            int mid = (lo + hi) >> 1, e = said[mid].ev;
+            if (e == ev) return mid;
+            if (e < ev) lo = mid + 1; else hi = mid - 1;
+        }
+        return -1;
+    }
+
     /// <summary>외친다: 75dB 말 (로봇은 80dB 안내) — 들은 사람은 같은 믿음을 '말'로 얻는다.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void Shout(Sim sim, Agent a, Belief b)
     {
         if (_snd == null) return;

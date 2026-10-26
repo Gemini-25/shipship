@@ -5,6 +5,60 @@ namespace Lab;
 /// <summary>법칙 시험 — 보존 · 대칭 · 결정론 · 경계. 빨강이면 엔진 버그다.</summary>
 public static partial class Program
 {
+    /// <summary>예전 소리 퍼짐 셈 그대로 (Sound.Emit · StepLoss의 고치기 전 판 — 이웃마다 제곱근 · 로그 · 압력): 칸 → 들린 크기들 (더한 차례).</summary>
+    private static Dictionary<int, List<float>> OldSoundSpread(Field F, Layout L, int cell, float db)
+    {
+        double Thin(int c)
+        {
+            if (!L.IsSpace(c) && L.Kind[c] != CellKind.Wall) return 0;
+            if (L.Kind[c] == CellKind.Wall) return 1;
+            if (L.Kind[c] == CellKind.Door && !F.DoorPassable(L.DoorAt[c])) return 1;
+            double p = F.Pressure(c);
+            return p < 1 ? 0 : Math.Min(1.5, p / 101.3);
+        }
+        float StepLoss(int to, int source)
+        {
+            float loss = 0.6f;
+            int dx = L.X(to) - L.X(source), dy = L.Y(to) - L.Y(source);
+            double d1 = Math.Sqrt(dx * dx + dy * dy), d0 = Math.Max(1, d1 - 1);
+            loss += (float)(20 * Math.Log10(Math.Max(1, d1) / d0)) * 0.7f;
+            var k = L.Kind[to];
+            if (k == CellKind.Wall) loss += F.Hole[to] >= 2 ? 0 : F.Hole[to] > 0 ? 15 : 45;
+            else if (k == CellKind.Door && !F.DoorPassable(L.DoorAt[to])) loss += F.DoorOpen[L.DoorAt[to]] > 0 ? 8 : 25;
+            if (L.IsSpace(to))
+            {
+                double th = Thin(to);
+                if (th <= 0) return 999;
+                loss += (float)(-20 * Math.Log10(th) * 0.5);
+            }
+            return Math.Max(0.3f, loss);
+        }
+        var res = new Dictionary<int, List<float>>();
+        if (Thin(cell) <= 0) return res;
+        var best = new Dictionary<int, float> { [cell] = db };
+        var pq = new PriorityQueue<int, float>();
+        pq.Enqueue(cell, -db);
+        var nb = new int[4];
+        while (pq.TryDequeue(out int c, out float neg))
+        {
+            float lv = -neg;
+            if (best.TryGetValue(c, out float bc) && bc > lv + 1e-4f) continue;
+            if (!res.TryGetValue(c, out var list)) res[c] = list = new List<float>();
+            list.Add(lv);
+            L.Neighbors(c, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0 || F.IsOut(j)) continue;
+                float next = lv - StepLoss(j, cell);
+                if (next < Sound.Floor) continue;
+                if (best.TryGetValue(j, out float bj) && bj >= next) continue;
+                best[j] = next;
+                pq.Enqueue(j, -next);
+            }
+        }
+        return res;
+    }
+
     private static void Laws()
     {
         Console.WriteLine("법칙 시험\n");
@@ -396,6 +450,60 @@ public static partial class Program
             s.Step(); s.Step(); s.Step();
             snd.Emit(s, a, 120, SoundKind.Bang);
             Check("진공에서는 소리가 전해지지 않는다", snd.Loudest(near) == 0 && snd.Loudest(other) == 0, $"{snd.Loudest(near):0} / {snd.Loudest(other):0}dB");
+            // 퍼지는 셈 (마음 위기 틱 예산 고침): 칸마다 한 번 센 문 · 벽 · 엷은 공기 몫과 퍼짐 몫 표가 예전 셈(이웃마다 제곱근 · 로그 · 압력을 다시 셌다)과
+            // 칸마다 같은 크기를 같은 차례로 남긴다 — 사람이 사는 배 · 외판 구멍으로 빠지는 방 · 열고 닫은 문
+            {
+                var sv = ShipWorld.Crewed("Didim", 7, 6, 2);
+                var fv = sv.Get<Field>(); var sndV = sv.Get<Sound>(); var lv = sv.Layout;
+                bool InRoom(int i) => lv.Kind[i] == CellKind.Floor && lv.Room[i] >= 0;
+                int hull = Enumerable.Range(1, lv.N - 2).First(i => lv.Hull[i] && lv.Kind[i] == CellKind.Wall && (InRoom(i - 1) || InRoom(i + 1)));
+                fv.SetHole(hull, 0.3f);
+                for (int d = 0; d < lv.Doors.Count; d += 2) fv.SetDoor(d, 1);
+                sv.Run(40);
+                var vac = lv.Rooms.Where(r => r.Cells.Length > 8).OrderBy(r => r.Cells.Length).First();   // 한 방은 진공으로 (엷은 공기 몫이 무한 — 소리가 들지 않는다)
+                foreach (int c in vac.Cells) { for (int g = 0; g < fv.G; g++) fv.N[c * fv.G + g] = 0; fv.U[c] = 0; }
+                var srcs = new[] { hull - 1, hull + 1, lv.Doors[0].Cell }.Concat(Enumerable.Range(0, lv.N).Where(InRoom).Where((c, i) => i % 37 == 0).Take(6)).Where(c => c >= 0 && c < lv.N && lv.IsSpace(c)).ToList();
+                int cells = 0, bad = 0; string first = "";
+                foreach (int c0 in srcs)
+                {
+                    var want = OldSoundSpread(fv, lv, c0, 90);
+                    int ev = sndV.Emit(sv, c0, 90, SoundKind.Bang);
+                    for (int c = 0; c < lv.N; c++)
+                    {
+                        var got = sndV.At(c).Where(h => h.Event == ev).Select(h => BitConverter.SingleToInt32Bits(h.Db)).ToList();
+                        var w = want.TryGetValue(c, out var wl) ? wl.Select(BitConverter.SingleToInt32Bits).ToList() : new List<int>();
+                        if (w.Count > 0) cells++;
+                        if (!got.SequenceEqual(w)) { bad++; if (first == "") first = $"칸 {c} (소리 {c0}): {string.Join("/", w.Select(BitConverter.Int32BitsToSingle))} → {string.Join("/", got.Select(BitConverter.Int32BitsToSingle))}"; }
+                    }
+                }
+                Check("소리 퍼짐: 칸마다 한 번 센 몫 · 퍼짐 표 = 예전 셈 (디딤호 · 외판 구멍으로 빠지는 방 · 진공인 방 · 열고 닫은 문 — 칸마다 같은 크기 · 같은 차례)", bad == 0 && cells > 100,
+                    bad == 0 ? $"소리 {srcs.Count}개 · 들린 칸 {cells} · 진공 {vac.Name}" : $"다른 칸 {bad} · {first}");
+            }
+            // 작은 값 줄 (Heap4 — 소리 퍼짐 · 길찾기가 쓴다): .NET PriorityQueue<int, float>와 꺼내는 차례가 같다 (같은 값이 많고 · 넣기 · 꺼내기 · 비우기가 섞이고 · NaN · −0 · 무한도)
+            {
+                var rq = new PriorityQueue<int, float>(); var hq = new Heap4();
+                ulong x = 88172645463325252UL; int diff = 0, outs = 0, most = 0;
+                float[] odd = { float.NaN, -0f, 0f, float.PositiveInfinity, float.NegativeInfinity };
+                for (int k = 0; k < 200000; k++)
+                {
+                    x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+                    if (x % 5 < 3 || rq.Count == 0)
+                    {
+                        float p = x % 97 == 0 ? odd[(int)((x >> 8) % (ulong)odd.Length)] : (int)((x >> 20) % 50) * 0.5f;
+                        rq.Enqueue(k, p); hq.Enqueue(k, p);
+                    }
+                    else
+                    {
+                        rq.TryDequeue(out int e1, out float p1); hq.TryDequeue(out int e2, out float p2);
+                        if (e1 != e2 || BitConverter.SingleToInt32Bits(p1) != BitConverter.SingleToInt32Bits(p2)) diff++;
+                        outs++;
+                    }
+                    most = Math.Max(most, rq.Count);
+                    if (x % 4000 == 0) { rq.Clear(); hq.Clear(); }
+                }
+                Check("작은 값 줄 (Heap4): PriorityQueue<int, float>와 꺼내는 차례가 같다 (같은 값 · NaN · −0 · 무한 · 넣기 · 꺼내기 · 비우기가 섞여도)", diff == 0 && hq.Count == rq.Count && outs > 50000,
+                    $"꺼냄 {outs} · 다른 것 {diff} · 가장 길 때 {most}");
+            }
             // 긴 하루: 들린 소리는 감각이 읽을 몇 틱만 남는다 — 사람이 사는 배를 20분 돌려도 지난 소리가 쌓이지 않는다
             //   (검토 ⑤-1: 지운 뒤 남은 목록을 다시 줄에 세우지 않아 그 칸이 다시는 정리되지 않았다 — 찍기가 하루 약 23MB씩 자랐다)
             {

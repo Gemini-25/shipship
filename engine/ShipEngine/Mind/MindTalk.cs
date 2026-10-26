@@ -53,6 +53,7 @@ public sealed partial class Mind
     }
 
     /// <summary>이야기를 고른다: 기억 · 관계 · 성격에서 꺼낼 거리와 그 무게 · 꺼낼 사람.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private TalkOption PickTopic(Sim sim, int i, int j)
     {
         var soc = _soc!;

@@ -1000,6 +1000,7 @@ public sealed partial class Mind
         return false;
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int NearestFree(Agent a, int[] furn, int habit = -1)
     {
         int best = -1, bd = int.MaxValue;
@@ -1095,24 +1096,44 @@ public sealed partial class Mind
         return false;
     }
 
+    // BusiestSeat가 한 번 부를 때마다 쓰는 표 (방마다 어울리는 이 수 · 아는 얼굴 · 꺼림 — 자리마다 사람 · 로봇을 다시 훑지 않게: 값 · 차례는 같다 · 찍지 않는다)
+    private int[] _seatCount = Array.Empty<int>(), _seatRoomStamp = Array.Empty<int>(), _seatOcc = Array.Empty<int>();
+    private float[] _seatFriends = Array.Empty<float>(), _seatShun = Array.Empty<float>();
+    private int _seatStamp;
+    private readonly List<(int cell, int room)> _seatLeisure = new();
+
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private int BusiestSeat(Agent a)
     {
         if (_social.Length == 0) return -1;
-        var count = new Dictionary<int, int>();
-        foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && o.C.Goal == GoalKind.Socialize) { int r = RoomOf(o.C.Cell); count[r] = count.GetValueOrDefault(r) + 1; }
+        int R = L.Rooms.Count;
+        if (_seatCount.Length != R + 1) { _seatCount = new int[R + 1]; _seatRoomStamp = new int[R + 1]; _seatFriends = new float[R + 1]; _seatShun = new float[R + 1]; }
+        if (_seatOcc.Length != L.N) _seatOcc = new int[L.N];
+        if (++_seatStamp == int.MaxValue) { Array.Clear(_seatOcc); Array.Clear(_seatRoomStamp); _seatStamp = 1; }
+        int stamp = _seatStamp;
+        Array.Clear(_seatCount);
+        _seatLeisure.Clear();
+        foreach (var o in Agents)
+        {
+            if (o == a) continue;
+            if ((uint)o.C.Cell < (uint)_seatOcc.Length) _seatOcc[o.C.Cell] = stamp;   // 남이 선 칸 (빈자리가 아니다)
+            if (!o.IsPerson || o.C.Up == 0 || !Society.Leisure(o.C.Goal)) continue;   // 쉬는 이 (어울리는 이도 쉬는 이다)
+            int r = RoomOf(o.C.Cell);
+            if (o.C.Goal == GoalKind.Socialize) _seatCount[r + 1]++;
+            _seatLeisure.Add((o.C.Cell, r));
+        }
         int best = -1; double bs = double.MinValue;
         foreach (int fu in _social)
         {
             int cell = L.Furniture[fu].Cells[0];
-            bool used = false;
-            foreach (var o in Agents) if (o != a && o.C.Cell == cell) { used = true; break; }
-            if (used) continue;
+            if (_seatOcc[cell] == stamp) continue;
+            int room = L.Furniture[fu].Room;
+            if (_seatRoomStamp[room + 1] != stamp) { _seatRoomStamp[room + 1] = stamp; _seatFriends[room + 1] = FriendsIn(a, room); _seatShun[room + 1] = Shun(a.Id, room); }
             // 어울리러 가면 같은 방에서 쉬는 사람 곁 자리에 앉는다 (가까울수록 — 말이 닿는 거리면 크게) — 의자가 많은 방에서 혼자 먼 구석에 앉지 않게
             double near = 0;
-            foreach (var o in Agents)
-                if (o != a && o.IsPerson && o.C.Up != 0 && Society.Leisure(o.C.Goal) && RoomOf(o.C.Cell) == L.Furniture[fu].Room) near += Math.Max(0, 10 - Dist(o.C.Cell, cell));
-            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 + near - Manhattan(a.C.Cell, cell) * 0.1
-                       - Shun(a.Id, L.Furniture[fu].Room) * 30; // 꺼리는 방 · 금기의 방은 사람이 모여 있어도 덜 간다
+            foreach (var (oc, or) in _seatLeisure) if (or == room) near += Math.Max(0, 10 - Dist(oc, cell));
+            double s = _seatCount[room + 1] * 10 + _seatFriends[room + 1] * 15 + near - Manhattan(a.C.Cell, cell) * 0.1
+                       - _seatShun[room + 1] * 30; // 꺼리는 방 · 금기의 방은 사람이 모여 있어도 덜 간다
             if (s > bs) { bs = s; best = cell; }
         }
         return best;

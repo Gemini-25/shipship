@@ -119,6 +119,7 @@ public sealed partial class Mind
     /// 깨어 있는 사람이 제 칸이 아닌 곳에서 귀에 35dB 넘게 닿은 소리를 들으면 2틱(5초) 그 쪽을 본다 —
     /// 쾅 · 비명 · 경보 · 금 가는 소리는 4틱(10초)이고 · 보던 것보다 약한 소리는 고개를 다시 돌리지 않는다.
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
     private void Glance(Agent a, in Heard h, float heardDb, long t)
     {
         ref var c = ref a.C;
