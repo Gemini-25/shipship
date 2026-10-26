@@ -493,7 +493,8 @@ public sealed partial class Mind
                 }
                 if (Sheltering(a) && (c.Bed < 0 || RoomOf(c.Bed) != ShelterRoom))
                 {
-                    if (RoomOf(here) != ShelterRoom) plan.Add(Go(ShelterSpot(a, ShelterCell), 1));
+                    int spot = StandSpot(a, ShelterRoom, ShelterCell);   // 문 칸 · 문 곁 · 남의 자리가 아닌 바닥 (5단 C1)
+                    if (spot != here) plan.Add(Go(spot, 0));
                     plan.Add(Use(UseKind.Sleep, Time.Hours(10)));
                     return true;
                 }
@@ -556,14 +557,14 @@ public sealed partial class Mind
             case GoalKind.Meeting:
             {
                 if (GatherRoom < 0) return false;
-                plan.Add(Go(SpotIn(a, GatherRoom, o.Cell, GoalKind.Meeting), 1));
+                plan.Add(Go(StandSpot(a, GatherRoom, o.Cell), 0));   // 머물 자리 (5단 C1)
                 plan.Add(Use(UseKind.None, Time.Minutes(20)));
                 return true;
             }
             case GoalKind.Shelter:
             {
                 if (ShelterRoom < 0) return false;
-                plan.Add(Go(ShelterSpot(a, o.Cell), 1));
+                plan.Add(Go(StandSpot(a, ShelterRoom, o.Cell), 0));   // 머물 자리 (5단 C1)
                 plan.Add(Use(UseKind.None, Time.Minutes(5)));
                 return true;
             }
