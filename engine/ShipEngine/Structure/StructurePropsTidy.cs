@@ -40,7 +40,10 @@ public sealed partial class Structure
         {
             var p = Props[i];
             if (p.Kind != 2 || p.State != 0 || !cells.Contains(CellOf(p))) continue;
-            kg += MassOf(p).kg;
+            var (m, inertia) = MassOf(p);
+            var (x, y, vx, vy, w) = PropWorld(p);
+            PropPxGone += m * vx; PropPyGone += m * vy; PropLGone += m * (x * vy - y * vx) + inertia * w;   // 쓸어 담은 것이 가져간 운동량 (몸에 실려 가던 것 — 장부가 맞게 · PH13 검토 고침)
+            kg += m;
             Props.RemoveAt(i);
             SweptPieces++;
         }
@@ -60,6 +63,7 @@ public sealed partial class Structure
             if (MassOf(p).kg > maxKg) continue;
             p.Pose = 0; p.Th = 0; p.Vx = p.Vy = p.W = 0;
             FillBody(ref p);   // 선 꼴 (질량은 그대로)
+            if (p.Kind == 1) _clutterDirty = true;   // 세운 가구 — 길 값은 다음에 물을 때 다시 (되살린 세계와 같게 · PH13 검토 고침)
             Righted++;
             n++;
         }

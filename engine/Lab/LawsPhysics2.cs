@@ -47,6 +47,24 @@ public static partial class Program
             double bdv = st.Bodies.Count > 0 ? st.Bodies[0].Vx - bv0 : 0;
             var book1 = WorldBook(st);
             double gas = Math.Abs(st.GasPx) + Math.Abs(st.BurnPx) + 1;
+            // 검토 고침: 이미 나는 것이 있어도 이번 틱에 나간 것은 그 틱에 날지 않는다 (나간 자리 그대로 세상 틀로 옮길 뿐) · 쓸어 담은 조각이 가져간 운동량도 장부에
+            int cup = t.People.Items.Keys.ToList().IndexOf("컵");
+            int late = st.PutItem(cup, 0, Worlds.At(lay, 3, 1));
+            int li = st.IndexOf(late); var lp = st.Props[li];
+            double lx0 = lp.X, ly0 = lp.Y;
+            lp.State = 5; lp.Vx = 3; lp.Kg = 0.3f; st.Props[li] = lp;   // 시험 차림: 이번 틱에 빨려 나간 것처럼
+            st.ShipAx = 0; s.Step();
+            var lq = st.Props[st.IndexOf(late)];
+            var (llx, lly) = st.LocalOf(0, lq.X, lq.Y);
+            bool sameTick = Structure.Flying(lq) && Math.Abs(llx - lx0) < 1e-6 && Math.Abs(lly - ly0) < 1e-6;
+            int shard = st.PutItem(cup, 0, Worlds.At(lay, 10, 2));
+            { int si = st.IndexOf(shard); var sp = st.Props[si]; sp.Kind = 2; st.Props[si] = sp; }   // 깨진 조각처럼
+            var bk0 = WorldBook(st);
+            st.Sweep(new[] { Worlds.At(lay, 10, 2) });
+            var bk1 = WorldBook(st);
+            Check("검토 고침 (PH11 · PH13): 이미 나는 것이 있어도 이번 틱에 나간 컵은 그 틱에 날지 않는다 (나간 자리 그대로 — 배 틀 1e-6) · 움직이는 배에서 쓸어 담은 조각의 운동량이 장부에 남는다 (1e-9)",
+                sameTick && Math.Abs(bk1.px - bk0.px) < 1e-9 * Math.Max(1, Math.Abs(bk0.px)) && Math.Abs(bk1.py - bk0.py) < 1e-9 * Math.Max(1, Math.Abs(bk0.py)),
+                $"나간 컵 배 틀 ({lx0:0.000},{ly0:0.000}) → ({llx:0.000},{lly:0.000}) · 쓸어 담기 장부 어긋남 ({bk1.px - bk0.px:0.0e0}, {bk1.py - bk0.py:0.0e0})");
             Check("세상 빠르기 (법칙 16 · 6): 0.3g 점화 중 외판 구멍 밖으로 나간 수리 꾸러미는 세상 틀로 곧게 난다 — 세 틱 뒤 자리 x₀ + v t · 빠르기 그대로 (1e-9) · 배의 몸은 a·t (+ 뿜는 공기)만큼 빨라진다 · 몸 + 물체 + 기체 − 점화 장부가 그대로",
                 fly > 0 && j >= 0 && Structure.Flying(q) && Math.Abs(q.X - ex) < 1e-9 * Math.Max(1, Math.Abs(ex)) && Math.Abs(q.Y - ey) < 1e-9 * Math.Max(1, Math.Abs(ey)) && q.Vx == vx0 && q.Vy == vy0
                 && bdv > a * dt * 0.999 && Math.Abs(book1.px - book0.px) < 1e-6 * gas && Math.Abs(book1.py - book0.py) < 1e-6 * gas,

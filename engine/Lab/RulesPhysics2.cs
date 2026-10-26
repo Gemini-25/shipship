@@ -109,6 +109,26 @@ public static partial class Program
                 r >= 1.9 && t2.Contains("약 기운에") && t1.Length > 0 && !t1.Contains("약 기운"), $"몫 비 {r:0.00} · 맑은 몸 '{t1}' · 약 기운 '{t2}'");
         }
 
+        // ── PH13 검토 고침: 세운 가구의 길 값 — 세운 뒤 길 값이 찍고 되살린 세계와 같다 (예전: 세워도 옛 길 값이 남아 되살린 세계와 달랐다) ──
+        if (Do("판단 — 물체 길 값"))
+        {
+            var s = ShipWorld.Crewed("Didim", 7, 1, 0, 0);
+            var st = s.Get<Structure>(); var L = s.Layout;
+            bool Free(int x, int y) => L.In(x, y) && L.Kind[L.Index(x, y)] == CellKind.Floor && L.FurnitureAt[L.Index(x, y)] < 0;
+            int mid = Enumerable.Range(0, L.N).First(c => L.Room[c] >= 0 && Enumerable.Range(-2, 5).All(dx => Free(L.X(c) + dx, L.Y(c)) && Free(L.X(c) + dx, L.Y(c) - 1) && Free(L.X(c) + dx, L.Y(c) + 1)));
+            int shelf = Enumerable.Range(0, L.Furniture.Count).First(f => L.Furniture[f].Type == "Shelf");
+            int id = st.TearLoose(s, shelf, 0, 0, 0, s.Causes.Add(CauseKind.Setup, "시험 — 선반이 넘어졌다", s.Tick), "볼트가 풀린");
+            { int i = st.IndexOf(id); var q = st.Props[i]; q.X = L.X(mid) + 0.5; q.Y = L.Y(mid) + 0.5; q.Pose = 1; q.Th = 0.7; q.State = 0; q.Vx = q.Vy = q.W = 0; st.Props[i] = q; st.ClutterChanged(); }
+            List<int> Cl(Structure x) => Enumerable.Range(0, L.N).Where(c => x.ClutterAt(c) > 0).ToList();
+            var lying = Cl(st);
+            var around = Enumerable.Range(-1, 3).SelectMany(dy => Enumerable.Range(-1, 3).Select(dx => L.Index(L.X(mid) + dx, L.Y(mid) + dy))).ToArray();
+            int up = st.RightUp(around, 1000);
+            var r = new Sim(s.Setup); r.Load(s.Save());
+            var a = Cl(st); var b = Cl(r.Get<Structure>());
+            Check("세운 가구의 길 값 (PH13 검토 고침): 누운 선반을 세우면 길 값이 선 꼴로 바뀌고 · 찍고 되살린 세계와 같다",
+                up == 1 && a.SequenceEqual(b) && !a.SequenceEqual(lying), $"세움 {up} · 누운 길 값 {lying.Count}칸 → 지금 {a.Count}칸 · 되살린 {b.Count}칸");
+        }
+
         // ── PH12 물체 볼거리: 카메라 안에서 컵이 깨지면 그 틱들을 천천히 (화면 1초에 1틱) — 하루 느린 예산 안 ──
         if (Do("물체 볼거리"))
         {

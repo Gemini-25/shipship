@@ -172,9 +172,10 @@ public sealed partial class Structure
             plugged = false;
             foreach (var p in all) plugged |= p.State == 6;
             if (L.Furniture.Count > 0) SettleFurniture(sim);   // 잠든 가구 · 우주로 간 가구 (다시 앉음 · 연료 · 열용량 옮김 — PH10)
-            Launch(all, world);   // 구멍 밖으로 나간 것은 세상 틀로 난다 (PH11 — 장부 '우주로'는 300m 뒤)
         }
-        if (fly) { Fly(sim, dt); all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props); }   // 지난 틱까지 나간 것 (이번 틱에 나간 것은 다음 틱부터)
+        if (fly) Fly(sim, dt);   // 지난 틱까지 나간 것 (이번 틱에 나간 것은 다음 틱부터 — 날기 전에 옮기지 않는다 · PH11 검토 고침)
+        if (any || gone) Launch(sim);   // 구멍 밖으로 나간 것은 세상 틀로 난다 (PH11 — 장부 '우주로'는 300m 뒤)
+        all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);   // 깨짐 · 다시 앉음 · 우주로가 목록을 바꿨다
         WritePlugs(all, plugged);   // 물체 막음 → 장 (다음 틱 흐름부터)
     }
 

@@ -455,7 +455,7 @@ public sealed partial class Structure
             int c = CellOf(p);
             var (hx, hy) = FurnHome(f);
             double th = Math.IEEERemainder(p.Th, 2 * Math.PI);
-            if (T.Equip(L.Furniture[f].Type).AnchorG <= 0 && p.Pose == 0 && p.Z <= 1e-3 && Math.Abs(th) <= ReseatRad
+            if (FurnAt[f] != -2 && T.Equip(L.Furniture[f].Type).AnchorG <= 0 && p.Pose == 0 && p.Z <= 1e-3 && Math.Abs(th) <= ReseatRad
                 && (p.X - hx) * (p.X - hx) + (p.Y - hy) * (p.Y - hy) <= ReseatM * ReseatM && FurnSpotClear(f, p.Id))
             {
                 if (FurnAt[f] != -1) { F.MoveFurnishing(f, FurnAt[f], -1); FurnAt[f] = -1; }
@@ -465,7 +465,7 @@ public sealed partial class Structure
                 _clutterDirty = true;
                 continue;
             }
-            if (c >= 0 && FurnAt[f] != c && L.IsSpace(c)) { F.MoveFurnishing(f, FurnAt[f], c); FurnAt[f] = c; }
+            if (c >= 0 && FurnAt[f] != c && FurnAt[f] != -2 && L.IsSpace(c)) { F.MoveFurnishing(f, FurnAt[f], c); FurnAt[f] = c; }   // 우주에 나갔다 돌아와 실린 가구는 열용량 · 연료를 이미 잃었다 (PH11 검토 고침 — 남의 칸에서 빼지 않게)
         }
         if (removed) _clutterDirty = true;
     }

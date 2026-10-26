@@ -14,16 +14,19 @@ public sealed partial class Structure
     /// <summary>세상 틀로 나는 물체인가 (구멍 밖 우주 · 실린 몸 없음).</summary>
     public static bool Flying(in Prop p) => p.State == 5 && p.Host == -1;
 
-    /// <summary>이번 틱에 구멍 밖으로 나간 것 (State 5 · 아직 몸 틀): 그 몸의 세상 값으로 옮겨 세상 틀로 날게 한다 (몸이 없는 배면 배의 몸을 세운다 — 세상 틀 = 도면 틀).</summary>
-    private void Launch(Span<Prop> all, bool world)
+    /// <summary>이번 틱에 구멍 밖으로 나간 것 (State 5 · 아직 몸 틀): 그 칸의 몸의 세상 값으로 옮겨 세상 틀로 날게 한다 (몸이 없는 배면 배의 몸을 세운다 — 세상 틀 = 도면 틀).
+    /// 실린 몸은 지금 목록에서 다시 찾는다 (깨짐 · 다시 앉음이 목록을 바꿨다 — 틱 처음 표에 기대지 않는다 · PH11 검토 고침).</summary>
+    private void Launch(Sim sim)
     {
+        var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
         for (int i = 0; i < all.Length; i++)
         {
             ref var p = ref all[i];
             if (p.State != 5 || p.Host == -1) continue;
-            if (!world) EnsureShip();
-            int b = world && i < _hostOf.Length ? _hostOf[i] : 0;
-            if (b < 0 || b >= Bodies.Count || Bodies[b].Mass <= 0) b = Bodies.Count > 0 && Bodies[0].Mass > 0 ? 0 : -1;
+            EnsureShip();
+            all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props);
+            p = ref all[i];
+            int b = HostNear(CellOf(p));
             if (b >= 0)
             {
                 var o = Bodies[b];
@@ -33,6 +36,21 @@ public sealed partial class Structure
             }
             p.Host = -1; p.Z = 0; p.Vz = 0; p.PlugAt = 0;
         }
+    }
+
+    /// <summary>나간 자리의 몸: 그 칸의 몸 · 없으면 (구멍 칸 · 바깥 칸) 곁 칸의 몸 · 그것도 없으면 배 (0).</summary>
+    private int HostNear(int c)
+    {
+        int b = BodyOf(c);
+        if (b >= 0 && b < Bodies.Count && Bodies[b].Mass > 0 && c >= 0 && L.Kind[c] != CellKind.Outside) return b;
+        if (c >= 0)
+        {
+            Span<int> nb = stackalloc int[4];
+            L.Neighbors(c, nb);
+            foreach (int j in nb)
+                if (j >= 0 && L.Kind[j] != CellKind.Outside && BodyOf(j) is int bj and >= 0 && bj < Bodies.Count && Bodies[bj].Mass > 0) return bj;
+        }
+        return Bodies.Count > 0 && Bodies[0].Mass > 0 ? 0 : -1;
     }
 
     /// <summary>
@@ -49,7 +67,7 @@ public sealed partial class Structure
             if (!Flying(p)) continue;
             if (p.Kg <= 0) FillBody(ref p);
             double len = Math.Sqrt(p.Vx * p.Vx + p.Vy * p.Vy) * dt;
-            int n = Math.Max(1, (int)Math.Ceiling(len / SpaceProbeM));
+            int n = Math.Max(1, (int)Math.Ceiling(Math.Min(len, SpaceProbeM * 512) / SpaceProbeM));   // 많아야 512걸음 (100m 넘게 나는 것은 걸음이 길다 — 그만큼 떨어진 곳에서는 배를 지나지 않는다)
             double h = dt / n, t = 0;
             for (int k = 0; k < n && Flying(p); k++)
             {
