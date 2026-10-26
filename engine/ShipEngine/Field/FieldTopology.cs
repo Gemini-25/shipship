@@ -100,17 +100,18 @@ public sealed partial class Field
     /// <summary>되살릴 때: 마지막으로 구역을 지은 때의 문 · 구멍으로 같은 구역 · 틈을 다시 세운다 (기체는 건드리지 않는다 — 원래 세계와 바이트까지 같게).</summary>
     private void RestoreTopology()
     {
-        if (_topoDoor.Length != DoorOpen.Length || _topoHole.Length != Hole.Length || _topoTaped.Length != DoorTaped.Length || _topoBleed.Length != DoorBleed.Length) { _dirty = true; Rebuild(); return; }
-        var door = DoorOpen; var hole = Hole; var taped = DoorTaped; var bleed = DoorBleed;
-        DoorOpen = (float[])_topoDoor.Clone(); Hole = (float[])_topoHole.Clone(); DoorTaped = (byte[])_topoTaped.Clone(); DoorBleed = (byte[])_topoBleed.Clone();
+        if (_topoDoor.Length != DoorOpen.Length || _topoHole.Length != Hole.Length || _topoTaped.Length != DoorTaped.Length || _topoBleed.Length != DoorBleed.Length || _topoSevered.Length != Severed.Length) { _dirty = true; Rebuild(); return; }
+        var door = DoorOpen; var hole = Hole; var taped = DoorTaped; var bleed = DoorBleed; var severed = Severed;
+        DoorOpen = (float[])_topoDoor.Clone(); Hole = (float[])_topoHole.Clone(); DoorTaped = (byte[])_topoTaped.Clone(); DoorBleed = (byte[])_topoBleed.Clone(); Severed = (byte[])_topoSevered.Clone();
         ScanPass();
         BuildTopology();
-        DoorOpen = door; Hole = hole; DoorTaped = taped; DoorBleed = bleed;
+        DoorOpen = door; Hole = hole; DoorTaped = taped; DoorBleed = bleed; Severed = severed;
     }
 
     private float[] _topoDoor = Array.Empty<float>(), _topoHole = Array.Empty<float>(); // 마지막으로 구역을 지은 때의 문 · 구멍 · 막은 문틈 (찍는다)
     private byte[] _topoTaped = Array.Empty<byte>();
     private byte[] _topoBleed = Array.Empty<byte>();
+    private byte[] _topoSevered = Array.Empty<byte>();   // 마지막으로 구역을 지은 때의 끊긴 칸 (④가 장 뒤에 끊으면 다음 틱까지 옛 구역 — 되살려도 같게 · 찍는다)
 
     /// <summary>칸마다 트였나를 한 번 센다 (밀어내기 · 구역이 함께 쓴다) — 지난번과 달라진 칸은 그 둘레 틈 곁 칸 기억을 지운다.</summary>
     private void ScanPass()
@@ -159,6 +160,8 @@ public sealed partial class Field
         if (_topoHole.Length != Hole.Length) _topoHole = new float[Hole.Length];
         if (_topoTaped.Length != DoorTaped.Length) _topoTaped = new byte[DoorTaped.Length];
         if (_topoBleed.Length != DoorBleed.Length) _topoBleed = new byte[DoorBleed.Length];
+        if (_topoSevered.Length != Severed.Length) _topoSevered = new byte[Severed.Length];
+        Array.Copy(Severed, _topoSevered, Severed.Length);
         Array.Copy(DoorOpen, _topoDoor, DoorOpen.Length); Array.Copy(Hole, _topoHole, Hole.Length); Array.Copy(DoorTaped, _topoTaped, DoorTaped.Length); Array.Copy(DoorBleed, _topoBleed, DoorBleed.Length);
         // 2. 구역: 한 번 훑으며 왼쪽 · 위 이웃과 잇는다 (뿌리는 늘 무리에서 가장 작은 칸) · 다시 훑으며 뿌리를 만난 차례로 번호
         //    — 가장 작은 칸 번호 차례 · 구역 안 칸은 번호 차례 (넓이 우선으로 채우고 줄 세우던 것과 같다)

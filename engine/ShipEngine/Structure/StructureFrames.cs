@@ -203,6 +203,7 @@ public sealed partial class Structure
             if (parent < Bodies.Count) Refit(parent);
             sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, cells[0], (float)(massKg / 1000), dcause);
             _latticeDirty = true;
+            SplitVersion++;   // 떨어져 나간 칸이 바뀌었다 — 그 칸을 건너는 급전선이 끊긴다 (⑥이 다시 센다 · 예전: 이어진 채로 남아 되살린 세계와 달랐다)
             return;
         }
         int id = Fragments.Count + 1;

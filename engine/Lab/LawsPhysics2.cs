@@ -195,6 +195,25 @@ public static partial class Program
             $"돌풍 칸 {seen} · 어긋남 {bad}{(bad > 0 ? " (" + at + ")" : "")}");
     }
 
+    /// <summary>
+    /// 법칙 — 끓는 행성 되살림 (PH14~15 검토 — 옛 구멍): 큰 부서짐 뒤 찍고 되살려도 다음 틱이 바이트 같다.
+    /// 예전: ① 장이 구역을 지은 뒤 ④가 끊은 칸을 되살린 세계는 새 구역으로 지었다 (끊긴 칸을 구역 찍음에 넣지 않았다) · ② 작은 덩어리가 떨어져 나가도 ⑥ 급전선 끊김을 다시 세지 않아 이어진 채 남았다 (되살린 세계는 끊김).
+    /// </summary>
+    private static void VenusSaveLaws()
+    {
+        if (!Do("끓는 행성 되살림 법칙")) return;
+        Console.WriteLine("\n[끓는 행성 되살림 — 큰 부서짐 뒤 찍고 되살림]");
+        var s = ShipWorld.Create("Didim", 3);
+        s.Get<Outside>().Land("venuslike", s.Tick);
+        s.Run(2);
+        var r = new Sim(s.Setup); r.Load(s.Save());
+        bool same = true; int at = -1;
+        for (int k = 0; k < 2 && same; k++) { s.Step(); r.Step(); same = s.Save().AsSpan().SequenceEqual(r.Save()); if (!same) at = k; }
+        var st = s.Get<Structure>();
+        Check("끓는 행성 되살림: 92기압 행성에 내린 디딤호를 두 틱 뒤 (조각 · 떨어져 나간 칸이 생긴 뒤) 찍고 되살려 두 틱 — 바이트 같다 (구역을 지은 때의 끊긴 칸 · 급전선 끊김이 같다)",
+            same && st.Props.Count > 100, same ? $"같음 · 물체 {st.Props.Count}" : $"{at}틱 뒤 다름");
+    }
+
     /// <summary>법칙 — 판 조각 600 상한 (PH15): 넘으면 잠든 것부터 가루로 (그 몸이 운동량을 받는다) · 그래도 넘으면 가장 오래된 나는 것을 장부 '우주로' — 질량 · 운동량 장부가 그대로.</summary>
     private static void PlateLaws()
     {
