@@ -920,14 +920,15 @@ public sealed partial class Mind
         Span<int> nb = stackalloc int[4];
         float here = RoomBadness(a, room);
         int best = -1; float bestBad = float.MaxValue;
+        bool Refuge(int c) => L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c) && !FledFrom(a, L.Room[c]) && !KeptOut(a, L.Room[c])
+                && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f;
         while (q.Count > 0 && seen.Count < 3000)
         {
             int c = q.Dequeue();
-            if (L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c) && !FledFrom(a, L.Room[c]) && !KeptOut(a, L.Room[c])
-                && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f)
+            if (Refuge(c))
             {
                 float bad = RoomBadness(a, L.Room[c]);
-                if (bad <= 0) return c;                       // 위험하다고 믿지 않는 가장 가까운 방
+                if (bad <= 0) return RefugeSpot(a, c, Refuge);   // 위험하다고 믿지 않는 가장 가까운 방 — 문 바로 앞이면 같은 방 안쪽으로 물린다 (5단 C4)
                 if (bad < bestBad) { bestBad = bad; best = c; }
             }
             L.Neighbors(c, nb);
@@ -938,7 +939,7 @@ public sealed partial class Mind
                 seen.Add(j); q.Enqueue(j);
             }
         }
-        return best >= 0 && bestBad < here - 0.15f ? best : -1;
+        return best >= 0 && bestBad < here - 0.15f ? RefugeSpot(a, best, Refuge) : -1;
     }
 
     /// <summary>그 방이 위험하다고 믿는 정도 (0 = 믿지 않음 · 가장 확신하는 위험 믿음).</summary>

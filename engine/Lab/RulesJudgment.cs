@@ -132,6 +132,7 @@ public static partial class Program
                 s.Run(2);
                 so.Grudge[x * so.N + y] = 0.95f; so.Grudge[y * so.N + x] = 0.6f; so.Bond[z * so.N + y] = 0.8f;
                 m[x].C.Stress = 0.9f; m[x].C.Anger = 0.9f;
+                m[y].C.Brave = 0.6f;   // 맞는 이가 맞선다 (겁 많은 이는 방을 빠져나가 멀리 머문다 — 5단 C4 · 주먹이 오가야 '친다' 행동을 센다)
                 var acts = new List<SocialAct>();
                 long f0 = s.Facts.Total;
                 var blowsOf = new Dictionary<long, int>();

@@ -35,13 +35,9 @@ public sealed partial class Mind
         }
     }
 
-    /// <summary>
-    /// 그 방 안에서 머물 칸: 남이 선 칸 · 남의 계획 마지막 가기 칸을 표시하고 (목표와 상관없이) · 가구 없는 바닥 가운데 1000 × 표 + 가운데까지 거리가 가장 낮은 칸 ·
-    /// 내 칸이 그 방 · 표 0 · 표시 없으면 그대로 · 남는 칸이 없으면 가운데 (문 칸은 끝까지 고르지 않는다). O(방 칸 + 사람).
-    /// </summary>
-    private int StandSpot(Agent a, int room, int center)
+    /// <summary>남이 선 칸 · 남의 계획 마지막 가기 칸에 도장을 찍는다 (목표와 상관없이) — 이번 도장 번호를 돌려준다.</summary>
+    private int StampOthers(Agent a)
     {
-        if (room < 0) return center;
         if (_stand == null) BuildStand();
         if (_standStamp.Length != L.N) _standStamp = new int[L.N];
         int gen = ++_standGen;
@@ -53,6 +49,47 @@ public sealed partial class Mind
             for (int k = o.Plan.Count - 1; k >= 0; k--)
                 if (o.Plan[k].Kind == StepKind.GoTo) { int g = o.Plan[k].Cell; if ((uint)g < (uint)L.N) _standStamp[g] = gen; break; }
         }
+        return gen;
+    }
+
+    /// <summary>
+    /// 피할 곳을 문 바로 앞에서 물린다 (5단 C4): 처음 찾은 칸 c0이 표 0이 아니면 같은 방 6걸음 안 (방 안 바닥으로)에서 같은 거름 (ok)을 지나는 표 0 칸 가운데 가장 가까운 칸 ·
+    /// 남이 선 칸 · 남이 가는 칸은 건너뛴다 · 없으면 c0.
+    /// </summary>
+    private int RefugeSpot(Agent a, int c0, Func<int, bool> ok)
+    {
+        if (Environment.GetEnvironmentVariable("RS_DEBUG") != null) Console.WriteLine($"RS a{a.Id} c0=({L.X(c0)-1},{L.Y(c0)-1}) k{StandKindAt(c0)} goal {a.C.Goal}");
+        if (c0 < 0 || StandKindAt(c0) == 0) return c0;
+        int room = L.Room[c0];
+        if (room < 0) return c0;
+        int gen = StampOthers(a);
+        var q = new Queue<(int c, int d)>();
+        var seen = new HashSet<int> { c0 };
+        q.Enqueue((c0, 0));
+        Span<int> nb = stackalloc int[4];
+        while (q.Count > 0)
+        {
+            var (c, d) = q.Dequeue();
+            if (c != c0 && _stand![c] == 0 && L.FurnitureAt[c] < 0 && _standStamp[c] != gen && ok(c)) return c;
+            if (d >= 6) continue;
+            L.Neighbors(c, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0 || L.Kind[j] != CellKind.Floor || L.Room[j] != room || !seen.Add(j)) continue;
+                q.Enqueue((j, d + 1));
+            }
+        }
+        return c0;
+    }
+
+    /// <summary>
+    /// 그 방 안에서 머물 칸: 남이 선 칸 · 남의 계획 마지막 가기 칸을 표시하고 (목표와 상관없이) · 가구 없는 바닥 가운데 1000 × 표 + 가운데까지 거리가 가장 낮은 칸 ·
+    /// 내 칸이 그 방 · 표 0 · 표시 없으면 그대로 · 남는 칸이 없으면 가운데 (문 칸은 끝까지 고르지 않는다). O(방 칸 + 사람).
+    /// </summary>
+    private int StandSpot(Agent a, int room, int center)
+    {
+        if (room < 0) return center;
+        int gen = StampOthers(a);
         int here = a.C.Cell;
         if ((uint)here < (uint)L.N && L.Room[here] == room && _stand![here] == 0 && _standStamp[here] != gen && L.FurnitureAt[here] < 0) return here;
         int best = -1, bs = int.MaxValue;

@@ -149,5 +149,25 @@ public static partial class Program
             Check("문 칸 (C3) 봉쇄: 불난 방의 문 칸에 몸이 누워 있는 동안 주컴퓨터가 그 문에 닫기를 하나 넘게 요청하지 않는다 (봉쇄는 한다)",
                 seals == 1 && sm.SealDoorRequests - req0 <= 1, $"봉쇄 {seals} · 닫기 요청 {sm.SealDoorRequests - req0}");
         }
+
+        // (바) C4 피할 곳은 문 바로 앞이 아닌 곳: 침실 (5,1)의 한 사람 · 침실 왼쪽 외판 구멍 0.003m² — 피해 나와 처음 선 칸이 문에서 2칸 넘게 (문 곁이 아니다) · 그때 문이 닫혔고 · 10분 뒤 산다
+        //     (예전: 구멍에서 4칸 넘게 떨어진 처음 칸 — 문 곁 (5,4)에 섰다)
+        {
+            var s = Worlds.Full(lay, 3);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
+            int p = m.AddPerson(s, At(5, 1));
+            s.Run(2);
+            f.SetHole(At(0, 1), 0.003f);   // 침실 왼쪽 외판 (구멍에서 4칸 넘게 떨어진 처음 칸이 문 곁 (5,4)이 되게)
+            int first = -1; float doorAt = 1;
+            for (int k = 0; k < (int)Time.Minutes(10); k++)
+            {
+                ref var c = ref m[p].C; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; s.Step();
+                ref var c2 = ref m[p].C;
+                if (first < 0 && c2.Goal == GoalKind.Evacuate && m[p].Plan.Count > 0 && m[p].Plan[0].Kind == StepKind.GoTo && c2.Cell == m[p].Plan[0].Cell) { first = c2.Cell; s.Run(60); doorAt = f.DoorOpen[door]; }
+            }
+            Check("문 칸 (C4) 피할 곳: 침실 외판에 작은 구멍 — 피해 나와 처음 선 칸이 식당 · 문에서 2칸 넘게 (문 곁이 아니다) · 그 뒤 문이 닫혔고 · 10분 뒤 산다",
+                first >= 0 && lay.Room[first] == lay.Room[At(5, 5)] && m.Dist(first, At(5, 3)) >= 2 && doorAt <= 0.01f && life[m[p].C.Body].Alive != 0,
+                $"처음 선 칸 {(first >= 0 ? $"({lay.X(first) - 1},{lay.Y(first) - 1}) · 문까지 {m.Dist(first, At(5, 3))}" : "없음")} · 그 뒤 문 열림 {doorAt:0.00} · 산다 {life[m[p].C.Body].Alive != 0}");
+        }
     }
 }

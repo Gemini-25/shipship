@@ -69,6 +69,7 @@ public static partial class Program
             int awake = m.AddPerson(s, At(15, 2)), sleeper = m.AddPerson(s, At(16, 2));
             s.Run(3);
             life[m[sleeper].C.Body].Asleep = 1; m[sleeper].C.Sleepy = 1;
+            foreach (int door in new[] { At(10, 3), At(14, 6) }) s.Get<Structure>().LockDoor(lay.DoorAt[door], s.Tick + Time.Hours(1));   // 깨어 있는 이가 방 안에 머문다 (문이 열리면 살피러 · 피하러 오가다 나가 버린다 — 5단 C4 뒤 피할 곳이 바뀌어 일찍 나갔다)
             var room = Enumerable.Range(0, lay.N).Where(c => lay.Room[c] == lay.Room[At(15, 2)] && lay.Kind[c] == CellKind.Floor).ToList();
             foreach (int c in room) f.AddGas(c, t.gCO, f.Moles(c) * 0.0015, f.Temp(c));   // 1500ppm
             for (int k = 0; k < Time.Minutes(10); k++)
