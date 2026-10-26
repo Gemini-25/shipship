@@ -39,7 +39,7 @@ public static partial class Program
                 int i = st.Props.FindIndex(p => Structure.Flying(p));
                 if (i >= 0) { var p = st.Props[i]; fly = p.Id; t0 = s.Tick; x0 = p.X; y0 = p.Y; vx0 = p.Vx; vy0 = p.Vy; bv0 = st.Bodies[0].Vx; }
             }
-            const int n = 3;   // 배가 점화로 멀어진다 — 300m 안에서 (세 틱 · 7.2초)
+            const int n = 2;   // 배가 점화로 멀어진다 — 300m 안에서 (두 틱 · 4.8초 — 나가는 기체가 꾸러미를 30m/s 넘게 밀어 낸다 · PH14)
             for (int k = 0; k < n; k++) { st.ShipAx = a; s.Step(); }
             int j = fly > 0 ? st.IndexOf(fly) : -1;
             var q = j >= 0 ? st.Props[j] : default;
@@ -65,10 +65,34 @@ public static partial class Program
             Check("검토 고침 (PH11 · PH13): 이미 나는 것이 있어도 이번 틱에 나간 컵은 그 틱에 날지 않는다 (나간 자리 그대로 — 배 틀 1e-6) · 움직이는 배에서 쓸어 담은 조각의 운동량이 장부에 남는다 (1e-9)",
                 sameTick && Math.Abs(bk1.px - bk0.px) < 1e-9 * Math.Max(1, Math.Abs(bk0.px)) && Math.Abs(bk1.py - bk0.py) < 1e-9 * Math.Max(1, Math.Abs(bk0.py)),
                 $"나간 컵 배 틀 ({lx0:0.000},{ly0:0.000}) → ({llx:0.000},{lly:0.000}) · 쓸어 담기 장부 어긋남 ({bk1.px - bk0.px:0.0e0}, {bk1.py - bk0.py:0.0e0})");
-            Check("세상 빠르기 (법칙 16 · 6): 0.3g 점화 중 외판 구멍 밖으로 나간 수리 꾸러미는 세상 틀로 곧게 난다 — 세 틱 뒤 자리 x₀ + v t · 빠르기 그대로 (1e-9) · 배의 몸은 a·t (+ 뿜는 공기)만큼 빨라진다 · 몸 + 물체 + 기체 − 점화 장부가 그대로",
+            Check("세상 빠르기 (법칙 16 · 6): 0.3g 점화 중 외판 구멍 밖으로 나간 수리 꾸러미는 세상 틀로 곧게 난다 — 두 틱 뒤 자리 x₀ + v t · 빠르기 그대로 (1e-9) · 배의 몸은 a·t (+ 뿜는 공기)만큼 빨라진다 · 몸 + 물체 + 기체 − 점화 장부가 그대로",
                 fly > 0 && j >= 0 && Structure.Flying(q) && Math.Abs(q.X - ex) < 1e-9 * Math.Max(1, Math.Abs(ex)) && Math.Abs(q.Y - ey) < 1e-9 * Math.Max(1, Math.Abs(ey)) && q.Vx == vx0 && q.Vy == vy0
                 && bdv > a * dt * 0.999 && Math.Abs(book1.px - book0.px) < 1e-6 * gas && Math.Abs(book1.py - book0.py) < 1e-6 * gas,
                 $"나감 틱 {t0} · 꾸러미 ({q.X:0.000000}, {q.Y:0.000}) 바람 ({ex:0.000000}, {ey:0.000}) · 빠르기 ({q.Vx:0.000}, {q.Vy:0.000}) · 몸 Δv {bdv:0.0000} (a·t {a * dt:0.0000}) · 장부 어긋남 ({book1.px - book0.px:0.0e0}, {book1.py - book0.py:0.0e0}) / 크기 {gas:0.0e0}");
         }
+    }
+
+    /// <summary>법칙 — 몸 물체 (PH14): 끌려간 몸도 장부에 든다 (바람이 준 빠르기는 기체가 잃고 · 벽이 받은 것은 배의 몸이 되받고 · 다시 선 몸은 지닌 운동량을 가지고 나간다).</summary>
+    private static void BodyPropLaws()
+    {
+        if (!Do("몸 물체 법칙")) return;
+        Console.WriteLine("\n[몸 물체 — 장부 (PH14)]");
+        var lay = Worlds.Ascii(SpaceRoom);
+        var s = FieldStructure(lay);
+        var st = s.Get<Structure>();
+        st.EnsureBody();
+        s.Run(2);
+        var b = st.Bodies[0]; b.Vx = 0.4; b.W = 0.002; st.Bodies[0] = b;   // 배가 움직이며 돈다 (장부가 틀마다 맞는지)
+        var book0 = WorldBook(st);
+        st.Ragdoll(s, 0, Worlds.At(lay, 4, 2), false, false, s.Causes.Add(CauseKind.Setup, "시험 — 센 바람에 발이 떨어졌다", s.Tick), 8, 0);
+        int moved = 0;
+        for (int k = 0; k < 6; k++) { s.Step(); int i = st.RagdollOf(0); if (i >= 0 && st.Props[i].State == 0) { moved = k + 1; break; } }
+        double hit = st.PropHits.Where(h => h.Tag == 0).Sum(h => (double)h.E);
+        st.EndRagdoll(0);
+        var book1 = WorldBook(st);
+        double size = 70 * 8 + Math.Abs(st.GasPx) + 1;
+        Check("몸 물체 장부: 움직이며 도는 배에서 8m/s로 끌려간 70kg 몸이 벽에 부딪혀 서고 다시 제 힘으로 — 몸 + 물체 + 기체 장부가 그대로 (1e-9) · 벽에 부딪힌 에너지가 몸의 맞음 장부에",
+            moved > 0 && hit > Structure.BodyHitJ && Math.Abs(book1.px - book0.px) < 1e-9 * size && Math.Abs(book1.py - book0.py) < 1e-9 * size && Math.Abs(book1.l - book0.l) < 1e-9 * size * 10,
+            $"선 틱 {moved} · 맞음 {hit:0}J · 장부 어긋남 ({book1.px - book0.px:0.0e0}, {book1.py - book0.py:0.0e0}, {book1.l - book0.l:0.0e0}) / 크기 {size:0}");
     }
 }

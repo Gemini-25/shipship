@@ -567,6 +567,7 @@ public static partial class Program
         HandLaws();   // 함장의 손 (LawsHand.cs — docs/UI2.md §8 H1~H5)
         Depth2Laws();   // 사고의 물리 (LawsDepth2.cs — docs/DEPTH_FIX.md DF9)
         Physics2Laws();   // 물리 세계 뒤 커밋 (LawsPhysics2.cs — docs/PHYSICS.md PH11~)
+        BodyPropLaws();   // 몸 물체 (PH14)
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>

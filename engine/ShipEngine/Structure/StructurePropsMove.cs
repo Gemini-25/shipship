@@ -16,6 +16,7 @@ public sealed partial class Structure
     public DotForm PropForm(in Prop p)
     {
         if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
+        if (p.Kind is 5 or 6) return BodyForm(p);   // 몸 물체 (PH14)
         if (p.Kind is 1 or 3) return FurnPropForm(p);   // 뜯긴 가구 · 날아간 문짝 (PH10)
         int key = p.What * 8 + p.Pose;
         if ((uint)key < (uint)_propFormAt.Length && _propFormAt[key] is { } at) return at;   // 표 차례로 곧장 (섬 짝마다 잔걸음마다 부른다 — 속도만)
@@ -139,6 +140,7 @@ public sealed partial class Structure
     {
         bool any = false, plugged = false, gone = false, fly = false, world = Bodies.Count > 0;
         _windy = F.WindCells.Count > 0; _tickDt = dt;
+        FootingAfter(sim);   // 발 디딤 (PH14 — 이 틱 돌풍에 발이 떨어진 몸은 물체로 · 목록이 늘어나니 먼저)
         // 가구 (PH10): 받는 힘 (틀 · 바람 · 덜컹)이 견디는 힘을 넘으면 뜯는다 · 폭풍 (② 이 틱 기체 폭발 — 물체 · 가구 · 기체가 민 것은 바깥 몫이다) — 물체 목록이 늘어나니 먼저
         if (L.Furniture.Count > 0)
         {

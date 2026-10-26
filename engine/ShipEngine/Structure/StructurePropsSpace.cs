@@ -32,10 +32,22 @@ public sealed partial class Structure
                 var o = Bodies[b];
                 double c = Math.Cos(o.Th), s = Math.Sin(o.Th), dx = p.X - o.Lx, dy = p.Y - o.Ly, rx = c * dx - s * dy, ry = s * dx + c * dy;
                 double vx = o.Vx - o.W * ry + c * p.Vx - s * p.Vy, vy = o.Vy + o.W * rx + s * p.Vx + c * p.Vy;
+                foreach (var k in _outKick)
+                {
+                    if (k.id != p.Id) continue;
+                    // 구멍 쪽 빠르기가 적어도 미는 만큼 (바닥에 대한 빠르기로 · 튄 것도 구멍 밖으로) — 기체가 민다
+                    double vn = p.Vx * k.nx + p.Vy * k.ny, dv = Math.Max(Math.Abs(vn), k.push) - vn;
+                    if (dv == 0) break;
+                    double gx = (c * k.nx - s * k.ny) * dv, gy = (s * k.nx + c * k.ny) * dv;
+                    vx += gx; vy += gy;
+                    GasPx -= p.Kg * gx; GasPy -= p.Kg * gy; GasL -= (o.X + rx) * p.Kg * gy - (o.Y + ry) * p.Kg * gx;
+                    break;
+                }
                 p.X = o.X + rx; p.Y = o.Y + ry; p.Vx = vx; p.Vy = vy; p.W += o.W; p.Th += o.Th;
             }
             p.Host = -1; p.Z = 0; p.Vz = 0; p.PlugAt = 0;
         }
+        _outKick.Clear();
     }
 
     /// <summary>나간 자리의 몸: 그 칸의 몸 · 없으면 (구멍 칸 · 바깥 칸) 곁 칸의 몸 · 그것도 없으면 배 (0).</summary>

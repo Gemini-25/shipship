@@ -158,5 +158,62 @@ public static partial class Program
                 fact.Kind == FactKind.Shattered && shown >= 2 && d!.PropScreenSec is >= 2 and <= 3.5 && Director.Weight(FactKind.Shattered) == 8,
                 $"깨짐 {(fact.Kind == FactKind.Shattered ? $"틱 {fact.Tick}" : "없음")} · 그 뒤 화면 {shown:0.00}초 · 볼거리 {d?.PropScreenSec:0.00}초");
         }
-    }
+    
+        // ── PH14 몸 물체: 제 힘을 잃은 사람 · 로봇은 ④가 원판 물체로 셈한다 — 끌려가다 벽에 부딪혀 다치고 · 큰 틈으로 나간 이는 멀어지고 · 로봇도 미끄러진다 ──
+        if (Do("몸 물체"))
+        {
+            Console.WriteLine("\n[몸 물체 — 끌려가는 몸 (PH14)]");
+            // (가) 바람에 발이 떨어져 8m/s로 끌려간 이가 3.5m 앞 벽에 부딪힌다 — 남은 운동 에너지만큼 타박 (원인 '끌려가다 부딪혔다') · 멈추면 다시 제 힘으로
+            {
+                var lay = Worlds.Ascii(SpaceRoom);
+                var s = Worlds.Full(lay, 1);
+                var st = s.Get<Structure>(); var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int who = m.AddPerson(s, Worlds.At(lay, 4, 2));
+                s.Run(2);
+                int body = m[who].C.Body;
+                st.Ragdoll(s, body, m[who].C.Cell, false, false, s.Causes.Add(CauseKind.Setup, "시험 — 센 바람에 발이 떨어졌다", s.Tick), 8, 0);
+                s.Run(4);
+                string story = s.Causes.Story(life[body].HurtCause);
+                Check("몸 물체 (가): 8m/s로 끌려간 이가 3.5m 앞 벽에 부딪혀 다친다 (마찰을 빼고 남은 에너지 — 타박 · 원인 '끌려가다 부딪혔다') · 멈추면 몸 물체를 거두고 벽 곁 칸에 선다",
+                    life[body].Blunt > 0.05f && story.Contains("끌려가다 부딪혔다") && st.RagdollOf(body) < 0 && m[who].C.Cell == Worlds.At(lay, 7, 2),
+                    $"타박 {life[body].Blunt:0.00} · \"{story}\" · 몸 물체 {st.RagdollOf(body)} · 칸 x {lay.X(m[who].C.Cell)}");
+            }
+            // (나) 외판 1m² 구멍 곁의 이는 빨려 나가 10틱 (24초) 뒤 배에서 5m 넘게 멀어진다 · 찍고 되살린 세계와 같다 / 곁의 로봇도 미끄러져 나간다
+            {
+                var lay = Worlds.Ascii(SpaceRoom);
+                (Sim s, int who, int bot) Make(bool robot)
+                {
+                    var s = Worlds.Full(lay, 1);
+                    var m = s.Get<Mind>();
+                    int who = robot ? -1 : m.AddPerson(s, Worlds.At(lay, 1, 2)), bot = robot ? m.AddRobot(s, Worlds.At(lay, 1, 2)) : -1;
+                    s.Run(2);
+                    s.Get<Structure>().DamageCause[Worlds.At(lay, 0, 2)] = s.Causes.Add(CauseKind.Setup, "외판에 파편이 박혔다", s.Tick);
+                    s.Get<Field>().SetHole(Worlds.At(lay, 0, 2), 1.0f);
+                    return (s, who, bot);
+                }
+                double Away(Sim s, int tag)
+                {
+                    var st = s.Get<Structure>();
+                    int i = st.RagdollOf(tag);
+                    if (i < 0 || !Structure.Flying(st.Props[i])) return 0;
+                    var (lx, ly) = st.LocalOf(0, st.Props[i].X, st.Props[i].Y);
+                    return Math.Sqrt((lx - 0.5) * (lx - 0.5) + (ly - 2.5) * (ly - 2.5));
+                }
+                var (s1, who1, _) = Make(false);
+                var m1 = s1.Get<Mind>();
+                s1.Run(2);
+                var r = new Sim(s1.Setup); r.Load(s1.Save());
+                s1.Run(8); r.Run(8);
+                double d = Away(s1, m1[who1].C.Body);
+                bool same = s1.Save().AsSpan().SequenceEqual(r.Save());
+                var (s2, _, bot) = Make(true);
+                var m2 = s2.Get<Mind>();
+                s2.Run(3);
+                double db = Away(s2, -1 - m2[bot].C.Mech);
+                Check("몸 물체 (나): 외판 1m² 구멍 곁의 이는 빨려 나가 10틱 (24초) 뒤 배에서 5m 넘게 멀어진다 (떠감) · 나는 동안 찍고 되살린 세계와 같다 / 곁의 로봇도 바람에 밀려 구멍 밖으로",
+                    d > 5 && m1[who1].C.Adrift != 0 && same && s2.Get<Structure>().RobotsKnocked >= 1 && db > 1,
+                    $"사람 {d:0.0}m · 떠감 {m1[who1].C.Adrift} · 되살림 같음 {same} / 로봇 밀림 {s2.Get<Structure>().RobotsKnocked} · {db:0.0}m");
+            }
+        }
+}
 }

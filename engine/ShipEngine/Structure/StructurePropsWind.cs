@@ -202,14 +202,14 @@ public sealed partial class Structure
     /// 빨아들이지 않는 구멍 (기압이 같은 두 방 사이 · 공기가 다 빠진 방)과 옆 방으로 이어진 구멍은 보통 벽이다 (거짓 — 부른 쪽이 튀거나 틈을 지나게 둔다).
     /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private bool HoleHit(Sim sim, ref Prop p, int hole)
+    private bool HoleHit(Sim sim, ref Prop p, int hole, double tau = -1)
     {
         var fm = PropForm(p);
         string name = PropName(p);
         if (hole >= 0)
         {
             double face = MinFace(fm);
-            if (!Sucked(p, hole, face)) return false;
+            if (!Sucked(p, hole, face, tau)) return false;
             if (face > F.Hole[hole] * PlugMargin)
             {
                 p.State = 6; p.PlugAt = hole + 1; p.Vx = p.Vy = p.W = 0; p.Still = 0; p.Since = _now;
@@ -219,6 +219,7 @@ public sealed partial class Structure
                 return true;
             }
             if (!HoleToSpace(hole)) return false;
+            OutThrough(p, hole, face, tau);
         }
         p.State = 5;
         int sc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(name)} 구멍 밖 우주로 빨려 나갔다", sim.Tick, hole, p.Cause);
@@ -234,15 +235,38 @@ public sealed partial class Structure
         return false;
     }
 
-    /// <summary>구멍이 그 물체를 무게보다 세게 빨아들이나 (누르는 힘 = 기압 차 × 덮은 넓이 > 무게 — 빨려 붙음 · 떨어짐 · 우주로의 같은 문턱).</summary>
+    /// <summary>
+    /// 구멍이 그 물체를 무게보다 세게 빨아들이나 (누르는 힘 = 기압 차 × 덮은 넓이 > 무게 — 빨려 붙음 · 떨어짐 · 우주로의 같은 문턱) ·
+    /// tau (틱 처음에서 닿은 때 — 초): 그때 기압으로 (장은 이미 흘렀으니 구멍 입처럼 그 구역이 빈 빠르기로 되짚는다 — 큰 구멍은 한 틱에 방을 비운다 · 음수면 틱 끝 기압).
+    /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private bool Sucked(in Prop p, int hole, double face)
+    private bool Sucked(in Prop p, int hole, double face, double tau = -1) => SuckNet(p, hole, face, tau) > 0;
+
+    /// <summary>구멍이 그 물체를 빨아들이는 힘에서 무게를 뺀 것 (N — 양이면 빨린다 · <see cref="Sucked"/>).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(Hot)]
+    private double SuckNet(in Prop p, int hole, double face, double tau = -1)
     {
-        if (hole < 0 || L.Kind[hole] != CellKind.Wall || F.Hole[hole] <= 0.01f || F.Severed[hole] != 0) return false;
+        if (hole < 0 || L.Kind[hole] != CellKind.Wall || F.Hole[hole] <= 0.01f || F.Severed[hole] != 0) return -1;
         int c = HoleSide(p, hole);
         double weight = p.Kg * Gravity * (c >= 0 ? F.Grav[c] : 0);
-        return Suction(c, hole, face) > weight;
+        return Suction(c, hole, face, tau >= 0 && c >= 0 ? Math.Exp(F.WindK[c] * Math.Max(0, _tickDt - tau)) : 1) - weight;
     }
+
+    /// <summary>
+    /// 구멍 밖으로 나가는 것의 빠르기: 구멍 쪽 (이쪽 트인 칸에서 구멍 칸으로) 빠르기가 적어도 빨아들이는 힘이 구멍 벽 두께 (0.5m)를 미는 만큼 —
+    /// 벽에 닿아 이미 튄 것도 구멍 밖으로 (튄 빠르기로 방에 되돌아와 실리지 않게 · PH14 고침). 옆 빠르기는 그대로.
+    /// 미는 것은 나가는 기체다 — 세상 틀로 옮길 때 (<see cref="Launch"/> · 틱 끝 몸 자세) 더하고 장부 Gas가 잃는다 (몸은 되받지 않는다).
+    /// </summary>
+    private void OutThrough(in Prop p, int hole, double face, double tau)
+    {
+        int c = HoleSide(p, hole);
+        if (c < 0 || p.Kg <= 0) return;
+        int nx = Math.Sign(L.X(hole) - L.X(c)), ny = nx == 0 ? Math.Sign(L.Y(hole) - L.Y(c)) : 0;
+        double push = Math.Sqrt(2 * Math.Max(0, SuckNet(p, hole, face, tau)) * 0.5 / p.Kg);
+        _outKick.Add((p.Id, nx, ny, push));
+    }
+    /// <summary>이번 틱 구멍 밖으로 나간 것의 미는 쪽 · 적어도 빠르기 (찍지 않는다 — 같은 틱 Launch가 쓰고 비운다).</summary>
+    private readonly List<(int id, int nx, int ny, double push)> _outKick = new();
 
     /// <summary>구멍 이쪽의 트인 칸: 물체 무게중심 칸 (트였으면) · 아니면 (무게중심이 구멍 칸에 들었다) 구멍 곁 트인 칸 가운데 무게중심에 가장 가까운 것.</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -283,12 +307,12 @@ public sealed partial class Structure
 
     /// <summary>구멍에 붙은 것을 누르는 힘 (N): 그 칸과 구멍 너머의 기압 차 × 덮은 넓이.</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
-    private double Suction(int cell, int hole, double face)
+    private double Suction(int cell, int hole, double face, double back = 1)
     {
         if (cell < 0 || hole < 0) return 0;
         int bx = 2 * L.X(hole) - L.X(cell), by = 2 * L.Y(hole) - L.Y(cell);
         double pOut = L.In(bx, by) && !F.IsOut(L.Index(bx, by)) && F.Passable(L.Index(bx, by)) ? F.Pressure(L.Index(bx, by)) : F.Outside.KPa;
-        return Math.Max(0, F.Pressure(cell) - pOut) * 1000 * Math.Min(F.Hole[hole], face);
+        return Math.Max(0, F.Pressure(cell) * back - pOut) * 1000 * Math.Min(F.Hole[hole], face);
     }
 
     /// <summary>

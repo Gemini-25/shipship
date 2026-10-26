@@ -97,6 +97,7 @@ public sealed partial class Structure
     /// </summary>
     private void NoteHit(Sim sim, in Prop p, double e, byte other, double px, double py, double speed, double fall, byte how, double t)
     {
+        if (p.Kind is 5 or 6) { BodyHit(sim, p, e, speed); return; }   // 몸 물체는 깨지지 않는다 — 그 몸이 맞는다 (PH14)
         if (e <= 0 || p.Kind is not (0 or 1 or 2) || p.Kg <= 0) return;
         double es = MaterialOf(p).E, eo = T.Materials[Math.Min(other, T.Materials.Count - 1)].Def.E;
         byte sub = _tickDt > 0 ? (byte)Math.Clamp((int)Math.Round(t / _tickDt * 255), 0, 255) : sim.Facts.SubNow;   // 닿은 그 때 (잔걸음 처음이 아니라 — 떨어져 닿는 때는 잔걸음 안이다)

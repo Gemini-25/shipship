@@ -649,6 +649,7 @@ public sealed partial class Mind : IEngine
             {
                 ref var body = ref _life[b];
                 if (body.Alive == 0 || body.Cell < 0) continue;
+                if (_st.RagdollOf(b) >= 0) continue;   // 몸 물체로 ④가 셈한다 (PH14 — 원판이 제 몸에 부딪히지 않게)
                 byte low = (byte)(body.Conscious == 0 || body.Asleep != 0 ? 1 : 0);
                 int ag = AgentOfBody(b);
                 Add(new PropActor { Tag = b, Cell = body.Cell, R = Structure.ActorR, Kg = (float)PersonKg, H = low != 0 ? 0.4f : 1.7f, Low = low, Cause = ag >= 0 ? Agents[ag].C.GoalCause : 0, Target = ag >= 0 ? GatherTarget(Agents[ag]) : 0 },
@@ -656,7 +657,7 @@ public sealed partial class Mind : IEngine
             }
         foreach (var a in Agents)
         {
-            if (a.C.Kind != AgentKind.Robot || a.C.Mech < 0 || a.C.Damage >= 1 || a.C.Cell < 0 || a.C.Cell >= L.N) continue;
+            if (a.C.Kind != AgentKind.Robot || a.C.Mech < 0 || a.C.Damage >= 1 || a.C.Cell < 0 || a.C.Cell >= L.N || _st.RagdollOf(-1 - a.C.Mech) >= 0) continue;
             Add(new PropActor { Tag = -1 - a.C.Mech, Cell = a.C.Cell, R = Structure.ActorR, Kg = RobotKg, H = 1.2f, Cause = a.C.GoalCause, Target = GatherTarget(a) }, WalkOf(a.Id, a.C.Cell));
         }
         _st.SetActors(_actorBuf.AsSpan(0, n), _actorPathBuf.AsSpan(0, np));

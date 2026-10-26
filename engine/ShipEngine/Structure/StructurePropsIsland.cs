@@ -991,7 +991,7 @@ public sealed partial class Structure
         r.Cell = c;
         // 무게중심이 도면 밖 · 바깥에 들었다 → 우주로 · 구멍 벽 칸에 들었다 (큰 구멍의 틈) → 빨아들이면 막거나 우주로 (아니면 틈을 지나 그대로 간다)
         if (c < 0 || L.Kind[c] == CellKind.Outside || F.IsOut(c)) { HoleHit(sim, ref p, -1); TrackEnd(tr, p, tau, ref r.LastKey); r.Done = true; return false; }
-        if (L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f && HoleHit(sim, ref p, c)) { TrackEnd(tr, p, tau, ref r.LastKey); r.Done = true; return false; }
+        if (L.Kind[c] == CellKind.Wall && F.Hole[c] > 0.01f && HoleHit(sim, ref p, c, tau)) { TrackEnd(tr, p, tau, ref r.LastKey); r.Done = true; return false; }
         double m = r.M, I = r.In, rho = r.Rho;
         var sm = r.Sm;
         double gp = Gravity * F.Grav[c];   // 누르는 힘 N = m g' (무중력이면 정말 뜬다)
@@ -1146,7 +1146,7 @@ public sealed partial class Structure
         for (int c = r.S0; c < r.S0 + r.Ns && !gone; c++)
         {
             ref var ct = ref _ic[c];
-            if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell);
+            if (ct.Cell >= 0 && L.Kind[ct.Cell] == CellKind.Wall && F.Hole[ct.Cell] > 0.01f && (ct.Jn > 0 || ct.Sep <= Slop)) gone = HoleHit(sim, ref p, ct.Cell, dt - rem);
         }
         if (gone) { TrackEnd(tr, p, dt - rem, ref r.LastKey); r.Done = true; return; }
         bool still = r.Gp > 0 && !r.Air && p.State == 1 && p.Vx * p.Vx + p.Vy * p.Vy < SleepV * SleepV && Math.Abs(p.W) < SleepW && p.Tilt == 0 && double.IsPositiveInfinity(r.NextJolt) && !r.Walked;   // 걷는 원판이 아직 지나가는 틱이면 자지 않는다 (깨운 까닭)

@@ -900,8 +900,16 @@ public sealed partial class Painter
             {
                 int cell = a.C.Cell;
                 int x = L.X(cell), y = L.Y(cell);
-                if (x < x0 - 1 || y < y0 - 1 || x > x0 + w || y > y0 + h + 1 || !Mine(cell)) continue;
                 var (nx, ny) = Nudge?.Invoke(a) ?? (0, 0);
+                if (st != null && (a.IsPerson ? a.C.Body : a.C.Mech) >= 0 && st.RagdollOf(a.IsPerson ? a.C.Body : -1 - a.C.Mech) is int ri and >= 0)
+                {
+                    // 제 힘을 잃은 몸 (PH14 — ④ 몸 물체): 칸이 아니라 그 물체 자리에 (미끄러지는 · 구멍 밖 우주로 나는 — 배 틀로 옮겨)
+                    var bp = st.Props[ri];
+                    var (bx, by) = Structure.Flying(bp) && st.Bodies.Count > 0 ? st.LocalOf(0, bp.X, bp.Y) : (bp.X, bp.Y);
+                    x = (int)Math.Floor(bx); y = (int)Math.Floor(by);
+                    nx += (int)Math.Round((bx - x - 0.5) * T); ny += (int)Math.Round((by - y - 0.5) * T);
+                }
+                if (x < x0 - 1 || y < y0 - 1 || x > x0 + w || y > y0 + h + 1 || !Mine(cell)) continue;
                 if (a.IsPerson)
                 {
                     DrawPerson(img, mind, life, a, Px(x) + nx, Py(y) + ny, frame);

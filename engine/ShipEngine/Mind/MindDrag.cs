@@ -1,11 +1,10 @@
 namespace ShipEngine;
 
 /// <summary>
-/// ③ 국소 현상 (나) 구멍으로 끌려감 · (다) 물건이 구멍을 막는다 (깊이 바퀴 3 · docs/ENGINE.md ③ '국소 현상').
-/// 감압 돌풍의 끌림힘 ½ρv²·Cd·A (서 있으면 0.7m² · 낮으면 0.3m²)가 발바닥 마찰 μmg를 넘으면 사람이 바람 쪽으로 미끄러진다 —
-/// 깨어 있는 이는 곁의 설비 · 문틀을 붙잡아 손힘 500N을 더 버틴다 (본능). 몸보다 큰 구멍(0.25m²)이면 우주로 빨려 나가 떠내려가고 ·
-/// 작으면 몸이 구멍에 빨려 붙어 막는다 (기압 차 × 구멍 넓이가 300N 아래로 내려가야 뗀다). 사람의 자리는 마음 층에 있으니
-/// 여기서 장(바람 · 기압 · 구멍 입 — <see cref="Field.HoleMouthPa"/>)을 읽고 장에 '몸이 막은 넓이'를 요청한다 — 아래 층은 위를 모른다 (물건은 ④가 PH4c).
+/// ③ 국소 현상 (나) 구멍으로 끌려감 · (다) 몸이 구멍을 막는다 (깊이 바퀴 3 · docs/ENGINE.md ③ '국소 현상') — 판단 몫만 (PH14: 발이 떨어질지 · 그 뒤 몸의 움직임은 ④ 몸 물체).
+/// 사람은 제가 느끼는 끌림 (감압 돌풍 · 구멍 입의 ½ρv²·Cd·A — 서 있으면 0.7m² · 낮으면 0.3m²)이 발 마찰을 넘을 것 같으면 곁의 설비 · 문틀을 붙잡는다 (본능 — 손힘 500N을 ④에 요청).
+/// 걷기 전에 선 몸들을 ④에 알린다 (발 디딤) · 발이 떨어진 이는 넘어지고 걷던 길을 버린다 · 그 몸 물체를 따라 칸을 맞춘다 (날면 떠감 · 구멍을 막으면 빨려 붙음 — 기압 차 × 구멍 넓이가 300N 아래로 내려가야 뗀다 ·
+/// 멈추면 다시 제 힘으로). 몸이 막은 넓이는 장에 요청한다 — 아래 층은 위를 모른다.
 /// </summary>
 public sealed partial class Mind
 {
@@ -22,10 +21,11 @@ public sealed partial class Mind
         if (_life == null) return;
         foreach (var a in Agents)
         {
-            if (!a.IsPerson) continue;
+            if (!a.IsPerson) { RobotDrag(sim, a); continue; }
             ref var c = ref a.C;
             if (c.Body < 0) continue;
             ref var b = ref _life[c.Body];
+            if (_st != null && _st.RagdollOf(c.Body) is int ri and >= 0) { FollowRagdoll(sim, a, ref b, ri, dt); continue; }   // 몸 물체 (PH14 — ④가 셈한다)
             if (c.Adrift != 0) { Drift(ref c, ref b); continue; }
             int cell = b.Cell;
             if (cell < 0 || cell >= L.N) continue;
@@ -40,70 +40,121 @@ public sealed partial class Mind
             double grip = (F.Stored(T.sWater, cell) > 50 ? WetMu : FootMu) * Math.Max(0.05, F.Grav[cell]) * PersonKg * Gravity;
             if (drag <= grip) continue;
             int cause = WindCause(cell);
-            // 붙잡기: 깨어 있는 이는 곁의 설비 · 문틀을 붙든다 (본능 — 손힘만큼 더 버틴다)
-            bool held = c.Up != 0 && HandholdNear(cell);
-            if (held && drag <= grip + HandGrip)
+            // 붙잡기: 바람이 발을 떼려 하면 (제가 느끼는 끌림이 발 마찰을 넘는다) 깨어 있는 이는 곁의 설비 · 문틀을 붙든다 (본능 — 손힘을 ④에 요청 · 버틸지는 ④가 셈한다)
+            if (c.Up == 0 || !HandholdNear(cell)) continue;
+            _st?.Hold(c.Body, HandGrip);
+            if (drag <= grip + HandGrip && (c.HeldAt == 0 || sim.Tick - c.HeldAt > Time.Minutes(1)))
             {
-                if (c.HeldAt == 0 || sim.Tick - c.HeldAt > Time.Minutes(1))
-                {
-                    int hc = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 빨아들이는 바람에 곁의 것을 붙잡고 버텼다", sim.Tick, cell, cause, a.Id);
-                    sim.Facts.Emit(sim.Tick, FactKind.Fell, cell, 0, hc, a.Id);
-                    HoldsHeld++;
-                }
-                c.HeldAt = sim.Tick;
-                continue;
+                int hc = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 빨아들이는 바람에 곁의 것을 붙잡고 버텼다", sim.Tick, cell, cause, a.Id);
+                sim.Facts.Emit(sim.Tick, FactKind.Fell, cell, 0, hc, a.Id);
+                HoldsHeld++;
             }
-            // 끌려간다: 센 쪽 축으로 · 한 틱에 많아야 세 칸 (끌림이 이긴 만큼 빨리 — 1m 미끄러지며 얻는 빠르기)
-            double net = drag - grip - (held ? HandGrip : 0);
-            double speed = Math.Sqrt(2 * Math.Max(0, net) / PersonKg * 1.0);
-            int steps = Math.Clamp((int)(speed * dt / 4), 1, 3);
-            int dx = Math.Abs(wx) >= Math.Abs(wy) ? Math.Sign(wx) : 0, dy = dx == 0 ? Math.Sign(wy) : 0;
-            if (c.Up != 0) Fall(sim, a);   // 발이 떨어져 넘어진다
-            a.Path.Clear(); a.PathIdx = 0;
-            for (int s = 0; s < steps; s++)
-            {
-                if (s > 0 && F.HoleMouthPa(cell, out int m2) > 0) { dx = L.X(m2) - L.X(cell); dy = L.Y(m2) - L.Y(cell); }   // 구멍 곁에 닿으면 구멍 쪽으로
-                else if (s > 0 && (F.WindX[cell] != 0 || F.WindY[cell] != 0)) { double ax = F.WindX[cell], ay = F.WindY[cell]; dx = Math.Abs(ax) >= Math.Abs(ay) ? Math.Sign(ax) : 0; dy = dx == 0 ? Math.Sign(ay) : 0; }
-                int x = L.X(cell) + dx, y = L.Y(cell) + dy;
-                if (!L.In(x, y)) break;
-                int j = L.Index(x, y);
-                var kind = L.Kind[j];
-                bool open = kind == CellKind.Outside || F.Severed[j] != 0;
-                if (open || kind == CellKind.Wall && F.Hole[j] > 0.01f)
-                {
-                    if (open || F.Hole[j] >= BodyPass)
-                    {
-                        // 몸이 지나는 구멍 — 우주로 빨려 나가 떠내려간다
-                        int k = open ? j : L.In(x + dx, y + dy) ? L.Index(x + dx, y + dy) : j;
-                        int sc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(NameOf(a.Id))} 빨아들이는 바람에 끌려 구멍 밖 우주로 빨려 나갔다", sim.Tick, j, cause, a.Id);
-                        sim.Facts.Emit(sim.Tick, FactKind.WentOutside, j, 1, sc, a.Id);
-                        b.Cell = k; c.Cell = k; c.Adrift = 1; c.AdriftDx = (sbyte)dx; c.AdriftDy = (sbyte)dy;
-                        b.HurtCause = sc;
-                        PeopleSpaced++;
-                    }
-                    else
-                    {
-                        // 작은 구멍 — 몸이 빨려 붙어 막는다
-                        int pc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(NameOf(a.Id))} 구멍에 빨려 붙었다 — 몸이 구멍을 막았다 ({F.Hole[j] * 1e4:0}cm²)", sim.Tick, j, cause, a.Id);
-                        sim.Facts.Emit(sim.Tick, FactKind.Hurt, cell, 0.2f, pc, c.Body);
-                        c.PinAt = j + 1;
-                        b.HurtCause = pc;
-                        PeoplePinned++;
-                    }
-                    break;
-                }
-                if (kind == CellKind.Wall || L.FurnitureAt[j] >= 0 || kind == CellKind.Door && F.DoorOpen[L.DoorAt[j]] < 0.5f)
-                {
-                    // 벽 · 설비 · 닫힌 문에 부딪혀 멈춘다 (½mv² — 200J에 가벼운 타박 0.25)
-                    double e = 0.5 * PersonKg * speed * speed;
-                    if (e >= 50) _life.Strike(sim, c.Body, (float)Math.Min(1.5, e / 800), 0, sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(NameOf(a.Id))} 바람에 끌려가다 부딪혔다", sim.Tick, j, cause, a.Id));
-                    break;
-                }
-                cell = j; b.Cell = j; c.Cell = j;
-                PeoplePulled++;
-            }
+            c.HeldAt = sim.Tick;
         }
+        Footing(sim);
         ApplyPlugs();
+    }
+
+    private PropActor[] _feetBuf = new PropActor[16];
+    /// <summary>
+    /// 선 몸들 (걷기 전 — 틱 처음 자리)의 발 디딤을 ④에 요청한다 (붙잡음 요청을 더해 — 발이 떨어질지는 ④가 셈한다) · 이번에 발이 떨어진 이는 넘어지고 걷던 길을 버린다.
+    /// 업힌 이 · 빨려 붙은 이 · 떠내려가는 이 · 이미 몸 물체인 이는 빼고.
+    /// </summary>
+    private void Footing(Sim sim)
+    {
+        if (_st == null || _life == null) return;
+        int n = 0;
+        foreach (var a in Agents)
+        {
+            ref var c = ref a.C;
+            PropActor x;
+            if (a.IsPerson)
+            {
+                if (c.Body < 0 || c.Adrift != 0 || c.PinAt != 0 || c.CarriedBy >= 0) continue;
+                ref var b = ref _life[c.Body];
+                if (b.Alive == 0 || b.Cell < 0 || b.Cell >= L.N || _st.RagdollOf(c.Body) >= 0) continue;
+                x = new PropActor { Tag = c.Body, Cell = b.Cell, Kg = (float)PersonKg, Low = b.Low };
+            }
+            else
+            {
+                if (c.Kind != AgentKind.Robot || c.Mech < 0 || c.Damage >= 1 || c.Cell < 0 || c.Cell >= L.N || _st.RagdollOf(-1 - c.Mech) >= 0) continue;
+                x = new PropActor { Tag = -1 - c.Mech, Cell = c.Cell, Kg = RobotKg };
+            }
+            if (n == _feetBuf.Length) Array.Resize(ref _feetBuf, n * 2);
+            _feetBuf[n++] = x;
+        }
+        if (n == 0) return;
+        long knocked = _st.PeopleKnocked + _st.RobotsKnocked;
+        _st.Footing(sim, _feetBuf.AsSpan(0, n));
+        if (_st.PeopleKnocked + _st.RobotsKnocked == knocked) return;
+        foreach (var a in Agents)
+        {
+            int tag = a.IsPerson ? a.C.Body : a.C.Kind == AgentKind.Robot && a.C.Mech >= 0 ? -1 - a.C.Mech : int.MinValue;
+            if (tag == int.MinValue || (!a.IsPerson && tag >= 0) || a.IsPerson && tag < 0 || _st.RagdollOf(tag) < 0) continue;
+            if (a.IsPerson && a.C.Up != 0) { Fall(sim, a); PeoplePulled++; }   // 발이 떨어져 넘어진다
+            a.Path.Clear(); a.PathIdx = 0;
+        }
+    }
+
+    /// <summary>
+    /// 몸 물체를 따른다 (PH14): 날면 우주로 빨려 나간 것 (떠내려감 · 둘레 칸은 배 틀의 가장 가까운 끝 칸) · 구멍을 막으면 빨려 붙음 (멍 · 떼기는 그대로) ·
+    /// 미끄러지는 동안 몸의 칸은 물체의 칸 · 멈추면 (놓임) 거둔다 — 다시 제 힘으로 (깨어 있으면 일어선다 · 아니면 그 자리에 누운 채).
+    /// </summary>
+    private void FollowRagdoll(Sim sim, Agent a, ref Body b, int ri, double dt)
+    {
+        ref var c = ref a.C;
+        var p = _st!.Props[ri];
+        if (c.Up != 0) { Fall(sim, a); PeoplePulled++; }   // ④가 발을 뗐다 (바람이 손힘 · 발 마찰을 이겼다) — 넘어져 끌려간다
+        a.Path.Clear(); a.PathIdx = 0;
+        if (Structure.Flying(p))
+        {
+            int at = _st.SpaceCellOf(p);
+            if (c.Adrift == 0)
+            {
+                int sc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(NameOf(a.Id))} 빨아들이는 바람에 끌려 구멍 밖 우주로 빨려 나갔다", sim.Tick, at, p.Cause, a.Id);
+                sim.Facts.Emit(sim.Tick, FactKind.WentOutside, at, 1, sc, a.Id);
+                c.Adrift = 1; b.HurtCause = sc;
+                PeopleSpaced++;
+            }
+            b.Cell = at; c.Cell = at;
+            return;
+        }
+        int cell = _st.CellOf(p);
+        if (cell >= 0) { b.Cell = cell; c.Cell = cell; }
+        if (p.State == 6)
+        {
+            if (c.PinAt == 0)
+            {
+                int j = p.PlugAt - 1;
+                int pc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(NameOf(a.Id))} 구멍에 빨려 붙었다 — 몸이 구멍을 막았다 ({F.Hole[j] * 1e4:0}cm²)", sim.Tick, j, p.Cause, a.Id);
+                sim.Facts.Emit(sim.Tick, FactKind.Hurt, cell, 0.2f, pc, c.Body);
+                c.PinAt = p.PlugAt;
+                b.HurtCause = pc;
+                PeoplePinned++;
+            }
+            Pinned(sim, a, ref b, dt);
+            if (c.PinAt == 0) _st.EndRagdoll(c.Body);   // 몸을 뗐다
+            return;
+        }
+        if (c.PinAt != 0) c.PinAt = 0;   // 물체가 구멍에서 떨어졌다 (누르는 힘이 무게 아래)
+        if (p.State == 0) _st.EndRagdoll(c.Body);   // 멈췄다 — 다시 제 힘으로
+    }
+
+    /// <summary>바람에 밀린 로봇 (PH14 — 발 디딤은 ④가 셈한다: 끌림이 바퀴 · 발 마찰을 넘으면 몸 물체 Kind 6)을 따른다 — 몸의 칸은 물체의 칸 · 멈추면 다시 제 힘으로 · 날면 우주에서 떠내려간다.</summary>
+    private void RobotDrag(Sim sim, Agent a)
+    {
+        if (_st == null || a.C.Kind != AgentKind.Robot || a.C.Mech < 0) return;
+        ref var c = ref a.C;
+        int tag = -1 - c.Mech;
+        int ri = _st.RagdollOf(tag);
+        if (ri >= 0)
+        {
+            var p = _st.Props[ri];
+            int at = Structure.Flying(p) ? _st.SpaceCellOf(p) : _st.CellOf(p);
+            if (at >= 0) c.Cell = at;
+            a.Path.Clear(); a.PathIdx = 0;
+            if (p.State == 0) _st.EndRagdoll(tag);
+        }
     }
 
     /// <summary>곁(제 칸 · 여덟 이웃)에 붙잡을 것이 있나: 설비 · 문틀.</summary>
