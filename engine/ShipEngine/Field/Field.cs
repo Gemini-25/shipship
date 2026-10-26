@@ -1,3 +1,6 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 namespace ShipEngine;
 
 /// <summary>
@@ -125,24 +128,50 @@ public sealed partial class Field : IEngine
 
     public double Moles(int i)
     {
-        double n = 0;
-        for (int g = 0; g < G; g++) n += N[i * G + g];
+        ref double r = ref MemoryMarshal.GetReference(N.AsSpan(i * G, G));
+        double n = 0; int g = 0;
+        for (; g <= G - 4; g += 4) { n += Unsafe.Add(ref r, g); n += Unsafe.Add(ref r, g + 1); n += Unsafe.Add(ref r, g + 2); n += Unsafe.Add(ref r, g + 3); }
+        for (; g < G; g++) n += Unsafe.Add(ref r, g);
         return n;
     }
 
     /// <summary>기체 열용량 Σ n cv (J/K).</summary>
     public double GasC(int i)
     {
-        double c = 0;
-        for (int g = 0; g < G; g++) c += N[i * G + g] * _cv[g];
+        ref double r = ref MemoryMarshal.GetReference(N.AsSpan(i * G, G));
+        ref double k = ref MemoryMarshal.GetArrayDataReference(_cv);
+        double c = 0; int g = 0;
+        for (; g <= G - 4; g += 4)
+        {
+            c += Unsafe.Add(ref r, g) * Unsafe.Add(ref k, g); c += Unsafe.Add(ref r, g + 1) * Unsafe.Add(ref k, g + 1);
+            c += Unsafe.Add(ref r, g + 2) * Unsafe.Add(ref k, g + 2); c += Unsafe.Add(ref r, g + 3) * Unsafe.Add(ref k, g + 3);
+        }
+        for (; g < G; g++) c += Unsafe.Add(ref r, g) * Unsafe.Add(ref k, g);
         return c;
     }
 
     /// <summary>몰 · 기체 열용량을 한 번에 (Moles · GasC와 같은 값).</summary>
-    public double Moles(int i, out double gasC)
+    public double Moles(int i, out double gasC) => SumNC(i, out gasC);
+
+    /// <summary>
+    /// 칸 기체의 몰 수 Σn · 열용량 Σn·cv — 성분 차례대로 하나씩 더한다 (넷씩 펼쳐 읽을 뿐 더하는 차례는 그대로 → 비트까지 같다).
+    /// 장의 뜨거운 곳 (압력 · 확산 · 센서): 칸마다 성분 수만큼 이어 더하는 셈이라 칸 경계 검사 · 고리 셈을 덜면 이웃 칸의 셈과 겹쳐 돈다.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private double SumNC(int i, out double gasC)
     {
-        double n = 0, c = 0;
-        for (int g = 0; g < G; g++) { double v = N[i * G + g]; n += v; c += v * _cv[g]; }
+        ref double r = ref MemoryMarshal.GetReference(N.AsSpan(i * G, G));
+        ref double k = ref MemoryMarshal.GetArrayDataReference(_cv);   // 길이 G (만들 때 성분 표에서)
+        double n = 0, c = 0; int g = 0;
+        for (; g <= G - 4; g += 4)
+        {
+            double v0 = Unsafe.Add(ref r, g), v1 = Unsafe.Add(ref r, g + 1), v2 = Unsafe.Add(ref r, g + 2), v3 = Unsafe.Add(ref r, g + 3);
+            n += v0; c += v0 * Unsafe.Add(ref k, g);
+            n += v1; c += v1 * Unsafe.Add(ref k, g + 1);
+            n += v2; c += v2 * Unsafe.Add(ref k, g + 2);
+            n += v3; c += v3 * Unsafe.Add(ref k, g + 3);
+        }
+        for (; g < G; g++) { double v = Unsafe.Add(ref r, g); n += v; c += v * Unsafe.Add(ref k, g); }
         gasC = c;
         return n;
     }
@@ -157,19 +186,46 @@ public sealed partial class Field : IEngine
         return c > 1e-6 ? U[i] / c : Ts[i];
     }
 
+    /// <summary>두 칸의 <see cref="SumNC"/>를 한 고리에서 (칸마다 더하는 차례는 그대로 — 두 칸의 이어 더하기가 서로 기다리지 않는다).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SumNC2(int i, int j, out double ni, out double ci, out double nj, out double cj)
+    {
+        ref double a = ref MemoryMarshal.GetReference(N.AsSpan(i * G, G));
+        ref double b = ref MemoryMarshal.GetReference(N.AsSpan(j * G, G));
+        ref double k = ref MemoryMarshal.GetArrayDataReference(_cv);
+        double n0 = 0, c0 = 0, n1 = 0, c1 = 0;
+        for (int g = 0; g < G; g++)
+        {
+            double v = Unsafe.Add(ref a, g), w = Unsafe.Add(ref b, g), kg = Unsafe.Add(ref k, g);
+            n0 += v; c0 += v * kg; n1 += w; c1 += w * kg;
+        }
+        ni = n0; ci = c0; nj = n1; cj = c1;
+    }
+
+    /// <summary>몰 · 열용량 · 질량 Σn·M을 한 번에 — 셋 다 성분 차례대로 (<see cref="SumNC"/>와 같은 차례 · 질량은 성분 질량 합과 같은 차례).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private double SumNCM(int i, out double gasC, out double mass)
+    {
+        ref double r = ref MemoryMarshal.GetReference(N.AsSpan(i * G, G));
+        ref double k = ref MemoryMarshal.GetArrayDataReference(_cv);
+        ref double mo = ref MemoryMarshal.GetArrayDataReference(_molar);   // 길이 G
+        double n = 0, c = 0, m = 0;
+        for (int g = 0; g < G; g++) { double v = Unsafe.Add(ref r, g); n += v; c += v * Unsafe.Add(ref k, g); m += v * Unsafe.Add(ref mo, g); }
+        gasC = c; mass = m;
+        return n;
+    }
+
     /// <summary>압력 (kPa).</summary>
     public double Pressure(int i)
     {
-        double n = 0, c = 0;
-        for (int g = 0; g < G; g++) { double v = N[i * G + g]; n += v; c += v * _cv[g]; }
+        double n = SumNC(i, out double c);
         return c > 1e-9 ? n * R * (U[i] / c) / CellVolume / 1000.0 : 0;
     }
 
     /// <summary>몰 · 기체 열용량 · 압력을 한 번에 (Moles · GasC · Pressure와 같은 값 — 칸의 여러 값을 읽는 센서가 쓴다).</summary>
     public double Read(int i, out double gasC, out double kPa)
     {
-        double n = 0, c = 0;
-        for (int g = 0; g < G; g++) { double v = N[i * G + g]; n += v; c += v * _cv[g]; }
+        double n = SumNC(i, out double c);
         gasC = c;
         kPa = c > 1e-9 ? n * R * (U[i] / c) / CellVolume / 1000.0 : 0;
         return n;
