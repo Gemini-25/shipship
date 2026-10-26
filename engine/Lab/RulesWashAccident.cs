@@ -5,6 +5,14 @@ namespace Lab;
 /// <summary>규칙 시험 — 5단 '화장실 사고' (docs/STAGE5.md C16 ~): 온수기 조절기 고장 · 물 온도 · 샤워 물에 데임 …</summary>
 public static partial class Program
 {
+    /// <summary>샤워 칸 둘 (C23 ~): 가까운 S (8,1) · 먼 S (27,1 — 줄을 서는 편이 나을 만큼 멀다) · 세면대 · 침대 · 전기.</summary>
+    private const string ShowerTwoShip = @"
+##############################
+#e.....#S..................S.#
+#......D.....................#
+#pb....#...k.................#
+##############################";
+
     private static void WashAccidentRules()
     {
         if (!Do("화장실 사고")) return;
@@ -174,6 +182,46 @@ public static partial class Program
             Check("화장실 사고 (C20) 포자 기침: 화장실의 다른 칸이 모두 곰팡이 0.8 · 곰팡이 없는 칸에 1시간 — 기침 1 넘게 · 증상 '기침' · 기침 소리의 원인 글에 '곰팡이' / 곰팡이 없는 배는 0",
                 m.coughs >= 1 && m.sym && m.why.Contains("곰팡이") && none.coughs == 0,
                 $"기침 {m.coughs} · 증상 {m.sym} · '{m.why}' / 곰팡이 없음 {none.coughs}");
+        }
+
+        // C23 샤워 칸 사용 금지 불 (사람이 본다 · 비트): 샤워 칸 둘 (가까운 S (8,1) · 먼 S (27,1)) · 더러운 이 —
+        //     (가) 걸어가던 중 가까운 칸 불 (비트 1)이 켜지면 먼 칸에서 씻는다 · (나) 줄 선 중 켜져도 먼 칸 · (다) 비트 2를 켰다 꺼도 비트 1 불은 남는다
+        //     (예전: 사람 · 줄 안내가 변기 불만 보아 불 켜진 샤워 칸에 들어가 틀었다)
+        {
+            var two = Worlds.Ascii(ShowerTwoShip, legend);
+            int TAt(int x, int y) => Worlds.At(two, x, y);
+            (long nearUse, long farUse, bool ok) Shower(bool queued)
+            {
+                var s = Worlds.Full(two, 5);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+                var sh = two.Furniture.Where(x => x.Type == "Shower").OrderBy(x => two.X(x.Cells[0])).ToList();
+                int near = sh[0].Id, far = sh[1].Id, dn = net.Devices.First(d => d.Furniture == near).Id, df = net.Devices.First(d => d.Furniture == far).Id;
+                int a = m.AddPerson(s, TAt(2, 1)), b = queued ? m.AddPerson(s, TAt(9, 2)) : -1;
+                s.Run(2);
+                void Calm(int p) { int off = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = off; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+                if (queued) { life[m[b].C.Body].Dirt = 0.95f; for (long t = 0; t < Time.Minutes(10) && m[b].C.Cell != sh[0].Cells[0]; t++) { Calm(b); s.Step(); } }   // B가 먼저 가까운 칸에서 씻는다
+                life[m[a].C.Body].Dirt = 0.9f;
+                double n0 = net.ShowerMeter[dn], f0 = net.ShowerMeter[df];
+                bool signed = false;
+                for (long t = 0; t < Time.Minutes(40); t++)
+                {
+                    Calm(a); if (queued) Calm(b);
+                    s.Step();
+                    var ac = m[a].C;
+                    bool walking = ac.Goal == GoalKind.Wash && ac.GoalTarget == near && ac.StepIndex < m[a].Plan.Count && m[a].Plan[ac.StepIndex].Kind == StepKind.GoTo && ac.StepIndex == 0;
+                    bool inQueue = ac.Goal == GoalKind.Wash && ac.GoalTarget == near && ac.StepIndex == 1;
+                    if (!signed && (queued ? inQueue && s.Tick - ac.StepStart > 5 : walking && two.X(ac.Cell) >= 4)) { m.SignWash(near, 1, true); signed = true; }
+                    if (signed && m.ShowersTaken >= (queued ? 2 : 1) && life[m[a].C.Body].Dirt < 0.5f) break;
+                }
+                // 비트: 2를 켰다 끈다 — 1은 남는다
+                m.SignWash(near, 2, true); m.SignWash(near, 2, false);
+                bool kept = m.WashSign[near] == 2 && signed;   // 비트 1 → 값 2 (1 << 1)
+                return ((long)(net.ShowerMeter[dn] - n0), (long)(net.ShowerMeter[df] - f0), kept && life[m[a].C.Body].Dirt < 0.5f);
+            }
+            var walk = Shower(false); var line = Shower(true);
+            Check("화장실 사고 (C23) 샤워 칸 사용 금지 불: 걸어가던 이 · 줄 선 이는 불 켜진 가까운 칸이 아닌 먼 칸에서 씻는다 · 비트 2를 켰다 꺼도 비트 1 불은 남는다",
+                walk.nearUse == 0 && walk.farUse > 0 && walk.ok && line.farUse > 0 && line.ok,
+                $"걸어가던 이: 가까운 칸 물 {walk.nearUse}몰 · 먼 칸 {walk.farUse}몰 · 씻김+불 {walk.ok} / 줄 선 이: 먼 칸 {line.farUse}몰 · 씻김+불 {line.ok}");
         }
     }
 }

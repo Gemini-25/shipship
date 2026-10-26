@@ -263,7 +263,11 @@ public sealed partial class Mind
         if (use == UseKind.Counsel && !TreatNear(a, st)) { Fail(sim, a, "이야기할 이가 멀어졌다"); return; }
         if (use == UseKind.Cpr) Activity(a, "hard");   // 가슴 압박은 힘든 일
         if (use == UseKind.Queue) { QueueStep(sim, a, st); return; }   // 화장실 · 샤워 줄
-        if (use == UseKind.Shower && t <= c.StepStart + 1) ShowerStart(a, st);
+        if (use == UseKind.Shower && t <= c.StepStart + 1)
+        {
+            if (Signed(st.Target)) { WashRedirect(a, st.Target, t, "샤워 칸에 사용 금지 불이 켜져 있다"); WashTurnedAway++; return; }   // 틀기 전에 불을 본다 (5단 C23)
+            ShowerStart(a, st);
+        }
         bool done = t - c.StepStart >= st.Value;
         if (use == UseKind.Cpr) { int r = CprTick(sim, a, st); if (r < 0) return; done |= r > 0; }
         if (use == UseKind.Surgery) { int r = SurgeryTick(sim, a, st); if (r < 0) return; done = r > 0 || t - c.StepStart >= st.Value; }

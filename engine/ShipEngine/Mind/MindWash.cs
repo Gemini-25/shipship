@@ -70,7 +70,13 @@ public sealed partial class Mind
     }
 
     /// <summary>⑩이 요청: 변기의 '사용 금지' 불을 켜고 끈다.</summary>
-    public void SignToilet(int fu, bool on) { if (fu >= 0 && fu < WashSign.Length) WashSign[fu] = (byte)(on ? 1 : 0); }
+    public void SignToilet(int fu, bool on) => SignWash(fu, 0, on);
+    /// <summary>
+    /// ⑩이 요청: 변기 · 샤워 칸의 '사용 금지' 불 — 까닭마다 비트 (0 막힘 · 가득 / 1 조절기 알림 / 2 무중력 · 5단 C23). 하나라도 켜져 있으면 불이 켜져 있다 (사람은 불만 본다).
+    /// </summary>
+    public void SignWash(int fu, int bit, bool on) { if (fu >= 0 && fu < WashSign.Length && bit is >= 0 and < 8) WashSign[fu] = (byte)(on ? WashSign[fu] | (1 << bit) : WashSign[fu] & ~(1 << bit)); }
+    /// <summary>그 설비에 '사용 금지' 불이 켜져 있나 (눈 — 까닭은 모른다).</summary>
+    public bool Signed(int fu) => fu >= 0 && fu < WashSign.Length && WashSign[fu] != 0;
 
     /// <summary>⑩이 요청: 줄에 선 이에게 안내 — 저 설비가 비었다 (to) · 또는 당신 차례는 몇 번째 (order).</summary>
     public void CallWash(long tick, int agent, int to, int order)
@@ -186,7 +192,7 @@ public sealed partial class Mind
                     + (c.ExercisedAt > 0 && _nowTick - c.ExercisedAt < Time.Hours(1) ? 0.8f : 0)
                     + (InWindow(hour - c.Chrono, c.ShiftHour + 15, 2) ? 0.4f * c.Consc : 0);   // 잠자리에 들기 전
             bool floating = c.Floated != 0;   // 무중력: 물이 떠다녀 샤워를 못 쓴다
-            int fu = floating ? -1 : PickWash(a, _showers, GoalKind.Wash, f => _net == null || _net.WaterTank > ShowerWater * 2);
+            int fu = floating ? -1 : PickWash(a, _showers, GoalKind.Wash, f => !Signed(f) && (_net == null || _net.WaterTank > ShowerWater * 2));   // 사용 금지 불이 켜진 칸은 고르지 않는다 (5단 C23)
             Add(GoalKind.Wash, fu, fu >= 0 ? L.Furniture[fu].Cells[0] : c.Bed >= 0 ? c.Bed : here, s);
         }
     }
@@ -259,9 +265,9 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         // (다) 와 보니: '사용 금지' 불이 켜졌다 · 넘쳐 몹시 더럽다 (몹시 급하면 더러워도 쓴다) → 다른 변기로
+        if (Signed(st.Target)) { WashRedirect(a, st.Target, t, c.Goal == GoalKind.Toilet ? "변기에 사용 금지 불이 켜져 있다" : "샤워 칸에 사용 금지 불이 켜져 있다"); WashTurnedAway++; return; }   // 샤워 칸 불도 (5단 C23)
         if (c.Goal == GoalKind.Toilet && _life != null)
         {
-            if (st.Target < WashSign.Length && WashSign[st.Target] != 0) { WashRedirect(a, st.Target, t, "변기에 사용 금지 불이 켜져 있다"); WashTurnedAway++; return; }
             if (st.Target < _life.Grime.Length && _life.Grime[st.Target] >= 0.85f && Urge(a) < 0.9f) { WashRedirect(a, st.Target, t, "변기가 넘쳐 몹시 더럽다"); WashTurnedAway++; return; }
         }
         bool told = Called(a, c.StepStart - Time.Minutes(3), out _, out int order);   // 줄에 서기 전 · 걸어오는 동안 · 줄에 선 동안 들은 것 (줄에 선 내내 기억한다)
@@ -348,7 +354,7 @@ public sealed partial class Mind
         if (!Called(a, t - Time.Minutes(3), out int to, out _) || to < 0 || to == c.GoalTarget || to >= L.Furniture.Count) return;
         int q = a.Plan.FindIndex(st => st.Kind == StepKind.Use && (UseKind)st.Arg == UseKind.Queue);
         if (q < 0 || c.StepIndex > q) return;   // 벌써 들어갔다
-        if (L.Furniture[to].Type != (c.Goal == GoalKind.Toilet ? "Toilet" : "Shower") || c.Goal == GoalKind.Toilet && !ToiletOk(to) || Manhattan(c.Cell, L.Furniture[to].Cells[0]) > 80) return;   // 기다리는 갈래가 아니다 · 쓸 수 없다 · 멀다
+        if (L.Furniture[to].Type != (c.Goal == GoalKind.Toilet ? "Toilet" : "Shower") || c.Goal == GoalKind.Toilet && !ToiletOk(to) || Signed(to) || Manhattan(c.Cell, L.Furniture[to].Cells[0]) > 80) return;   // 기다리는 갈래가 아니다 · 쓸 수 없다 · 멀다
         foreach (var v in a.Avoid) if (v.Goal == c.Goal && v.Target == to) return;   // 내가 피하기로 한 곳
         _callOrder[a.Id] = -1;   // 이 안내로 한 번 돌아섰다
         WashRedirect(a, c.GoalTarget, t, "주컴퓨터가 다른 화장실이 비었다고 한다");
@@ -534,7 +540,6 @@ public sealed partial class Mind
         if (_showerDev[a.Id] != d + 1) { _showerDev[a.Id] = d + 1; _showerFrom[a.Id] = d < _net.ShowerMeter.Length ? _net.ShowerMeter[d] : 0; }
     }
 
-    /// <summary>물을 잠그고 온수기를 끈다: 틀 때부터 흐른 물 (몰).</summary>
     /// <summary>틀 때부터 흐른 물 (계량기의 차 — 몰).</summary>
     private double ShowerTaken(Agent a, int d) => a.Id < _showerDev.Length && _showerDev[a.Id] == d + 1 && d < _net!.ShowerMeter.Length ? Math.Max(0, _net.ShowerMeter[d] - _showerFrom[a.Id]) : 0;
 

@@ -67,7 +67,7 @@ public sealed partial class ShipMind
             int cell = L.Furniture[fu].Cells[0], room = L.Room[cell];
             bool clog = _life.Clogged[fu] != 0, full = _life.Tank[fu] >= Life.TankMax - 0.5;
             bool sign = clog || full;
-            if (sign != (_mind.WashSign[fu] != 0))
+            if (sign != ((_mind.WashSign[fu] & 1) != 0))   // 제 비트만 (막힘 · 가득 — 5단 C23)
             {
                 _mind.SignToilet(fu, sign);
                 if (sign) { ToiletSigns++; Broadcast(sim, $"{RoomName(room)} 변기 하나가 {(clog ? "막혔습니다" : "오물 통이 가득 찼습니다")} — 손볼 때까지 쓰지 마세요"); }
@@ -170,7 +170,7 @@ public sealed partial class ShipMind
                 int c = L.Furniture[fu].Cells[0], rr = L.Room[c];
                 if (rr == r || rr < 0 || RoomSeen[rr] == 0) continue;
                 bool toilet = L.Furniture[fu].Type == "Toilet";
-                if (toilet && (!ToiletReports(fu) || _mind.WashSign[fu] != 0 || !_net!.Working(WashDevice(fu)))) continue;
+                if (toilet && (!ToiletReports(fu) || _mind.WashSign[fu] != 0 || !_net!.Working(WashDevice(fu))) || !toilet && _mind.WashSign[fu] != 0) continue;   // 샤워 칸 불도 (5단 C23)
                 bool busy = false;
                 foreach (var a in mind.Agents) if (a.IsPerson && a.C.Up != 0 && (a.C.Cell == c || _washSince[a.Id] != 0 && InOrAtDoor(a.C.Cell, rr) && !OnFixture(a.C.Cell))) { busy = true; break; }
                 if (!busy) free.Add(fu);
