@@ -137,7 +137,8 @@ public sealed partial class Mind
             return;
         }
         if (c.PinAt != 0) c.PinAt = 0;   // 물체가 구멍에서 떨어졌다 (누르는 힘이 무게 아래)
-        if (p.State == 0) _st.EndRagdoll(c.Body);   // 멈췄다 — 다시 제 힘으로
+        if (c.Adrift != 0) c.Adrift = 0;   // 날던 몸이 배의 트인 칸에 다시 들었다 (④가 실었다)
+        if (Settled(p)) _st.EndRagdoll(c.Body);   // 멈췄다 — 다시 제 힘으로
     }
 
     /// <summary>바람에 밀린 로봇 (PH14 — 발 디딤은 ④가 셈한다: 끌림이 바퀴 · 발 마찰을 넘으면 몸 물체 Kind 6)을 따른다 — 몸의 칸은 물체의 칸 · 멈추면 다시 제 힘으로 · 날면 우주에서 떠내려간다.</summary>
@@ -153,9 +154,12 @@ public sealed partial class Mind
             int at = Structure.Flying(p) ? _st.SpaceCellOf(p) : _st.CellOf(p);
             if (at >= 0) c.Cell = at;
             a.Path.Clear(); a.PathIdx = 0;
-            if (p.State == 0) _st.EndRagdoll(tag);
+            if (Settled(p)) _st.EndRagdoll(tag);
         }
     }
+
+    /// <summary>몸 물체가 멈췄나: 놓였다 · 무중력에서 떠 있는 채 느려졌다 (0.05m/s 아래 — 그 뒤는 떠다님으로).</summary>
+    private static bool Settled(in Prop p) => p.State == 0 || p.State == 4 && p.Vx * p.Vx + p.Vy * p.Vy < 0.05 * 0.05 && Math.Abs(p.W) < 0.5;
 
     /// <summary>곁(제 칸 · 여덟 이웃)에 붙잡을 것이 있나: 설비 · 문틀.</summary>
     private bool HandholdNear(int cell)
@@ -181,7 +185,7 @@ public sealed partial class Mind
         b.Cell = j; c.Cell = j;
     }
 
-    /// <summary>구멍에 빨려 붙은 이: 기압 차 × 구멍 넓이에 눌려 있다 — 빨린 자리에 멍이 들고 · 힘이 300N 아래가 되거나 구멍을 덧대면 몸을 뗀다.</summary>
+    /// <summary>구멍에 빨려 붙은 이: 기압 차 × 구멍 넓이에 눌려 있다 — 힘이 300N 아래가 되거나 구멍을 덧대면 몸을 뗀다 (판단 — 멍은 ⑦).</summary>
     private void Pinned(Sim sim, Agent a, ref Body b, double dt)
     {
         ref var c = ref a.C;
@@ -194,9 +198,7 @@ public sealed partial class Mind
             sim.Facts.Emit(sim.Tick, FactKind.Rescue, b.Cell, 0, fc, a.Id);
             return;
         }
-        // 빨린 자리: 1kN에 30분이면 타박 1 (깊은 멍 · 부기)
-        b.Blunt += (float)(force / 1000 * dt / 1800);
-        b.Pain = Math.Min(1, b.Pain + (float)(force / 1000 * dt / 600));
+        // 빨린 자리의 멍 · 아픔은 ⑦이 ④의 누르는 힘으로 셈한다 (PH16) — 마음은 붙어 있는 동안 움직이지 못한다
         a.Path.Clear(); a.PathIdx = 0; c.MoveBudget = 0;
     }
 

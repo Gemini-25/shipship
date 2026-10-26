@@ -150,28 +150,34 @@ public sealed partial class ShipMind
             int worst = -1; double wm = 0;
             foreach (int c in room.Cells)
             {
-                double dirt = (_life != null && _life.Mold[c] > 0.3f ? _life.Mold[c] : 0) + (F.Stored(T.sWater, c) > 5 ? F.Stored(T.sWater, c) / 100 + 0.3 : 0) + _litter.GetValueOrDefault(c);
+                double dirt = (_life != null && _life.Mold[c] > 0.3f ? _life.Mold[c] : 0) + (F.Stored(T.sWater, c) > 5 ? F.Stored(T.sWater, c) / 100 + 0.3 : 0) + _litter.GetValueOrDefault(c) + (_heavy.Contains(c) ? 1 : 0);   // 둘이서 들 것 먼저 (둘을 함께 보낸다)
                 if (dirt > wm) { wm = dirt; worst = c; }
             }
             if (worst < 0 || Jobs.Any(j => j.Kind == GoalKind.Clean && L.Room[j.Target] == room.Id)) continue;
-            Post(sim, new Job { Kind = GoalKind.Clean, Target = worst }, worst, person => true);
+            if (Post(sim, new Job { Kind = GoalKind.Clean, Target = worst }, worst, person => true) && _heavy.Contains(worst))
+                Post(sim, new Job { Kind = GoalKind.Clean, Target = worst }, worst, person => true);   // 둘이서 든다 — 같은 칸에 하나 더
         }
     }
 
     /// <summary>정돈 (PH13): 카메라에 보인 깨진 조각 · 가루 · 누운 것 · 넘어진 것 (불 켜진 방) — 칸마다 치울 몫 (일감을 거두기 전에 센다: 찍지 않으니 되살린 세계도 같게).</summary>
     private void ScanLitter()
     {
-        _litter.Clear();
+        _litter.Clear(); _heavy.Clear();
         if (_st != null)
         {
+            // 일할 수 있는 로봇이 둘이면 둘이서 들 무게까지 (PH16 — 한 로봇 40kg · 둘이 80kg)
+            int able = 0;
+            foreach (var a in _mind!.Agents) if (!a.IsPerson && a.C.Kind == AgentKind.Robot && a.C.Up != 0 && _mind.RobotCan(a, GoalKind.Clean)) able++;
+            double limit = Mind.RobotLiftKg * Math.Clamp(able, 1, 2);
             foreach (var p in _st.Props)
             {
                 if (p.State != 0 || (p.Flags & Structure.DecorFlag) != 0) continue;
                 bool piece = p.Kind == 2, fallen = p.Kind is 0 or 1 && p.Pose != 0;
-                if (!piece && !fallen || fallen && p.Kg > Mind.RobotLiftKg) continue;   // 로봇도 못 세울 무게는 일감으로 내지 않는다 (같은 실패를 되풀이하지 않게)
+                if (!piece && !fallen || fallen && p.Kg > limit) continue;   // 로봇 (둘)도 못 세울 무게는 일감으로 내지 않는다 (같은 실패를 되풀이하지 않게)
                 int c = _st.CellOf(p);
                 if (c < 0 || L.Room[c] < 0 || _net != null && !_net.RoomPowered(L.Room[c])) continue;
                 _litter[c] = _litter.GetValueOrDefault(c) + (piece ? 0.4 : 0.3);
+                if (fallen && p.Kg > Mind.RobotLiftKg) _heavy.Add(c);
             }
             for (int c = 0; c < _st.Grit.Length; c++)
                 if (_st.Grit[c] > 0 && L.Room[c] >= 0 && (_net == null || _net.RoomPowered(L.Room[c]))) _litter[c] = _litter.GetValueOrDefault(c) + 0.5;
@@ -180,6 +186,7 @@ public sealed partial class ShipMind
 
     // 이번 정돈 셈의 칸마다 치울 것 (찍지 않는다 — 틱마다 장부에서 다시 센다)
     private readonly Dictionary<int, double> _litter = new();
+    private readonly HashSet<int> _heavy = new();   // 둘이서 들 것이 있는 칸 (찍지 않는다 — 틱마다 다시 센다)
 
     private bool Done(in Job j) => j.Kind switch
     {

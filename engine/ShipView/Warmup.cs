@@ -44,6 +44,27 @@ public static class Warmup
                 var room = c.Layout.Rooms.Where(r => r.Cells.Length > 20 && r.Type != "Corridor").OrderByDescending(r => r.Cells.Length).FirstOrDefault();
                 if (chem != null && room != null)
                     foreach (int cell in room.Cells.Where((x, i) => i % 9 == 0 && c.Layout.Kind[x] == CellKind.Floor).Take(4)) chem.Ignite(cell, 3e6, c.Causes.Add(CauseKind.Setup, "데우기 불", c.Tick, cell));
+                // 물체 길 (PHYSICS.md §4-2 — 감압 · 막음 · 깨짐 · 몸 물체 · 판 조각): 둘째로 큰 방 외판에 작은 구멍 · 곁에 물건 몇 · 큰 파편 하나 — 복제라 세계는 그대로
+                var st = c.Find<Structure>(); var f = c.Find<Field>(); var L = c.Layout;
+                var other = L.Rooms.Where(r => r.Cells.Length > 12 && r != room).OrderByDescending(r => r.Cells.Length).FirstOrDefault();
+                if (st != null && f != null && other != null)
+                {
+                    int hull = -1, near = -1;
+                    var nb = new int[4];
+                    foreach (int x in other.Cells)
+                    {
+                        L.Neighbors(x, nb);
+                        foreach (int j in nb) if (j >= 0 && L.Hull[j] && L.Kind[j] == CellKind.Wall) { hull = j; near = x; break; }
+                        if (hull >= 0) break;
+                    }
+                    if (hull >= 0)
+                    {
+                        int n = c.Tables.People.Items.Count;
+                        foreach (int x in other.Cells.Where(x => L.Kind[x] == CellKind.Floor && L.FurnitureAt[x] < 0).Take(3).Append(near)) st.PutItem(x % Math.Max(1, n), 1, x);
+                        f.SetHole(hull, 0.08f);
+                        st.Impact(c, hull, 4e6, 0, 0, c.Causes.Add(CauseKind.Setup, "데우기 파편", c.Tick, hull));
+                    }
+                }
                 c.Run(ticks);
             }
             catch { }

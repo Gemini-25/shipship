@@ -182,6 +182,8 @@ public sealed partial class Structure
     private PropActor[] _actors = new PropActor[16];   // 찍는다 — ⑧이 틱 끝마다 쓰고 ④가 다음 틱에 읽는다
     private int _nActors;
     public const float ActorR = 0.25f;
+    /// <summary>이번 틱 걷는 원판 수 (보기 · 시험).</summary>
+    public int ActorCount => _nActors;
 
     /// <summary>
     /// 요청 (⑧ Mind.Step 끝): 물체가 맞힐 수 있는 이들 · 그 틱에 걸은 길 (paths — 원판마다 PathAt부터 PathN칸) — ④는 다음 틱 물체 걸음에 그 길을 같은 시간표로 따라간다
@@ -208,7 +210,7 @@ public sealed partial class Structure
     {
         _itemNames ??= T.People.Items.Keys.ToArray();
         bool furn = p.Kind == 1 || p.Kind == 2 && (p.Flags & FurnPieceFlag) != 0;   // 가구 · 가구 조각 (PH10 — What = 가구 번호)
-        string name = p.Kind == 5 ? "사람" : p.Kind == 6 ? "로봇" : p.Kind == 3 ? "문짝" : furn ? (p.What >= 0 && p.What < L.Furniture.Count ? T.Equip(L.Furniture[p.What].Type).Name : "설비")
+        string name = p.Kind == 5 ? "사람" : p.Kind == 6 ? "로봇" : p.Kind == 4 ? "판 조각" : p.Kind == 3 ? "문짝" : furn ? (p.What >= 0 && p.What < L.Furniture.Count ? T.Equip(L.Furniture[p.What].Type).Name : "설비")
             : p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "물건";
         return p.Kind == 2 ? name + " 조각" : name;
     }
@@ -342,7 +344,7 @@ public sealed partial class Structure
 
     private void LoadProps(StateReader r)
     {
-        r.Tag("물체"); Props.Clear(); Props.AddRange(r.List<Prop>()); Masks.Clear(); Masks.AddRange(r.List<PropMask>()); MaskBits.Clear(); MaskBits.AddRange(r.List<ulong>());
+        r.Tag("물체"); Props.Clear(); Props.AddRange(r.List<Prop>()); _bodyPropsAt = -1; Masks.Clear(); Masks.AddRange(r.List<PropMask>()); MaskBits.Clear(); MaskBits.AddRange(r.List<ulong>());
         r.ArrInto(Grit); r.ArrInto(GritMat); r.ArrInto(FurnPlaced); r.ArrInto(FurnAnchor); r.ArrInto(FurnProp); r.ArrInto(FurnAt); r.ArrInto(DoorLeafOut); PropHits.Clear(); PropHits.AddRange(r.List<PropHit>());
         PropPxGone = r.F64(); PropPyGone = r.F64(); PropLGone = r.F64(); FixL = r.F64(); ToHostPx = r.F64(); ToHostPy = r.F64(); ToHostL = r.F64(); BrokenKg = r.F64(); GritKg = r.F64(); SweptKg = r.F64(); SweptPieces = r.I64(); Righted = r.I64();
         NextPropId = r.I32(); PropSteps = r.I64(); Bounces = r.I64(); Shattered = r.I64(); Toppled = r.I64(); TornLoose = r.I64(); Rolled = r.I64(); IslandMiss = r.I64();

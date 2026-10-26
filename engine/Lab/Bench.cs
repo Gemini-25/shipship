@@ -224,6 +224,18 @@ public static partial class Program
             Check("물체 예산: 새뜰호 조용한 틱 (잠든 생활 소품 — PH9) — '구조:물체' ≤ 0.02ms", pq <= 0.02 && decor > 0, $"{pq * 1000:0.0}µs/틱 (다섯 번 가운데 · {Span5(qs, 1000)}) · 꾸밈 {decor}");
             Check("물체 예산: 외판 0.5m² 감압 · 곁 물건 20개 (걷는 이 곁) — 가장 긴 틱의 '구조:물체' ≤ 1ms (위기 틱 물체 — §4-2)", pb <= 1 && pw > 0, $"{pb:0.000}ms (다섯 번 가운데 · {Span5(bs, 1)}) · 깬 것 {pw}");
             Check("물체 예산: 감압 순간을 찍어 125틱 (주컴퓨터 Rehearse 복제처럼 — 가벼운 물체 셈) — 물체 몫 ≤ 3ms", pr <= 3, $"{pr:0.000}ms / 125틱 (다섯 번 가운데 · {Span5(rs, 1)})");
+            // 큰 부서짐 (PH16): 끓는 행성 (92기압)에 내린 디딤호 — 외판이 짓눌려 판 조각 · 깨진 조각이 천 개 언저리 · 밀려드는 돌풍 — 여섯 틱 가운데 가장 긴 틱
+            {
+                var sv = ShipWorld.Create("Didim", 3); var stv = sv.Get<Structure>();
+                sv.Get<Outside>().Land("venuslike", sv.Tick);
+                double worst = 0; int most = 0;
+                for (int k = 0; k < 6; k++)
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew(); sv.Step();
+                    worst = Math.Max(worst, sw.Elapsed.TotalMilliseconds); most = Math.Max(most, stv.Props.Count);
+                }
+                Check("물체 예산: 끓는 행성 (92기압)에 내린 디딤호 여섯 틱 — 판 조각 · 깨진 조각이 천 개 언저리 — 가장 긴 틱 ≤ 3초 (예전: 짝 찾기가 물체 × 짝을 훑어 26초)", worst <= 3000 && most > 500, $"가장 긴 틱 {worst / 1000:0.00}초 · 물체 가장 많을 때 {most}");
+            }
             Check("물체 예산: 깨짐 한 번 (가면 조각 · 가루 · 흩어짐 · 장부) ≤ 0.05ms · 감압 틱의 물체 소리 (방마다 · 갈래마다 한 번) ≤ 0.1ms (PH8)", pk <= 0.05 && noise <= 0.1,
                 $"깨짐 한 번 {pk * 1000:0.0}µs (다섯 번 가운데 · {Span5(ks, 1000)}) · 물체 소리 가장 긴 틱 {noise * 1000:0.0}µs (다섯 번 가운데 · {Span5(ns, 1000)})");
         }

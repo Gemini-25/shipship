@@ -95,4 +95,136 @@ public static partial class Program
             moved > 0 && hit > Structure.BodyHitJ && Math.Abs(book1.px - book0.px) < 1e-9 * size && Math.Abs(book1.py - book0.py) < 1e-9 * size && Math.Abs(book1.l - book0.l) < 1e-9 * size * 10,
             $"선 틱 {moved} · 맞음 {hit:0}J · 장부 어긋남 ({book1.px - book0.px:0.0e0}, {book1.py - book0.py:0.0e0}, {book1.l - book0.l:0.0e0}) / 크기 {size:0}");
     }
+
+    /// <summary>법칙 — 바람 끌림은 공기 빠르기를 넘지 못한다 (가볍고 넓은 것 · 긴 잔걸음): 끌림은 상대 빠르기를 줄이기만 한다 (닫힌 꼴 — 옮김 · 돎).</summary>
+    private static void WindCapLaws()
+    {
+        if (!Do("바람 끌림 법칙")) return;
+        Console.WriteLine("\n[바람 끌림 — 공기 빠르기를 넘지 않는다]");
+        (double v, double air) Run(int detail)
+        {
+            var lay = Worlds.Ascii(SpaceRoom, Worlds.Seats);
+            var s = Worlds.Full(lay, 1);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            st.Debris = false; st.Breakage = false; st.PropDetail = detail;
+            foreach (var (name, x, y) in new[] { ("접시", 1, 1), ("접시", 1, 3), ("컵", 1, 2), ("책", 2, 1), ("접시", 2, 3), ("컵", 3, 2) }) Worlds.PutItem(s, name, Worlds.At(lay, x, y));
+            for (int y = 1; y <= 3; y++) for (int x = 1; x <= 7; x++) f.AddGas(Worlds.At(lay, x, y), f.T.gCO2, 200, 293.15);   // 이산화탄소를 더해 세 기압 언저리 (벽은 버틴다 — 짙은 기체: 밀도 5kg/m³)
+            s.Run(1);
+            f.SetHole(Worlds.At(lay, 0, 2), 1.0f);
+            double vMax = 0, air = 0;
+            for (int k = 0; k < 3; k++)
+            {
+                s.Step();
+                for (int c = 0; c < f.Cells; c++) if (f.WindPa[c] > 0 && f.WindRho[c] > 0) air = Math.Max(air, Math.Sqrt(2 * f.WindPa[c] / f.WindRho[c]));
+                var o = st.Bodies.Count > 0 ? st.Bodies[0] : default;
+                foreach (var p in st.Props)
+                {
+                    double vx = p.Vx, vy = p.Vy;
+                    if (Structure.Flying(p)) { vx -= o.Vx; vy -= o.Vy; }
+                    vMax = double.IsNaN(vx + vy) ? double.PositiveInfinity : Math.Max(vMax, Math.Sqrt(vx * vx + vy * vy));
+                }
+            }
+            return (vMax, air);
+        }
+        var full = Run(1); var light = Run(0);
+        const double sound = 343;
+        Check("바람 끌림: 세 기압 이산화탄소 방 외판 1m² 구멍 곁 접시 · 컵 · 책 (가볍고 넓다) — 빨려 나가는 바람에 밀려도 (배에 대해) 소리 빠르기를 넘지 않는다 · 온전한 셈도 · 가벼운 셈 (주컴퓨터 상상 — 한 틱 네 잔걸음)도 (예전: 끌림을 앞으로 셈해 λh > 2면 상대 빠르기가 부호를 바꾸며 불었다)",
+            full.v > 1 && full.v <= sound && light.v > 1 && light.v <= sound,
+            $"가장 빠른 물체 — 온전 {full.v:0.0}m/s · 가벼운 셈 {light.v:0.0}m/s · 가장 센 돌풍 {Math.Max(full.air, light.air):0}m/s · 소리 빠르기 {sound:0}m/s");
+    }
+
+    /// <summary>
+    /// 법칙 — 짝 닿음의 팔은 제 껍질까지 (떨어져 다가오는 짝도): 제 돎은 제 겉에 받은 충격량으로만 — |I·Δω| ≤ r·m·|Δv| (r 꼴의 가장 먼 겉).
+    /// 무중력 · 공기 없는 방에서 200m/s로 날아온 컵 · 접시 · 책이 비스듬히 식량 상자에 맞는다 (예전: 떨어진 짝의 팔을 두 물체 가운데 점까지 잡아 마찰 충격량이 수 m 팔로 돌렸다).
+    /// </summary>
+    private static void PairArmLaws()
+    {
+        if (!Do("짝 닿음 팔 법칙")) return;
+        Console.WriteLine("\n[짝 닿음 팔 — 제 껍질까지]");
+        double worst = 0; string at = "";
+        int hits = 0;
+        foreach (var (name, dy, vy) in new[] { ("컵", 0.10, 0.0), ("컵", 0.18, 40.0), ("접시", 0.2, -60.0), ("책", 0.15, 90.0), ("컵", -0.12, -120.0), ("접시", -0.25, 150.0), ("책", 0.0, -150.0), ("컵", 0.3, 180.0) })
+        {
+            var s = PropWorld(0);
+            var st = s.Get<Structure>();
+            st.Breakage = false;
+            double y0 = 5 - vy * (3.0 / 200) / 2;   // 옆 빠르기가 있어도 3m 앞 상자 언저리에서 만나게
+            int id = Slide(s, name, 3.0, y0, 200, vy);
+            Slide(s, "식량 상자", 6.0, y0 + vy * (3.0 / 200) + dy, 0, 0);
+            var p0 = st.Props[st.IndexOf(id)];
+            var fm = st.PropForm(p0);
+            double r = fm.Shape.Hit.reach, m = fm.Mass, I = fm.I;
+            s.Step();
+            var p1 = st.Props[st.IndexOf(id)];
+            double dv = Math.Sqrt((p1.Vx - p0.Vx) * (p1.Vx - p0.Vx) + (p1.Vy - p0.Vy) * (p1.Vy - p0.Vy)), dl = I * Math.Abs(p1.W - p0.W);
+            if (dv > 1) hits++;
+            double ratio = dl / Math.Max(1e-9, r * m * dv);
+            if (ratio > worst) { worst = ratio; at = $"{name} 비낌 {dy:0.00}m · 옆 {vy:0}m/s — I·Δω {dl:0.000} · r·m·Δv {r * m * dv:0.000} (Δω {p1.W - p0.W:0.0}rad/s · Δv {dv:0.0}m/s)"; }
+        }
+        Check("짝 닿음 팔: 무중력 · 공기 없는 방에서 200m/s (옆 빠르기 −150 ~ 180m/s)로 날아온 컵 · 접시 · 책이 3m 앞 식량 상자에 비스듬히 맞는다 — 제 돎의 바뀜이 제 겉에 받은 충격량의 몫을 넘지 않는다 (|I·Δω| ≤ r·m·|Δv|)",
+            hits >= 5 && worst <= 1.0001,
+            $"맞음 {hits} · 가장 큰 몫 {worst:0.000} ({at})");
+    }
+
+    /// <summary>
+    /// 법칙 — 바람의 줄어드는 빠르기 (WindK)는 구역 전체의 몫: 이 틱에 차오른 구역은 0 · 빠진 구역은 처음/끝 몰의 로그 — ④가 그것으로 틱 처음 기압을 되짚는다 (구멍 입 · 빨림 · 나가는 빠르기).
+    /// 끓는 행성 (92기압)에 내린 디딤호 두 틱: 이 틱에 기압이 오른 칸은 WindK가 0 (예전: 그 칸 돌풍이 가장 센 틈 하나의 몫을 써 101kPa에서 9.2MPa로 차오른 방을 비는 방으로 되짚어 22MPa — 구멍 곁 컵에 13MPa 빨림).
+    /// </summary>
+    private static void RegionDecayLaws()
+    {
+        if (!Do("구역 되짚기 법칙")) return;
+        Console.WriteLine("\n[구역 되짚기 — 차오르는 방은 비는 방이 아니다]");
+        var s = ShipWorld.Create("Didim", 3);
+        var f = s.Get<Field>();
+        s.Get<Outside>().Land("venuslike", s.Tick);
+        int bad = 0, seen = 0; string at = "";
+        var p0 = new double[f.Cells];
+        for (int k = 0; k < 2; k++)
+        {
+            for (int c = 0; c < f.Cells; c++) p0[c] = f.Pressure(c);
+            s.Step();
+            for (int c = 0; c < f.Cells; c++)
+            {
+                if (f.RegionOf[c] < 0 || f.WindPa[c] <= 0) continue;
+                seen++;
+                if (f.WindK[c] > 0 && f.Pressure(c) > 1.01 * p0[c]) { if (bad++ == 0) at = $"틱 {k} 칸 {c} {p0[c]:0} → {f.Pressure(c):0}kPa · K {f.WindK[c]:0.00} (되짚음 {f.Pressure(c) * Math.Exp(f.WindK[c] * Time.SecondsPerTick):0}kPa)"; }
+            }
+        }
+        Check("구역 되짚기: 끓는 행성 (92기압)에 내린 디딤호 두 틱 — 돌풍이 분 칸 가운데 이 틱에 기압이 오른 칸은 줄어드는 빠르기가 0 (되짚은 틱 처음 기압이 끝보다 높지 않다)",
+            seen > 100 && bad == 0,
+            $"돌풍 칸 {seen} · 어긋남 {bad}{(bad > 0 ? " (" + at + ")" : "")}");
+    }
+
+    /// <summary>법칙 — 판 조각 600 상한 (PH15): 넘으면 잠든 것부터 가루로 (그 몸이 운동량을 받는다) · 그래도 넘으면 가장 오래된 나는 것을 장부 '우주로' — 질량 · 운동량 장부가 그대로.</summary>
+    private static void PlateLaws()
+    {
+        if (!Do("판 조각 법칙")) return;
+        Console.WriteLine("\n[판 조각 — 600 상한 · 장부 (PH15)]");
+        var s = PropWorld(1);
+        var st = s.Get<Structure>();
+        st.EnsureBody();
+        s.Step();
+        for (int k = 0; k < 590; k++) st.ThrowPlate(s, -40 - k % 25 * 2.0, -40 - k / 25 * 2.0, 0, 0, 20, 0);   // 배 밖 — 멈춰 떠 있다
+        var inside = new List<int>();
+        for (int k = 0; k < 10; k++) inside.Add(st.ThrowPlate(s, 3.5 + k % 5 * 1.5, 3.5 + k / 5 * 3, 1, 0, 25, 0));   // 방 안 — 바닥에 실려 미끄러지다 선다
+        s.Run(3);   // 600 — 아직 넘지 않는다 · 방 안 것은 섰다
+        bool settled = inside.All(id => st.IndexOf(id) >= 0 && st.Props[st.IndexOf(id)].State == 0);
+        for (int k = 0; k < 5; k++) st.ThrowPlate(s, -40, 60 + k * 2.0, 0, 0, 20, 0);   // 605 — 잠든 것 다섯이 가루로
+        var b0 = WorldBook(st);
+        s.Step();
+        var b1 = WorldBook(st);
+        int n1 = st.Props.Count(p => p.Kind == 4), dust1 = inside.Count(id => st.IndexOf(id) < 0);
+        double grit1 = st.GritKg;
+        for (int k = 0; k < 10; k++) st.ThrowPlate(s, -40, 80 + k * 2.0, 0, 0, 20, 0);   // 610 — 남은 잠든 것 다섯이 가루로 · 그래도 넘는 다섯은 가장 오래된 나는 것이 우주로
+        var b2 = WorldBook(st);
+        s.Step();
+        var b3 = WorldBook(st);
+        int n2 = st.Props.Count(p => p.Kind == 4), dust2 = inside.Count(id => st.IndexOf(id) < 0);
+        double kgSum = st.PlateKgNow + st.PlateKgLost + st.PlateKgDust, size = 600 * 25;
+        bool book = Math.Abs(b1.px - b0.px) < 1e-9 * size && Math.Abs(b1.py - b0.py) < 1e-9 * size && Math.Abs(b1.l - b0.l) < 1e-9 * size * 100
+            && Math.Abs(b3.px - b2.px) < 1e-9 * size && Math.Abs(b3.py - b2.py) < 1e-9 * size && Math.Abs(b3.l - b2.l) < 1e-9 * size * 100;
+        Check("판 조각 600 상한: 605개 (방 안에 선 것 10)면 잠든 것 가운데 오래된 다섯이 가루로 (그 칸 바닥) · 610개면 남은 잠든 다섯이 가루로 · 그래도 넘는 다섯은 가장 오래된 나는 것이 장부 '우주로' — 질량 (만든 = 있는 + 우주로 + 가루) · 운동량 장부가 그대로 (1e-9)",
+            settled && n1 == 600 && dust1 == 5 && Math.Abs(grit1 - 125) < 1e-6 && n2 == 600 && dust2 == 10 && Math.Abs(st.PlateKgLost - 100) < 1e-6 && Math.Abs(kgSum - st.PlateKgMade) < 1e-9 * st.PlateKgMade && book,
+            $"섰다 {settled} · 605 → {n1} (가루로 {dust1} · {grit1:0}kg) · 610 → {n2} (가루로 {dust2} · 우주로 {st.PlateKgLost:0}kg) · 질량 {kgSum:0.000} / 만든 {st.PlateKgMade:0.000} · 장부 어긋남 ({b1.px - b0.px:0.0e0}, {b1.l - b0.l:0.0e0} / {b3.px - b2.px:0.0e0}, {b3.l - b2.l:0.0e0})");
+    }
 }

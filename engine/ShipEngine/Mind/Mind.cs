@@ -730,7 +730,7 @@ public sealed partial class Mind : IEngine
         {
             ref var b = ref _life![a.C.Body];
             a.C.Cell = b.Cell;
-            bool up = b.Alive != 0 && b.Conscious != 0 && b.Asleep == 0 && a.C.Adrift == 0;   // ③ 우주로 떠내려간 이는 아무것도 할 수 없다
+            bool up = b.Alive != 0 && b.Conscious != 0 && b.Asleep == 0 && a.C.Adrift == 0 && (_st == null || _st.RagdollOf(a.C.Body) < 0);   // ③ 우주로 떠내려간 이 · 바람에 발이 떨어져 끌려가는 이 (④ 몸 물체 — PH14)는 아무것도 할 수 없다
             if (a.C.Up != 0 && !up && b.Asleep == 0) Fall(sim, a);
             a.C.Up = (byte)(up ? 1 : 0);
             // ③ 국소 현상: 누운 이 · 자는 이는 머리가 낮다 (업힌 이는 어깨 높이) · 깨어 있는 이는 머리 높이에 연기 · 열기가 차면 몸을 낮춰 기어간다 (본능)
@@ -740,7 +740,7 @@ public sealed partial class Mind : IEngine
         else
         {
             FeelMech(sim, a);   // ⑥ 몸을 느낀다 — 전지 · 상함 (판단 이관 (사))
-            bool up = a.C.Damage < 1 && a.C.Battery > 0;
+            bool up = a.C.Damage < 1 && a.C.Battery > 0 && (_st == null || a.C.Mech < 0 || _st.RagdollOf(-1 - a.C.Mech) < 0);   // 바람에 밀려 미끄러지는 동안 (④ 몸 물체)은 제 힘이 없다
             if (a.C.Up != 0 && !up) Fall(sim, a);
             a.C.Up = (byte)(up ? 1 : 0);
         }

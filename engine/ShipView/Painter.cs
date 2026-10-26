@@ -62,9 +62,10 @@ public sealed partial class Painter
         _pst = st;
         foreach (var it in st.Props)
         {
-            if (it.Kind is not (0 or 1 or 2 or 3)) continue;   // 물건 · 뜯긴 가구 · 조각 · 문짝 (PH8 · PH10)
+            if (it.Kind is not (0 or 1 or 2 or 3 or 4)) continue;   // 물건 · 뜯긴 가구 · 조각 · 문짝 · 판 조각 (PH8 · PH10 · PH15)
             if (Structure.Flying(it))   // 우주로 나는 것 (PH11 — 세상 틀): 배 틀로 옮겨 별 위에
             {
+                if (it.Kind == 4) continue;   // 나는 판 조각은 부스러기처럼 그린다 (틱 사이 자리 · 난 때 — Shards)
                 if (st.Bodies.Count == 0) { yield return (it, it.X, it.Y, it.Th); continue; }
                 var (lx, ly) = st.LocalOf(0, it.X, it.Y);
                 yield return (it, lx, ly, it.Th - st.Bodies[0].Th);
@@ -78,7 +79,7 @@ public sealed partial class Painter
         if (PropAt == null || tr == null || tr.Tick != _tick - 1) yield break;
         foreach (var it in tr.Gone)
         {
-            if (it.Kind is not (0 or 1 or 2 or 3)) continue;
+            if (it.Kind is not (0 or 1 or 2 or 3 or 4)) continue;
             var (ok, x, y, th) = PropAt(it.Id);
             if (ok) yield return (it, x, y, th);
         }
@@ -395,7 +396,9 @@ public sealed partial class Painter
     /// </summary>
     private void Shards(Img img, Sim s, Structure st, int x0, int y0, int dots = T)
     {
-        if (st.Shards.Count == 0) return;
+        bool plates = false;
+        foreach (var q in st.Props) if (q.Kind == 4 && Structure.Flying(q)) { plates = true; break; }
+        if (st.Shards.Count == 0 && !plates) return;
         // 지난 틱에 바깥에서 맞은 것 (운석 · 구름 — 바깥이 먼저 돌아 그 부스러기는 틱 처음 맞은 칸에서 한 틱을 다 난다): 맞은 때 (Sub) 전에는 그리지 않고 ·
         // 뒤에는 남은 틱 사이에 맞은 칸 곁 → 틱 끝 자리를 곧게 (틱 사이 비율을 (f − Sub) / (1 − Sub)로 — 다음 틱과 이어진다)
         var outs = s.Find<Outside>();
@@ -405,7 +408,7 @@ public sealed partial class Painter
         double f = Math.Clamp(TickFrac, 0, 1), back = (1 - f) * Time.SecondsPerTick;
         double th = double.IsNaN(SkyTh) ? b0.Th : SkyTh, ox = double.IsNaN(ShipX) ? b0.X : ShipX, oy = double.IsNaN(ShipY) ? b0.Y : ShipY;
         double cs = Math.Cos(-th), sn = Math.Sin(-th);
-        foreach (var sh in st.Shards)
+        foreach (var sh in plates ? st.FlyingDebris() : st.Shards)   // 바깥에서 던진 알갱이 + 나는 판 조각 (PH15 — 알갱이 꼴로 읽는다)
         {
             double sback = back;
             bool fresh = back > 0 && sh.Born == _tick - 1, hit = false;
@@ -1074,7 +1077,7 @@ public sealed partial class Painter
     private DotForm PropLook(Tables t, in Prop p)
     {
         if (p.Piece > 0 && _pst != null) return _pst.PieceLook(p);   // 조각은 원래 꼴을 그 가면으로 자른 것 (PH8)
-        if (p.Kind is 1 or 3 && _pst != null) return _pst.PropForm(p);   // 뜯긴 가구 · 날아간 문짝은 그 꼴 그대로 (PH10)
+        if (p.Kind is 1 or 3 or 4 && _pst != null) return _pst.PropForm(p);   // 뜯긴 가구 · 날아간 문짝 · 판 조각은 그 꼴 그대로 (PH10 · PH15)
         _itemNames ??= t.People.Items.Keys.ToArray();
         return DotForge.Make(t, p.What >= 0 && p.What < _itemNames.Length ? _itemNames[p.What] : "_default", lie: p.Pose);
     }

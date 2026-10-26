@@ -572,11 +572,25 @@ public sealed partial class Mind
             if (_st != null)
             {
                 _st.Sweep(around[..n]);
+                // 드는 힘: 저 + 같은 칸을 치우러 곁에 와 있는 이 (둘이서 든다 — PH16)
                 double can = a.IsPerson ? PersonLiftKg : RobotLiftKg;
+                int helpers = 0;
+                foreach (var o in Agents)
+                {
+                    if (o == a || o.C.Up == 0 || o.C.StepIndex < 0 || o.C.StepIndex >= o.Plan.Count) continue;
+                    var os = o.Plan[o.C.StepIndex];
+                    if (os.Kind != StepKind.Clean || os.Cell != cell || Dist(o.C.Cell, cell) > 2) continue;
+                    can += o.IsPerson ? PersonLiftKg : RobotLiftKg; helpers++;
+                }
                 _st.RightUp(around[..n], can);
                 var (_, heavy) = _st.Fallen(around[..n], can);
                 if (heavy > 0)
-                    Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = cell, Method = 255, Out = JudgeOut.Blocked, Why = SnagKind.Other, By = -1, Note = "넘어진 것이 너무 무거워 혼자 세우지 못했다" });
+                {
+                    // 도울 이가 오고 있으면 (같은 칸을 맡았다) 30분까지 기다린다 — 아니면 일지에 남기고 손을 뗀다 (같은 실패를 되풀이하지 않는다)
+                    bool coming = helpers == 0 && Agents.Any(o => o != a && o.C.Up != 0 && o.C.AssignedGoal == GoalKind.Clean && o.C.AssignedTarget == st.Cell && o.C.AssignedUntil > t);
+                    if (coming && t - c.StepStart < Time.Minutes(40)) return;
+                    Jot(a, new Judgment { Tick = t, Goal = c.Goal, Target = st.Target, Cell = cell, Method = 255, Out = JudgeOut.Blocked, Why = SnagKind.Other, By = -1, Note = helpers > 0 ? "넘어진 것이 너무 무거워 둘이서도 세우지 못했다" : "넘어진 것이 너무 무거워 혼자 세우지 못했다" });
+                }
             }
         }
         if (_work != null) _work.Cleaned++;

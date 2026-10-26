@@ -17,6 +17,7 @@ public sealed partial class Structure
     {
         if (p.Piece > 0) return PieceForm(p);   // 조각 (PH8 — 온전한 꼴의 가면)
         if (p.Kind is 5 or 6) return BodyForm(p);   // 몸 물체 (PH14)
+        if (p.Kind == 4) return PlateForm();   // 판 조각 (PH15)
         if (p.Kind is 1 or 3) return FurnPropForm(p);   // 뜯긴 가구 · 날아간 문짝 (PH10)
         int key = p.What * 8 + p.Pose;
         if ((uint)key < (uint)_propFormAt.Length && _propFormAt[key] is { } at) return at;   // 표 차례로 곧장 (섬 짝마다 잔걸음마다 부른다 — 속도만)
@@ -92,7 +93,7 @@ public sealed partial class Structure
     internal const System.Runtime.CompilerServices.MethodImplOptions Hot = System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization;
 
     public const double Gravity = 9.8, WetShare = 0.33, WetMol = 50, SleepV = 1e-3, SleepW = 0.01, SleepSec = 0.5, MaxPropH = 0.1, MaxPropTurn = 0.1;
-    public const int MaxPropSteps = 1024, LightPropSteps = 4;   // 섬마다 한 틱 잔걸음 상한 (온전 · 가벼운 셈 — 상상 복제)
+    public const int MaxPropSteps = 1024, LightPropSteps = 4, PropWork = 1024 * 256;   // 섬 하나의 한 틱 일 상한 (잔걸음 × (물체 + 짝) — 깨짐이 깨짐을 불러 조각이 수천인 섬도 틱이 몇 초를 넘지 않게)   // 섬마다 한 틱 잔걸음 상한 (온전 · 가벼운 셈 — 상상 복제)
 
     /// <summary>물체의 질량 · 회전관성 (아직 깨지 않아 몸 값이 비었으면 꼴에서).</summary>
     [System.Runtime.CompilerServices.MethodImpl(Hot)]
@@ -163,11 +164,13 @@ public sealed partial class Structure
         if (any)
         {
             BuildClearance();
-            if (!_clutterDirty) foreach (var p in all) if (p.Kind is 1 or 3 && Awake(p)) { _clutterDirty = true; break; }   // 깨어 있는 가구 · 문짝이 움직인다 — 길 값은 다음에 물을 때 지금 자리에서 다시 짓는다 (찍지 않으니 되살린 세계와 같게)
+            if (!_clutterDirty) foreach (var p in all) if (p.Kind is 1 or 2 or 3 or 4 && Awake(p)) { _clutterDirty = true; break; }   // 깨어 있는 가구 · 문짝 · 조각 · 판 조각   // 깨어 있는 가구 · 문짝이 움직인다 — 길 값은 다음에 물을 때 지금 자리에서 다시 짓는다 (찍지 않으니 되살린 세계와 같게)
             StepIslands(sim, all, dt, world);   // 섬마다 함께 걷는다 — 잔걸음 동안 목록은 그대로다 (빼는 것은 틱 끝 · 맞음은 장부에만 더한다)
         }
         if (world && all.Length > 0) Reactions(all);
         if (_breakHits.Count > 0) { long tb = Prof.Start(); Breaks(sim, world); Prof.Lap("구조:깨짐", tb); }       // 깨짐 · 이음매 · 찌그러짐 · 쏟음 (PH8 — 몸이 되받은 뒤 · 맞은 그 때의 상태에서)
+        if (Props.Count > PieceCap) Crumble(world);   // 작은 조각이 너무 많으면 가장 가벼운 것부터 가루로 (셈을 붙드는 상한)
+        if (Props.Count > ShardMax) PlateCap(world);   // 판 조각이 600을 넘으면 잠든 것부터 가루로 (PH15)
         if (_noises.Count > 0) { long tn = Prof.Start(); EmitNoises(sim); Prof.Lap("구조:물체 소리", tn); }       // 물체 소리 (방마다 · 갈래마다 한 번)
         if (any || gone)
         {

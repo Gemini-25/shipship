@@ -203,6 +203,8 @@ public static partial class Program
             case "props-breach": PropsBreachScene(dir); return;
             case "props-space": PropsSpaceScene(dir); return;   // 우주의 물체 (PH11)
             case "props-body": PropsBodyScene(dir); return;   // 몸 물체 (PH14)
+            case "props-plate": PropsPlateScene(dir); return;   // 판 조각 (PH15)
+            case "props-lift": PropsLiftScene(dir); return;   // 둘이서 들기 (PH16)
             case "props-burn": PropsBurnScene(dir); return;
             case "topple": ToppleScene(dir); return;
             case "props-zerog": PropsZeroGScene(dir); return;
@@ -258,7 +260,7 @@ public static partial class Program
                 else if (fire) head = FireCaption(s);
                 else if (zg) head = ZeroGCaption(s);
                 else if (ar) head = ArrestCaption(s);
-                else { var stc = s.Get<Structure>(); head = $"몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t"; }
+                else { var stc = s.Get<Structure>(); head = $"몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.FlyingDebris().Count} / 우주로 {(stc.ShardKgLost + stc.PlateKgLost) / 1000:0.0}t"; }
                 page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · {System.Net.WebUtility.HtmlEncode(head)}{string.Concat(lines.Distinct().Take(fire || zg || ar ? 6 : 4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
             }
             else Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
