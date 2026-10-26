@@ -35,7 +35,14 @@ public sealed partial class Network
     public const double InsulPvcMolPerStrand = 7 * 0.65 / 62.5, InsulPlastMolPerStrand = 7 * 0.35 / 14.03;
     /// <summary>그 칸에 피복을 깐다 (가닥 수만큼).</summary>
     public void LayInsulation(int c, double strands) { F.AddStore(c, T.sPvc, strands * InsulPvcMolPerStrand); F.AddStore(c, T.sPoly, strands * InsulPlastMolPerStrand); }
-    public const double CoolLeakMolPerSec = 0.05, WaterLeakMolPerSec = 0.46;   // 틈 1에서 펌프가 돌 때 (서 있으면 냉각 10분의 1 · 물 20분의 1)
+    /// <summary>
+    /// 끊긴 관 (틈 1)에서 펌프가 돌 때 뿜는 빠르기 (몰/초 — DF9: 관 단면 × 유량 계수 0.6 × √(2ΔP/ρ)): 물관 ½인치 (1.27cm²) · 물 재생기 압력 100kPa → 1.08kg/s (분에 65L) ·
+    /// 냉각관 ¼인치 (0.32cm²) · 고리 압력 100kPa · 액체 암모니아 600kg/m³ → 0.21kg/s (분에 12kg) · 서 있으면 관에 든 것만 (물 500분의 1 · 냉각 50분의 1).
+    /// 이음매가 풀린 틈 · 스미는 틈 (틈 1 아래)은 그 몫 × 샘 빠르기 (펌프가 돌 때 냉각 0.05 · 물 0.46몰/초 — 서 있으면 냉각 10분의 1 · 물 20분의 1).
+    /// </summary>
+    public const double CoolSeepMolPerSec = 0.05, WaterSeepMolPerSec = 0.46;
+    public static readonly double WaterLeakMolPerSec = 0.6 * 1.27e-4 * Math.Sqrt(2 * 100e3 / 1000) * 1000 / 0.018,
+        CoolLeakMolPerSec = 0.6 * 0.32e-4 * Math.Sqrt(2 * 100e3 / 600) * 600 / 0.017;
     public static byte Bit(LineKind k) => (byte)(1 << (int)k);
 
     // ── 깐 것 (도면에서 · 찍지 않는다) ──

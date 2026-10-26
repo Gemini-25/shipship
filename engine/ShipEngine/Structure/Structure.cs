@@ -37,9 +37,12 @@ public sealed partial class Structure : IEngine
     public int Offset => 0;
 
     public const double HullRatingKPa = 400, WallRatingKPa = 160;
-    /// <summary>보통 문: 한 기압은 겨우 버틴다 — 피로가 쌓이면 수십 분 뒤 날아간다 (끼익 소리가 먼저).</summary>
-    public const double NormalDoorKPa = 120;
-    public const double FatigueK = 1.8e-4;
+    /// <summary>보통 문: 한 기압 차의 두 배 남짓을 버틴다 (DF9 — 우주선 해치 · 칸막이 문은 진공 대 한 기압을 무한정 버틴다: 정적 하중으로는 시들지 않는다 · 한 기압이면 부하 0.48이라 끼익거린다).</summary>
+    public const double NormalDoorKPa = 210;
+    /// <summary>피로 쌓임 (부하가 오르내린 폭마다 · 넘친 부하의 세제곱에 곱한다 — 부하 0.8을 오르내리면 천 번 남짓에 찢어진다 · 정적 하중은 쌓지 않는다 · DF9) · 오르내림으로 셀 가장 작은 폭 (기압이 틱마다 조금씩 흔들리는 것은 빼고).</summary>
+    public const double FatigueK = 0.002, FatigueStep = 0.02;
+    /// <summary>버티는 벽 · 문이 끼익거리는 부하 (정격의 몫) · 압력 차가 민 원인을 다는 부하.</summary>
+    public const double CreakLoad = 0.45, PushedLoad = 0.4;   // 민 원인은 새 판의 부하로 (평시 한 기압을 받치는 외판 0.25는 '밀었다'가 아니다)
     public const double BraceFactor = 1.6;   // 덧대 받친 문 · 벽의 정격 배율   // 피로 쌓임 (초당 · 넘친 부하의 세제곱에 곱한다)
     public const double CrackArea = 0.0005;  // 금 (m²)
     /// <summary>초고속 충돌이 배 안 공기 칸에 남긴 열 가운데 충격파가 되는 몫 (어림 — 파편 구름 · 증기의 팽창).</summary>
@@ -71,6 +74,8 @@ public sealed partial class Structure : IEngine
     public float[] ImpactJ;
     /// <summary>그 가운데 지나는 순간 그 칸에 있던 사람 (⑧이 알린 원판)이 맞음으로 받아 간 몫 (J — DF8 · ⑦이 ImpactJ와 함께 비운다: 남은 몫만 알리지 않은 몸 · 늦게 든 몸이 받는다).</summary>
     public float[] ImpactTakenJ;
+    /// <summary>벽 · 문 칸마다 피로를 마지막으로 센 부하 (오르내림의 기준 — DF9).</summary>
+    public float[] LoadRef;
     /// <summary>폭풍이 바닥 칸에 준 가장 큰 넘친 압력 (kPa — ⑦ 귀가 읽고 지운다 · 소리 단계 S3).</summary>
     public float[] BlastPeakKPa;
     /// <summary>점화의 관성 하중 (g — 배 가속도 / 9.8): ⑤ 바깥이 틱마다 넣는 요청. 외판 · 뼈대가 받는 하중이 이만큼 는다 (점화 한 번 = 하중 한 주기). 찍지 않는다.</summary>
@@ -84,7 +89,7 @@ public sealed partial class Structure : IEngine
         Fatigue = new float[L.N]; Corrode = new float[L.N]; Stress = new float[L.N]; DamageCause = new int[L.N];
         DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count]; Braced = new byte[L.N];
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
-        ImpactJ = new float[L.N]; ImpactTakenJ = new float[L.N]; BlastPeakKPa = new float[L.N];
+        ImpactJ = new float[L.N]; ImpactTakenJ = new float[L.N]; LoadRef = new float[L.N]; BlastPeakKPa = new float[L.N];
         BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         DoorLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         // 에어락 벽: 바깥문이 있는 방의 벽은 배의 압력 경계다 — 비운 에어락의 안쪽 벽도 한 기압을 버틴다 (외판과 같은 정격 · ISS 퀘스트 에어락)
@@ -459,23 +464,18 @@ public sealed partial class Structure : IEngine
                 Cycle(sim, c, sig, th);
                 if (Crack[c] > 0) { Fracture(sim, c, sig); if (F.Hole[c] >= 2) { Stress[c] = 0; continue; } }
             }
-            if (dp < 1) { Stress[c] = 0; continue; }
+            if (dp < 1) { Stress[c] = 0; if (LoadRef[c] >= FatigueStep) Swing(c, 0, T.Materials[L.Material[c]].Def); continue; }
             double rating = Math.Max(1e-3, Rating(c));
             double load = dp / rating;
             Stress[c] = (float)load;
             var m = T.Materials[L.Material[c]].Def;
-            // 피로: 피로 한계를 넘은 부하의 세제곱에 비례
+            // 피로: 부하가 오르내린 폭 (마이너 — 반 주기마다) × 피로 한계를 넘은 부하의 세제곱 · 정적 하중은 쌓지 않는다 (DF9 — 정격을 넘으면 찢어질 뿐)
             double nominal = dp / Math.Max(1e-3, rating / Math.Max(1e-3, (1 - Fatigue[c]) * (1 - Corrode[c])));
-            if (nominal > m.Fatigue)
-            {
-                double x = (nominal - m.Fatigue) / (1 - m.Fatigue);
-                Fatigue[c] = (float)Math.Min(1, Fatigue[c] + FatigueK * x * x * x * dt);
-                if (Fatigue[c] >= 0.85f && Crack[c] <= 0 && kind == CellKind.Wall) SeedCrack(c, 0.005, DamageCause[c]); // 쌓인 피로가 금이 된다 (S-N 손상 → 큰 금의 시작)
-                if (DamageCause[c] == 0) DamageCause[c] = sim.Causes.Add(CauseKind.Pressure, "압력 차가 벽을 밀었다", sim.Tick, c, LowSideCause(c));
-                // 끼익: 버티는 문 · 벽이 소리를 낸다 (사람 · 컴퓨터가 듣고 알아챈다)
-                if (load >= 0.6 && (sim.Tick + c) % 10 == 0)
-                    sim.Find<Sound>()?.Emit(sim, NearestAir(c), (float)(50 + 30 * Math.Min(1, load)), SoundKind.Creak, DamageCause[c]);
-            }
+            Swing(c, nominal, m);
+            if (nominal >= PushedLoad && DamageCause[c] == 0) DamageCause[c] = sim.Causes.Add(CauseKind.Pressure, "압력 차가 벽을 밀었다", sim.Tick, c, LowSideCause(c));
+            // 끼익: 버티는 문 · 벽이 소리를 낸다 (사람 · 컴퓨터가 듣고 알아챈다)
+            if (load >= CreakLoad && (sim.Tick + c) % 10 == 0)
+                sim.Find<Sound>()?.Emit(sim, NearestAir(c), (float)(50 + 30 * Math.Min(1, load)), SoundKind.Creak, DamageCause[c]);
             if (kind == CellKind.Door)
             {
                 if (load >= 1) BlowDoor(sim, c, load);
@@ -490,6 +490,19 @@ public sealed partial class Structure : IEngine
                 SeedCrack(c, 0.05 + 0.5 * (load - 0.85), cc);   // 과부하로 난 금 — 자랄 수 있다
             }
         }
+    }
+
+    /// <summary>부하가 기준에서 FatigueStep 넘게 옮겨 가면 그 폭을 반 주기로 센다 (넘친 부하의 세제곱 × 폭) — 쌓인 피로가 0.85를 넘으면 벽에 금이 된다 (S-N 손상 → 큰 금의 시작).</summary>
+    private void Swing(int c, double nominal, MaterialDef m)
+    {
+        double swing = Math.Abs(nominal - LoadRef[c]);
+        if (swing < FatigueStep) return;
+        double top = Math.Max(nominal, LoadRef[c]);
+        LoadRef[c] = (float)nominal;
+        if (top <= m.Fatigue) return;
+        double x = (top - m.Fatigue) / (1 - m.Fatigue);
+        Fatigue[c] = (float)Math.Min(1, Fatigue[c] + FatigueK * x * x * x * swing);
+        if (Fatigue[c] >= 0.85f && Crack[c] <= 0 && L.Kind[c] == CellKind.Wall) SeedCrack(c, 0.005, DamageCause[c]);
     }
 
     private int Cause(Sim sim, int c, string text)
@@ -776,7 +789,7 @@ public sealed partial class Structure : IEngine
         w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
         w.Tag("열 · 진동"); w.Arr(ThTurn); w.Arr(ThRun); w.I64(VibGrowths); w.I64(ThermalCracks);
         w.Tag("열 수축"); w.Arr(TsSlip); w.I64(ThermalTicks);
-        w.Tag("파편 길"); w.List(ShardPasses); w.Arr(ImpactTakenJ);
+        w.Tag("파편 길"); w.List(ShardPasses); w.Arr(ImpactTakenJ); w.Arr(LoadRef);
         SaveBodies(w);
         SaveProps(w);
     }
@@ -791,7 +804,7 @@ public sealed partial class Structure : IEngine
         r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();
         r.Tag("열 · 진동"); r.ArrInto(ThTurn); r.ArrInto(ThRun); VibGrowths = r.I64(); ThermalCracks = r.I64();
         r.Tag("열 수축"); TsSlip = r.Arr<float>(); ThermalTicks = r.I64();
-        r.Tag("파편 길"); ShardPasses.Clear(); ShardPasses.AddRange(r.List<ShardPass>()); r.ArrInto(ImpactTakenJ);
+        r.Tag("파편 길"); ShardPasses.Clear(); ShardPasses.AddRange(r.List<ShardPass>()); r.ArrInto(ImpactTakenJ); r.ArrInto(LoadRef);
         LoadBodies(r);
         LoadProps(r);
         Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)

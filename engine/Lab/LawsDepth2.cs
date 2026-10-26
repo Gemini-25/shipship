@@ -74,6 +74,25 @@ public static partial class Program
                 s30 < s50 && s50 < s80 && s80 - s50 <= 3 * (s50 - s30), $"30MJ {s30} · 50MJ {s50} · 80MJ {s80}");
         }
 
+        // 정적 하중은 시들게 하지 않는다: 진공 옆 닫힌 보통 문이 72시간 버틴다 (끼익거리며 · 피로 0 그대로) — 예전: 한 기압 부하 0.84에 피로가 쌓여 51분 만에 날아갔다
+        {
+            var lay = Worlds.Ascii(@"
+#########
+#...D...#
+#...#...#
+#########");
+            var s = FieldStructure(lay);
+            var f = s.Get<Field>(); var st = s.Get<Structure>();
+            f.Adiabatic = true;
+            f.SetHole(Worlds.At(lay, 0, 1), 2.5f);   // 왼쪽 방 외판이 뚫렸다
+            int door = Worlds.At(lay, 4, 1);
+            for (int d = 0; d < lay.Doors.Count; d++) f.DoorTaped[d] = 1;   // 문틈을 막았다 (새는 것으로 오른쪽 방이 빠지지 않게 — 부하를 72시간 그대로)
+            s.Run(Time.Hours(72));
+            Check("정적 하중: 진공 옆 닫힌 보통 문이 72시간 버틴다 — 날아가지 않고 피로도 쌓이지 않는다 (부하 0.5 아래 · 정격 한 기압의 두 배 넘게)",
+                st.DoorsBlown == 0 && st.Fatigue[door] < 0.01f && st.Stress[door] is > 0.3f and < 0.5f,
+                $"날아간 문 {st.DoorsBlown} · 피로 {st.Fatigue[door]:0.000} · 부하 {st.Stress[door]:0.00} · 오른쪽 방 {f.Pressure(Worlds.At(lay, 6, 1)):0.0}kPa");
+        }
+
         // 큰 충돌의 갈라짐: 두 방을 잇는 좁은 통로를 20kg · 8km/s (640MJ) 운석이 위에서 — 배가 둘로 갈라진다 (예전: 640MJ로는 조각 0 · 5GJ가 들어야 했다)
         {
             var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);

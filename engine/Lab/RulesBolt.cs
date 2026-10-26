@@ -128,7 +128,7 @@ public static partial class Program
             var lay = Worlds.Ascii(art);
             var s = FieldStructure(lay, 4);
             var f = s.Get<Field>(); var st = s.Get<Structure>();
-            f.FillAir(250);   // 왼쪽 방은 250kPa (보통 문은 120kPa를 버틴다 — 1.5배 넘게 밀리면 문짝이 떨어져 난다)
+            f.FillAir(400);   // 왼쪽 방은 400kPa (보통 문은 210kPa를 버틴다 — 1.5배 넘게 밀리면 문짝이 떨어져 난다)
             int door = 0, dc = lay.Doors[0].Cell;
             f.SetDoor(door, 0); st.RequestDoor(door, 0);
             foreach (int c in lay.Rooms.First(r => r.Cells.All(x => lay.X(x) > lay.X(dc))).Cells) { for (int g = 0; g < f.G; g++) f.N[c * f.G + g] = 0; f.U[c] = 0; }   // 오른쪽 방은 진공

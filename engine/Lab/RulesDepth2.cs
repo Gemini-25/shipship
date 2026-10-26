@@ -139,6 +139,36 @@ public static partial class Program
                 st.Blast(s, mid, j, s.Causes.Add(CauseKind.Setup, "폭발", s.Tick, mid));
                 return (Enumerable.Range(0, lay.N).Count(c => lay.Kind[c] == CellKind.Floor && f.Hole[c] > 0), st.BlastPeakKPa[mid]);
             }
+            // 끊긴 관의 흐름: 관 단면 × √(2ΔP/ρ) — 펌프가 도는 물관이 끊기면 분에 수십 L (예전 0.5L) · 스미는 틈 (0.05)의 열 배 넘게
+            {
+                var legend = new Dictionary<char, string>
+                {
+                    ['R'] = "ReactorCore", ['u'] = "CoolantPump", ['v'] = "CoolantPump", ['b'] = "Battery", ['p'] = "PowerPanel", ['c'] = "MainComputer", ['r'] = "RobotDock",
+                    ['O'] = "OxygenGenerator", ['W'] = "WaterRecycler", ['g'] = "GrowBed", ['k'] = "CoffeeMachine",
+                };
+                var lay = Worlds.Ascii(LineShip, legend);
+                (double cutLmin, double seepLmin) Flow()
+                {
+                    double Run(float leak)
+                    {
+                        var s = Worlds.Full(lay, 3);
+                        s.Run(5);
+                        var net = s.Get<Network>();
+                        byte wt = Network.Bit(LineKind.Water);
+                        int cell = Enumerable.Range(0, lay.N).First(c => (net.LineAt[c] & wt) != 0 && lay.IsSpace(c));
+                        double t0 = net.WaterTank;
+                        if (leak >= 1) net.CutLines(s, cell, wt, s.Causes.Add(CauseKind.Setup, "물관을 끊었다", s.Tick, cell));
+                        else net.LeakPipe(s, cell, LineKind.Water, leak, s.Causes.Add(CauseKind.Setup, "물관 이음매가 스민다", s.Tick, cell));
+                        s.Run(5);   // 처음 12초 (주컴퓨터가 밸브를 잠그기 전)
+                        return (t0 - net.WaterTank) * 0.018 * Time.Minutes(1) / 5;   // kg = L · 분에
+                    }
+                    return (Run(1), Run(0.05f));
+                }
+                var (cutL, seepL) = Flow();
+                Check("끊긴 관의 흐름: 물 재생기가 도는 물관 (½인치 · 100kPa)이 끊기면 분에 30L 넘게 (관 단면 × √(2ΔP/ρ)) · 스미는 틈 (0.05)의 열 배 넘게",
+                    cutL > 30 && cutL > 10 * seepL && seepL > 0, $"끊김 분에 {cutL:0.0}L · 스밈 분에 {seepL:0.000}L");
+            }
+
             var small = Deck(0.5e6); var big = Deck(8e6);
             Check("폭발은 충격량으로 판을 찢는다: 방 가운데 0.5MJ (TNT 120g)는 첨두압이 바닥 정격을 넘어도 바닥을 못 뚫고 · 8MJ (TNT 1.9kg)는 뚫는다",
                 small.kpa > 300 && small.holes == 0 && big.holes > 0, $"0.5MJ 첨두 {small.kpa:0}kPa · 뚫린 바닥 {small.holes}칸 / 8MJ 첨두 {big.kpa:0}kPa · {big.holes}칸");

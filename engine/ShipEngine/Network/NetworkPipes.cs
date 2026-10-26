@@ -104,7 +104,10 @@ public sealed partial class Network
         float leak = PipeLeak[c * 2 + s];
         if (leak <= 0) return 0;
         bool p = Pumping(c, k);
-        return k == LineKind.Water ? leak * WaterLeakMolPerSec * (p ? 1 : 0.05) : leak * CoolLeakMolPerSec * (p ? 1 : 0.1);
+        // 끊긴 관 (틈 1)은 관 단면으로 뿜는다 (DF9 — 압력이 빠지면 관에 든 것만: 물 500분의 1 · 냉각 (축압기가 조금 민다) 50분의 1) ·
+        //  이음매 · 스미는 틈은 그 몫만큼 (펌프가 서면 냉각 10분의 1 · 물 20분의 1)
+        if (leak >= 1) return k == LineKind.Water ? WaterLeakMolPerSec * (p ? 1 : 0.002) : CoolLeakMolPerSec * (p ? 1 : 0.02);
+        return k == LineKind.Water ? leak * WaterSeepMolPerSec * (p ? 1 : 0.05) : leak * CoolSeepMolPerSec * (p ? 1 : 0.1);
     }
 
     /// <summary>밸브를 잠그거나 연다 (주컴퓨터 · 사람).</summary>
