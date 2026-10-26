@@ -337,6 +337,7 @@ public static partial class Program
 
             // 녹은 연장선: 왼쪽 생명유지실 (산소 발생기 · 대형 냉각 펌프 · 냉각 펌프 둘 — 짐 51A가 연장선 정격 32A의 1.5배를 넘는다) · 제 급전선 길이 젖어 다시 올릴 수 없다
             //   → 로봇이 오른쪽 방에서 연장선을 끌어온다 → 1분 넘게 넘쳐 피복이 녹는다 (오른쪽 급전선까지 끊긴다) — 같은 짐으로 같은 길을 다시 깔지 않는다 (짐을 줄여서 다시)
+            //   (검토 고침) 일곱 시간 전에 그 방 연장선이 짐이 넘쳐 녹은 기록이 있어도 (막힌 곳이 이미 풀렸다) 새 녹음은 첫 번 — 짐을 줄여 보지도 않고 '또 녹았다'로 그만두지 않는다
             {
                 const string HeavyShip = @"
 ##################
@@ -344,26 +345,75 @@ public static partial class Program
 #..W..Uu...D..q..#
 #....u..s..#r...w#
 ##################";
-                var lay = Worlds.Ascii(HeavyShip, new Dictionary<char, string>(NetLegend) { ['U'] = "LargeCoolantPump", ['u'] = "CoolantPump" });
-                int At(int x, int y) => Worlds.At(lay, x, y);
-                int left = lay.Room[At(4, 2)], right = lay.Room[At(13, 2)];
-                var s = Worlds.Full(lay, 1);
-                var net = s.Get<Network>(); var m = s.Get<Mind>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>();
-                m.AddRobot(s, At(12, 3), AgentKind.Robot, At(12, 3));
-                s.Run(3);
-                var path = net.Feeders[net.RoomFeeder[left]].Path;
-                var jp = net.JumperPath(right, left)!;
-                f.AddStore(path.Skip(1).First(c => Array.IndexOf(jp, c) < 0), f.T.sWater, 60);
-                long f0 = s.Facts.Total;
-                float maxA = 0;
-                for (int k = 0; k < 120; k++) { s.Run((int)Time.Minutes(0.5)); foreach (var j in net.Jumpers) maxA = Math.Max(maxA, j.Amps); }
-                var facts = s.Facts.Since(f0).ToList();
-                int laid = facts.Count(x => x.Kind == FactKind.Jumper && x.Other == 1);
-                int melted = facts.Count(x => x.Kind == FactKind.Short && s.Causes.Story(x.Cause).Contains("정격을 넘게"));
-                bool lit = net.RoomPowered(left) && net.Jumpers.Count == 1;
-                if (Debug) { Console.WriteLine($"    가장 큰 전류 {maxA:0}A"); foreach (var l in sm.Log.Where(l => !l.text.Contains("작업대가 없다"))) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}"); }
+                (int laid, int melted, bool lit, int shed, bool relit, float maxA) Melt(bool oldBurn)
+                {
+                    var lay = Worlds.Ascii(HeavyShip, new Dictionary<char, string>(NetLegend) { ['U'] = "LargeCoolantPump", ['u'] = "CoolantPump" });
+                    int At(int x, int y) => Worlds.At(lay, x, y);
+                    int left = lay.Room[At(4, 2)], right = lay.Room[At(13, 2)];
+                    var s = Worlds.Full(lay, 1);
+                    var net = s.Get<Network>(); var m = s.Get<Mind>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>();
+                    m.AddRobot(s, At(12, 3), AgentKind.Robot, At(12, 3));
+                    s.Run(3);
+                    if (oldBurn)
+                    {   // ⑥의 기록: 일곱 시간 전에 오른쪽 방에서 끌어온 연장선이 짐이 넘쳐 녹았다 (짐 막힌 곳은 여섯 시간 — 이미 풀렸다)
+                        net.Burns.Add(new JumperBurn { Seq = ++net.BurnSeq, Tick = s.Tick - Time.Hours(7), From = right, To = left, Cell = At(9, 2), Why = 1, Amps = 51 });
+                        s.Run(5);
+                        m[0].C.Battery = 1;
+                    }
+                    var path = net.Feeders[net.RoomFeeder[left]].Path;
+                    var jp = net.JumperPath(right, left)!;
+                    f.AddStore(path.Skip(1).First(c => Array.IndexOf(jp, c) < 0), f.T.sWater, 60);
+                    long f0 = s.Facts.Total;
+                    float maxA = 0;
+                    bool relit = false;   // 짐을 줄인 채 연장선으로 밝았다 (제 급전선이 살아나면 연장선은 걷힌다)
+                    for (int k = 0; k < 120; k++)
+                    {
+                        s.Run((int)Time.Minutes(0.5));
+                        foreach (var j in net.Jumpers) maxA = Math.Max(maxA, j.Amps);
+                        if (sm.LineSheds > 0 && net.Jumpers.Count == 1 && net.RoomPowered(left) && !net.OwnFeederLive(left)) relit = true;
+                    }
+                    var facts = s.Facts.Since(f0).ToList();
+                    int laid = facts.Count(x => x.Kind == FactKind.Jumper && x.Other == 1);
+                    int melted = facts.Count(x => x.Kind == FactKind.Short && s.Causes.Story(x.Cause).Contains("정격을 넘게"));
+                    int shed = facts.Count(x => x.Kind == FactKind.LoadShed && net.Devices[x.Other].Room == left);
+                    bool lit = net.RoomPowered(left) && net.Jumpers.Count == 1;
+                    if (Debug) { Console.WriteLine($"    (옛 녹음 {oldBurn}) 가장 큰 전류 {maxA:0}A · 끝에 연장선 {net.Jumpers.Count} · 제 급전선 {net.OwnFeederLive(left)}"); foreach (var l in sm.Log.Where(l => !l.text.Contains("작업대가 없다") && !l.text.Contains("원료"))) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}"); }
+                    return (laid, melted, lit, shed, relit, maxA);
+                }
+                var oldT = Task.Run(() => Melt(true));
+                var now = Melt(false); var old = oldT.Result;
                 Check("녹은 연장선 길을 다시 깔지 않는다: 짐이 넘쳐 녹은 뒤에는 그 방 짐을 줄여 (덜 급한 것을 끄고) 다시 잇는다 — 한 시간에 녹음 하나 · 끝에 그 방은 연장선으로 밝다",
-                    melted <= 1 && laid >= 2 && lit, $"깐 연장선 {laid} · 넘쳐 녹음 {melted} · 끝에 밝음 {lit} · 가장 큰 전류 {maxA:0}A");
+                    now.melted <= 1 && now.laid >= 2 && now.lit, $"깐 연장선 {now.laid} · 넘쳐 녹음 {now.melted} · 짐 줄임 {now.shed} · 끝에 밝음 {now.lit} · 가장 큰 전류 {now.maxA:0}A");
+                Check("풀린 막힌 곳은 번을 다시 센다: 일곱 시간 전에 녹은 기록이 있어도 새 녹음은 첫 번 — 짐을 줄여 다시 잇고 그 방은 연장선으로 밝다 (예전엔 '또 녹았다'로 연장선을 그만뒀다)",
+                    old.melted <= 1 && old.laid >= 2 && old.shed >= 1 && old.relit, $"깐 연장선 {old.laid} · 넘쳐 녹음 {old.melted} · 짐 줄임 {old.shed} · 줄인 채 연장선으로 밝음 {old.relit}");
+            }
+
+            // 갈 길이 없는 것은 몸의 사정일 수 있다 (검토 고침 — 평가 결함의 문 없는 방 배): 아래 통로 식사기 밑 선이 끊겼다 · 위 오른쪽 문 없는 방에 갇힌 로봇 (하나 · 둘) ·
+            //   아래 통로 로봇은 전지가 거의 없다 (25분 뒤에 찬다) — 갇힌 로봇이 거듭 막혀도 (같은 몸이 두 번 · 서로 다른 몸 둘) 막힌 적 없는 로봇이 닿으면 보낸다 → 선을 잇는다
+            //   (예전엔 같은 몸의 막힘 둘로 '맡긴 이 둘이 막혔다' · 그 방 일을 한 시간 막아 60분이 지나도록 아무도 가지 않았다)
+            {
+                (long sentAt, bool fixedLine, bool saidTwo) Trapped(int trapped)
+                {
+                    var lay = Worlds.Ascii(Worlds.MindShipComputer.Replace("#..p.b....D", "#..p.b....#").Replace("#####D########D##########", "#####D###################").Replace("#.........#.............#", "#.........#........pb...#"), Worlds.MindLegend);
+                    int At(int x, int y) => Worlds.At(lay, x, y);
+                    var s = Worlds.Full(lay, 34);
+                    var m = s.Get<Mind>(); var sm = s.Get<ShipMind>(); var net = s.Get<Network>();
+                    for (int i = 0; i < trapped; i++) m.AddRobot(s, At(17 + 3 * i, 3), AgentKind.Robot, At(17 + 3 * i, 3));   // 문 없는 방에 갇힌 로봇
+                    int late = m.AddRobot(s, At(20, 7), AgentKind.Robot, At(20, 7));                                              // 아래 통로 · 전지가 거의 없다
+                    s.Run(12);
+                    long f0 = s.Facts.Total; int l0 = sm.Log.Count;
+                    int cell = net.Devices.First(d => d.Type == "MealDispenser").Cell;
+                    net.CutLines(s, cell, 1, s.Causes.Add(CauseKind.Setup, "식사기 밑 전선을 쥐가 갉았다", s.Tick));
+                    for (int k = 0; k < Time.Minutes(60); k++) { m[late].C.Battery = k < Time.Minutes(25) ? 0.1f : k == Time.Minutes(25) ? 1f : m[late].C.Battery; s.Step(); }
+                    long sentAt = s.Facts.Since(f0).Where(x => x.Kind == FactKind.ComputerAssign && x.Actor == late).Select(x => x.Tick).DefaultIfEmpty(-1).Min();
+                    if (Debug) foreach (var l in sm.Log.Skip(l0).Where(l => !l.text.Contains("원료"))) Console.WriteLine($"    (갇힘 {trapped}) {Time.Clock(l.tick)} {l.text}");
+                    return (sentAt, net.LineCut[cell] == 0, sm.Log.Skip(l0).Any(l => l.text.Contains("맡긴 이 둘이")));
+                }
+                var twoT = Task.Run(() => Trapped(2));
+                var one = Trapped(1); var two = twoT.Result;
+                Check("갇힌 몸의 막힘으로 그 방을 막지 않는다: 문 없는 방에 갇힌 로봇이 같은 일에 두 번 막혀도 '맡긴 이 둘'이 아니다 · 전지가 찬 로봇을 보내 선을 잇는다 · 갇힌 로봇 둘이 막혀도 막힌 적 없는 로봇은 닿으면 보낸다",
+                    one.sentAt >= 0 && one.fixedLine && !one.saidTwo && two.sentAt >= 0 && two.fixedLine,
+                    $"갇힌 로봇 하나: 보냄 {one.sentAt >= 0} · 이음 {one.fixedLine} · '맡긴 이 둘' {one.saidTwo} / 둘: 보냄 {two.sentAt >= 0} · 이음 {two.fixedLine}");
             }
         }
 

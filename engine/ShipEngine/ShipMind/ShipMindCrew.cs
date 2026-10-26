@@ -29,6 +29,7 @@ public sealed partial class ShipMind
         if (x.Person >= 0 && _mind.Agents[x.Person].C.AssignedUntil > t && _mind.Agents[x.Person].C.AssignedGoal == g && life[_mind.Agents[x.Person].C.Body].Alive != 0) return; // 받아 준 이가 하고 있다
         if (t - x.AskedAt < (x.Decl1 >= 0 && x.Person < 0 ? Time.Minutes(0.25) : Time.Minutes(1))) return; // 거절하면 15초 뒤 다음 사람에게 · 받아 준 이가 그만두면 1분 뒤 다시
         int best = -1; double bc = double.MaxValue;
+        bool noWay = x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum) && NoWayTo(x.Room);   // 막힌 곳 (DF3): 서로 다른 둘이 '갈 길이 없다'로 막힌 방
         foreach (var a in _mind.Agents)
         {
             if (!a.IsPerson || a.Id == x.Decl1 || a.Id == x.Decl2) continue;
@@ -40,6 +41,7 @@ public sealed partial class ShipMind
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
             if (g is GoalKind.Treat or GoalKind.Surgery or GoalKind.Counsel && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
             if (x.Cell >= 0 && CutBy(a.C.Cell, x.Cell, false) >= 0) continue;   // 막힌 곳 (DF3): 막혀 있는 문을 지나야만 닿는 이에게는 부탁하지 않는다
+            if (noWay && NoWayFor(x.Room, a)) continue;   // · 갈 길이 없다고 막힌 이 · 문 · 벽 그림으로 닿지 않는 이에게도 (막힌 적 없이 닿는 이에게는 부탁한다)
             float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat or GoalKind.Surgery => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, GoalKind.Counsel => CounselFit(sim, a, x.Subject), _ => a.C.SkSeal };
             int path = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell);   // 길 거리 (벽 너머 직선이 아니라)
             double cost = (g == GoalKind.Counsel ? path * 0.3 + (1 - skill) * 30 : path * (1.5 - skill) / _mind.Vigor(a)) + (b.Asleep != 0 ? 30 : 0);   // 마음 돌봄은 가까운 이보다 맞는 이 (급하지 않다) · 도착 시간 — 잠기운 · 기운 없음은 느리다 (DF4)

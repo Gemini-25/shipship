@@ -7,10 +7,10 @@ namespace ShipEngine;
 public struct Spot
 {
     public byte Kind;          // 1 문 · 2 연장선 · 3 계획 · 4 방 (갈 길이 없다)
-    public int Obj, Obj2;      // 문: 문 번호 · -1 / 연장선: 받는 방 · 끌어온 방 (짐이 넘쳤으면 -1 — 길과 상관없다) / 계획: 방 · 걸음의 꼴 지문 / 방: 방 번호 · -1
+    public int Obj, Obj2;      // 문: 문 번호 · -1 / 연장선: 받는 방 · 끌어온 방 (짐이 넘쳤으면 -1 — 길과 상관없다) / 계획: 방 · 걸음의 꼴 지문 / 방: 방 번호 · 막힌 몸
     public SnagKind Snag;      // 문: 막힌 까닭
     public byte Why;           // 연장선이 탄 까닭: 1 짐이 넘쳤다 · 2 깔린 바닥이 젖었다 · 3 피복이 뜨거웠다
-    public byte Times;         // 같은 까닭으로 막힌 번
+    public byte Times;         // 같은 까닭으로 막힌 번 (풀린 뒤에 다시 막히면 1부터)
     public float Amps;         // 연장선: 탈 때 흐른 전류
     public long Tick;          // 마지막으로 막힌 때
 }
@@ -25,7 +25,8 @@ public struct Spot
 ///   줄여도 또 녹으면 연장선을 그만둔다 · 깔린 바닥이 젖거나 뜨거워 탔으면 한 시간 동안 그 방에서는 끌어오지 않는다 (다른 방에서 · 없으면 기다린다).</item>
 /// <item>계획: 지어낸 계획을 다 마쳤는데 같은 사건이 그대로면 그 계획의 꼴을 센다 — 두 번째면 그 계획의 구멍 막기 걸음은 통하지 않은 것으로 적는다 (같은 계획을 세 번 세우지 않는다) ·
 ///   미리 돌려 본 세계에서 안 된 걸음은 10분 막힌 것으로 (그 세계의 까닭은 이 세계의 문이 말해 주지 않는다).</item>
-/// <item>방: 맡긴 이 둘이 '갈 길이 없다'로 막힌 방 — 한 시간 동안 그 방 일(샘 · 빠짐은 기본 절차서의 몫)에 더 보내지 않는다 (같은 까닭 두 번이면 다른 길 · 셋째를 보내 A → B → C → A가 되던 것).</item>
+/// <item>방: 서로 다른 맡긴 이 둘이 '갈 길이 없다'로 막힌 방 (막힌 몸이 서 있던 자리에서 문 · 벽 그림으로도 그 방에 닿지 않을 때만 적는다 — 몸을 함께) — 한 시간 동안 그 방 일(샘 · 빠짐은 기본 절차서의 몫)에
+///   막힌 그 몸들과 문 · 벽 그림으로 닿지 않는 몸은 보내지 않는다 (같은 까닭 두 번이면 다른 길 · 셋째를 보내 A → B → C → A가 되던 것) · 막힌 적 없이 닿는 몸은 보낸다 (갇힌 몸의 사정으로 그 방을 막지 않는다).</item>
 /// </list>
 /// </summary>
 public sealed partial class ShipMind
@@ -38,7 +39,7 @@ public sealed partial class ShipMind
     private readonly List<int> _cutQ = new();
     private bool[] _cutSeen = Array.Empty<bool>(), _cutGoal = Array.Empty<bool>(), _cutDoor = Array.Empty<bool>();
 
-    /// <summary>막힌 곳을 적는다 (같은 곳 · 같은 까닭이면 번을 센다 · 같은 막힘을 두 번 읽으면 그대로).</summary>
+    /// <summary>막힌 곳을 적는다 (같은 곳 · 같은 까닭이면 번을 센다 — 이미 풀린 곳이면 1부터 다시 · 같은 막힘을 두 번 읽으면 그대로).</summary>
     private void NoteSpot(byte kind, int obj, int obj2, SnagKind k, byte why, float amps, long t)
     {
         for (int i = 0; i < Spots.Count; i++)
@@ -46,7 +47,8 @@ public sealed partial class ShipMind
             var s = Spots[i];
             if (s.Kind != kind || s.Obj != obj || s.Obj2 != obj2 || s.Snag != k || s.Why != why) continue;
             if (s.Tick == t) return;
-            s.Tick = t; s.Amps = amps; if (s.Times < 255) s.Times++;
+            s.Times = !Standing(s) ? (byte)1 : s.Times < 255 ? (byte)(s.Times + 1) : s.Times;   // 여섯 시간 전에 녹은 일 하나와 지금의 녹음은 '두 번'이 아니다
+            s.Tick = t; s.Amps = amps;
             Spots[i] = s;
             return;
         }
@@ -93,15 +95,16 @@ public sealed partial class ShipMind
         return cut;
     }
 
-    /// <summary>방 사이 걸음 (문 · 바깥문): from의 자리에서 to의 자리에 닿나 — 막힌 곳의 문을 건너뛸 때 처음 만난 그 문 (cut).</summary>
-    private bool Reaches(int from, int to, bool eva, bool skipCut, out int cut)
+    /// <summary>방 사이 걸음 (문 · 바깥문): from의 자리에서 to의 자리(toRoom ≥ 0이면 그 방)에 닿나 — 막힌 곳의 문을 건너뛸 때 처음 만난 그 문 (cut).</summary>
+    private bool Reaches(int from, int to, bool eva, bool skipCut, out int cut, int toRoom = -1)
     {
         cut = -1;
         int R = L.Rooms.Count;
         if (_cutSeen.Length != R + 1) { _cutSeen = new bool[R + 1]; _cutGoal = new bool[R + 1]; }
         Array.Clear(_cutSeen); Array.Clear(_cutGoal);
         _cutQ.Clear();
-        foreach (int n in Places(to, eva)) _cutGoal[n] = true;
+        if (toRoom >= 0) _cutGoal[toRoom] = true;
+        else foreach (int n in Places(to, eva)) _cutGoal[n] = true;
         foreach (int n in Places(from, eva)) if (!_cutSeen[n]) { _cutSeen[n] = true; _cutQ.Add(n); }
         for (int qi = 0; qi < _cutQ.Count; qi++)
         {
@@ -132,20 +135,33 @@ public sealed partial class ShipMind
         return res;
     }
 
-    /// <summary>맡긴 이 둘이 '갈 길이 없다'로 막힌 방인가 (한 시간).</summary>
+    /// <summary>서로 다른 맡긴 이 둘이 '갈 길이 없다'로 막힌 방인가 (한 시간 — 같은 몸이 거듭 막힌 것은 하나로 센다).</summary>
     private bool NoWayTo(int room)
     {
         if (room < 0) return false;
-        foreach (var s in Spots) if (s.Kind == 4 && s.Obj == room && s.Times >= 2 && Standing(s)) return true;
+        int first = int.MinValue;
+        foreach (var s in Spots)
+            if (s.Kind == 4 && s.Obj == room && Standing(s)) { if (first == int.MinValue) first = s.Obj2; else if (s.Obj2 != first) return true; }
         return false;
     }
 
+    /// <summary>그 몸을 그 방 일에 보내지 않나 ('갈 길이 없다'로 막힌 방): 거기서 막힌 몸이거나 · 문 · 벽 그림으로도 닿지 않는다 (막힌 적 없이 닿는 몸은 보낸다).</summary>
+    private bool NoWayFor(int room, Agent a)
+    {
+        foreach (var s in Spots) if (s.Kind == 4 && s.Obj == room && s.Obj2 == a.Id && Standing(s)) return true;
+        return !LaidOutTo(a.C.Cell, room, Mind.Eva(a));
+    }
+
+    /// <summary>문 · 벽 그림으로 from의 자리에서 그 방에 닿나 (문이 막혔는지는 보지 않는다 — 갈 길이 없는 것이 몸의 사정인지 방의 사정인지 가른다).</summary>
+    private bool LaidOutTo(int from, int room, bool eva) => from < 0 || room < 0 || Reaches(from, -1, eva, false, out _, room);
+
+    /// <summary>'갈 길이 없다'로 막힌 방에 보낼 몸이 없다 — 일지에 한 번 (그 사건마다).</summary>
     private void TellNoWay(Sim sim, ref Incident x)
     {
         CutSkips++;
         if (x.Cut != 0) return;
         x.Cut = 1;
-        Say(sim, $"막힌 곳: {RoomName(x.Room)} {IncidentName(x)} — 맡긴 이 둘이 같은 까닭으로 막혔다 ({Mind.SnagText(SnagKind.NoPath)}) · 더 보내지 않는다", NoteKind.Stuck, -1, x.Id);
+        Say(sim, $"막힌 곳: {RoomName(x.Room)} {IncidentName(x)} — 맡긴 이 둘이 같은 까닭으로 막혔다 ({Mind.SnagText(SnagKind.NoPath)}) · 그 둘은 더 보내지 않고 닿는 이를 기다린다", NoteKind.Stuck, -1, x.Id);
     }
 
     /// <summary>맡길 몸이 모두 막힌 곳에 끊겼다 — 일지에 한 번 (그 사건마다).</summary>
@@ -290,7 +306,7 @@ public sealed partial class ShipMind
         int shape = PlanShape(steps);
         NoteSpot(3, x.Room, shape, SnagKind.None, 0, 0, _tick);
         byte times = 0;
-        foreach (var s in Spots) if (s.Kind == 3 && s.Obj == x.Room && s.Obj2 == shape) times = s.Times;
+        foreach (var s in Spots) if (s.Kind == 3 && s.Obj == x.Room && s.Obj2 == shape && Standing(s)) times = s.Times;
         if (times < 2) return;
         PlansNoEffect++;
         var patched = new List<string>();

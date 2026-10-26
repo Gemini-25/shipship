@@ -1143,7 +1143,7 @@ public sealed partial class ShipMind : IEngine
         // 막힌 로봇 풀기: 맡긴 로봇이 그 일을 할 몸이 아니거나 (팔 · 다리) · 막힌 뒤 3분 넘게 다른 것을 하면 이 일에서 놓아주고 다른 로봇을 보낸다 (예전엔 30분 동안 '맡은 이 있음')
         ReleaseStuck(sim, ref x, g, x.RobotA); ReleaseStuck(sim, ref x, g, x.RobotB);
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
-        if (x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum) && NoWayTo(x.Room)) { TellNoWay(sim, ref x); return; }   // 막힌 곳 (DF3): 로봇 둘이 '갈 길이 없다'로 막힌 방 — 더 보내지 않는다 (같은 까닭 두 번이면 다른 길)
+        bool noWay = x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum) && NoWayTo(x.Room), noWaySkip = false;   // 막힌 곳 (DF3): 서로 다른 로봇 둘이 '갈 길이 없다'로 막힌 방 — 그 몸들 · 닿지 않는 몸은 보내지 않는다 (같은 까닭 두 번이면 다른 길)
         int goalCell = x.Kind is IncidentKind.Leak or IncidentKind.Vacuum && g == GoalKind.Investigate ? target : x.Cell, cutDoor = -1;
         bool handJob = HandJob(x, g);
         while (have < need)
@@ -1161,13 +1161,14 @@ public sealed partial class ShipMind : IEngine
                 }
                 if (a.Id == x.RobotA && Busy(x.RobotA) || a.Id == x.RobotB && Busy(x.RobotB)) continue; // 이 사건에 가 있는 로봇 (일을 마쳤으면 다시 보낼 수 있다)
                 if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10) || a.Id == x.Dropped2 && sim.Tick - x.DroppedAt2 < Time.Minutes(10)) continue;   // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다 (둘까지 — A → B → A가 되지 않게)
+                if (noWay && NoWayFor(x.Room, a)) { noWaySkip = true; continue; }   // · 막힌 적 없이 닿는 몸은 보낸다 (갇힌 몸의 사정으로 그 방을 막지 않는다)
                 if (CutBy(a.C.Cell, goalCell, Mind.Eva(a)) is int cd && cd >= 0) { if (cutDoor < 0) cutDoor = cd; continue; }   // 막힌 곳 (DF3): 막혀 있는 문을 지나야만 닿는다 — 보내지 않는다
                 int hand = HandCost(a, g);
                 int d = (int)(_mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) / Math.Max(0.1, _mind.PaceOf(a))) + hand + (from >= 0 ? 100000 : 0);   // 도착 시간 (문을 돌아 가는 길 ÷ 상한 다리의 걸음 몫 — DF4) + 손에 든 것
                 cands++;
                 if (d < bd) { bd = d; best = a.Id; bestFrom = from; bestHand = hand; }
             }
-            if (best < 0) { if (cutDoor >= 0) TellCut(sim, ref x, cutDoor); break; }
+            if (best < 0) { if (noWaySkip) TellNoWay(sim, ref x); else if (cutDoor >= 0) TellCut(sim, ref x, cutDoor); break; }
             if (bestFrom >= 0)
             {
                 var y = Incidents[bestFrom];
@@ -1259,7 +1260,8 @@ public sealed partial class ShipMind : IEngine
             if (!Mind.Telling(c.Snag) || c.SnagTick < (person ? x.AskedAt : x.SentAt) || c.SnagTick <= x.SnagTick) continue;
             if (person && (c.SnagGoal != c.AssignedGoal || c.AssignedUntil < c.SnagTick)) continue;   // 부탁받은 일에서 막힌 것만
             if (Mind.DoorSnag(c.Snag) && c.SnagSubject >= 0 && c.SnagSubject < L.Doors.Count) NoteSpot(1, c.SnagSubject, -1, c.Snag, 0, 0, c.SnagTick);   // 막힌 곳 (DF3): 그 문에 붙여 기억한다
-            else if (c.Snag == SnagKind.NoPath && x.Room >= 0 && x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum)) NoteSpot(4, x.Room, -1, c.Snag, 0, 0, c.SnagTick);   // · 그 방에 갈 길이 없다
+            else if (c.Snag == SnagKind.NoPath && x.Room >= 0 && x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum) && !LaidOutTo(c.Cell, x.Room, Mind.Eva(_mind.Agents[rb])))
+                NoteSpot(4, x.Room, rb, c.Snag, 0, 0, c.SnagTick);   // · 그 방에 갈 길이 없다 (막힌 몸과 함께 — 선 자리에서 문 · 벽 그림으로도 끊겼을 때만)
             bool again = x.Snag == c.Snag && x.SnagSubject == c.SnagSubject;
             x.Snag = c.Snag; x.SnagGoal = c.SnagGoal; x.SnagCell = c.SnagCell; x.SnagSubject = c.SnagSubject; x.SnagTick = c.SnagTick;
             if (x.Kind is IncidentKind.Vacuum or IncidentKind.Leak && !HasPlan(x.Id))   // 기본 절차서의 방법(안에서 · 바깥에서)이 막혔다 — 까닭과 함께 적는다 (막힐 때 그 로봇이 하던 목표의 대상으로 가른다)
