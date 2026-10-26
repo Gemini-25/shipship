@@ -2,7 +2,7 @@ using ShipEngine;
 
 namespace Lab;
 
-/// <summary>규칙 시험 — 5단 '화장실 사고' (docs/STAGE5.md C16 ~): 온수기 조절기 고장 · 물 온도 …</summary>
+/// <summary>규칙 시험 — 5단 '화장실 사고' (docs/STAGE5.md C16 ~): 온수기 조절기 고장 · 물 온도 · 샤워 물에 데임 …</summary>
 public static partial class Program
 {
     private static void WashAccidentRules()
@@ -50,6 +50,27 @@ public static partial class Program
             Check("화장실 사고 (C16) 조절기: 고장 사이 0.02시간이면 데우며 흐르는 10분 안에 저절로 고장 난다 (원인 글 '조절기' · 사실 '조절기 고장') · 전기 부품을 고치면 조절기도 새것 (313K)",
                 fault is 1 or 2 && why.Contains("조절기") && fact && n3.ThermoFault[d3] == 0 && Math.Abs(fixedK - 313) < 0.5,
                 $"고장 {fault} · '{why}' · 사실 {fact} · 고친 뒤 {n3.ThermoFault[d3]} · {fixedK:0.0}K");
+        }
+
+        // C17 샤워 물에 데임 (몸에 직접): 333K 3초치 → 화상 0.1 ~ 0.35 · 원인 '뜨거웠다' · 사실 '다쳤다' / 325K 5초치 → 0 · 사실 없음 / 325K 60초치 → 0.15 ~ 0.2 / 313K 6분치 → 0 · 더러움은 씻긴다
+        {
+            (float burn, int hurt, string why, float dirt) Rinse(double k, double sec)
+            {
+                var s = Worlds.Full(lay, 3);
+                var life = s.Get<Life>();
+                int b = life.AddBody(Worlds.At(lay, 9, 3));
+                life[b].Dirt = 0.8f;
+                s.Run(1);
+                float burn0 = life[b].Burn; int f0 = s.Facts.Since(0).Count(x => x.Kind == FactKind.Hurt);
+                int thermo = s.Causes.Add(CauseKind.Machine, "시험: 온수기 조절기 접점이 붙었다", s.Tick);
+                life.Rinse(s, b, Network.ShowerFlow * sec, k, thermo);
+                var hurt = s.Facts.Since(0).Where(x => x.Kind == FactKind.Hurt).Skip(f0).ToList();
+                return (life[b].Burn - burn0, hurt.Count, hurt.Count > 0 ? s.Causes.Story(hurt[0].Cause) : "", life[b].Dirt);
+            }
+            var a = Rinse(333, 3); var b5 = Rinse(325, 5); var b60 = Rinse(325, 60); var ok = Rinse(313, 360);
+            Check("화장실 사고 (C17) 샤워 물에 데임: 333K 3초치 → 화상 0.1 ~ 0.35 · '뜨거웠다' (← 조절기) · 사실 '다쳤다' / 325K 5초치 → 0 · 사실 없음 / 325K 60초치 → 0.15 ~ 0.2 / 313K 6분치 → 0 · 더러움이 씻긴다",
+                a.burn is >= 0.1f and <= 0.35f && a.hurt == 1 && a.why.Contains("뜨거웠다") && a.why.Contains("조절기") && b5.burn == 0 && b5.hurt == 0 && b60.burn is >= 0.15f and <= 0.2f && ok.burn == 0 && ok.dirt < 0.1f,
+                $"333K 3초 {a.burn:0.000} (사실 {a.hurt} · '{a.why}') / 325K 5초 {b5.burn:0.000} ({b5.hurt}) / 60초 {b60.burn:0.000} / 313K 6분 {ok.burn:0.000} · 더러움 0.8 → {ok.dirt:0.00}");
         }
     }
 }

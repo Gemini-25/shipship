@@ -192,6 +192,29 @@ public sealed partial class Life
     }
 
     /// <summary>샤워 칸에서 흐른 물로 씻긴다 (월드 — 물은 ⑥ 샤워 칸이 이미 흘려 오수로 보냈다): 더러움이 water/ShowerMol만큼 · 지린 옷도 (물 200몰 넘게).</summary>
+    /// <summary>
+    /// 샤워 물에 씻긴다 · 데인다 (월드 — 5단 C17): 물을 맞은 시간 = 흐른 물 ÷ 흐름 · 물이 316K 넘으면 초마다 화상 0.08 × 2^((K − 333)/1.7) (물 온도와 데는 시간 어림 —
+    /// 60℃에 3초 · 52℃에 1분 남짓) · 화상이 0.02를 넘을 때만 덴다 (원인 '샤워 물이 데일 듯 뜨거웠다' ← 그 물을 뜨겁게 한 까닭 · 사실 '다쳤다').
+    /// </summary>
+    public void Rinse(Sim sim, int body, double water, double waterK, int cause)
+    {
+        Rinse(body, water);
+        if (waterK <= 316 || water <= 0 || body < 0 || body >= Bodies.Count) return;
+        double sec = water / Network.ShowerFlow;
+        double burn = 0.08 * Math.Pow(2, (waterK - 333) / 1.7) * sec;
+        if (burn <= 0.02) return;
+        int c = sim.Causes.Add(CauseKind.Machine, $"샤워 물이 데일 듯 뜨거웠다 ({waterK - 273.15:0}℃)", sim.Tick, this[body].Cell, cause);
+        Scald(sim, body, (float)Math.Min(1, burn), c);
+    }
+
+    /// <summary>⑧의 요청: 그 샤워 칸 (장치)에서 흐른 물 water몰에 씻긴다 — 물 온도 · 그 까닭 (조절기 고장)은 ⑥에서 읽는다.</summary>
+    public void Rinse(Sim sim, int body, double water, int device)
+    {
+        _net ??= sim.Find<Network>();
+        if (_net == null || device < 0 || device >= _net.Devices.Count) { Rinse(body, water); return; }
+        Rinse(sim, body, water, _net.ShowerWaterK(device), device < _net.ThermoCause.Length ? _net.ThermoCause[device] : 0);
+    }
+
     public void Rinse(int body, double water)
     {
         ref var b = ref this[body];
