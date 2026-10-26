@@ -418,7 +418,7 @@ public sealed partial class Structure
                 }
                 if (L.FurnitureAt[c] >= 0 && kpa > BlastHarmKPa) HitFurniture(sim, L.FurnitureAt[c], (kpa - BlastHarmKPa) / 70, bc, "충격파에");
                 // ⑦ 몸이 읽는 충격: 넘친 압력 × 충격파의 길이 (작은 폭발은 짧아 덜 다친다 — 지속 시간 ∝ W^(1/3) · 브라운 곡선의 경향) — TNT 15kg 넘게면 100kPa에 3.9kJ
-                if (kpa > BlastHarmKPa) { ImpactJ[c] += (float)((kpa - BlastHarmKPa) * 60 * Math.Min(1, w3 / 2.5)); if (DamageCause[c] == 0) DamageCause[c] = bc; }
+                if (kpa > BlastHarmKPa) { double hj = (kpa - BlastHarmKPa) * 60 * Math.Min(1, w3 / 2.5); ImpactJ[c] += (float)hj; if (DamageCause[c] == 0) DamageCause[c] = bc; HitActors(sim, c, hj, DamageCause[c]); }
             }
         }
         sim.Facts.Emit(sim.Tick, FactKind.LoudSound, cell, (float)Math.Min(194, 120 + 20 * Math.Log10(Math.Max(1, w))), bc);

@@ -424,6 +424,7 @@ public sealed partial class Network : IEngine
         ReleaseAir(dt);
         LeakStep(sim, dt);
         if (sim.Tick % 25 == 0) WearStep(sim, 25 * dt);
+        ShardStep(sim);         // DF8: 파편이 지난 칸의 선 · 관
         if (sim.Tick % 5 == 0) LineStep(sim);
         ChipStep(sim);          // 판단 이관 (사): 계산 장치의 칩 열 — 느려짐 · 열 보호
         RobotStep(sim, dt);     // 판단 이관 (사): 로봇 몸 — 전지 · 열 · 충격 · 물 · 전기 · 진공

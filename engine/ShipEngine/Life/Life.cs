@@ -285,6 +285,10 @@ public sealed partial class Life : IEngine
     /// ④ 물체 맞음 장부를 읽는다 (5틱마다 — 사람 꼬리표 = 몸 번호): 20J 넘으면 타박 E/800 (많아야 1.5) · 날카로우면 피 E/4000 — 원인은 그 맞음 (민 것까지 이어진다).
     /// 읽은 것은 지운다 (로봇 꼬리표는 ⑥ 몫으로 남긴다).
     /// </summary>
+    // 이번 생명 걸음에 몸마다 받은 파편 · 충격파 (TakeHits가 채우고 몸 걸음이 비운다 — 한 걸음 안에서만 · 찍지 않는다)
+    private float[] _shardJ = Array.Empty<float>();
+    private int[] _shardCause = Array.Empty<int>();
+
     private void TakeHits(Sim sim, Structure st)
     {
         var hits = st.PropHits;
@@ -293,6 +297,12 @@ public sealed partial class Life : IEngine
         {
             var h = hits[k];
             if (h.Tag < 0) { hits[n++] = h; continue; }
+            if (h.Sharp == Structure.ShardHitMark)
+            {
+                // 파편 · 충격파가 지나는 순간 그 칸에 있었다 (DF8) — 몸 걸음에서 칸의 충격처럼 셈한다 (생명 박자의 위상과 상관없이)
+                if (h.Tag < Bodies.Count) { if (_shardJ.Length < Bodies.Count) { Array.Resize(ref _shardJ, Bodies.Count); Array.Resize(ref _shardCause, Bodies.Count); } _shardJ[h.Tag] += h.E; _shardCause[h.Tag] = h.Cause; }
+                continue;
+            }
             if (h.Tag < Bodies.Count && h.E >= HitHurtJ) Strike(sim, h.Tag, (float)Math.Min(1.5, h.E / 800), h.Sharp != 0 ? h.E / 4000 : 0, h.Cause);
         }
         hits.RemoveRange(n, hits.Count - n);
@@ -337,7 +347,8 @@ public sealed partial class Life : IEngine
             if (body.Alive == 0) continue;
             StepBody(sim, b, ref body, dt, st, outside, chem);
         }
-        if (st != null) Array.Clear(st.ImpactJ);
+        if (st != null) { Array.Clear(st.ImpactJ); Array.Clear(st.ImpactTakenJ); }
+        Array.Clear(_shardJ);
         BodyNoise(sim, dt);   // 소리 단계 S2: 코골이 · 기침
         Ears(sim, dt);        // 소리 단계 S3: 큰 소리가 귀를 먹먹하게 한다
         var net = sim.Find<Network>();
@@ -638,15 +649,19 @@ public sealed partial class Life : IEngine
         double dp = b.LastKPa - p;
         if (!suit && dp > 40) { b.Barotrauma += (float)(dp / 150); b.LungDamage += (float)(dp / 400); harm ??= "급감압에 폐를 다쳤다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         b.LastKPa = (float)p;
-        if (st != null && st.ImpactJ[c] > 0)
+        // 파편 · 충격: 지나는 순간 그 칸에 있던 이 (⑧이 알린 원판)는 그 맞음으로 (DF8 — 그 뒤 걸어 나가도 같다) · 아무도 받아 가지 않은 칸의 충격은 그 칸의 몸이 (알리지 않은 몸)
+        double hitJ = 0; int hitWhy = 0;
+        if (id < _shardJ.Length && _shardJ[id] > 0) { hitJ = _shardJ[id]; hitWhy = _shardCause[id]; _shardJ[id] = 0; }
+        else if (st != null && st.ImpactJ[c] > st.ImpactTakenJ[c]) { hitJ = st.ImpactJ[c] - st.ImpactTakenJ[c]; hitWhy = st.DamageCause[c]; }
+        if (hitJ > 0)
         {
-            double e = st.ImpactJ[c];
+            double e = hitJ;
             float before = b.Blunt;
             b.Blunt += (float)(e / 8000);
-            BleedInside(sim, id, ref b, before, st.DamageCause[c]);
+            BleedInside(sim, id, ref b, before, hitWhy);
             b.Bleed += (float)(e / 4000);
             harm ??= "파편 · 충격에 맞았다";
-            env = env == 0 ? st.DamageCause[c] : env;
+            env = env == 0 ? hitWhy : env;
         }
         if (outside != null)
         {

@@ -24,6 +24,7 @@ public static partial class Program
                 var s = Worlds.Full(lay, 21);
                 var o = s.Get<Outside>(); var sm = s.Get<ShipMind>();
                 o.Route = route; o.Distance = au;
+                sm.MorningHour = 1;   // 아침 방송을 첫 파편보다 먼저 (DF8 — 파편 폭풍이 전선을 끊으면 주컴퓨터가 꺼져 그날 방송이 없다)
                 if (voyage) o.StartVoyage(s, 1.52);   // 항해 중 (전이 궤도 — 반나절엔 거리가 거의 그대로)
                 s.Run(Time.Hours(12));
                 double dv = Outside.HohmannDv(1.0, 1.52, o.Rt?.Incline ?? 0).dv1;

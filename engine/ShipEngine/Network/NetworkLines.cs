@@ -434,6 +434,29 @@ public sealed partial class Network
         return string.Join(" · ", parts);
     }
 
+    /// <summary>파편이 지나며 칸에 남긴 에너지가 이만큼이면 그 칸의 선 · 관이 찢긴다 (J — 전선 · 센서 선 피복 몇 mm는 수 kJ · 관벽 1~2mm 금속관은 수십 kJ · 어림 · DF8).</summary>
+    public const double ShardCableJ = 3000, ShardPipeJ = 30000;
+
+    /// <summary>틱마다 ④가 적은 파편 길 (DF8): 지난 에너지가 문턱을 넘은 칸의 전선 · 센서 선 · 관을 찢는다 — 원인 '파편에 전선이 끊겼다' (그 파편까지 잇는다). 읽은 것은 비운다.</summary>
+    private void ShardStep(Sim sim)
+    {
+        if (_stc == null || _stc.ShardPasses.Count == 0) return;
+        byte pw = Bit(LineKind.Power), pipes = (byte)(Bit(LineKind.Coolant) | Bit(LineKind.Water));
+        foreach (var h in _stc.ShardPasses)
+        {
+            int c = h.Cell;
+            if (c < 0 || c >= LineAt.Length || h.J < ShardCableJ) continue;
+            byte at = LineAt[c];
+            bool data = c < _onData.Length && _onData[c] && DataBroken[c] == 0;
+            if (data) CutData(sim, c, sim.Causes.Add(CauseKind.Electric, "파편에 센서 선이 끊겼다", sim.Tick, c, h.Cause));
+            if ((at & pw) != 0 && (LineCut[c] & pw) == 0) CutLines(sim, c, pw, sim.Causes.Add(CauseKind.Electric, "파편에 전선이 끊겼다", sim.Tick, c, h.Cause));
+            byte fresh = (byte)(at & pipes & ~LineCut[c]);
+            if (fresh != 0 && h.J >= ShardPipeJ)
+                CutLines(sim, c, fresh, sim.Causes.Add(CauseKind.Leak, (fresh & Bit(LineKind.Coolant)) != 0 ? "파편에 냉각관이 뚫려 암모니아가 뿜어 나온다" : "파편에 물관이 뚫려 물이 뿜어 나온다", sim.Tick, c, h.Cause));
+        }
+        _stc.ShardPasses.Clear();
+    }
+
     /// <summary>5틱마다 선이 지나는 칸: 떨어져 나감 · 곁 외판 구멍 · 불의 열 → 선이 상한다 (센서 선은 바퀴 1 그대로).</summary>
     private void LineStep(Sim sim)
     {

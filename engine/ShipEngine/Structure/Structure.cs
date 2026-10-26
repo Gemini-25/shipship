@@ -21,6 +21,14 @@ namespace ShipEngine;
 /// <summary>문이 열리지 않는 까닭 (④ — 마음 · 주컴퓨터가 막힘으로 읽는다).</summary>
 public enum DoorShut : byte { None, Jammed, Unpowered, Held, VacuumBeyond, Pressure, Locked }
 
+/// <summary>파편이 지난 칸 하나 (DF8 — ⑥ 망이 읽는다).</summary>
+public struct ShardPass
+{
+    public int Cell;
+    public float J;
+    public int Cause;
+}
+
 public sealed partial class Structure : IEngine
 {
     public string Name => "구조";
@@ -59,6 +67,8 @@ public sealed partial class Structure : IEngine
     public long[] DoorLock;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
     public float[] ImpactJ;
+    /// <summary>그 가운데 지나는 순간 그 칸에 있던 사람 (⑧이 알린 원판)이 맞음으로 받아 간 몫 (J — DF8 · ⑦이 ImpactJ와 함께 비운다: 남은 몫만 알리지 않은 몸 · 늦게 든 몸이 받는다).</summary>
+    public float[] ImpactTakenJ;
     /// <summary>폭풍이 바닥 칸에 준 가장 큰 넘친 압력 (kPa — ⑦ 귀가 읽고 지운다 · 소리 단계 S3).</summary>
     public float[] BlastPeakKPa;
     /// <summary>점화의 관성 하중 (g — 배 가속도 / 9.8): ⑤ 바깥이 틱마다 넣는 요청. 외판 · 뼈대가 받는 하중이 이만큼 는다 (점화 한 번 = 하중 한 주기). 찍지 않는다.</summary>
@@ -72,7 +82,7 @@ public sealed partial class Structure : IEngine
         Fatigue = new float[L.N]; Corrode = new float[L.N]; Stress = new float[L.N]; DamageCause = new int[L.N];
         DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count]; Braced = new byte[L.N];
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
-        ImpactJ = new float[L.N]; BlastPeakKPa = new float[L.N];
+        ImpactJ = new float[L.N]; ImpactTakenJ = new float[L.N]; BlastPeakKPa = new float[L.N];
         BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         DoorLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         // 에어락 벽: 바깥문이 있는 방의 벽은 배의 압력 경계다 — 비운 에어락의 안쪽 벽도 한 기압을 버틴다 (외판과 같은 정격 · ISS 퀘스트 에어락)
@@ -148,60 +158,137 @@ public sealed partial class Structure : IEngine
     /// <summary>뭉툭한 것은 덜 뚫는다 (드 마르: 뚫는 에너지 ∝ 지름^1.5 — 같은 두께) — 200kg 덩어리가 7m/s로 부딪히면 찌그러뜨릴 뿐.</summary>
     public static double Blunt(double sizeM) => Math.Pow(Math.Max(1, sizeM / ImpactSizeM), 1.5);
 
-    /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다 (부딪힌 것의 크기 sizeM — 클수록 뭉툭해 덜 뚫는다).</summary>
+    /// <summary>파편 구름의 갈래 (DF8 — 첫 벽을 뚫은 뒤 원뿔로 퍼진다: 옆 기울기 · 몫 — 겉 갈래의 반각 약 24° · 초고속 충돌의 파편 구름은 반각 30° 언저리):
+    /// 남은 탄체 덩이가 가는 가운데 줄이 가장 무겁고 (0.6) · 안쪽 갈래 (기울기 0.2 — 둘째 칸부터 옆으로) · 겉의 흩뿌림 (0.45).</summary>
+    private static readonly (double Slope, double Share)[] ConeRays = { (0, 0.6), (-0.2, 0.13), (0.2, 0.13), (-0.45, 0.07), (0.45, 0.07) };
+    /// <summary>파편이 지난 칸 (DF8 — ⑥ 망이 읽고 비운다: 그 칸의 선 · 관이 파편 에너지에 찢긴다 · 칸 · 지난 에너지 J · 원인).</summary>
+    public readonly List<ShardPass> ShardPasses = new();
+
+    /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다 (부딪힌 것의 크기 sizeM — 클수록 뭉툭해 덜 뚫는다).
+    /// 첫 벽을 뚫기 전에는 한 줄 · 뚫은 뒤에는 원뿔의 갈래 다섯 (같은 걸음에 같은 칸에 닿은 갈래는 합쳐 셈한다 — 갈래마다 몫이 줄어든다).</summary>
     public void Impact(Sim sim, int cell, double joules, int dx, int dy, int cause, double sizeM = ImpactSizeM)
     {
         Impacts++;
         var snd = sim.Find<Sound>();
-        int c = cell;
-        double e = joules;
-        int hops = 0;
         sim.Facts.Emit(sim.Tick, FactKind.Impact, cell, (float)(joules / 1000), cause);
         snd?.Emit(sim, NearestAir(cell), (float)(85 + 10 * Math.Log10(Math.Max(1, joules / 1000))), SoundKind.Bang, cause);
-        while (e > 100 && c >= 0 && hops++ < 12)
+        int nr = ConeRays.Length;
+        Span<int> rc = stackalloc int[nr]; Span<double> re = stackalloc double[nr];
+        Span<int> uc = stackalloc int[nr]; Span<double> ue = stackalloc double[nr], uf = stackalloc double[nr];
+        int n = 1; rc[0] = cell; re[0] = joules;
+        int ox = 0, oy = 0, k = 0;   // 원뿔이 열린 칸 · 그 뒤 걸음
+        bool cone = false;
+        int px = -dy, py = dx;       // 옆 방향
+        for (int hop = 1; hop <= 12; hop++)
         {
-            var kind = L.Kind[c];
-            if (kind == CellKind.Wall || kind == CellKind.Door)
+            // 이 걸음에 갈래들이 닿은 칸마다 에너지를 합친다
+            int nu = 0;
+            for (int i = 0; i < n; i++)
             {
-                var m = T.Materials[L.Material[c]].Def;
-                double mm = kind == CellKind.Door ? 3 : L.Hull[c] ? 10 : 4;
-                double pen = m.Penetrate * 1000 * mm * Math.Max(0.2, HeatFactor(c, m)) * (1 - Corrode[c]) * Blunt(sizeM);
-                if (e < pen)
+                if (rc[i] < 0 || re[i] <= 100) continue;
+                int u = 0;
+                while (u < nu && uc[u] != rc[i]) u++;
+                if (u == nu) { uc[nu] = rc[i]; ue[nu] = 0; nu++; }
+                ue[u] += re[i];
+            }
+            if (nu == 0) break;
+            bool opened = false;
+            for (int u = 0; u < nu; u++)
+            {
+                int c = uc[u];
+                double e = ue[u];
+                uf[u] = 0;
+                var kind = L.Kind[c];
+                if (kind == CellKind.Wall || kind == CellKind.Door)
                 {
-                    Fatigue[c] = (float)Math.Min(1, Fatigue[c] + 0.3 * e / pen);
-                    DamageCause[c] = cause;
-                    // 뚫지 못한 파편은 흠을 낸다 — 금의 씨앗 (2mm + 40mm × (에너지/관통)^1.5)
-                    if (kind == CellKind.Wall && e > 0.05 * pen) SeedCrack(sim, c, 0.002 + 0.04 * Math.Pow(e / pen, 1.5), sim.Causes.Add(CauseKind.Impact, "파편이 벽에 흠을 냈다", sim.Tick, c, cause));
-                    AddHeatTo(c, e);
-                    break;
+                    var m = T.Materials[L.Material[c]].Def;
+                    double mm = kind == CellKind.Door ? 3 : L.Hull[c] ? 10 : 4;
+                    double pen = m.Penetrate * 1000 * mm * Math.Max(0.2, HeatFactor(c, m)) * (1 - Corrode[c]) * Blunt(sizeM);
+                    if (e < pen)
+                    {
+                        Fatigue[c] = (float)Math.Min(1, Fatigue[c] + 0.3 * e / pen);
+                        DamageCause[c] = cause;
+                        // 뚫지 못한 파편은 흠을 낸다 — 금의 씨앗 (2mm + 40mm × (에너지/관통)^1.5)
+                        if (kind == CellKind.Wall && e > 0.05 * pen) SeedCrack(sim, c, 0.002 + 0.04 * Math.Pow(e / pen, 1.5), sim.Causes.Add(CauseKind.Impact, "파편이 벽에 흠을 냈다", sim.Tick, c, cause));
+                        AddHeatTo(c, e);
+                        continue;
+                    }
+                    double excess = e - pen;
+                    double area = Math.Min(2.5, 1e-4 * Math.Pow(excess / 1000, 0.8));
+                    Open(sim, c, Math.Max(F.Hole[c], (float)area), cause, FactKind.WallBreach);
+                    if (kind == CellKind.Door && L.DoorAt[c] >= 0) { DoorJam[L.DoorAt[c]] = 1; F.SetDoor(L.DoorAt[c], Math.Max(F.DoorOpen[L.DoorAt[c]], 0.3f)); }
+                    AddHeatTo(c, pen);
+                    ShardPasses.Add(new ShardPass { Cell = c, J = (float)excess, Cause = cause });
+                    uf[u] = excess * 0.6 / e;
+                    if (!cone) { opened = true; ox = L.X(c); oy = L.Y(c); }
                 }
-                double excess = e - pen;
-                double area = Math.Min(2.5, 1e-4 * Math.Pow(excess / 1000, 0.8));
-                Open(sim, c, Math.Max(F.Hole[c], (float)area), cause, FactKind.WallBreach);
-                if (kind == CellKind.Door && L.DoorAt[c] >= 0) { DoorJam[L.DoorAt[c]] = 1; F.SetDoor(L.DoorAt[c], Math.Max(F.DoorOpen[L.DoorAt[c]], 0.3f)); }
-                AddHeatTo(c, pen);
-                e = excess * 0.6;
+                else if (L.IsSpace(c))
+                {
+                    // 공기 칸: 절반은 열 (불덩이 · 파편이 데운다), 절반은 계속
+                    ImpactJ[c] += (float)e;
+                    HitActors(sim, c, e, cause);
+                    ShardPasses.Add(new ShardPass { Cell = c, J = (float)e, Cause = cause });
+                    // 그 칸의 설비 · 가구가 맞는다 (100J/kg에 부서진다 — 어림)
+                    if (L.FurnitureAt[c] >= 0) HitFurniture(sim, L.FurnitureAt[c], e * 0.3 / Math.Max(10, FurnitureKg(L.FurnitureAt[c]) * 100), cause, "파편에");
+                    double heat = e * 0.5;
+                    // 아주 큰 충돌은 배 안에서 터진다: 그 몫의 15%가 충격파 (초고속 충돌의 파편 구름 · 증기 — 20MJ 넘게 · 어림:
+                    //  작은 관통은 파편 구름이 그 방을 휩쓰는 데서 그치고(관통 · 열) · kg급 운석부터 방을 넘어서는 충격파가 된다)
+                    if (heat > BlastFromJ) { Blast(sim, c, heat * BlastShare, cause); heat *= 1 - BlastShare; }
+                    F.AddSurfaceHeat(c, heat * 0.5);
+                    F.AddHeat(c, heat * 0.5);
+                    sim.Find<Chemistry>()?.Ignite(c, 0, cause);
+                    uf[u] = 0.5;
+                }
+                else if (kind == CellKind.Outside && hop > 1) uf[u] = 0;
+                else uf[u] = 1;
             }
-            else if (L.IsSpace(c))
+            for (int i = 0; i < n; i++)
             {
-                // 공기 칸: 절반은 열 (불덩이 · 파편이 데운다), 절반은 계속
-                ImpactJ[c] += (float)e;
-                // 그 칸의 설비 · 가구가 맞는다 (100J/kg에 부서진다 — 어림)
-                if (L.FurnitureAt[c] >= 0) HitFurniture(sim, L.FurnitureAt[c], e * 0.3 / Math.Max(10, FurnitureKg(L.FurnitureAt[c]) * 100), cause, "파편에");
-                double heat = e * 0.5;
-                // 아주 큰 충돌은 배 안에서 터진다: 그 몫의 15%가 충격파 (초고속 충돌의 파편 구름 · 증기 — 20MJ 넘게 · 어림:
-                //  작은 관통은 파편 구름이 그 방을 휩쓰는 데서 그치고(관통 · 열) · kg급 운석부터 방을 넘어서는 충격파가 된다)
-                if (heat > BlastFromJ) { Blast(sim, c, heat * BlastShare, cause); heat *= 1 - BlastShare; }
-                F.AddSurfaceHeat(c, heat * 0.5);
-                F.AddHeat(c, heat * 0.5);
-                sim.Find<Chemistry>()?.Ignite(c, 0, cause);
-                e -= heat;
+                if (rc[i] < 0 || re[i] <= 100) continue;
+                int u = 0;
+                while (uc[u] != rc[i]) u++;
+                re[i] *= uf[u];
             }
-            else if (kind == CellKind.Outside && hops > 1) break;
-            int nx = L.X(c) + dx, ny = L.Y(c) + dy;
-            c = L.In(nx, ny) ? L.Index(nx, ny) : -1;
+            if (opened)
+            {
+                // 첫 벽을 뚫었다: 남은 에너지를 원뿔의 갈래로 나눈다
+                double left = re[0];
+                cone = true; n = nr; k = 0;
+                for (int i = 0; i < nr; i++) re[i] = left * ConeRays[i].Share;
+            }
+            if (cone)
+            {
+                k++;
+                for (int i = 0; i < n; i++)
+                {
+                    double s = ConeRays[i].Slope;
+                    int side = Math.Sign(s) * (int)Math.Floor(Math.Abs(s) * k + 0.5);
+                    int nx = ox + dx * k + px * side, ny = oy + dy * k + py * side;
+                    rc[i] = rc[i] >= 0 && L.In(nx, ny) ? L.Index(nx, ny) : -1;
+                }
+            }
+            else
+            {
+                int nx = L.X(rc[0]) + dx, ny = L.Y(rc[0]) + dy;
+                rc[0] = L.In(nx, ny) ? L.Index(nx, ny) : -1;
+            }
         }
     }
+
+    /// <summary>파편 · 충격파가 그 칸을 지나는 순간 그 칸에 있던 사람 (⑧이 알린 원판)을 맞음으로 남긴다 (⑦이 다음 생명 틱에 읽는다 — 그 사이 걸어 나가도 맞았다 · DF8).</summary>
+    private void HitActors(Sim sim, int c, double e, int cause)
+    {
+        bool took = false;
+        for (int a = 0; a < _nActors; a++)
+            if (_actors[a].Tag >= 0 && _actors[a].Cell == c)
+            {
+                PropHits.Add(new PropHit { Tag = _actors[a].Tag, Cell = c, E = (float)e, Sharp = ShardHitMark, Cause = cause, Tick = sim.Tick });
+                took = true;
+            }
+        if (took) ImpactTakenJ[c] += (float)e;
+    }
+    /// <summary>맞음 장부에서 파편 · 충격파의 맞음 (물체가 맞힌 것과 다르다 — ⑦은 칸의 충격처럼 셈한다).</summary>
+    public const byte ShardHitMark = 2;
 
     private void AddHeatTo(int c, double j)
     {
@@ -229,6 +316,7 @@ public sealed partial class Structure : IEngine
     {
         if (_p.Length != L.N) _p = new double[L.N];
         _now = sim.Tick; _sim = sim;
+        ShardPasses.Clear();   // ⑥이 이 틱 앞에서 읽었다 (망이 없는 세계에서도 쌓이지 않게)
         long t = Prof.Start();
         // 닫힌 문 칸은 벽처럼 (장이 기체를 비워 둔 칸 — 기압 0으로 읽으면 옆 벽이 한쪽이 진공이라고 착각한다)
         for (int i = 0; i < L.N; i++)
@@ -645,6 +733,7 @@ public sealed partial class Structure : IEngine
         w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
         w.Tag("열 · 진동"); w.Arr(ThTurn); w.Arr(ThRun); w.I64(VibGrowths); w.I64(ThermalCracks);
         w.Tag("열 수축"); w.Arr(TsSlip); w.I64(ThermalTicks);
+        w.Tag("파편 길"); w.List(ShardPasses); w.Arr(ImpactTakenJ);
         SaveBodies(w);
         SaveProps(w);
     }
@@ -659,6 +748,7 @@ public sealed partial class Structure : IEngine
         r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();
         r.Tag("열 · 진동"); r.ArrInto(ThTurn); r.ArrInto(ThRun); VibGrowths = r.I64(); ThermalCracks = r.I64();
         r.Tag("열 수축"); TsSlip = r.Arr<float>(); ThermalTicks = r.I64();
+        r.Tag("파편 길"); ShardPasses.Clear(); ShardPasses.AddRange(r.List<ShardPass>()); r.ArrInto(ImpactTakenJ);
         LoadBodies(r);
         LoadProps(r);
         Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)

@@ -213,6 +213,8 @@ public sealed partial class Field
                 int l = Cell(x - 1, y), r = Cell(x + 1, y), u = Cell(x, y - 1), dn = Cell(x, y + 1);
                 if (Side(l) && Side(r) && (Gasy(l) || Gasy(r))) AddLink(l, r, i, Hole[i], Hole[i] >= 0.05f ? LinkKind.Breach : LinkKind.Crack);
                 else if (Side(u) && Side(dn) && (Gasy(u) || Gasy(dn))) AddLink(u, dn, i, Hole[i], Hole[i] >= 0.05f ? LinkKind.Breach : LinkKind.Crack);
+                // 두 겹 벽 (외판 뒤 칸막이 · 방 모서리 — DF8): 구멍 난 벽 칸끼리 한 줄로 맞닿았으면 한 줄기 틈 — 양 끝 트인 칸 사이 (넓이는 가장 작은 구멍) · 줄의 첫 칸에서만 잇는다
+                else { HoleRun(i, x, y, 1, 0); HoleRun(i, x, y, 0, 1); }
             }
             // 트인 칸이 바깥과 바로 맞닿음 (뚫린 외판 · 열린 바깥 문 · 떨어져 나간 자리)
             if (Passable(i))
@@ -232,6 +234,21 @@ public sealed partial class Field
     }
 
     private int Cell(int x, int y) => L.In(x, y) ? L.Index(x, y) : -1;
+    private bool HoledWall(int c) => c >= 0 && L.Kind[c] == CellKind.Wall && Hole[c] > 0 && Hole[c] < 2f;
+    /// <summary>구멍 난 벽 칸 i에서 (dx, dy)로 이어진 구멍 난 벽 줄 (셋까지): 뒤가 트인 칸이고 앞 끝도 트인 칸이면 그 둘 사이에 틈 하나.</summary>
+    private void HoleRun(int i, int x, int y, int dx, int dy)
+    {
+        int back = Cell(x - dx, y - dy);
+        if (!Side(back)) return;
+        double area = Hole[i];
+        for (int k = 1; k <= 3; k++)
+        {
+            int j = Cell(x + dx * k, y + dy * k);
+            if (HoledWall(j)) { area = Math.Min(area, Hole[j]); continue; }
+            if (k > 1 && Side(j) && (Gasy(back) || Gasy(j))) AddLink(back, j, i, area, area >= 0.05 ? LinkKind.Breach : LinkKind.Crack);
+            return;
+        }
+    }
     /// <summary>틈의 한쪽이 될 수 있나: 트인 칸이거나 바깥.</summary>
     private bool Side(int c) => c < 0 || IsOut(c) || Passable(c);
     private bool Gasy(int c) => c >= 0 && Passable(c);
