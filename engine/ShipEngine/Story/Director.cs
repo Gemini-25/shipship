@@ -92,7 +92,8 @@ public sealed partial class Director
         FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
         FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, FactKind.Meeting => 25, FactKind.Verdict => 45, FactKind.Elected => 35, FactKind.Mutiny => 60, FactKind.Devised => 30, FactKind.Consulted => 14,
         FactKind.MethodWorked => 40, FactKind.MethodFailed => 25, FactKind.ManualChanged => 30,   // 궁리 끝에 해낸 일 · 매뉴얼대로 했다가 틀어진 일 · 회의가 매뉴얼을 고친 일
-        FactKind.CableCut => 8, FactKind.PipeLeak => 10, FactKind.Tumble => 40, FactKind.Crash => 70, _ => 1,   // ⑥ 바퀴 3 — 선이 끊겼다 (탔다 · 찢겼다 · 피복이 갈라졌다) · 관이 샌다
+        FactKind.CableCut => 8, FactKind.PipeLeak => 10, FactKind.Tumble => 40, FactKind.Crash => 70,   // ⑥ 바퀴 3 — 선이 끊겼다 (탔다 · 찢겼다 · 피복이 갈라졌다) · 관이 샌다
+        FactKind.Shattered => 8, FactKind.Toppled => 10, FactKind.ItemFell => 6, FactKind.TornLoose => 30, _ => 1,   // 물체 볼거리 (PH12 — 깨졌다는 사람 곁이면 15)
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -136,6 +137,8 @@ public sealed partial class Director
             int cell = f.Cell;
             if (cell < 0 && f.Actor >= 0 && mind != null && f.Actor < mind.Agents.Count) cell = mind.Agents[f.Actor].C.Cell;
             float w = WeightOf(f);
+            if (f.Kind == FactKind.Shattered && PersonNear(mind, life, cell)) w = ShatterNearWeight;
+            if (PropFact(f.Kind) && InView(cell)) _propNew = true;
             int depth = f.Cause != 0 ? sim.Causes.Depth(f.Cause) : 0;
             float score = w * (1 + 0.15f * depth);
             // 처음 보는 일은 두 배 (대화는 끝마다 따로 — 첫 다툼 · 첫 사과)
@@ -182,6 +185,7 @@ public sealed partial class Director
 
         Camera(sim, t);
         Grade(sim, screen, _top, _max);
+        PropShow(sim);
         Pace(t, screen);
         if (bestScore > 0) MaybeHighlight(sim, best, t);
         DayTick(sim, t);
@@ -326,9 +330,58 @@ public sealed partial class Director
         }
         if (_criticalLeft > 0) { _criticalLeft -= screen; Speed = CriticalSpeed; Mood = "결정적 순간"; CriticalScreenSec += screen; return; }   // 예산 밖
         bool budgetLeft = DayMinutes <= 0 || _slowToday < SlowShare * DayMinutes * 60;
+        if (_propShowLeft > 0 && budgetLeft) { _propShowLeft--; Speed = PropShowSpeed; Mood = "볼거리"; PropScreenSec += screen; _slowToday += screen; return; }   // 물체 볼거리 (PH12 — 하루 느린 예산 안)
         if (t - _lastDanger < Time.Minutes(1)) { Speed = DangerSpeed; Mood = "위험"; DangerScreenSec += screen; _slowToday += screen; return; }
         if (t - _lastOmen < Time.Minutes(3) && (budgetLeft || t - _lastHeavyOmen < Time.Minutes(1))) { Speed = OmenSpeed; Mood = "조짐"; OmenScreenSec += screen; _slowToday += screen; return; }
         Speed = DayMinutes > 0 ? CalmNow(t) : CalmSpeed; Mood = "조용함"; CalmScreenSec += screen;
+    }
+
+    // ───────────────────────── 물체 볼거리 (docs/PHYSICS.md PH12) ─────────────────────────
+
+    /// <summary>물체 볼거리 빠르기 (화면 1초에 1틱 — 실제의 2.4배) · 한 번에 많아야 3틱 · 깨어 움직이는 물체의 운동 에너지 합 문턱 (J) · 사람 곁에서 깨진 것의 무게.</summary>
+    public const double PropShowSpeed = 1, PropShowJ = 20;
+    public const int PropShowTicks = 3;
+    public const float ShatterNearWeight = 15;
+    public double PropScreenSec;
+    /// <summary>물체 볼거리를 켠다 (시험이 끈 연출과 견준다).</summary>
+    public bool PropShowOn = true;
+    private int _propShowLeft;
+    private bool _propNew, _propHot;
+
+    private static bool PropFact(FactKind k) => k is FactKind.Shattered or FactKind.Toppled or FactKind.ItemFell or FactKind.TornLoose;
+
+    /// <summary>칸 c 곁 (두 칸 안)에 산 사람이 있나.</summary>
+    private bool PersonNear(Mind? mind, Life? life, int c)
+    {
+        if (mind == null || life == null || c < 0) return false;
+        foreach (var a in mind.Agents)
+        {
+            if (!a.IsPerson || a.C.Cell < 0 || life.Bodies[a.C.Body].Alive == 0) continue;
+            if (Math.Max(Math.Abs(L.X(a.C.Cell) - L.X(c)), Math.Abs(L.Y(a.C.Cell) - L.Y(c))) <= 2) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 카메라 안에 새 물체 사실 (깨졌다 · 넘어졌다 · 떨어졌다 · 뜯겨 나왔다)이 났거나 · 깨어 움직이는 물체의 운동 에너지 합이 20J를 막 넘었으면 3틱을 화면 1초에 1틱으로 (월드 값만 읽는다).
+    /// </summary>
+    private void PropShow(Sim sim)
+    {
+        bool hot = false;
+        if (sim.Find<Structure>() is { } st && st.Props.Count > 0)
+        {
+            double e = 0;
+            foreach (var p in st.Props)
+            {
+                if (!Structure.Awake(p) || p.Kg <= 0) continue;
+                int c = st.CellOf(p);
+                if (c < 0 || !InView(c)) continue;
+                e += 0.5 * p.Kg * (p.Vx * p.Vx + p.Vy * p.Vy + p.Vz * p.Vz) + 0.5 * p.Inertia * p.W * p.W;
+            }
+            hot = e >= PropShowJ;
+        }
+        if (PropShowOn && (_propNew || hot && !_propHot)) _propShowLeft = PropShowTicks;
+        _propNew = false; _propHot = hot;
     }
 
     /// <summary>하루 예산의 조용함 빠르기: 남은 틱 ÷ 남은 화면 초 — 조용한 날은 꼭 목표만큼 · 조짐 · 위험에 쓴 만큼 남은 조용함이 빨라진다 (기계가 못 따라가면 넘는다 — 위 줄이 정직하게 보인다).</summary>
