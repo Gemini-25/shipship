@@ -23,7 +23,7 @@ public sealed partial class Life
         {
             ref var b = ref this[body];
             b.HandGerm += 1;
-            if (b.Gut == 0) b.GutCause = sim.Causes.Add(CauseKind.Biology, $"{Ko.I(name)} 연 식량 상자에 장염 균이 묻어 있었다", sim.Tick, cell, 0, 0, actor);
+            b.HandCause = sim.Causes.Add(CauseKind.Biology, $"{Ko.I(name)} 연 식량 상자에 장염 균이 묻어 있었다", sim.Tick, cell, 0, 0, actor);
         }
         if (Rng.Unit(sim.Seed, Rng.Key("상자 감기"), n, 0) >= CrateColdChance) return;
         int c0 = sim.Causes.Add(CauseKind.Biology, "식량 상자 하나에 감기 바이러스가 묻어 있었다", sim.Tick, cell);

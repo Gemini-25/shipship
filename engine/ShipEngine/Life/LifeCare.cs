@@ -124,6 +124,7 @@ public sealed partial class Life
             }
             else if (b.Ill == 2 && b.IllH >= SickHours) { b.Ill = 3; b.IllH = 0; }
         }
+        if (b.Gut is 1 or 2) GutStage(sim, id, dt);   // 배탈 (5단 C22)
     }
 
     /// <summary>1분마다: 앓는 이(잠복 마지막 날부터) 곁 · 같은 방에서 옮는다.</summary>

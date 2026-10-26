@@ -180,10 +180,13 @@ public sealed partial class Life
     /// <summary>시험 · 사고: 변기를 막는다 (원인 마디를 받는다).</summary>
     public void Clog(int toilet, int cause) { WashArrays(); Clogged[toilet] = 1; ClogCause[toilet] = cause; }
 
+    /// <summary>참지 못하는 장 (kg): 배탈을 앓으면 0.2 (5단 C22) · 아니면 0.45.</summary>
+    public static double BowelLimit(in Body b) => b.Gut == 2 ? GutBowelMax : BowelMax;
+
     /// <summary>참지 못했다: 방광 · 장이 한계를 넘었다 — 그 자리 바닥이 젖고 · 몸과 옷이 더러워진다 (원인: 그때 하던 일은 마음이 안다 — 여기는 몸의 한계).</summary>
     private void Soil(Sim sim, int id, ref Body b, int c)
     {
-        bool bowel = b.Bowel > BowelMax;
+        bool bowel = b.Bowel > BowelLimit(b);
         double urine = b.Bladder;
         b.SoilCause = sim.Causes.Add(CauseKind.Biology, bowel ? "참지 못하고 옷에 지렸다 (장이 찼다)" : "참지 못하고 옷에 지렸다 (방광이 찼다)", sim.Tick, c);
         if (urine > 0) { F.AddStore(c, T.sWater, urine, b.SoilCause); b.Bladder = 0; }   // 바닥이 젖는다 (오줌의 물 — 고인 물 장부 · 그 물의 원인)

@@ -641,7 +641,7 @@ public sealed partial class Life : IEngine
         // 몸이 더러워진다: 날마다 · 땀 · 피 (씻는 것은 사람의 판단 — 샤워 칸 · 물수건)
         b.Dirt = (float)Math.Min(1, b.Dirt + DirtPerDay * dt / 86400 + (b.Bleed + b.BleedIn > 0 ? DirtPerBloodL * b.Bleed * dt / 3600 : 0));
         // 참지 못한다 (월드): 방광 · 장이 한계를 넘으면 그 자리에 지린다 — 바닥이 젖고 몸이 더러워진다 (비우러 가는 것은 사람의 판단)
-        if (b.Bladder > BladderMax || b.Bowel > BowelMax) Soil(sim, id, ref b, c);
+        if (b.Bladder > BladderMax || b.Bowel > BowelLimit(b)) Soil(sim, id, ref b, c);
         // 늘 조금씩 물을 잃는다 (숨 · 피부 — 하루 1.5L)
         double insens = Insensible * dt;
         b.Water -= insens;

@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>⑦ (다) 숨은 병 — 진단이 맞히려는 것 (가장 급한 하나). 체함 · 잠은 참으로는 없다 — 모르는 눈이 잘못 보는 것.</summary>
-public enum Ail : byte { None, Cold, Infection, CO, Cyanide, Overdose, Liver, Heart, Radiation, Indigestion, Sleep, InternalBleed, Appendicitis, Bruise }
+public enum Ail : byte { None, Cold, Infection, CO, Cyanide, Overdose, Liver, Heart, Radiation, Indigestion, Sleep, InternalBleed, Appendicitis, Bruise, Gut }
 
 /// <summary>⑦ (다) 증상 — 몸에서 보이는 것.</summary>
 [Flags]
@@ -26,13 +26,13 @@ public sealed partial class Life
         if (FeverK(b) * (1 - FeverCut(b)) > 0.5) s |= Sym.Fever;
         if (b.COHb > 0.08f || b.CN > 0.2f || b.Ill == 2) s |= Sym.Headache;
         if (b.COHb > 0.12f || b.Liver > 0.2f || b.RadRecent > 1 || OpioidEffect(b) > 15) s |= Sym.Nausea;
-        if (b.Appendix > 0.3f) s |= Sym.Nausea;
+        if (b.Appendix > 0.3f || b.Gut == 2) s |= Sym.Nausea;   // 배탈 (5단 C22 — 우주 멀미는 증상에 넣지 않는다: 무중력 멀미가 진료를 부르지 않게)
         if (b.SpO2 < 0.85f || b.LungDamage > 0.3f || b.Heart > 0.35f || b.BloodL < 4) s |= Sym.Breathless;
         if (b.Hypoxia > 0.2f || b.COHb > 0.25f || b.CN > 0.4f || b.Brain > 0.1f || b.BloodL < 3.5f) s |= Sym.Confused;
         if (b.Ill == 2 || b.LungDamage > 0.2f || b.Spore > SporeCough) s |= Sym.Cough;   // 곰팡이 포자는 마시는 동안 곧 기침 (DF1)
         if (b.Heart > 0.2f) s |= Sym.ChestPain;
         if (Sedation(b) > 0.3 || b.COHb > 0.2f) s |= Sym.Drowsy;
-        if (b.RadRecent > 0.5 || b.Heart > 0.2f || b.Liver > 0.3f || b.Ill == 2 || b.Infect > 0.3f || b.BleedIn > 0.05f) s |= Sym.Weak;
+        if (b.RadRecent > 0.5 || b.Heart > 0.2f || b.Liver > 0.3f || b.Ill == 2 || b.Gut == 2 || b.Infect > 0.3f || b.BleedIn > 0.05f) s |= Sym.Weak;
         if (b.Liver > 0.5f) s |= Sym.Jaundice;
         if (b.BleedIn > BleedInSelfStop || b.BloodL < 4.2f) s |= Sym.Pale;   // 창백하고 어지럽다 (속 출혈 · 피를 잃었다)
         return s;
@@ -51,6 +51,7 @@ public sealed partial class Life
         if (b.Liver > 0.2f) return Ail.Liver;
         if (b.Heart > 0.2f) return Ail.Heart;
         if (b.RadRecent > 1) return Ail.Radiation;
+        if (b.Gut == 2) return Ail.Gut;
         if (b.Ill == 2) return Ail.Cold;
         return Ail.None;
     }
@@ -60,13 +61,13 @@ public sealed partial class Life
     {
         Ail.Cyanide => Ail.CO, Ail.CO => Ail.Cold, Ail.Overdose => Ail.Sleep, Ail.Infection => Ail.Cold,
         Ail.Liver => Ail.Indigestion, Ail.Heart => Ail.Indigestion, Ail.Radiation => Ail.Cold,
-        Ail.InternalBleed => Ail.Bruise, Ail.Appendicitis => Ail.Indigestion, _ => a,
+        Ail.InternalBleed => Ail.Bruise, Ail.Appendicitis => Ail.Indigestion, Ail.Gut => Ail.Indigestion, _ => a,
     };
 
     /// <summary>병마다 맞힐 바탕 (증상만 보고 · 아무것도 모르는 이).</summary>
     public static double DxBase(Ail a) => a switch
     {
-        Ail.Cold => 0.9, Ail.Infection => 0.4, Ail.Appendicitis => 0.35, Ail.Overdose => 0.3, Ail.Heart => 0.25, Ail.Radiation => 0.2, Ail.InternalBleed => 0.2, Ail.CO => 0.15, Ail.Liver => 0.1, Ail.Cyanide => 0.1, _ => 1,
+        Ail.Cold => 0.9, Ail.Infection => 0.4, Ail.Appendicitis => 0.35, Ail.Overdose => 0.3, Ail.Heart => 0.25, Ail.Radiation => 0.2, Ail.InternalBleed => 0.2, Ail.CO => 0.15, Ail.Liver => 0.1, Ail.Cyanide => 0.1, Ail.Gut => 0.6, _ => 1,
     };
 
     /// <summary>
@@ -104,7 +105,7 @@ public sealed partial class Life
     {
         Ail.Cold => "감기", Ail.Infection => "곪음", Ail.CO => "일산화탄소 중독", Ail.Cyanide => "시안화수소 중독", Ail.Overdose => "진통제 과용",
         Ail.Liver => "간이 상함", Ail.Heart => "상한 심장", Ail.Radiation => "방사선병", Ail.Indigestion => "체함", Ail.Sleep => "그냥 잠든 것",
-        Ail.InternalBleed => "속 출혈", Ail.Appendicitis => "맹장염", Ail.Bruise => "타박상", _ => "아픈 데 없음",
+        Ail.InternalBleed => "속 출혈", Ail.Appendicitis => "맹장염", Ail.Bruise => "타박상", Ail.Gut => "배탈", _ => "아픈 데 없음",
     };
 
     /// <summary>증상 글 (많아야 셋 — 진료 기록 · 원인 마디).</summary>

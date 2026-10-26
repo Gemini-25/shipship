@@ -36,7 +36,7 @@ public sealed partial class Life
 
     private static (double Drug, double Pain, double Breath, double Sick, double Shiver, double Sum) UnsteadyParts(in Body b)
     {
-        double drug = Sedation(b), pain = 0.6 * b.Pain, breath = 2 * (Math.Max(0, b.Hypoxia - 0.05) + Math.Max(0, b.COHb - 0.1)), sick = 0.5 * b.Nausea;
+        double drug = Sedation(b), pain = 0.6 * b.Pain, breath = 2 * (Math.Max(0, b.Hypoxia - 0.05) + Math.Max(0, b.COHb - 0.1)), sick = 0.5 * b.Nausea + (b.Gut == 2 ? 0.3 : 0);   // 배탈 앓음 +0.3 (5단 C22)
         double shiver = b.CoreK < 308.65 ? 0.5 * Math.Min(1, (308.65 - b.CoreK) / 1.5) : 0;
         return (drug, pain, breath, sick, shiver, drug + pain + breath + sick + shiver);
     }
@@ -152,6 +152,6 @@ public sealed partial class Life
     {
         if (body < 0 || body >= Bodies.Count) return 0;
         ref var b = ref this[body];
-        return (float)Math.Max(b.Bladder / BladderMax, b.Bowel / BowelMax);
+        return (float)Math.Max(b.Bladder / BladderMax, b.Bowel / (b.Gut == 2 ? GutUrgeKg : BowelMax));   // 배탈을 앓으면 장이 0.1kg에 다 마렵다 (5단 C22)
     }
 }
