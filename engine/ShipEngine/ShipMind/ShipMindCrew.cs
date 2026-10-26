@@ -33,14 +33,16 @@ public sealed partial class ShipMind
         {
             if (!a.IsPerson || a.Id == x.Decl1 || a.Id == x.Decl2) continue;
             ref var b = ref life[a.C.Body];
-            if (b.Alive == 0 || b.Conscious == 0 || x.Kind == IncidentKind.PersonDown && a.C.Body == x.Subject) continue;
+            if (b.Alive == 0 || b.Conscious == 0 || PersonKind(x.Kind) && a.C.Body == x.Subject) continue;   // 당사자 (쓰러진 이 · 다친 이 · 심정지 · 수술 · 마음 돌봄)
+            if ((Life.Symptoms(b) & (Sym.Breathless | Sym.Confused)) != 0 || b.Hypoxia > 0.2f) continue;   // 숨이 차거나 정신이 흐린 이 — 몸 감시가 읽는다 (DF4: 질식 중인 이에게 여섯 번 부탁하던 것)
+            if (Dangerous(x.Kind) && x.Room >= 0 && _mind.RoomOf(a.C.Cell) == x.Room) continue;   // 사건 방 안의 이 — 피할 이다 (DF4)
             if (a.C.AssignedUntil > t && (a.C.AssignedGoal != GoalKind.Idle || a.C.AssignedArg == Mind.PlanBound)) continue;   // 이미 다른 일을 맡았다 (지어낸 계획의 몸이 되어 기다리는 이도)
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
             if (g is GoalKind.Treat or GoalKind.Surgery or GoalKind.Counsel && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
             if (x.Cell >= 0 && CutBy(a.C.Cell, x.Cell, false) >= 0) continue;   // 막힌 곳 (DF3): 막혀 있는 문을 지나야만 닿는 이에게는 부탁하지 않는다
             float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat or GoalKind.Surgery => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, GoalKind.Counsel => CounselFit(sim, a, x.Subject), _ => a.C.SkSeal };
             int path = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell);   // 길 거리 (벽 너머 직선이 아니라)
-            double cost = (g == GoalKind.Counsel ? path * 0.3 + (1 - skill) * 30 : path * (1.5 - skill)) + (b.Asleep != 0 ? 30 : 0);   // 마음 돌봄은 가까운 이보다 맞는 이 (급하지 않다)
+            double cost = (g == GoalKind.Counsel ? path * 0.3 + (1 - skill) * 30 : path * (1.5 - skill) / _mind.Vigor(a)) + (b.Asleep != 0 ? 30 : 0);   // 마음 돌봄은 가까운 이보다 맞는 이 (급하지 않다) · 도착 시간 — 잠기운 · 기운 없음은 느리다 (DF4)
             if (cost < bc) { bc = cost; best = a.Id; }
         }
         if (best < 0) return;

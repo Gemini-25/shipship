@@ -84,6 +84,9 @@ public struct Body
     public int GutCause;                         // 배탈의 원인 마디
     public float Spore;                          // 마시는 곰팡이 포자 (그 방 몫 — 마스크 · 우주복이면 0)
     public int PropId;                           // ④ 제 힘을 잃은 동안의 물체 Id (0 없음 — docs/PHYSICS.md PH14)
+    public float Groggy;                         // 잠기운 0~1 (자는 동안 잔 만큼 차오르고 · 깨면 분 단위로 풀린다 — 깊이 고침 DF4)
+    public float Spent;                          // 기운 없음 0~1 (멎은 심장이 다시 뛴 뒤 · 몇 시간에 걸쳐 풀린다 — DF4)
+    public long SleptFrom;                       // 잠든 틱 + 1 (0: 깨어 있다)
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -150,6 +153,30 @@ public sealed partial class Life : IEngine
 
     /// <summary>근육이 약해진 정도 (0 ~ 1 — 근육 20%를 잃으면 1): 중력에서 걸음 · 내려앉음이 서툴다.</summary>
     public static double Weakness(in Body b) => Math.Clamp(b.MuscleLoss / 0.2, 0, 1);
+
+    /// <summary>잠기운이 가득 차는 잠 (분) · 깬 뒤 풀리는 시간 상수 (초) · 되살아난 뒤 기운 없음의 시간 상수 (시간).</summary>
+    public const double GroggyFullMin = 30, GroggyTauSec = 90, SpentTauHours = 3;
+
+    /// <summary>
+    /// 잠기운 (sleep inertia — Tassi &amp; Muzet 2000 · 깬 직후 1~3분이 가장 짙고 반응 · 손놀림이 30~50% 느리다 · 깊이 잤을수록 짙다):
+    /// 자는 동안 잔 만큼 차오르고 (30분이면 가득 — 깨는 그 틱에 이미 차 있다) · 깨면 1분 반의 시간 상수로 풀린다 (3분에 8분의 1).
+    /// 기운 없음 (심정지 뒤 증후군 — 되살아난 이는 몇 시간 · 며칠 기운이 없다): 멎은 심장이 다시 뛰면 1 · 3시간의 시간 상수로 풀린다.
+    /// 값만 낸다 — 손발이 얼마나 느린지는 ⑧ 판단이 읽는다.
+    /// </summary>
+    private static void Drowse(long tick, ref Body b, double dt)
+    {
+        if (b.Asleep != 0)
+        {
+            if (b.SleptFrom == 0) b.SleptFrom = tick + 1;
+            b.Groggy = (float)Math.Min(1, Time.ToSeconds(tick + 1 - b.SleptFrom) / (GroggyFullMin * 60));
+        }
+        else
+        {
+            b.SleptFrom = 0;
+            if (b.Groggy > 0) { b.Groggy *= (float)Math.Exp(-dt / GroggyTauSec); if (b.Groggy < 0.01f) b.Groggy = 0; }
+        }
+        if (b.Spent > 0) { b.Spent *= (float)Math.Exp(-dt / (SpentTauHours * 3600)); if (b.Spent < 0.01f) b.Spent = 0; }
+    }
 
     private readonly Field F;
     private readonly Layout L;
@@ -401,6 +428,7 @@ public sealed partial class Life : IEngine
     {
         int c = b.Cell;
         if (c < 0 || c >= L.N) return;
+        Drowse(sim.Tick, ref b, dt);   // 잠기운 · 기운 없음 (DF4)
         double p = F.Pressure(c), tair = F.Temp(c);
         bool suit = b.Suit != 0, low = b.Low != 0;
         double thead = F.HeadTemp(c, low);   // ③ 머리 높이의 공기 (뜨거운 층이 서면 선 이는 위 · 기어가거나 누운 이는 아래)

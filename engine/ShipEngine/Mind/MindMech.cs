@@ -26,6 +26,16 @@ public sealed partial class Mind
     public bool RobotCan(Agent a, GoalKind g) => LegsOk(a) && (!HandGoal(g) || HandsOk(a));
 
     private double MechPace(Agent a) => HasMech(a) ? Network.RobotPace(_net!.Robot(a.C.Mech)) : 1;
+    /// <summary>로봇 몸의 걸음 몫 (상한 다리 — 주컴퓨터가 도착 시간을 셈할 때 읽는다 · 사람은 1).</summary>
+    public double PaceOf(Agent a) => MechPace(a);
+
+    /// <summary>손발의 힘 (사람 — ⑦이 낸 잠기운 · 기운 없음을 읽는다 · DF4): 1 멀쩡 · 막 깬 이 · 되살아난 이 0.4 (0.3 아래로는 내려가지 않는다) — 로봇 · 드론은 1.</summary>
+    public double Vigor(Agent a)
+    {
+        if (!a.IsPerson || _life == null || a.C.Body < 0) return 1;
+        ref var b = ref _life[a.C.Body];
+        return Math.Clamp(1 - 0.6 * b.Groggy - 0.6 * b.Spent, 0.3, 1);
+    }
     private double MechSight(Agent a) => HasMech(a) ? Network.RobotSight(_net!.Robot(a.C.Mech)) : 1;
 
     /// <summary>몸을 느낀다: 전지 · 속(멈춤) · 새로 망가진 다리 · 팔 — 하던 일을 할 수 없게 됐으면 놓는다.</summary>

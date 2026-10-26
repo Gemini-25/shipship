@@ -352,7 +352,7 @@ public sealed partial class Mind
         fires.Sort((p, q) => Dist(me, p).CompareTo(Dist(me, q)) is var k && k != 0 ? k : p.CompareTo(q));
         int n = Math.Min(4, fires.Count);
         // ② (바) 물은 초당 25몰 (식혀 끈다) · 이산화탄소는 초당 10몰 (−78℃ 기체로 산소를 밀어낸다 — 155몰이 15초)
-        double amount = Math.Min(c.HoldCharge, (co2 ? 10 : 25) * Time.SecondsPerTick);
+        double amount = Math.Min(c.HoldCharge, (co2 ? 10 : 25) * Time.SecondsPerTick * Vigor(a));   // 막 깬 이 · 되살아난 이는 손이 굼떠 겨누고 짜는 몫이 준다 (DF4)
         bool first = c.HoldCharge >= ItemCharge(c.Holding) - 0.01;
         if (co2 && _chem != null)
         {
@@ -741,7 +741,7 @@ public sealed partial class Mind
         if (g >= FloatG && SmokeBad(a, c.Cell)) v = Math.Min(v, P.Speed["crawl"]);
         if (b.Suit != 0) v *= 0.7;
         if (b.CoreK > 312.15) v = Math.Min(v, P.Speed["walk"]); // 더위에 지쳐 뛰지 못한다
-        return v * Math.Max(0.3, 1 - b.Pain * 0.5) * BodyPace(a);   // ⑦ 앓음 · 잃은 몸무게
+        return v * Math.Max(0.3, 1 - b.Pain * 0.5) * BodyPace(a) * Vigor(a);   // ⑦ 앓음 · 잃은 몸무게 · 잠기운 · 기운 없음 (DF4)
     }
 
     private void Walk(Sim sim, Agent a, double dt)

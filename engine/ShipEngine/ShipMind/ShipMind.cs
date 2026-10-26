@@ -1145,12 +1145,13 @@ public sealed partial class ShipMind : IEngine
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
         if (x.Kind is not (IncidentKind.Leak or IncidentKind.Vacuum) && NoWayTo(x.Room)) { TellNoWay(sim, ref x); return; }   // 막힌 곳 (DF3): 로봇 둘이 '갈 길이 없다'로 막힌 방 — 더 보내지 않는다 (같은 까닭 두 번이면 다른 길)
         int goalCell = x.Kind is IncidentKind.Leak or IncidentKind.Vacuum && g == GoalKind.Investigate ? target : x.Cell, cutDoor = -1;
+        bool handJob = HandJob(x, g);
         while (have < need)
         {
             int best = -1, bd = int.MaxValue, bestFrom = -1, cands = 0, bestHand = 0;
             foreach (var a in _mind.Agents)
             {
-                if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가
+                if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone) || !_mind.RobotCan(a, g) || handJob && !_mind.HandsOk(a)) continue;   // ⑥ 몸 보고 — 그 일을 할 몸인가 (가서 고치는 살핌은 손일 — DF4)
                 int from = -1;
                 if (a.C.AssignedUntil > sim.Tick && !Root(x) && !Chore(a.C.AssignedGoal)) // 일상 일(⑪)은 놓고 온다
                 {
@@ -1162,7 +1163,7 @@ public sealed partial class ShipMind : IEngine
                 if (a.Id == x.Dropped && sim.Tick - x.DroppedAt < Time.Minutes(10) || a.Id == x.Dropped2 && sim.Tick - x.DroppedAt2 < Time.Minutes(10)) continue;   // 막혀 놓아준 로봇은 한동안 다시 보내지 않는다 (둘까지 — A → B → A가 되지 않게)
                 if (CutBy(a.C.Cell, goalCell, Mind.Eva(a)) is int cd && cd >= 0) { if (cutDoor < 0) cutDoor = cd; continue; }   // 막힌 곳 (DF3): 막혀 있는 문을 지나야만 닿는다 — 보내지 않는다
                 int hand = HandCost(a, g);
-                int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + hand + (from >= 0 ? 100000 : 0);   // 길 거리 (벽 너머 직선이 아니라 문을 돌아) + 손에 든 것
+                int d = (int)(_mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) / Math.Max(0.1, _mind.PaceOf(a))) + hand + (from >= 0 ? 100000 : 0);   // 도착 시간 (문을 돌아 가는 길 ÷ 상한 다리의 걸음 몫 — DF4) + 손에 든 것
                 cands++;
                 if (d < bd) { bd = d; best = a.Id; bestFrom = from; bestHand = hand; }
             }
@@ -1221,7 +1222,7 @@ public sealed partial class ShipMind : IEngine
         var a = _mind.Agents[rb];
         ref var c = ref a.C;
         if (c.AssignedUntil <= sim.Tick || c.AssignedGoal != g) return;
-        bool body = c.Up != 0 && !_mind.RobotCan(a, g);
+        bool body = c.Up != 0 && (!_mind.RobotCan(a, g) || HandJob(x, g) && !_mind.HandsOk(a));
         bool idle = c.Goal != g && c.SnagTick >= x.SentAt && c.Snag != SnagKind.None && sim.Tick - c.SnagTick > Time.Minutes(3) && c.Battery >= 0.15f;
         if (!body && !idle) return;
         c.AssignedUntil = sim.Tick;
@@ -1234,6 +1235,9 @@ public sealed partial class ShipMind : IEngine
     }
 
     public long Released;
+
+    /// <summary>가서 고치는 살핌 — 끊긴 선 · 센서 선 · 새는 관은 가서 잇고 죈다: 손일로 본다 (팔 상한 로봇에게 '살펴보기'로 맡겨 11분 오락가락하던 것 — DF4).</summary>
+    private static bool HandJob(in Incident x, GoalKind g) => Mind.HandGoal(g) || g == GoalKind.Investigate && x.Kind is IncidentKind.LineCut or IncidentKind.SensorLost or IncidentKind.PipeHunt;
 
     /// <summary>⑪ 일감판의 일상 일 (만들기 · 정비 · 청소 · 거두기 · 식량 채워 두기 · 나르기 · 조이기 · 변기 손질 · 쓴 것 채우기 · 줍기) — 사건이 나면 놓고 온다
     /// (예전엔 나르기 · 채우기 · 줍기가 빠져 — 내려놓은 우주복을 주우러 간 로봇을 일감 기한 두 시간 동안 부르지 않았다).</summary>
@@ -1283,7 +1287,7 @@ public sealed partial class ShipMind : IEngine
                 if (from < 0 || Rank(Incidents[from].Kind) <= Rank(x.Kind)) continue;
             }
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
-            int d = _mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) - (mine ? 1000 : 0) + (from >= 0 ? 100000 : 0);
+            int d = (int)(_mind.PathDist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) / Math.Max(0.1, _mind.PaceOf(a))) - (mine ? 1000 : 0) + (from >= 0 ? 100000 : 0);   // 도착 시간 (DF4)
             if (d < bd) { bd = d; best = a.Id; bestFrom = from; }
         }
         if (best >= 0 && bestFrom >= 0)

@@ -366,5 +366,95 @@ public static partial class Program
                     melted <= 1 && laid >= 2 && lit, $"깐 연장선 {laid} · 넘쳐 녹음 {melted} · 끝에 밝음 {lit} · 가장 큰 전류 {maxA:0}A");
             }
         }
+
+        // ── DF4 처지를 본다 (보고서 §4-8): 부탁 · 맡김은 지금 처지를 본다 — 숨이 찬 이 · 사건 방 안의 이 · 당사자에게는 부탁하지 않는다 · 손 없는 로봇은 손일에 뽑지 않고 도착 시간으로 고른다 ·
+        //    막 깬 이 · 되살아난 이는 잠기운 · 기운 없음 (⑦이 내는 값)으로 손발이 느리다 ──
+        if (Do("처지 보기"))
+        {
+            Console.WriteLine("\n[처지 보기 — 부탁 · 맡김은 지금 처지를 본다]");
+            bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
+            // 부탁: 로봇 없는 배 · 오른쪽 위 방에 불 (그 방 문 둘은 잠겼다 — 안의 이는 나오지 못한다) — 불난 방 안의 이 · 잠긴 문 밖 통로의 숨이 찬 이 (폐가 상했다 — 깨어 있다) · 왼쪽 방의 멀쩡한 이
+            {
+                var lay = Worlds.Ascii(Worlds.MindShipComputer.Replace("w", "."), Worlds.MindLegend);   // 작업대 없이 (일감 만들기로 자리를 뜨지 않게)
+                int At(int x, int y) => Worlds.At(lay, x, y);
+                var s = Worlds.Full(lay, 5);
+                var m = s.Get<Mind>(); var ch = s.Get<Chemistry>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>(); var st = s.Get<Structure>();
+                int pin = m.AddPerson(s, At(20, 3)), pbreath = m.AddPerson(s, At(14, 7)), pfar = m.AddPerson(s, At(3, 2));
+                s.Run(3);
+                foreach (int door in new[] { At(10, 3), At(14, 6) }) st.LockDoor(lay.DoorAt[door], s.Tick + Time.Hours(1));
+                life[m[pbreath].C.Body].LungDamage = 0.5f;
+                long f0 = s.Facts.Total;
+                int seed = s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick);
+                foreach (var (x, y) in new[] { (15, 1), (16, 1), (15, 2) }) ch.Ignite(At(x, y), 3e6, seed);
+                for (int k = 0; k < Time.Minutes(4); k++) { s.Step(); foreach (int q in new[] { pin, pbreath, pfar }) { ref var c = ref m[q].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; c.Bored = 0; } }
+                var asks = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Decision && x.Other == (int)GoalKind.FightFire && x.Actor >= 0).ToList();
+                if (Debug) foreach (var l in sm.Log.Where(l => l.text.Contains("님,") || l.text.Contains(": \""))) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}");
+                int bin = asks.Count(x => x.Actor == pin), bbreath = asks.Count(x => x.Actor == pbreath), good = asks.Count(x => x.Actor == pfar);
+                // 빠진 방에 갇힌 이 (운석 장면의 꼴 — 왼쪽 방 외판에 구멍 · 그 방 침대에 자던 이 · 로봇 둘은 다른 사건에 바쁘다): 숨이 막혀 가는 이에게 옆 방 일을 부탁하지 않는다
+                var vlay = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string> { ['x'] = "OxygenMaskBox", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['h'] = "HeatExchanger" });
+                var vs = Worlds.Full(vlay, 3);
+                var vm = vs.Get<Mind>();
+                int victim = vm.AddPerson(vs, Worlds.At(vlay, 3, 3), bed: Worlds.At(vlay, 3, 3));
+                vm.AddRobot(vs, Worlds.At(vlay, 22, 3), AgentKind.Robot, Worlds.At(vlay, 22, 3)); vm.AddRobot(vs, Worlds.At(vlay, 19, 2), AgentKind.Robot, Worlds.At(vlay, 19, 2));
+                vs.Run(2);
+                vs.Get<Network>().AirReserve = 2e6; vs.Get<Life>()[vm[victim].C.Body].Asleep = 1;
+                long v0 = vs.Facts.Total;
+                vs.Get<Field>().SetHole(Worlds.At(vlay, 3, 0), 0.02f);
+                vs.Run((int)Time.Minutes(5));
+                int vasks = vs.Facts.Since(v0).Count(x => x.Kind == FactKind.Decision && x.Actor == victim && vs.Causes.Text(x.Cause).Contains("부탁"));
+                Check("숨이 찬 이 · 사건 방 안의 이에게 부탁 0: 불난 방 안의 이 · 숨이 찬 이 (가까워도) 대신 멀쩡한 이에게 부탁한다 · 빠진 방에 갇혀 숨이 막혀 가는 이에게 옆 방 일을 부탁하지 않는다",
+                    bin + bbreath + vasks == 0 && good >= 1, $"불난 방 안의 이에게 부탁 {bin} · 숨이 찬 이에게 {bbreath} · 멀쩡한 이에게 {good} / 빠진 방에 갇힌 이에게 {vasks}");
+            }
+
+            // 맡김: 왼쪽 방 산소 발생기 밑 전선이 끊겼다 — 로봇 셋: 곁의 로봇 1은 팔이 상해 손을 못 쓰고 (팔 0.6 · 다리 0.88) · 로봇 2는 다리가 상해 느리다 (0.51배) · 로봇 3은 멀쩡하고 오른쪽 방
+            {
+                var lay = Worlds.Ascii(NetShip, NetLegend);
+                int At(int x, int y) => Worlds.At(lay, x, y);
+                var s = Worlds.Full(lay, 2);
+                var m = s.Get<Mind>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+                int r1 = m.AddRobot(s, At(6, 2), AgentKind.Robot, At(12, 3)), r2 = m.AddRobot(s, At(9, 3), AgentKind.Robot, At(12, 3)), r3 = m.AddRobot(s, At(13, 3), AgentKind.Robot, At(12, 3));
+                s.Run(3);
+                ref var b1 = ref net.Robot(m[r1].C.Mech); b1.Arms = 0.6f; b1.Legs = 0.88f;
+                net.Robot(m[r2].C.Mech).Legs = 0.7f;
+                foreach (int r in new[] { r1, r2, r3 }) m[r].C.Battery = 1;
+                long f0 = s.Facts.Total;
+                int o2 = net.Devices.First(d => d.Type == "OxygenGenerator").Id;
+                net.CutLines(s, net.Devices[o2].Cell, 1, s.Causes.Add(CauseKind.Setup, "산소 발생기 밑 전선을 쥐가 갉았다", s.Tick));
+                s.Run((int)Time.Minutes(3));
+                var sent = s.Facts.Since(f0).Where(x => x.Kind == FactKind.ComputerAssign && x.Other == (int)IncidentKind.LineCut).Select(x => x.Actor).ToList();
+                if (Debug) foreach (var l in sm.Log.Where(l => l.text.Contains("→"))) Console.WriteLine($"    {Time.Clock(l.tick)} {l.text}");
+                Check("손 없는 로봇은 선 잇기에 뽑히지 않는다 · 도착 시간으로 고른다: 곁의 팔 상한 로봇 · 가깝지만 다리가 상해 느린 로봇 대신 멀쩡한 로봇 3",
+                    sent.Count >= 1 && sent[0] == r3 && !sent.Contains(r1), $"맡긴 차례 {string.Join(" → ", sent.Select(m.NameOf))}");
+            }
+
+            // 잠기운: 오른쪽 위 방 의자에 불 — 그 방에서 40분 자다 불에 깬 이와 깨어 있던 이 (같은 사람 · 같은 씨) — 불을 알아챈 때부터 끌 때까지
+            {
+                (double sec, bool done) Fight(bool slept)
+                {
+                    var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+                    int At(int x, int y) => Worlds.At(lay, x, y);
+                    var s = Worlds.Full(lay, 9);
+                    var m = s.Get<Mind>(); var ch = s.Get<Chemistry>(); var life = s.Get<Life>();
+                    int p = m.AddPerson(s, At(18, 2));
+                    m[p].C.Brave = 0.9f; m[p].C.SkFire = 0.8f;
+                    for (int k = 0; k < Time.Minutes(40); k++)
+                    {
+                        ref var c = ref m[p].C; c.Hunger = 0; c.Thirst = 0; c.Bored = 0;
+                        if (slept) { life[c.Body].Asleep = 1; c.Sleepy = 0.5f; } else { life[c.Body].Asleep = 0; c.Sleepy = 0; }
+                        s.Step();
+                    }
+                    long f0 = s.Facts.Total;
+                    ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Setup, "의자 밑에서 불씨가 튀었다", s.Tick));
+                    for (int k = 0; k < Time.Minutes(10) && !s.Facts.Since(f0).Any(x => x.Kind == FactKind.Extinguished && x.Actor == p); k++) s.Step();
+                    var fs = s.Facts.Since(f0).ToList();
+                    long seen = fs.Where(x => x.Actor == p && x.Kind is FactKind.Noticed or FactKind.Warned).Select(x => x.Tick).DefaultIfEmpty(-1).Min();
+                    long outAt = fs.Where(x => x.Kind == FactKind.Extinguished && x.Actor == p).Select(x => x.Tick).DefaultIfEmpty(-1).Min();
+                    return (seen >= 0 && outAt >= 0 ? Time.ToSeconds(outAt - seen) : -1, outAt >= 0);
+                }
+                var wokeT = Task.Run(() => Fight(true)); var awake = Fight(false); var woke = wokeT.Result;
+                Check("막 깬 이의 소화는 깨어 있던 이보다 느리다: 40분 자다 깬 이는 잠기운으로 손발이 느려 (⑦이 내는 값 — 몇 분에 걸쳐 풀린다) 불을 알아챈 뒤 끄기까지 더 걸린다",
+                    woke.done && awake.done && woke.sec > awake.sec * 1.3, $"깬 이 {woke.sec:0}초 · 깨어 있던 이 {awake.sec:0}초");
+            }
+        }
     }
 }

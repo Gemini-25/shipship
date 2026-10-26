@@ -68,6 +68,7 @@ public sealed partial class Life
     {
         b.Arrest = 0; b.NoFlow = 0; b.LowFlow = 0;
         b.Heart = Math.Min(1, b.Heart + 0.2f);   // 기절 심근
+        b.Spent = 1;                             // 기운 없음 (심정지 뒤 증후군 — DF4)
         Revives++;
         int cause = sim.Causes.Add(CauseKind.Biology, why, sim.Tick, b.Cell, parent != 0 ? parent : b.ArrestCause, parent != 0 ? b.ArrestCause : 0);
         sim.Facts.Emit(sim.Tick, FactKind.Revived, b.Cell, how, cause, actor: id);
