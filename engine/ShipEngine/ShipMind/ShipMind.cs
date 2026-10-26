@@ -1508,10 +1508,10 @@ public sealed partial class ShipMind : IEngine
     {
         var parts = new List<string> { $"산소 {ShipO2():0.0}kPa" };
         if (power && _net != null) parts.Add($"전력 {_net.Supplied:0}kW 내고 {_net.Demanded:0}kW 씀");
-        if (sim.Find<Work>() is Work w && sim.Book.Started)
+        if (sim.Find<Work>() != null && sim.Book.Started)
         {
-            parts.Add($"식량 {DaysText(w.DaysLeft(sim, (int)Res.Food).days)}");
-            parts.Add($"물 {DaysText(w.DaysLeft(sim, (int)Res.Water).days)}");
+            parts.Add($"식량 {DaysText(FoodDaysLeft(sim))}");   // 배급 · 막힌 곳과 같은 셈 (DF6 — 예전엔 장부의 하루 빠르기로 따로 셈했다)
+            parts.Add($"물 {DaysText(WaterDaysLeft(sim))}");
         }
         return string.Join(" · ", parts);
     }

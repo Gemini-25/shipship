@@ -330,6 +330,19 @@ public sealed partial class Life : IEngine
             if (d.Def.Role == "grow") Crops.Add(new Crop { Device = d.Id, Cell = d.Cell, Biomass = 0, Health = 1 });
     }
 
+    /// <summary>다 자란 작물 (1m² · 단마다 양분 몰 — 하루 0.1몰이면 사흘).</summary>
+    public const double RipeMolPerM2 = 0.3;
+
+    /// <summary>
+    /// 출항 때의 재배대 (설계한 배 — 깊이 고침 DF6): 이어 기르는 배라 재배대마다 자람 단계가 다르다 — 여섯 갈래로 고르게 (다 자란 것 · 6분의 5 · … · 6분의 1)
+    /// 예전엔 모두 막 심은 채 떠나 사흘 동안 거둘 것이 없었다 (새뜰호 이틀 거두기 0끼니).
+    /// </summary>
+    public void Rotate(Network net)
+    {
+        var span = CollectionsMarshal.AsSpan(Crops);
+        for (int k = 0; k < span.Length; k++) span[k].Biomass = (float)(RipeMolPerM2 * CropArea(net, k) * (1 - k % 6 / 6.0));
+    }
+
     // ───────────────────────── 한 걸음 ─────────────────────────
 
     public void Bind(Sim sim) => _net ??= sim.Find<Network>();

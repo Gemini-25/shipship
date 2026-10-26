@@ -43,6 +43,7 @@ public static class ShipWorld
     public static Sim Create(string shipKey, ulong seed)
     {
         var s = Create(Layout.Ship(shipKey, Tables.Default), seed);
+        s.Get<Life>().Rotate(s.Get<Network>());   // 이어 기르는 재배대 — 자람 단계가 저마다 (DF6)
         var st = s.Get<Structure>();
         st.BuildFlaws(s);
         st.Decorate(s);

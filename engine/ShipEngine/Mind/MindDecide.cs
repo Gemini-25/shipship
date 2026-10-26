@@ -245,7 +245,12 @@ public sealed partial class Mind
             if (c.Thirst > 0.3f && WaterAllowed(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             WashOptions(a, here, hour);   // 화장실 · 씻기
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
-            if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief) * WorkFactor(a));
+            if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0)
+            {
+                float work = (1.2f + c.Diligent) * (1 - 0.7f * grief) * WorkFactor(a);
+                Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], work);
+                FarmOption(a, here, work);   // 농부의 일: 일하는 재배실에 다 자란 작물을 보면 거둔다 (DF6)
+            }
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
             else if (c.Bored > 0.1f && !InWindow(hour, c.ShiftHour, 8)) Add(GoalKind.Relax, -1, -1, 0.35f); // 일 밖의 빈 시간: 우두커니 서 있기보다 좋아하는 것을 한다
             // ⑧ 운동: 하루 한 번쯤 — 성실 · 외향일수록 챙기고 신경성은 덜 (운동 습관 연구) · 일하는 시간 밖에서 · 졸리지 않을 때 (ISS 승무원은 하루 2시간 남짓)
@@ -402,6 +407,25 @@ public sealed partial class Mind
     {
         double h = ((hour - start) % 24 + 24) % 24;
         return h < len;
+    }
+
+    /// <summary>농부(기르는 일을 맡은 이)가 일하는 시간에 일터 방에서 다 자란 작물을 본다 — 거두기가 그의 일이다 (일보다 조금 앞서게 · 남이 거두러 가는 작물은 두고).</summary>
+    private void FarmOption(Agent a, int here, float work)
+    {
+        ref var c = ref a.C;
+        if (_life == null || _net == null || c.Station < 0 || c.Role >= RoleNames.Length || RoleNames[c.Role] != "농부") return;
+        int room = L.Furniture[c.Station].Room;
+        if (room < 0 || RoomOf(here) != room) return;   // 일터에 와서 본다
+        for (int k = 0; k < _life.Crops.Count; k++)
+        {
+            var cr = _life.Crops[k];
+            if (RoomOf(cr.Cell) != room || cr.Biomass < Work.HarvestAt * _life.CropArea(_net, k)) continue;
+            bool taken = false;
+            foreach (var o in Agents) if (o != a && o.C.Goal == GoalKind.Harvest && o.C.GoalTarget == k) { taken = true; break; }
+            if (taken) continue;
+            Add(GoalKind.Harvest, k, cr.Cell, work + 1.5f);
+            return;
+        }
     }
 
     /// <summary>그 방 문 너머의 빈 바닥 (다른 방 — 가까운 것 · 없으면 −1).</summary>

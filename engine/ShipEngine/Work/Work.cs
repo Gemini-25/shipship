@@ -35,7 +35,7 @@ public sealed partial class Work : IEngine
     public int Offset => 7;
 
     public const double MaintainAt = 0.8;      // 부품을 표준 수명의 80% 썼으면 미리 간다
-    public const float HarvestAt = 0.3f;       // 작물 1m²(단마다)에 양분이 이만큼(몰 — 사흘 치) 쌓이면 거둔다
+    public const float HarvestAt = (float)Life.RipeMolPerM2;   // 작물 1m²(단마다)에 양분이 이만큼(몰 — 사흘 치) 쌓이면 거둔다
     public const double RestockBelow = 30;     // 냉장고 · 배식기의 식량이 이 몰 아래면 식량 보관함에서 채운다 (한 상자 40몰)
 
     private readonly Layout L;

@@ -47,6 +47,8 @@ public sealed class Layout
     public int W, H;
     /// <summary>처음 물탱크 (L) · 냉각재 (kg) — 0이면 엔진 기본값.</summary>
     public double WaterL, CoolantKg;
+    /// <summary>물 재생기 처리량 (배 전체 L/시 — 배 설계 값: 태울 사람 수에 맞춘다 · 0이면 장치마다 엔진 기본값 — 깊이 고침 DF6).</summary>
+    public double WaterLph;
     public CellKind[] Kind = Array.Empty<CellKind>();
     /// <summary>칸 → 방 번호 (-1: 방 아님).</summary>
     public int[] Room = Array.Empty<int>();
@@ -126,7 +128,7 @@ public sealed class Layout
     {
         public string Key = "", Name = "", About = "";
         public int W, H;
-        public double WaterL, CoolantKg;
+        public double WaterL, CoolantKg, WaterLph;
         public string[] Rows = Array.Empty<string>();
         public string WallMaterial = "steel", HullMaterial = "steel", FloorMaterial = "steel";
         public List<RoomDef> Rooms = new();
@@ -146,7 +148,7 @@ public sealed class Layout
     public static Layout FromJson(string json, Tables t)
     {
         var f = JsonSerializer.Deserialize<ShipFile>(json, DataFiles.Json) ?? throw new InvalidDataException("배 도면을 읽지 못했다");
-        var L = new Layout { Key = f.Key, Name = f.Name, About = f.About, W = f.W, H = f.H, WaterL = f.WaterL, CoolantKg = f.CoolantKg };
+        var L = new Layout { Key = f.Key, Name = f.Name, About = f.About, W = f.W, H = f.H, WaterL = f.WaterL, CoolantKg = f.CoolantKg, WaterLph = f.WaterLph };
         L.Kind = new CellKind[L.N];
         L.Material = new byte[L.N];
         byte wallM = (byte)t.M(f.WallMaterial).Index, hullM = (byte)t.M(f.HullMaterial).Index, floorM = (byte)t.M(f.FloorMaterial).Index;

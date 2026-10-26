@@ -106,12 +106,12 @@ public sealed partial class ShipMind
                 if (_net.Broken[k] != 0 || Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k) || !SpareKnown((int)Part.Mechanical)) continue;
                 Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, _net.Devices[rp.Device].Cell, person => person.C.SkRepair >= 0.5f);
             }
-        // 거두기: 다 자란 작물 (로봇 먼저 · 사람은 기르는 솜씨가 조금이라도 있으면)
+        // 거두기: 다 자란 작물 (로봇 먼저 · 사람은 기르는 솜씨가 조금이라도 있으면) — 농부가 일하는 재배실의 작물은 농부의 일로 둔다 (DF6)
         if (_life != null)
             for (int k = 0; k < _life.Crops.Count; k++)
             {
                 var cr = _life.Crops[k];
-                if (cr.Biomass < Work.HarvestAt * _life.CropArea(_net, k) || Jobs.Any(j => j.Kind == GoalKind.Harvest && j.Target == k)) continue;
+                if (cr.Biomass < Work.HarvestAt * _life.CropArea(_net, k) || Jobs.Any(j => j.Kind == GoalKind.Harvest && j.Target == k) || FarmerAt(L.Room[cr.Cell])) continue;
                 Post(sim, new Job { Kind = GoalKind.Harvest, Target = k }, cr.Cell, person => person.C.SkFarm >= 0.3f);
             }
         // 식량 나르기: 냉장고 · 배식기가 비어 가면 가까운 식량 보관함에서 (로봇 먼저 · 사람은 누구나)
@@ -349,6 +349,16 @@ public sealed partial class ShipMind
         return true;
     }
 
+    /// <summary>그 방에서 농부가 일하고 있나 (카메라 — 일터에서 일하는 이 · 맡은 일 표).</summary>
+    private bool FarmerAt(int room)
+    {
+        if (room < 0 || room >= RoomSeen.Length || RoomSeen[room] == 0) return false;
+        var mind = _mind!;
+        int farmer = Array.IndexOf(mind.RoleNames, "농부");
+        foreach (var a in mind.Agents) if (a.IsPerson && a.C.Up != 0 && a.C.Role == farmer && a.C.Goal is GoalKind.Work or GoalKind.Harvest && L.Room[a.C.Cell] == room) return true;
+        return false;
+    }
+
     /// <summary>그 일을 할 몸의 로봇이 배에 있나 (지금 바쁜지는 묻지 않는다).</summary>
     private bool RobotFor(GoalKind g)
     {
@@ -402,15 +412,67 @@ public sealed partial class ShipMind
         foreach (var f in JobFails)
             if (f.Agent == -2 && sim.Tick - f.Tick < Time.Hours(JobFailHours))
                 Add($"{JobTitle(new Job { Kind = f.Kind, Target = f.Target, Arg = f.Arg })} ← {(f.Snag == SnagKind.None ? "맡은 이마다 기한을 넘겼다" : Mind.SnagText(f.Snag))}");
-        // 마실 물 · 식량 · 산소: 만드는 것까지 쳐서 30일을 못 버틴다
-        var (wd, _) = _work!.DaysLeft(sim, (int)Res.Water);
+        // 마실 물 · 식량 · 산소: 보통으로 쓰면 30일을 못 버틴다 (물 · 식량은 배급 · 방송 · 일지와 같은 셈 — DF6)
+        double wd = WaterDaysLeft(sim);
         if (wd < 30) Add($"마실 물 {wd:0}일 치 ← {WaterWhy()}");
-        var (fd, _) = _work.DaysLeft(sim, (int)Res.Food);
+        // 오수가 밀린다: 물 재생기가 거르는 양이 드는 양에 못 미친다 (오수 통 수위 · 재생기 계량기 — DF6: 예전엔 '마시는 양' 탓으로 오진했다)
+        if (WasteBacklog(out double wasteL, out double inL, out double outL)) { WasteWhy(); Add($"오수 {wasteL:0}L가 밀린다 ← 물 재생기가 거르는 양(하루 {outL:0}L)이 드는 양(하루 {inL:0}L)에 못 미친다"); }
+        double fd = FoodDaysLeft(sim);
         if (fd < 30) Add($"식량 {fd:0}일 치 ← {FoodWhy(sim)}");
-        var (od, _) = _work.DaysLeft(sim, (int)Res.O2);
+        var (od, _) = _work!.DaysLeft(sim, (int)Res.O2);
         if (od < 30) Add($"산소 {od:0}일 치 ← {O2Why()}");
         ReportBlocks(sim, Blocks, BlockCauses);
+        WasteCare(sim);
     }
+
+    /// <summary>밀린 오수의 까닭에 닿는 원인 (낡거나 망가진 재생기 거르개 · 기계 — 없으면 0).</summary>
+    private void WasteWhy()
+    {
+        if (_net == null) return;
+        foreach (var dev in _net.Devices)
+        {
+            if (dev.Def.Role != "recycler") continue;
+            int pc = _net.PartCause(dev.Id, Part.Filter);
+            if (pc != 0) { _why = pc; return; }
+        }
+    }
+
+    private byte _wasteRule;   // 밀린 오수로 샤워 배급을 열었다 (풀릴 때 거둔다)
+
+    /// <summary>
+    /// 오수가 밀리면 (DF6): 샤워 배급을 열고 (물 배급과 같은 몫 — 씻은 물이 오수의 큰 몫) · 낡은 재생기 거르개(30% 넘게 쓴 것)를 미리 갈게 맡긴다 ·
+    /// 오수가 10L 아래로 빠지면 (물 배급이 없으면) 샤워 배급을 거둔다.
+    /// </summary>
+    private void WasteCare(Sim sim)
+    {
+        if (_mind == null || _net == null) return;
+        bool backlog = WasteBacklog(out double wasteL, out double inL, out double outL);
+        if (backlog)
+        {
+            if (_mind.ShowerRuleMin == 0)
+            {
+                int why = BlockCause("오수");
+                _mind.SetShowerRule(sim, ShowerRuleMin, ShowerRuleGap, why);
+                _wasteRule = 1;
+                Say(sim, $"알립니다. 오수가 {wasteL:0}L 밀렸습니다 — 물 재생기가 하루 {outL:0}L를 거르는데 {inL:0}L가 듭니다 · 오늘부터 샤워는 {ShowerRuleMin}분 · 이틀에 한 번");
+            }
+            foreach (var dev in _net.Devices)
+            {
+                if (dev.Def.Role != "recycler" || !dev.Has(Part.Filter)) continue;
+                int k = dev.Id * 4 + (int)Part.Filter;
+                if (_net.Broken[k] != 0 || _net.WearFraction(dev.Id, Part.Filter) < 0.3 || Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k) || !SpareKnown((int)Part.Filter)) continue;
+                Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);   // 낡은 거르개는 덜 흐른다 — 미리 간다
+            }
+        }
+        else if (_wasteRule != 0 && _net.WasteWater * 0.018 < 10 && RationWaterOn == 0)
+        {
+            _wasteRule = 0;
+            _mind.SetShowerRule(sim, 0, ShowerRuleGap, 0);
+            Say(sim, "오수가 다 걸러졌습니다 — 샤워 배급을 풉니다");
+        }
+    }
+
+
 
     /// <summary>재료를 만드는 설비 쪽의 까닭: 없다 · 망가졌다 · 꺼 두었다(전력 여유) · 만드는 중.</summary>
     private string MakerWhy(string item)
@@ -444,7 +506,10 @@ public sealed partial class ShipMind
             double w = _net.WearFraction(dev.Id, Part.Filter);
             if (w > 0.6) worn ??= $"{dev.Name}의 거르개가 낡았다 (회수율 {(Network.WaterRecovery - 0.09 * Math.Min(1, w)) * 100:0}%)";
         }
-        return !any ? "물을 되찾는 장치가 없다" : broken ?? off ?? worn ?? "마시는 양이 되찾는 양보다 많다";
+        if (!any) return "물을 되찾는 장치가 없다";
+        string? known = broken ?? off ?? worn;
+        if (known != null) return known;
+        return WasteBacklog(out _, out _, out _) ? "오수가 밀린다 — 물 재생기가 거르는 양이 드는 양에 못 미친다" : "쓰는 물이 되찾는 물보다 많다";   // 예전 '마시는 양이 되찾는 양보다 많다' — 밀린 오수를 마시는 양 탓으로 오진했다 (DF6)
     }
 
     /// <summary>망가진 설비의 원인 (전기 쪽 · 기계 쪽 중 망가진 것).</summary>

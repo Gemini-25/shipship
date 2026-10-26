@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using ShipEngine;
 
 namespace Lab;
@@ -74,6 +75,61 @@ public static partial class Program
                 cWatched.moved && cWatched.covered && cWatched.room is "Medbay" or "Chapel" && cWatched.by == "로봇"
                 && cAlone.moved && cAlone.covered && cAlone.room is "Medbay" or "Chapel",
                 $"주컴퓨터: 옮김 {cWatched.moved} · 덮음 {cWatched.covered} · {cWatched.room} · {cWatched.by} · {cWatched.hours:0.0}시간 / 멈춤: 옮김 {cAlone.moved} · 덮음 {cAlone.covered} · {cAlone.room} · {cAlone.by} · {cAlone.hours:0.0}시간");
+        }
+
+        // ── DF6 물 · 맡은 일 자료 (보고서 §4-3 · §5): 오수가 밀리면 주컴퓨터가 막힌 곳(처리량)을 짚고 샤워 배급 · 재생기 정비를 낸다 · 새뜰호 농부가 재배 선반에서 일하고 거둔다 ──
+        if (Do("물 · 맡은 일"))
+        {
+            Console.WriteLine("\n[물 · 맡은 일 — 밀린 오수 · 농부의 재배 선반]");
+            bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
+            // 밀린 오수: 디딤호 6명 · 로봇 2 — 물 재생기 거르개가 낡았고 (0.8) 샤워가 몰려 한 시간마다 오수 25L가 더 든다 · 여섯 시간 (새뜰호와 나란히)
+            var wasteT = Task.Run(() =>
+            {
+                var s = ShipWorld.Crewed("Didim", 4, 6, 2);
+                var net = s.Get<Network>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>();
+                var rec = net.Devices.First(d => d.Def.Role == "recycler");
+                net.Age(rec.Id, Part.Filter, 0.8);
+                for (int k = 0; k < Time.Hours(6); k++)
+                {
+                    s.Step();
+                    if (k % Time.Hours(1) == 0) net.WasteWater += 25 * 55.5;
+                }
+                var blk = sm.Blocked.FirstOrDefault(b => b.StartsWith("오수")) ?? "";
+                bool wrong = sm.Blocked.Any(b => b.Contains("마시는 양")) || sm.Log.Any(l => l.text.Contains("마시는 양이 되찾는 양보다"));
+                bool fix = sm.Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target / 4 == rec.Id) || s.Facts.Since(0).Any(x => x.Kind == FactKind.Repaired && x.Other == rec.Id && (int)x.Size == (int)Part.Filter);
+                if (Debug) Console.WriteLine($"    오수 {net.WasteWater * 0.018:0}L · 막힌 곳 [{string.Join(" / ", sm.Blocked)}] · 샤워 배급 {m.ShowerRuleMin}분 · 정비 {fix} · {string.Join(" / ", sm.Log.Where(l => l.text.Contains("오수") || l.text.Contains("샤워")).Select(l => l.text).Take(4))}");
+                return (blk, wrong, shower: m.ShowerRuleMin, fix, waste: net.WasteWater * 0.018);
+            });
+
+            // 새뜰호 농부: 맡은 일 표의 설비가 재배 선반 · 화분 선반을 안다 → 재배 갑판에 일터가 있고 · 일하다 제 갑판의 작물이 다 자라면 거둔다
+            {
+                var s = ShipWorld.Crewed("Saetteul", 3, 40, 16);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var L = s.Layout;
+                int farmer = Array.IndexOf(m.RoleNames, "농부");
+                var farmers = m.Agents.Where(a => a.IsPerson && a.C.Role == farmer).ToList();
+                bool stations = farmers.Count > 0 && farmers.All(a => a.C.Station >= 0 && L.Rooms[L.Furniture[a.C.Station].Room].Type == "Hydroponics");
+                { int h = (int)Time.HourOfDay(s.Tick); foreach (var a in farmers) a.C.ShiftHour = h; }   // 농부들이 지금 근무 (출항 첫 시간)
+                var byFarmer = new HashSet<int>();
+                var net = s.Get<Network>();
+                s.Run((int)Time.Minutes(40));   // 일터로 간다 (그사이 출항 때 다 자란 작물은 로봇이 거둔다)
+                foreach (var a in farmers)
+                {
+                    int room = a.C.Station >= 0 ? L.Furniture[a.C.Station].Room : -1;
+                    int crop = Enumerable.Range(0, life.Crops.Count).FirstOrDefault(k => L.Room[life.Crops[k].Cell] == room, -1);
+                    if (crop >= 0) CollectionsMarshal.AsSpan(life.Crops)[crop].Biomass = (float)(Work.HarvestAt * life.CropArea(net, crop) * 1.05);   // 일하는 재배 갑판의 작물 하나가 막 다 자랐다
+                }
+                for (int k = 0; k < Time.Minutes(40); k++)
+                {
+                    s.Step();
+                    foreach (var a in farmers) if (a.C.Goal == GoalKind.Harvest && a.C.Holding == m.ItemIndex("수확물")) byFarmer.Add(a.Id);
+                }
+                if (Debug) Console.WriteLine($"    농부 {farmers.Count} · 일터 {string.Join(",", farmers.Select(a => a.C.Station >= 0 ? L.Furniture[a.C.Station].Type + "@" + L.Rooms[L.Furniture[a.C.Station].Room].Name : "-"))} · 거둔 농부 {byFarmer.Count} · 거둔 수 {s.Get<Work>().Harvested}");
+                Check("새뜰호 농부가 거둔다: 맡은 일 표가 재배 선반 · 화분 선반을 알아 농부마다 재배 갑판에 일터가 있고 · 일하다 제 갑판의 작물이 다 자라면 40분 안에 거둔다 (주컴퓨터는 농부가 일하는 갑판의 작물을 로봇에게 맡기지 않는다 · 예전엔 설비 이름이 달라 농부 여섯이 이틀 놀고 거두기 0끼니)",
+                    stations && byFarmer.Count >= 1, $"농부 {farmers.Count} · 일터 있음 {stations} · 거둔 농부 {byFarmer.Count}");
+            }
+            var w = wasteT.Result;
+            Check("오수가 밀리면 막힌 곳을 짚는다: 주컴퓨터가 '오수가 밀린다 ← 물 재생기가 거르는 양이 드는 양에 못 미친다'를 막힌 곳으로 · 샤워 배급을 열고 · 재생기 거르개를 미리 간다 ('마시는 양이 되찾는 양보다 많다'는 오진이다)",
+                w.blk.Contains("물 재생기") && !w.wrong && w.shower > 0 && w.fix, $"막힌 곳 '{w.blk}' · 오진 {w.wrong} · 샤워 배급 {w.shower}분 · 재생기 정비 {w.fix} · 오수 {w.waste:0}L");
         }
     }
 }

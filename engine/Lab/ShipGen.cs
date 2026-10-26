@@ -23,6 +23,8 @@ public sealed partial class ShipPlan
     public readonly string Key, Name, About;
     public readonly int W, H, Crew;
     public readonly double WaterL, CoolantKg;
+    /// <summary>물 재생기 처리량 — 태울 사람 하나에 시간당 0.6L (하루 14L: 마시고 씻고 내리는 오수 하루 9~11L의 1.3~1.6배 — 깊이 고침 DF6).</summary>
+    public const double WaterLphPerCrew = 0.6;
     public int Robots, Drones;
     public readonly List<Room> Rooms = new();
     public readonly List<(int X, int Y, bool Vertical, bool External, string Kind)> Doors = new();
@@ -571,7 +573,7 @@ public sealed partial class ShipPlan
         var rows = Enumerable.Range(0, H).Select(y => new string(_ch, y * W, W).TrimEnd()).ToArray();
         var o = new
         {
-            key = Key, name = Name, about = About, w = W, h = H, waterL = WaterL, coolantKg = CoolantKg, crew = Crew, robots = Robots, drones = Drones,
+            key = Key, name = Name, about = About, w = W, h = H, waterL = WaterL, waterLph = Math.Round(Crew * WaterLphPerCrew, 1), coolantKg = CoolantKg, crew = Crew, robots = Robots, drones = Drones,
             rows,
             rooms,
             doors = Doors.Select(d => new { x = d.X, y = d.Y, vertical = d.Vertical, external = d.External, kind = d.Kind }),

@@ -27,6 +27,7 @@ public static partial class Program
         var robots = m.Agents.Where(a => a.C.Kind == AgentKind.Robot).ToList();
         var docked = new int[m.Agents.Count]; var robotGoals = new Dictionary<GoalKind, int>();   // DF5: 로봇이 충전독에 서 있는 틱 · 로봇이 한 일
         long loiter = 0;   // 씻는 방에서 우두커니 서 있는 사람 틱
+        double wastePeak = 0; string morningWater = "", morningCalc = "";   // DF6: 오수 통 · 아침 방송의 물 날 수와 주컴퓨터 셈
         var meals = new int[m.Agents.Count]; var sleep = new int[m.Agents.Count]; var work = new int[m.Agents.Count]; var starving = new int[m.Agents.Count];
         var lastAte = people.ToDictionary(a => a.Id, a => a.C.AteAt);
         // 판단 이관 (바) 감사: 하루 동안 마음이 한 사회적 행동 · 사회가 낸 '행동' 사실을 모두 모은다 (행동은 두 틱 뒤 비우고 · 사실은 고리라 틱마다)
@@ -51,6 +52,14 @@ public static partial class Program
                 if (Debug && f.Kind == FactKind.Ignition) Console.WriteLine($"    {Time.Clock(day.Tick)} 불: {string.Join(" ← ", day.Causes.Chain(f.Cause).Select(c => day.Causes.Text(c)))}");
             }
             factCur = day.Facts.Total;
+            { var nw = day.Get<Network>(); wastePeak = Math.Max(wastePeak, nw.WasteWater * 0.018); }
+            if (Time.HourOfDay(day.Tick) is double hh && hh >= 7 && hh < 7.001 && morningWater == "")
+            {
+                var smm = day.Get<ShipMind>();
+                morningWater = System.Text.RegularExpressions.Regex.Match(smm.Morning, @"물 ([0-9.]+일 치|줄지 않음|999일 넘게)").Groups[1].Value;
+                double wd = smm.WaterDaysLeft(day);
+                morningCalc = double.IsInfinity(wd) ? "줄지 않음" : wd > 999 ? "999일 넘게" : $"{wd:0.#}일 치";
+            }
             foreach (var r in robots) { if (r.C.Goal == GoalKind.Charge && r.C.Cell == r.C.GoalTarget) docked[r.Id]++; robotGoals[r.C.Goal] = robotGoals.GetValueOrDefault(r.C.Goal) + 1; }
             foreach (var a in people) if (a.C.Goal == GoalKind.Idle && a.C.Up != 0 && m.RoomOf(a.C.Cell) is int wr && wr >= 0 && day.Layout.Rooms[wr].Type == "Washroom") loiter++;
             foreach (var a in people)
@@ -79,6 +88,19 @@ public static partial class Program
                 ok && day.Facts.CountOf(FactKind.WallCrack) == 0 && people.Count(a => work[a.Id] > Time.Hours(2)) >= 4,
                 string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)} 끼니 {meals[a.Id]} 잠 {sleepH(a.Id):0.0}시간 일 {work[a.Id] / (double)Time.TicksPerHour:0.0}시간 굶주린 {starving[a.Id] / (double)Time.TicksPerHour:0.0}시간"))
                 + $" · 금 {day.Facts.CountOf(FactKind.WallCrack)}");
+        }
+
+        // ── DF6 물 · 열 경보 (보고서 §4-3 · §4-7): 물 재생기가 하루 든 오수를 다 거른다 · 운동한 건강한 이에게 열 경보 0 · 방송 · 일지 · 배급이 같은 날 수 ──
+        {
+            var nw = day.Get<Network>(); var smw = day.Get<ShipMind>();
+            double waste = nw.WasteWater * 0.018;
+            Check("6명 배 오수가 쌓이지 않는다: 디딤호 하루 — 물 재생기가 드는 오수를 다 걸러 하루 끝 오수 통이 15L 아래 (예전엔 처리량 하루 39L가 6명의 오수 52L에 못 미쳐 날마다 쌓였다 — 엿새에 128L)",
+                waste < 15, $"하루 끝 오수 {waste:0.0}L (가장 많을 때 {wastePeak:0.0}L) · 거른 {nw.WaterProcessed * 0.018:0}L · 되찾은 {nw.WaterRecovered * 0.018:0}L");
+            var fevers = smw.Log.Where(l => l.text.Contains("열이 있습니다")).ToList();
+            Check("운동한 건강한 이에게 열 경보 0: 평시 하루 (앓는 이 없음) — 쉬는 몸에서 30분 사이 두 번 재어 둘 다 높을 때만 열 · 사람마다 하루 한 번 (예전엔 운동 뒤 30분이 지나자마자 37.7℃로 아홉 번)",
+                people.All(a => life[a.C.Body].Ill == 0) && fevers.Count == 0, $"열 경보 {fevers.Count}번{(fevers.Count > 0 ? $" (처음 {Time.Clock(fevers[0].tick)} {fevers[0].text})" : "")}");
+            Check("날 수는 한 셈: 아침 방송의 물 날 수가 주컴퓨터가 배급을 정하는 셈과 같다 (예전엔 방송 · 일지 · 배급이 따로 셈해 같은 날 '387.8일 치' · '28일 치')",
+                morningWater.Length > 0 && morningWater == morningCalc, $"방송 '물 {morningWater}' · 셈 '{morningCalc}'");
         }
 
         // ── DF5 평시 로봇 (보고서 §4-10): 할 일이 없으면 충전독에서 놀지 않고 돈다 (순회 · 나르기 · 거두기) — 충전독에 서 있는 몫이 하루의 절반 아래 ──
