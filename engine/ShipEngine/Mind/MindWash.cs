@@ -308,10 +308,7 @@ public sealed partial class Mind
                 }
                 else   // 망이 없는 샤워 칸 (시험 배): 물을 직접 쓴다
                 {
-                    double want = ShowerWater * st.Value / Time.Minutes(6);
-                    double got = _net != null ? Math.Min(_net.WaterTank, want) : want;
-                    if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
-                    _life!.Wash(sim, c.Body, got, 313, st.Cell);
+                    _life!.WashFromTap(sim, c.Body, ShowerWater * st.Value / Time.Minutes(6), 313, st.Cell);   // 물은 월드가 탱크에서 꺼낸다 (요청)
                 }
                 c.ShoweredAt = t; ShowersTaken++;
                 CountWashMoved(a, st.Target);
@@ -324,9 +321,7 @@ public sealed partial class Mind
             case UseKind.Hands:
             {
                 if (_net != null && !_net.WaterAt(st.Target)) break;   // 물관이 끊겼다 — 물이 나오지 않는다 (씻지 못했다)
-                double got = _net != null ? Math.Min(_net.WaterTank, HandWater) : HandWater;
-                if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
-                _life!.HandWash(sim, c.Body, got, st.Target >= 0 && st.Target < L.Furniture.Count ? L.Furniture[st.Target].Cells[0] : -1);   // 손 씻는 물 (월드 — 세면대 칸에서 쏴)
+                _life!.HandWash(sim, c.Body, HandWater, st.Target >= 0 && st.Target < L.Furniture.Count ? L.Furniture[st.Target].Cells[0] : -1);   // 손 씻는 물 (월드가 탱크에서 꺼내고 · 세면대 칸에서 쏴)
                 c.HandsAt = t; HandWashes++;
                 break;
             }

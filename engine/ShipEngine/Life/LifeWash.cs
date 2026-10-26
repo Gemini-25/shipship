@@ -170,11 +170,25 @@ public sealed partial class Life
         if (_net != null) _net.WasteWater += water - steam;
     }
 
-    /// <summary>손을 씻는다 (월드 — 세면대): 물 water몰 (망의 물탱크에서 이미 꺼낸 것)로 씻고 · 물이 나왔으면 세면대 칸에서 쏴 (낸 이는 그 몸 — 5단 C7).</summary>
-    public void HandWash(Sim sim, int body, double water, int cell)
+    /// <summary>
+    /// ⑧의 요청 (세면대 · 망 없는 샤워 칸): 물 want몰을 망의 물탱크에서 꺼내 (망이 없으면 그대로 · 장부 '씻었다') 씻는다 — 꺼낸 몰을 돌려준다.
+    /// 판단은 탱크 · 장부를 만지지 않는다 (C10 검토 고침).
+    /// </summary>
+    public double WashFromTap(Sim sim, int body, double want, double waterK, int cell)
     {
-        Wash(sim, body, water, 300, cell);
-        if (water > 0 && cell >= 0) sim.Find<Sound>()?.Emit(sim, cell, FaucetDb, SoundKind.Faucet, 0, Sound.BodyActor(body));
+        _net ??= sim.Find<Network>();
+        double got = _net != null ? Math.Min(Math.Max(0, _net.WaterTank), want) : want;
+        if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Washed, -got); }
+        Wash(sim, body, got, waterK, cell);
+        return got;
+    }
+
+    /// <summary>손을 씻는다 (⑧의 요청 — 세면대): 물탱크에서 want몰을 꺼내 씻고 · 물이 나왔으면 세면대 칸에서 쏴 (낸 이는 그 몸 — 5단 C7).</summary>
+    public double HandWash(Sim sim, int body, double want, int cell)
+    {
+        double got = WashFromTap(sim, body, want, 300, cell);
+        if (got > 0 && cell >= 0) sim.Find<Sound>()?.Emit(sim, cell, FaucetDb, SoundKind.Faucet, 0, Sound.BodyActor(body));
+        return got;
     }
 
     /// <summary>샤워 칸에서 흐른 물로 씻긴다 (월드 — 물은 ⑥ 샤워 칸이 이미 흘려 오수로 보냈다): 더러움이 water/ShowerMol만큼 · 지린 옷도 (물 200몰 넘게).</summary>

@@ -134,7 +134,7 @@ public enum FactKind : ushort
     Overflowed,        // 막힌 변기를 모르고 써서 넘쳤다 (Actor: 쓴 몸 · Other: 변기 설비 · Size: 바닥에 쏟아진 오줌 몰)
     // 5단 화장실 (라)(마) · 일상 물리 (docs/STAGE5.md)
     ThermoStuck,       // 샤워 온수기 조절기가 고장 났다 (Other: 장치 · Size: 1 접점 붙음 — 뜨거움 · 2 열린 채 굳음 — 찬물)
-    Spilled,           // 물 · 냄비를 쏟았다 (Actor: 그 몸 · Other: 설비 · Size: 쏟은 물 몰)
+    Spilled,           // 물 · 냄비를 쏟았다 (Actor: 그 몸 · Other: 설비의 가구 번호 (컵 — 급식기 · 냄비 — 조리대) · Size: 쏟은 물 몰)
     // ④ 물체 (docs/PHYSICS.md)
     ItemFell,          // 물체가 떨어졌다 (Other: 물체 Id · Size: 떨어진 높이 m)
     Shattered,         // 물체가 깨졌다 (Other: 물체 Id · Size: 맞은 에너지 J)

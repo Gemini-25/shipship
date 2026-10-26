@@ -87,13 +87,13 @@ public sealed partial class Life
         ref var b = ref this[body];
         double odds = CupFumble * MishapOdds(b, sleepy, hasty) * (1 - 0.5 * Math.Clamp(careful, 0, 1));
         double spilled = 0; int cause = 0;
-        if (got > 0 && Rng.Unit(sim.Seed, Rng.Key("쏟음"), sim.Tick, body) < odds)
+        if (got > 0 && b.Cell >= 0 && Rng.Unit(sim.Seed, Rng.Key("쏟음"), sim.Tick, body) < odds)   // 칸 밖의 몸 (−1)은 쏟을 바닥이 없다
         {
             spilled = got * (0.4 + 0.6 * Rng.Unit(sim.Seed, Rng.Key("쏟은 몫"), sim.Tick, body));
             string why = MishapWhy(b, sleepy);
             int cell = b.Cell;
             cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(name)} 컵을 쏟았다{(why.Length > 0 ? " — " + why : "")}", sim.Tick, cell, 0, 0, actor);
-            if (cell >= 0) F.AddStore(cell, T.sWater, spilled, cause);
+            F.AddStore(cell, T.sWater, spilled, cause);
             if (_net != null) sim.Book.Add(Res.Water, Flow.Spilled, -spilled);
             sim.Facts.Emit(sim.Tick, FactKind.Spilled, cell, (float)spilled, cause, actor: body, other: furniture);
             Spills++;
@@ -120,7 +120,7 @@ public sealed partial class Life
         var dev = _net.Devices[device];
         int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(name)} 냄비를 쏟았다{(why.Length > 0 ? " — " + why : "")}", sim.Tick, dev.Cell, 0, 0, actor);
         var (mol, panK) = _net.SpillPan(sim, device, share, cause);
-        sim.Facts.Emit(sim.Tick, FactKind.Spilled, dev.Cell, (float)mol, cause, actor: body, other: device);
+        sim.Facts.Emit(sim.Tick, FactKind.Spilled, dev.Cell, (float)mol, cause, actor: body, other: dev.Furniture);   // 설비는 가구 번호 (컵과 같게)
         Spills++;
         if (panK > 330) Scald(sim, body, (float)Math.Min(0.3, (panK - 330) / 150), cause);   // 뜨거운 물이 손 · 발에 (80℃ 0.15)
     }

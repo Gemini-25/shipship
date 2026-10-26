@@ -54,12 +54,37 @@ public static partial class Program
                 double pan0 = net.PanWater[stove.Id], floor0 = Floor(); float burn0 = life[body].Burn;
                 life.HandlePan(s, body, stove.Id, 0, 0, 0, p, m.NameOf(p));
                 var fact = s.Facts.Since(0).LastOrDefault(x => x.Kind == FactKind.Spilled);
-                return (pan0 - net.PanWater[stove.Id], Floor() - floor0, life[body].Burn - burn0, fact.Kind == FactKind.Spilled ? s.Causes.Text(fact.Cause) : "");
+                return (pan0 - net.PanWater[stove.Id], Floor() - floor0, life[body].Burn - burn0, fact.Kind == FactKind.Spilled && fact.Other == stove.Furniture ? s.Causes.Text(fact.Cause) : "");   // 사실의 설비는 가구 번호 (컵과 같게 — 검토 고침)
             }
             var hot = Pan(353.15f); var warm = Pan(303.15f);
             Check("쏟음 (C10) 냄비: 몫 1 · 80℃ 냄비를 쏟으면 냄비 물 40~100%가 바닥으로 (빠진 만큼 바닥에 — 합이 같다) · 쏟은 이가 덴다 · 원인 '냄비를 쏟았다' / 30℃ 냄비는 쏟아도 데지 않는다",
                 hot.moved >= 0.4 * Network.PanFill - 1e-3 && Math.Abs(hot.floor - hot.moved) < 1e-6 && hot.burn > 0 && hot.why.Contains("냄비를 쏟았다") && warm.moved > 0 && warm.burn == 0,
                 $"80℃: 쏟음 {hot.moved:0.0}몰 · 바닥 +{hot.floor:0.0} · 데임 {hot.burn:0.000} · '{hot.why}' / 30℃: 쏟음 {warm.moved:0.0} · 데임 {warm.burn:0.000}");
+        }
+
+        // (가-2) 검토 고침: 배급이 있으면 쏟은 물도 그날 몫에서 빠진다 (마신 이가 쏟은 것을 안다 — 받은 물이 그만큼) · 몸이 칸 밖이면 (−1) 쏟지 않는다 (예전: 장부에만 '쏟았다'가 적히고 물은 어디에도 없었다) ·
+        //       사실 '쏟았다'의 설비는 컵 · 냄비 모두 가구 번호
+        {
+            var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            var s = Worlds.Full(lay, 1);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int p = m.AddPerson(s, Worlds.At(lay, 3, 7));
+            s.Run(2);
+            life.CupFumble = 1;
+            m.SetRation(0, 1000, 0);
+            long d0 = m.Drinks;
+            double bd0 = s.Book.Of(Res.Water, Flow.Drunk), bs0 = s.Book.Of(Res.Water, Flow.Spilled), today0 = m.DrankToday(p);
+            for (int k = 0; k < (int)Time.Minutes(20) && m.Drinks == d0; k++) { ref var c = ref m[p].C; c.Thirst = 1; c.Hunger = 0; c.Sleepy = 0; s.Step(); }
+            double took = (bd0 - s.Book.Of(Res.Water, Flow.Drunk)) + (bs0 - s.Book.Of(Res.Water, Flow.Spilled)), today = m.DrankToday(p) - today0;
+            var body = m[p].C.Body;
+            int keep = life[body].Cell; life[body].Cell = -1;
+            double bs1 = s.Book.Of(Res.Water, Flow.Spilled);
+            var off = life.Drink(s, body, 0, 20, 0, 0, 0, p, m.NameOf(p));
+            bool offOk = off.spilled == 0 && s.Book.Of(Res.Water, Flow.Spilled) == bs1;
+            life[body].Cell = keep;
+            Check("쏟음 (C10 검토 고침): 배급이 있으면 쏟은 물도 그날 몫에서 빠진다 (받은 물 = 마신 + 쏟은) · 몸이 칸 밖이면 쏟지 않는다 (장부에만 적히고 물이 없던 것)",
+                m.Drinks == d0 + 1 && took > 0 && Math.Abs(today - took) < 1e-9 && offOk,
+                $"받은 물 {took:0.0}몰 · 그날 몫에서 빠진 {today:0.0} · 칸 밖 쏟음 {off.spilled:0.0} (장부 {(offOk ? "그대로" : "적힘")})");
         }
 
         // (다) C12 젖은 바닥 미끄러짐: 복도 한 줄 — 지린 물 (400몰)이 고인 칸을 B가 목말라 지나가면 (몫 1) 넘어진다 — 사실 '넘어졌다' 하나 · 원인 '미끄러져' ← '지렸다' · 타박 · Slips 1 · Falls 0
