@@ -244,6 +244,7 @@ public sealed partial class Mind
         // 눈
         int room = RoomOf(cell);
         double radius = SightRadius(a, cell);
+        if (c.Kind == AgentKind.Robot && c.Goal == GoalKind.Patrol && c.StepIndex >= 1 && c.GoalTarget >= 0 && c.GoalTarget < L.Rooms.Count) LookedAt(a, c.GoalTarget, t);   // DF5 순회: 그 방을 둘러본다 (둘러볼 자리에 닿은 뒤)
         if (room >= 0)
         {
             SeeRoom(sim, a, room, radius);
@@ -443,6 +444,7 @@ public sealed partial class Mind
         if (F.Stored(T.sWater, x) > 100) Learn(a, t, BeliefKind.Water, x, -1, 0.9f, BeliefSource.Saw);
         if (F.Hole[x] > 0 && L.Kind[x] == CellKind.Floor) Learn(a, t, BeliefKind.Breach, x, -1, 1, BeliefSource.Saw, _st?.DamageCause[x] ?? 0, F.Hole[x]); // ④ 바닥 · 천장 판이 뚫린 칸 (폭발 압력)
         if (_sparks.Contains(x)) Learn(a, t, BeliefKind.Spark, x, -1, 1, BeliefSource.Saw);
+        if (_devAt.Length == L.N && _devAt[x] >= 0 && _net != null && _net.Devices[_devAt[x]].Cell == x && IsStove(_devAt[x])) SeeStove(sim, a, t, x, _devAt[x]);   // DF5 켜 둔 조리대 · 오븐 (방 안이면 보인다)
         if (d <= 3 && _devAt.Length == L.N && _devAt[x] >= 0 && _net != null)
         {
             int dev = _devAt[x];

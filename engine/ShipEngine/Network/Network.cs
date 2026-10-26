@@ -879,6 +879,7 @@ public sealed partial class Network : IEngine
                     {
                         double x = F.TakeStore(c, T.sFood, Math.Min(food, 0.0005 * (PanK[d] - 470) / 100 * dt));
                         F.AddGas(c, T.gSoot, 6 * x, PanK[d]); F.AddGas(c, T.gH2O, 6 * x, PanK[d]);
+                        sim.Book.Add(Res.Food, Flow.Burned, -x);   // 눌어 없어진 음식도 장부에 (예전엔 적지 않아 켜 둔 조리대 하나에 식량 장부가 0.24몰 어긋났다 — DF5)
                     }
                     if (PanK[d] > 600 && food > 0.05) F.Tf[c] = Math.Max(F.Tf[c], PanK[d]); // 눌은 음식이 불붙을 만큼 뜨겁다
                     if (kw > 0 && OnCause[d] != 0) { var chem = sim.Find<Chemistry>(); if (chem != null) chem.HeatCause[c] = OnCause[d]; }

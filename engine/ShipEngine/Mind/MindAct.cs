@@ -15,7 +15,7 @@ public sealed partial class Mind
         long t = sim.Tick;
         c.Speed = 0;
         // 업은 사람이 깨어났으면 내려놓는다
-        if (c.Carrying >= 0 && (_life!.Bodies[c.Carrying].Conscious != 0 || _life.Bodies[c.Carrying].Alive == 0))
+        if (c.Carrying >= 0 && (_life!.Bodies[c.Carrying].Conscious != 0 || _life.Bodies[c.Carrying].Alive == 0 && c.Goal != GoalKind.LayOut))   // 수습하는 숨진 이는 쉴 곳까지 (DF5)
             DropCarried(sim, a, _life.Bodies[c.Carrying].Alive != 0);
         if (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count) { Activity(a, "rest"); return; }
         var st = a.Plan[c.StepIndex];
@@ -77,6 +77,22 @@ public sealed partial class Mind
             case StepKind.Salvage: SalvageStep(sim, a, st); return;
             case StepKind.Rewire: RewireStep(sim, a, st); return;
             case StepKind.Door: DoorStep(sim, a, st); return;
+            case StepKind.Switch: SwitchStep(sim, a, st); return;
+            case StepKind.Shroud: ShroudStep(sim, a, st); return;
+            case StepKind.PickUp when st.Arg == 2:   // DF5 시신 수습: 숨진 이를 든다 (덮이지 않은 · 아무도 옮기지 않는)
+            {
+                int vb = st.Target;
+                var body = _life!.Bodies[vb];
+                if (body.Alive != 0 || body.Shroud != 0) { EndPlan(a); return; }
+                if (Dist(c.Cell, body.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+                foreach (var o in Agents) if (o != a && o.C.Carrying == vb) { Fail(sim, a, "누가 이미 옮긴다", SnagKind.Taken); return; }
+                c.Carrying = vb;
+                int vd = AgentOfBody(vb);
+                if (vd >= 0) Agents[vd].C.CarriedBy = a.Id;
+                Move(a, c.Cell);
+                Next(a, t);
+                return;
+            }
             case StepKind.PickUp:
             {
                 int vb = st.Target;
@@ -98,6 +114,7 @@ public sealed partial class Mind
                 Next(a, t);
                 return;
             }
+            case StepKind.Drop when st.Arg == 2: DropCarried(sim, a, false); Next(a, t); return;   // DF5: 숨진 이를 쉴 곳에 내려놓는다 ('업어 냈다'가 아니다)
             case StepKind.Drop:
             {
                 // 내려놓은 곳이 안전할 때만 '업어 냈다' — 배 어디도 안전하지 않으면(기압이 다 빠졌다) 내려놓고 한동안 다시 업지 않는다 (업고 내리기를 되풀이하지 않게)

@@ -16,7 +16,7 @@ public sealed partial class ShipMind
     private void Chores(Sim sim)
     {
         if (_mind == null || _work == null) return;
-        if (sim.Tick % MakerEvery == ChoreOffset % MakerEvery) SwitchMakers();
+        if (sim.Tick % MakerEvery == ChoreOffset % MakerEvery) { SwitchMakers(); WatchLeftOn(sim); }
         if (sim.Tick % ChoreEvery == ChoreOffset) { PlanChores(sim); FindBlocks(sim); }
     }
 
@@ -33,6 +33,30 @@ public sealed partial class ShipMind
             if (have >= mk.Max) { if (_net.On[dev.Id] != 0 && dev.Def.Kw > 3) _net.SetOn(dev.Id, false); continue; }
             if (_net.On[dev.Id] == 0 && dev.Id < LineShed.Length && LineShed[dev.Id] != 0) continue;   // 연장선 짐을 줄이려고 껐다 (DF3) — 제 급전선이 살아날 때까지
             if (_net.On[dev.Id] == 0 && _net.Demanded + dev.Def.Kw < (_powerFirst.Contains(dev.Id) ? 0.95 : 0.8) * _net.Capacity()) _net.SetOn(dev.Id, true);
+        }
+    }
+
+    /// <summary>쓰는 이 없이 이만큼(분) 켜진 조리대 · 오븐은 주컴퓨터가 끈다 (DF5 — 경보 문턱 아래도).</summary>
+    public const int LeftOnCutMin = 15;
+    public long LeftOnCuts;
+    private byte[] _leftOnMin = Array.Empty<byte>();   // 장치마다 곁에 사람 없이 켜져 있던 분 (카메라로 본 방만 — 찍는다)
+
+    /// <summary>1분마다: 보이는 방의 켜진 조리대 · 오븐 곁에 사람이 없으면 분을 세고 · 15분이면 전원을 내린다 (켜 둔 이의 원인에 잇는다 — 켜 둔 이가 배운다).</summary>
+    private void WatchLeftOn(Sim sim)
+    {
+        if (_net == null || _mind == null) return;
+        if (_leftOnMin.Length != _net.Devices.Count) Array.Resize(ref _leftOnMin, _net.Devices.Count);
+        foreach (var dv in _net.Devices)
+        {
+            if (dv.Def.Role != "stove") continue;
+            int r = L.Room[dv.Cell];
+            if (_net.On[dv.Id] == 0 || r < 0 || r >= RoomSeen.Length || RoomSeen[r] == 0 || _mind.Attended(dv.Cell)) { _leftOnMin[dv.Id] = 0; continue; }   // 꺼졌다 · 못 본다 · 곁에 사람이 있다 (쓰는 중)
+            if (++_leftOnMin[dv.Id] < LeftOnCutMin) continue;
+            _leftOnMin[dv.Id] = 0;
+            int cut = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 쓰는 이 없이 {LeftOnCutMin}분 켜져 있던 {RoomName(r)} {dv.Name} 전원을 내렸다", sim.Tick, dv.Cell, _net.OnCause[dv.Id]);
+            sim.Facts.Emit(sim.Tick, FactKind.Switched, dv.Cell, 0, cut, -1, dv.Id);
+            _net.SetOn(dv.Id, false); StovesCut++; LeftOnCuts++;
+            Say(sim, $"{RoomName(r)} {dv.Name} 전원을 내렸다 — 쓰는 이 없이 {LeftOnCutMin}분 켜져 있었다", NoteKind.Power);
         }
     }
 
@@ -108,6 +132,17 @@ public sealed partial class ShipMind
         // 채우기 · 줍기 (docs/MIND.md 3단 — 손): 보관함 무게 센서로 덜 찬 소화기 · 우주복 · 마스크를 안다 · 카메라로 바닥의 큰 물건을 본다
         PlanRefills(sim);
         PlanGathers(sim);
+        // 시신 수습 (DF5): 숨진 지 10분 넘은 이 — 덮이지 않았고 · 옮기는 중이 아니고 · 그 방이 보이고 위험을 아는 방이 아니면 (로봇 먼저 · 없으면 사람)
+        if (_life != null)
+            foreach (var a in mind.Agents)
+            {
+                if (!a.IsPerson || a.C.Body < 0) continue;
+                var b = _life.Bodies[a.C.Body];
+                int r = b.Cell >= 0 ? L.Room[b.Cell] : -1;
+                if (b.Alive != 0 || b.Shroud != 0 || a.C.CarriedBy >= 0 || now - b.DiedAt < Time.Minutes(10) || r < 0 || RoomSeen[r] == 0 || RoomKnownBad(r)) continue;
+                if (Jobs.Any(j => j.Kind == GoalKind.LayOut && j.Target == a.C.Body)) continue;
+                Post(sim, new Job { Kind = GoalKind.LayOut, Target = a.C.Body }, b.Cell, person => !RobotFor(GoalKind.LayOut));   // 사람에게는 그 일을 할 로봇이 배에 없을 때만 (바쁜 로봇은 기다린다)
+            }
         // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
         foreach (var room in L.Rooms)
         {
@@ -134,6 +169,7 @@ public sealed partial class ShipMind
         GoalKind.ToiletCare => CareDone(j),
         GoalKind.Refill => j.Target >= L.Furniture.Count || _mind!.SpentIn(j.Target, (byte)j.Arg) <= 0 && (j.Agent < 0 || j.Agent >= _mind.Agents.Count || _mind.Agents[j.Agent].C.Holding != j.Arg),
         GoalKind.Gather => GatherDone(j.Target, j.Arg, j.Agent),
+        GoalKind.LayOut => _life == null || j.Target >= _life.Bodies.Count || _life.Bodies[j.Target].Shroud != 0,
         _ => true,
     };
 
@@ -255,7 +291,7 @@ public sealed partial class ShipMind
         {
             GoalKind.Craft => $"{Ko.I(_mind!.ItemNames[Math.Clamp(j.Arg, 0, _mind.ItemCount - 1)])} 만들기", GoalKind.Maintain => "미리 갈기", GoalKind.Clean => "청소", GoalKind.Harvest => "거두기",
             GoalKind.Restock => "식량 나르기", GoalKind.Haul => "헌 부품 나르기", GoalKind.Tighten => "볼트 조이기", GoalKind.ToiletCare => "변기 손질",
-            GoalKind.Refill => "쓴 것 채우기", GoalKind.Gather => "떨어진 것 줍기", _ => Mind.GoalName(j.Kind),
+            GoalKind.Refill => "쓴 것 채우기", GoalKind.Gather => "떨어진 것 줍기", GoalKind.LayOut => "시신 수습", _ => Mind.GoalName(j.Kind),
         };
         return cell >= 0 && cell < L.N && L.Room[cell] >= 0 ? $"{what} ({RoomName(L.Room[cell])})" : what;
     }
@@ -274,6 +310,7 @@ public sealed partial class ShipMind
             GoalKind.Haul => F(j.Arg / 256),
             GoalKind.ToiletCare => j.Arg == 3 ? PropCell(j.Target) : F(j.Target),
             GoalKind.Gather => PropCell(j.Target),
+            GoalKind.LayOut => _life != null && j.Target < _life.Bodies.Count ? _life.Bodies[j.Target].Cell : -1,
             _ => j.Target,
         };
     }
@@ -312,9 +349,16 @@ public sealed partial class ShipMind
         return true;
     }
 
+    /// <summary>그 일을 할 몸의 로봇이 배에 있나 (지금 바쁜지는 묻지 않는다).</summary>
+    private bool RobotFor(GoalKind g)
+    {
+        foreach (var a in _mind!.Agents) if (a.C.Kind == AgentKind.Robot && a.C.Up != 0 && a.C.Battery >= 0.2f && _mind.RobotCan(a, g)) return true;
+        return false;
+    }
+
     private static bool ChoreBusy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
         or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare
-        or GoalKind.Refill or GoalKind.Gather;
+        or GoalKind.Refill or GoalKind.Gather or GoalKind.LayOut;
 
     public readonly List<string> Blocks = new();
     public readonly List<int> BlockCauses = new();        // 막힌 곳마다 원인 마디 (⑪ — 같은 막힘이면 같은 마디 · 망가진 설비 때문이면 그 고장의 원인에 잇는다)
@@ -434,10 +478,12 @@ public sealed partial class ShipMind
     {
         w.List(Jobs); w.List(JobFails); w.I64(JobsFailed); w.I64(JobsStuck);
         w.I32(Blocks.Count); foreach (var b in Blocks) w.Str(b); w.Arr(BlockCauses.ToArray()); w.Arr(_powerFirst.OrderBy(x => x).ToArray());
+        w.Arr(_leftOnMin); w.I64(LeftOnCuts);
     }
     private void LoadChores(StateReader r)
     {
         Jobs = r.List<Job>(); JobFails = r.List<JobFail>(); JobsFailed = r.I64(); JobsStuck = r.I64();
         Blocks.Clear(); int nb = r.I32(); for (int i = 0; i < nb; i++) Blocks.Add(r.Str() ?? ""); BlockCauses.Clear(); BlockCauses.AddRange(r.Arr<int>()); _powerFirst.Clear(); foreach (int x in r.Arr<int>()) _powerFirst.Add(x);
+        _leftOnMin = r.Arr<byte>(); LeftOnCuts = r.I64();
     }
 }

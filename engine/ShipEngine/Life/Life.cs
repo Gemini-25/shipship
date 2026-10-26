@@ -87,6 +87,7 @@ public struct Body
     public float Groggy;                         // 잠기운 0~1 (자는 동안 잔 만큼 차오르고 · 깨면 분 단위로 풀린다 — 깊이 고침 DF4)
     public float Spent;                          // 기운 없음 0~1 (멎은 심장이 다시 뛴 뒤 · 몇 시간에 걸쳐 풀린다 — DF4)
     public long SleptFrom;                       // 잠든 틱 + 1 (0: 깨어 있다)
+    public byte Shroud;                          // 숨진 몸을 덮었다 (수습한 이가 요청 — 깊이 고침 DF5)
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -262,6 +263,8 @@ public sealed partial class Life : IEngine
     public ref Body this[int i] => ref CollectionsMarshal.AsSpan(Bodies)[i];
 
     public void Move(int body, int cell) => this[body].Cell = cell;
+    /// <summary>숨진 몸을 덮는다 (수습한 이의 요청 — 깊이 고침 DF5).</summary>
+    public void Cover(int body) { if (body >= 0 && body < Bodies.Count && this[body].Alive == 0) this[body].Shroud = 1; }
     public void Eat(int body, double glucoseMol) { this[body].Reserve += glucoseMol; this[body].Bowel += glucoseMol * BowelPerMol; }
     public void Drink(int body, double waterMol) => this[body].Water += waterMol;
 

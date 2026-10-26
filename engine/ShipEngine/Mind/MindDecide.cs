@@ -194,7 +194,7 @@ public sealed partial class Mind
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
-                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.Gather && _deciding.IsPerson ? (c.Goal == GoalKind.Work ? 2 : 1) : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게 · 근무 중에 받은 일은 일의 한 몫 — 하던 일 지킴을 넘는다)
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.Gather or GoalKind.LayOut && _deciding.IsPerson ? (c.Goal == GoalKind.Work ? 2 : 1) : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게 · 근무 중에 받은 일은 일의 한 몫 — 하던 일 지킴을 넘는다)
         }
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
         if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
@@ -274,7 +274,7 @@ public sealed partial class Mind
             float low = c.Battery < 0.1f ? 8 : c.Battery < 0.3f ? 4 : c.Battery < 0.95f && c.Goal == GoalKind.Charge ? 1.5f : 0.4f;
             int dock = ChargeDock(a);   // 죽은 독은 피한다 (docs/MIND.md 3단 덧붙임)
             Add(GoalKind.Charge, dock, dock, low);
-            if (!drone) { JobOption(a); StashOption(a, here); GatherOption(a, here); }   // 돌려놓기 · 줍기 (docs/MIND.md 3단)
+            if (!drone) { JobOption(a); StashOption(a, here); GatherOption(a, here); PatrolOption(a, here); }   // 돌려놓기 · 줍기 (docs/MIND.md 3단) · 순회 (DF5)
             else AssignedLook(a);   // 드론: 주컴퓨터가 맡긴 살피기 (쾅 소리 · 뜨거운 자리 · 진공이 된 방 — 예전엔 맡김을 쥐고만 있었다)
         }
 
@@ -382,6 +382,8 @@ public sealed partial class Mind
                         Add(GoalKind.Investigate, b.Cell, b.Cell, s * df * ClaimFactor(a, GoalKind.Investigate, b.Cell, 1), b.Cause);
                     break;
                 }
+                case BeliefKind.LeftOn when !drone: SwitchOption(a, b, df, caution); break;   // DF5 보면 끈다
+                case BeliefKind.Dead when !drone: LayOutOption(a, b, df, caution); break;     // DF5 시신 수습
                 case BeliefKind.Bang or BeliefKind.Strain or BeliefKind.Leak or BeliefKind.SmokeSmell or BeliefKind.Help or BeliefKind.Spark:
                 {
                     if (b.Src == BeliefSource.Saw && b.Kind != BeliefKind.Spark) break; // 이미 본 자리
@@ -400,6 +402,20 @@ public sealed partial class Mind
     {
         double h = ((hour - start) % 24 + 24) % 24;
         return h < len;
+    }
+
+    /// <summary>그 방 문 너머의 빈 바닥 (다른 방 — 가까운 것 · 없으면 −1).</summary>
+    private int OutsideDoor(int room, int from)
+    {
+        int best = -1, bd = int.MaxValue;
+        Span<int> nb = stackalloc int[4];
+        foreach (int dc in _roomDoors[room])
+        {
+            L.Neighbors(dc, nb);
+            foreach (int j in nb)
+                if (j >= 0 && L.Kind[j] == CellKind.Floor && L.FurnitureAt[j] < 0 && L.Room[j] >= 0 && L.Room[j] != room && Manhattan(from, j) < bd) { bd = Manhattan(from, j); best = j; }
+        }
+        return best;
     }
 
     /// <summary>장치의 중요도: 숨 · 열 · 전기에 관한 것이 높다.</summary>
@@ -436,6 +452,8 @@ public sealed partial class Mind
                     L.Neighbors(here, nb);
                     foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor) { plan.Add(Go(j)); break; }
                 }
+                else if (a.IsPerson && RoomOf(here) is int wr && wr >= 0 && L.Rooms[wr].Type == "Washroom" && OutsideDoor(wr, here) is int outside && outside >= 0)
+                    plan.Add(Go(outside));   // 다 쓴 씻는 방에서 우두커니 서 있지 않는다 — 문밖으로 (서 있는 이를 주컴퓨터가 줄로 읽었다 · DF5)
                 plan.Add(Use(UseKind.None, 10));
                 return true;
             }
@@ -774,6 +792,9 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Put, Target = refinery });
                 return true;
             }
+            case GoalKind.SwitchOff: return PlanSwitch(o, plan);
+            case GoalKind.Patrol: return PlanPatrol(a, o, plan);
+            case GoalKind.LayOut: return PlanLayOut(a, o, plan);
             case GoalKind.Stash: return PlanStash(a, o, plan);
             case GoalKind.Refill: return PlanRefill(a, o, here, plan);
             case GoalKind.Gather: return PlanGather(a, o, here, plan);
@@ -1013,7 +1034,7 @@ public sealed partial class Mind
         if (c.Holding == iScrap || c.Holding == iScrapElec) Add(GoalKind.Haul, c.AssignedGoal == GoalKind.Haul && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
         // 오물 통을 들고 있으면 (비우기가 끊겼어도) 비울 곳으로
         if (c.Holding == iWaste) Add(GoalKind.ToiletCare, -1, c.Cell, 1.0f);
-        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Refill)) return;
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Refill or GoalKind.LayOut)) return;
         int cell = c.AssignedGoal switch
         {
             GoalKind.Craft or GoalKind.Refill => c.AssignedTarget >= 0 && c.AssignedTarget < L.Furniture.Count && L.Furniture[c.AssignedTarget].Cells.Length > 0 ? L.Furniture[c.AssignedTarget].Cells[0] : -1,
@@ -1022,6 +1043,7 @@ public sealed partial class Mind
             GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,
             GoalKind.Restock => c.AssignedArg >= 0 && c.AssignedArg < L.Furniture.Count ? L.Furniture[c.AssignedArg].Cells[0] : -1,
             GoalKind.Haul => c.AssignedArg >= 0 && c.AssignedArg / 256 < L.Furniture.Count ? L.Furniture[c.AssignedArg / 256].Cells[0] : -1,
+            GoalKind.LayOut => _life != null && c.AssignedTarget < _life.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive == 0 && _life.Bodies[c.AssignedTarget].Shroud == 0 ? _life.Bodies[c.AssignedTarget].Cell : -1,   // DF5 시신 수습
             GoalKind.ToiletCare => c.AssignedArg == 3 ? LooseCell(c.AssignedTarget) : c.AssignedTarget >= 0 && c.AssignedTarget < L.Furniture.Count && L.Furniture[c.AssignedTarget].Cells.Length > 0 ? L.Furniture[c.AssignedTarget].Cells[0] : -1,   // 3: 내려놓인 그 통이 있는 칸 (물체 Id → 장부의 칸)
             _ => c.AssignedTarget,
         };

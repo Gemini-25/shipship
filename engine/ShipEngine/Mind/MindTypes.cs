@@ -29,6 +29,7 @@ public enum BeliefKind : byte
     Grind,       // 기계 소리가 이상하다 — 끽끽 · 덜컹 (대상 = 장치 · 들어서 안다)
     Burn,        // 곧 점화한다 — 붙잡아야 한다 (대상 = 점화 틱 · 방송으로 안다)
     GravityBack, // 곧 중력이 돌아온다 — 바닥 쪽을 잡는다 (방송으로 안다)
+    LeftOn,      // 켜 둔 채 곁에 쓰는 이가 없는 조리대 · 오븐 (대상 = 장치 · 보고 안다 — 깊이 고침 DF5)
 }
 
 public enum BeliefSource : byte { Saw, Heard, Smelled, Felt, Told, Screen }
@@ -82,6 +83,9 @@ public enum GoalKind : byte
     Stash,      // 손 비우기 · 돌려놓기 — 든 물건을 제자리(그 물건을 두는 보관함)에 넣는다 (대상: 보관함 설비)
     Refill,     // 쓴 소화기 · 우주복 · 마스크 채우기 (맡긴 일 — 대상: 보관함 설비 · Arg 물건)
     Gather,     // 바닥 물건 줍기 → 제자리 (대상: 칸 · Arg 물건)
+    SwitchOff,  // 켜 둔 채 쓰는 이가 없는 조리대 · 오븐을 끈다 (대상: 장치 — DF5)
+    Patrol,     // 로봇의 순회 — 제 구역의 방을 돌며 켜진 것 · 멈춘 장치 · 고인 물 · 숨진 이를 본다 (대상: 방 — DF5)
+    LayOut,     // 숨진 이를 수습한다 — 덮어 쉴 곳에 뉜다 (대상: 몸 — DF5)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -115,6 +119,8 @@ public enum StepKind : byte
     Lay,       // 든 물건을 그 자리에 내려놓는다 (급할 때 손 비우기)
     Refill,    // 든 소화기 · 우주복 · 마스크를 채운다 (Target: 채울 곳 설비 · 물탱크 물 · 모은 이산화탄소 · 방 공기의 산소)
     Gather,    // 바닥 물건을 줍는다 (Cell · Arg: 물건)
+    Switch,    // 켜 둔 장치를 끈다 (Target: 장치 — DF5)
+    Shroud,    // 숨진 이를 덮는다 (Target: 몸 — DF5)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

@@ -10,10 +10,10 @@ public sealed partial class Mind
     /// <summary>손일 — 팔이 상하면 못 한다.</summary>
     public static bool HandGoal(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Repair or GoalKind.Brace or GoalKind.Craft
         or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock or GoalKind.Haul or GoalKind.Tighten or GoalKind.ToiletCare or GoalKind.Treat or GoalKind.Rewire or GoalKind.Cpr or GoalKind.Surgery or GoalKind.Cook
-        or GoalKind.Stash or GoalKind.Refill or GoalKind.Gather;
+        or GoalKind.Stash or GoalKind.Refill or GoalKind.Gather or GoalKind.SwitchOff or GoalKind.LayOut;
 
     private static bool HandStep(in PlanStep st) => st.Kind is StepKind.Spray or StepKind.Seal or StepKind.Fix or StepKind.PickUp or StepKind.Brace or StepKind.Craft
-        or StepKind.Maintain or StepKind.Clean or StepKind.Harvest or StepKind.Salvage or StepKind.Rewire or StepKind.Tighten or StepKind.Sanitize or StepKind.Gather or StepKind.Refill
+        or StepKind.Maintain or StepKind.Clean or StepKind.Harvest or StepKind.Salvage or StepKind.Rewire or StepKind.Tighten or StepKind.Sanitize or StepKind.Gather or StepKind.Refill or StepKind.Switch or StepKind.Shroud
         || st.Kind == StepKind.Use && (UseKind)st.Arg is UseKind.Treat or UseKind.Cpr or UseKind.Surgery or UseKind.Cook;
 
     private bool HasMech(Agent a) => !a.IsPerson && _net != null && a.C.Mech >= 0 && a.C.Mech < _net.Robots.Count;

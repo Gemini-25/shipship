@@ -24,6 +24,9 @@ public static partial class Program
         var day = ShipWorld.Crewed("Didim", 3, 6, 2);
         var m = day.Get<Mind>(); var life = day.Get<Life>();
         var people = m.Agents.Where(a => a.IsPerson).ToList();
+        var robots = m.Agents.Where(a => a.C.Kind == AgentKind.Robot).ToList();
+        var docked = new int[m.Agents.Count]; var robotGoals = new Dictionary<GoalKind, int>();   // DF5: 로봇이 충전독에 서 있는 틱 · 로봇이 한 일
+        long loiter = 0;   // 씻는 방에서 우두커니 서 있는 사람 틱
         var meals = new int[m.Agents.Count]; var sleep = new int[m.Agents.Count]; var work = new int[m.Agents.Count]; var starving = new int[m.Agents.Count];
         var lastAte = people.ToDictionary(a => a.Id, a => a.C.AteAt);
         // 판단 이관 (바) 감사: 하루 동안 마음이 한 사회적 행동 · 사회가 낸 '행동' 사실을 모두 모은다 (행동은 두 틱 뒤 비우고 · 사실은 고리라 틱마다)
@@ -48,6 +51,8 @@ public static partial class Program
                 if (Debug && f.Kind == FactKind.Ignition) Console.WriteLine($"    {Time.Clock(day.Tick)} 불: {string.Join(" ← ", day.Causes.Chain(f.Cause).Select(c => day.Causes.Text(c)))}");
             }
             factCur = day.Facts.Total;
+            foreach (var r in robots) { if (r.C.Goal == GoalKind.Charge && r.C.Cell == r.C.GoalTarget) docked[r.Id]++; robotGoals[r.C.Goal] = robotGoals.GetValueOrDefault(r.C.Goal) + 1; }
+            foreach (var a in people) if (a.C.Goal == GoalKind.Idle && a.C.Up != 0 && m.RoomOf(a.C.Cell) is int wr && wr >= 0 && day.Layout.Rooms[wr].Type == "Washroom") loiter++;
             foreach (var a in people)
             {
                 if (a.C.AteAt != lastAte[a.Id]) { meals[a.Id]++; lastAte[a.Id] = a.C.AteAt; }
@@ -74,6 +79,14 @@ public static partial class Program
                 ok && day.Facts.CountOf(FactKind.WallCrack) == 0 && people.Count(a => work[a.Id] > Time.Hours(2)) >= 4,
                 string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)} 끼니 {meals[a.Id]} 잠 {sleepH(a.Id):0.0}시간 일 {work[a.Id] / (double)Time.TicksPerHour:0.0}시간 굶주린 {starving[a.Id] / (double)Time.TicksPerHour:0.0}시간"))
                 + $" · 금 {day.Facts.CountOf(FactKind.WallCrack)}");
+        }
+
+        // ── DF5 평시 로봇 (보고서 §4-10): 할 일이 없으면 충전독에서 놀지 않고 돈다 (순회 · 나르기 · 거두기) — 충전독에 서 있는 몫이 하루의 절반 아래 ──
+        {
+            double share = robots.Sum(r => docked[r.Id]) / (double)Math.Max(1, robots.Count * Time.Hours(24));
+            Check("평시 하루 로봇 충전독 시간 ≤ 50%: 할 일이 없는 로봇은 배를 돈다 (예전 94~99%)",
+                robots.Count == 2 && share <= 0.5,
+                $"충전독 {share:P0} ({string.Join(" · ", robots.Select(r => $"{m.NameOf(r.Id)} {docked[r.Id] / (double)Time.Hours(24):P0}"))}) · 한 일 {string.Join(" · ", robotGoals.OrderByDescending(x => x.Value).Select(x => $"{Mind.GoalName(x.Key)} {x.Value / (double)Math.Max(1, robots.Count * Time.Hours(24)):P0}"))}");
         }
 
         // ── 판단 이관 (바) 감사: 사회가 낸 '행동' 사실(대화 · 모임 열기 · 몸싸움 · 몰래 방해 · 헤어짐 · 별명 · 거짓말 · 털어놓음)마다 그 틱(두 틱 안)에 행위자의 판단 행동이 있다 ──
@@ -158,8 +171,8 @@ public static partial class Program
             Check("물자 장부: 디딤호 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다 · 샤워 물은 오수 통에서 되찾으니 물 배급을 열지 않는다 (찾아 고친 결함 — 아침 샤워 몇 번에 '30일 아래'로 보였다)",
                 worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 150 and < 400 && waterDays > waterNoMake && smd.RationWaterOn == 0 && m.ShowersTaken >= 3, // 탐사선: 180일 치 포장 식량
                 $"가장 큰 어긋남 {worst:0e0} ({worstName}) · 산소 {o2Other:0.0}몰 / 숨 {breathed:0}몰 · 식량 {foodDays:0.0}일 · 물 {waterDays:0}일 (되찾지 못하면 {waterNoMake:0.0}일) · 샤워 {m.ShowersTaken} · 물 배급 {smd.RationWaterOn}");
-            Check("평시 하루의 화장실: 줄을 선 이가 없으면 주컴퓨터는 줄 안내를 하지 않는다 (지나가는 이 · 손 씻는 이를 기다리는 이로 치던 결함)",
-                m.Queued > 0 || smd.WashCalls + smd.WashOrders == 0, $"줄 {m.Queued} · 안내 {smd.WashCalls}/{smd.WashOrders}");
+            Check("평시 하루의 화장실: 줄을 선 이가 없으면 주컴퓨터는 줄 안내를 하지 않는다 (지나가는 이 · 손 씻는 이를 기다리는 이로 치던 결함) · 다 쓴 이는 씻는 방에서 우두커니 서 있지 않는다 (둘이 변기 곁에 17분 서 있어 줄로 읽혔다 — DF5)",
+                (m.Queued > 0 || smd.WashCalls + smd.WashOrders == 0) && loiter <= Time.Minutes(2), $"줄 {m.Queued} · 안내 {smd.WashCalls}/{smd.WashOrders} · 씻는 방에서 우두커니 {Time.ToSeconds(loiter) / 60:0}분");
         }
 
         // ── 사바티에: 갈라 낸 수소와 걸러 모은 이산화탄소로 가른 물의 절반 가까이를 되찾는다 (ISS — 수소가 모자라 절반을 넘지 못한다) ──
