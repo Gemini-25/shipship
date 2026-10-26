@@ -30,7 +30,9 @@ public sealed partial class ShipMind
         {
             _gravPhase = 1;
             Say(sim, "중력이 사라집니다 — 손잡이를 잡으세요");
+            ShowersZeroG(sim, true);   // 샤워 칸 물을 잠그고 불 (5단 C26)
         }
+        if (g >= 0.5f) ShowersZeroG(sim, false);   // 돌아오면 비트 2만 끈다
         if (_gravPhase == 1 && rising)
         {
             _gravPhase = 2;
@@ -43,6 +45,26 @@ public sealed partial class ShipMind
                     _mind.Announce(sim, _roomVent[r], AlarmDb, new Belief { Kind = BeliefKind.GravityBack, Cell = _roomVent[r], Subject = -1, Conf = 1f, Seen = sim.Tick, Cause = cause });
         }
         if (g >= 0.99f) _gravPhase = 0;
+    }
+
+    /// <summary>
+    /// 무중력 샤워 칸 (5단 C26): 무너지면 열린 샤워 칸 밸브를 모두 잠그고 (온수기도) 모든 샤워 칸에 사용 금지 불 비트 2 · 방송 '무중력 — 샤워 칸 물을 잠갔습니다 · 물수건을 쓰세요' ·
+    /// 0.5g 넘게 돌아오면 비트 2만 끈다 (다른 까닭의 불은 그대로). 아는 것: 중력 센서 · 밸브 (제 조절).
+    /// </summary>
+    private void ShowersZeroG(Sim sim, bool on)
+    {
+        var mind = _mind!;
+        bool any = false;
+        foreach (var fu in L.Furniture)
+        {
+            if (fu.Type != "Shower" || fu.Cells.Length == 0) continue;
+            if (!on) { if ((mind.WashSign.Length > fu.Id ? mind.WashSign[fu.Id] & 4 : 0) != 0) { mind.SignWash(fu.Id, 2, false); any = true; } continue; }
+            int d = WashDevice(fu.Id);
+            if (d >= 0 && _net!.ValveOpen(d)) { _net.SetValve(d, false); _net.SetOn(d, false); }
+            mind.SignWash(fu.Id, 2, true); any = true;
+        }
+        if (on && any) Broadcast(sim, "무중력 — 샤워 칸 물을 잠갔습니다 · 물수건을 쓰세요");
+        else if (!on && any) Say(sim, "중력이 돌아와 샤워 칸 불을 껐다 (무중력 몫만)");
     }
 
     private void SaveGravity(StateWriter w) { w.Tag("중력"); w.I32(_gravPhase); w.I64(GravityRestarts); }

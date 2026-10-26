@@ -344,5 +344,36 @@ public static partial class Program
             Check("화장실 사고 (C25) 찬물 알림: 주컴퓨터가 전력 때문에 끈 온수기면 일감 0 (불도 없다) · 조절기가 열린 채 굳은 찬물이면 미리 갈기 일감 1 (불은 켜지 않는다)",
                 shed.jobs == 0 && !shed.sign && coldT.jobs >= 1 && !coldT.sign, $"끈 온수기: 일감 {shed.jobs} · 불 {shed.sign} / 조절기: 일감 {coldT.jobs} · 불 {coldT.sign}");
         }
+
+        // C26 중력이 무너지면 샤워 칸 잠금 (주컴퓨터): C18 도면 + 주컴퓨터 — 씻는 중 중력 발생기가 고장 나 꺼지면 1분 안에 밸브가 잠기고 불 (비트 2) · 방송 · 물수건 /
+        //     발생기를 고쳐 중력이 돌아오면 비트 2만 꺼진다 (미리 켠 비트 1은 남는다) (예전: 빈 칸 2분 잠금뿐 — 불이 없었다)
+        {
+            var lg = new Dictionary<char, string>(legend) { ['G'] = "GravityGenerator", ['c'] = "MainComputer" };
+            var glay = Worlds.Ascii(WashShip.Replace("#e.....#T", "#e..G..#T").Replace("#pb....#", "#pbc...#"), lg);
+            var s = Worlds.Full(glay, 3);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+            var shower = glay.Furniture.First(x => x.Type == "Shower");
+            int dev = net.Devices.First(d => d.Furniture == shower.Id).Id, gen = net.Devices.First(d => d.Type == "GravityGenerator").Id;
+            int p = m.AddPerson(s, Worlds.At(glay, 2, 1));
+            s.Run(2);
+            life[m[p].C.Body].Dirt = 0.8f;
+            void Calm() { int o = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; ref var c = ref m[p].C; c.ShiftHour = o; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Unfit = 0; c.Bored = 0; }
+            long broke = -1, shut = -1; bool signed = false, said = false; long w0 = m.Wipes;
+            for (long t = 0; t < Time.Minutes(40); t++)
+            {
+                Calm(); s.Step();
+                if (broke < 0 && net.ValveOpen(dev) && net.ShowerMeter[dev] > 0) { m.ShowerTooHotK = 400; m.SignWash(shower.Id, 1, true); net.Broken[gen * 4 + (int)Part.Electric] = 1; broke = s.Tick; }   // 비트 1은 미리 (다른 까닭) · 사람이 먼저 잠그지 않게 느끼지 못하는 이
+                if (broke >= 0 && shut < 0 && !net.ValveOpen(dev)) shut = s.Tick;
+                signed |= (m.WashSign[shower.Id] & 4) != 0;
+                foreach (var (_, text) in sm.Broadcasts) said |= text.Contains("샤워 칸 물을 잠갔습니다");
+            }
+            long wiped = m.Wipes - w0;
+            net.Broken[gen * 4 + (int)Part.Electric] = 0;   // 고쳤다 — 주컴퓨터가 다시 켠다
+            s.Run(Time.Minutes(10));
+            byte after = m.WashSign[shower.Id];
+            Check("화장실 사고 (C26) 무중력 샤워 잠금: 씻는 중 중력이 무너지면 주컴퓨터가 1분 안에 샤워 밸브를 잠그고 사용 금지 불 (비트 2) · 방송 · 물수건 / 중력이 돌아오면 비트 2만 꺼진다 (비트 1은 남는다)",
+                broke >= 0 && shut >= 0 && shut - broke <= Time.Minutes(1) && signed && said && wiped >= 1 && after == 2,
+                $"잠금 {(shut >= 0 && broke >= 0 ? Time.ToSeconds(shut - broke) : -1):0}초 · 불 {signed} · 방송 {said} · 물수건 {wiped} · 돌아온 뒤 불 비트 {after}");
+        }
     }
 }
