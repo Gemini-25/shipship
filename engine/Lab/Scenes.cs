@@ -213,6 +213,7 @@ public static partial class Program
             case "props-ships": PropsShipsScene(dir); return;
             case "mess": MessScene(dir); return;
             case "unbolt": UnboltScene(dir); return;
+            case "cup": CupScene(dir); return;   // 컵을 들고 마신다 (5단 C10b — SceneCup.cs)
             case "props-blast": PropsBlastScene(dir); return;
             case "hand": HandScene(dir); return;   // 함장의 손 (docs/UI2.md U2 — SceneHand.cs)
             case "forecast": ForecastScene(dir); return;   // 예측 장부 (docs/UI2.md U8 — SceneForecast.cs)

@@ -133,12 +133,12 @@ public sealed partial class Structure
     /// <summary>
     /// 요청 (⑧ — 내려놓기 · 쓰러지며 떨굼 · 벗어 든 것): 물건을 원판 바깥에 놓는다 — 놓은 이의 자리 (x, y) · 걷던 빠르기 (vx, vy — 그대로 미끄러져 간다) ·
     /// 앞 쪽 (걷던 쪽 · 서 있었으면 face) → 오른쪽 → 왼쪽 → 뒤 가운데 벽 · 가구 · 닫힌 문에 걸리지 않는 첫 자리 (0.25m + 닿는 반지름 + 1도트 · 모두 막혔으면 제자리) ·
-    /// 놓은 이 (꼬리표)와는 놓은 틱부터 두 틱 동안 닿지 않는다. 높이 z: 0이면 내려놓기 (그 자리 받침 — 탁자 위면 윗면) · 아니면 그 높이에서 놓친다 (손 1m — 걷던 빠르기로 날아 떨어진다 · PH7). 물체 Id (못 놓으면 −1).
+    /// 놓은 이 (꼬리표)와는 놓은 틱부터 두 틱 동안 닿지 않는다 · 담긴 물 liquid (컵 — 5단 C10b · 깨지거나 넘어지면 바닥으로 · PH8). 높이 z: 0이면 내려놓기 (그 자리 받침 — 탁자 위면 윗면) · 아니면 그 높이에서 놓친다 (손 1m — 걷던 빠르기로 날아 떨어진다 · PH7). 물체 Id (못 놓으면 −1).
     /// </summary>
-    public int DropItem(int item, float charge, double x, double y, float z, double vx, double vy, int cause, int tag, double faceX = 0, double faceY = 1)
+    public int DropItem(int item, float charge, double x, double y, float z, double vx, double vy, int cause, int tag, double faceX = 0, double faceY = 1, float liquid = 0)
     {
         int cell = x >= 0 && y >= 0 && x < L.W && y < L.H ? L.Index((int)x, (int)y) : -1;
-        int id = PutItem(item, charge, cell);
+        int id = PutItem(item, charge, cell, 0, liquid);
         if (id < 0) return -1;
         int i = IndexOf(id);
         var p = Props[i];

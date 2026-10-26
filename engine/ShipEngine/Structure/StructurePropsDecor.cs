@@ -23,6 +23,75 @@ public sealed partial class Structure
         Props.RemoveAll(p => (p.Flags & DecorFlag) != 0 && p.State == 0);
     }
 
+    /// <summary>
+    /// 요청 (⑧ — 5단 C10b 컵을 제자리에): 그 자리 (x, y)에 꾸밈 하나를 다시 놓는다 — 발자국 (가운데 · 껍질 표본)이 모두 가구 furniture의 같은 윗면 위 ·
+    /// 그 높이에서 막히지 않고 (벽 · 다른 가구 기둥) · 놓인 다른 물체와 겹치지 않으면 놓임 · 잠듦 · 꾸밈 표시로. 새 물체 Id (못 놓으면 −1 — 부른 이가 곁에 내려놓는다).
+    /// </summary>
+    public int ReturnDecor(int item, float liquid, double x, double y, int furniture, int cause, int tag)
+    {
+        if (item < 0 || x < 0 || y < 0 || x >= L.W || y >= L.H) return -1;
+        int c = L.Index((int)x, (int)y);
+        var p = new Prop { Kind = 0, What = (short)item };
+        FillBody(ref p);
+        var fm = PropForm(p);
+        var (sx, sy, reach) = fm.Shape.Hit;
+        double top = TopAt(x, y, out int on);
+        if (on != furniture + 1 || top <= 0) return -1;
+        for (int k = 0; k < sx.Length; k++)
+        {
+            double t = TopAt(x + sx[k], y + sy[k], out int o);
+            if (o != on || Math.Abs(t - top) > 1e-9) return -1;
+        }
+        // 걸어 지나는 이웃 칸에서 떨어진다 (처음 놓을 때와 같게 — 조용한 하루에 걷는 이가 깨우지 않는다)
+        double keep = ActorR + 2 * DotForm.Dot + reach + 1e-3;
+        int cx = L.X(c), cy = L.Y(c);
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0 || !L.In(cx + dx, cy + dy)) continue;
+                int nb = L.Index(cx + dx, cy + dy);
+                if (L.Kind[nb] is not (CellKind.Floor or CellKind.Door) || L.FurnitureAt[nb] == furniture) continue;
+                double ex = Math.Max(Math.Max(cx + dx - x, 0), x - (cx + dx + 1)), ey = Math.Max(Math.Max(cy + dy - y, 0), y - (cy + dy + 1));
+                if (ex * ex + ey * ey < keep * keep) return -1;
+            }
+        _zLo = top; _zHi = top + HeightOf(fm);
+        bool fits = FitsAt(fm, x, y);
+        FullHeight();
+        if (!fits) return -1;
+        foreach (ref readonly var q in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Props))
+        {
+            if (q.Kind is not (0 or 2) || q.State == 5) continue;
+            double r = reach + SamplesOf(PropForm(q)).reach + DotForm.Dot;
+            if ((q.X - x) * (q.X - x) + (q.Y - y) * (q.Y - y) < r * r && Math.Abs(q.Z - top) < 0.3) return -1;   // 그 자리에 다른 것이 놓였다
+        }
+        p.Id = NextPropId++; p.X = x; p.Y = y; p.Z = (float)top; p.On = on; p.Liquid = Math.Max(0, liquid);
+        p.G = F.Grav[c]; p.Flags |= DecorFlag; p.Asleep = 1; p.Since = _now; p.Cause = cause; p.Dropper = tag >= 0 ? tag + 1 : tag;
+        Props.Add(p);
+        return p.Id;
+    }
+
+    /// <summary>
+    /// 요청 (⑧ — 5단 C10b): 가구 furniture 윗면의 빈 자리에 꾸밈 하나를 놓는다 — 칸마다 3 × 3 자리를 (nearX, nearY)에서 가까운 차례로 <see cref="ReturnDecor"/>. 새 Id (자리가 없으면 −1).
+    /// </summary>
+    public int ReturnDecorOn(int item, float liquid, int furniture, double nearX, double nearY, int cause, int tag)
+    {
+        if (furniture < 0 || furniture >= L.Furniture.Count || item < 0) return -1;
+        var p = new Prop { Kind = 0, What = (short)item };
+        FillBody(ref p);
+        double reach = PropForm(p).Shape.Hit.reach, span = Math.Max(0, 1 - 2 * reach);
+        var spots = new List<(double d, double x, double y)>();
+        foreach (int c in L.Furniture[furniture].Cells)
+            for (int j = 0; j < 3; j++)
+                for (int i = 0; i < 3; i++)
+                {
+                    double x = L.X(c) + reach + span * i / 2, y = L.Y(c) + reach + span * j / 2;
+                    spots.Add(((x - nearX) * (x - nearX) + (y - nearY) * (y - nearY), x, y));
+                }
+        spots.Sort((a, b) => a.d != b.d ? a.d.CompareTo(b.d) : a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        foreach (var (_, x, y) in spots) { int id = ReturnDecor(item, liquid, x, y, furniture, cause, tag); if (id >= 0) return id; }
+        return -1;
+    }
+
     /// <summary>그 점 (x, y)의 맨 윗면 높이 (m — 제자리 가구 기둥의 윗면 · 없으면 바닥 0) · on: 0 바닥 · 가구 + 1.</summary>
     public double TopAt(double x, double y, out int on) => SupportAt(x, y, Ceiling, out on, out _);
 

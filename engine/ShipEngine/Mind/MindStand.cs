@@ -141,4 +141,35 @@ public sealed partial class Mind
         }
         return -1;
     }
+
+    /// <summary>
+    /// 마실 때 집을 컵 (5단 C10b): 내 방 · 물 나오는 곳 방에 놓인 꾸밈 컵 (가구 윗면 · 놓임) 가운데 돌아가는 길 (나 → 컵 → 물 + 물 → 컵 − 나 → 물)이 24칸 안에서 가장 짧은 것 ·
+    /// 남이 집으러 가는 컵은 뺀다 (남의 계획 — StandSpot과 같은 감각 읽기). 없으면 −1 (예전 길). 아는 것: 같은 방의 놓인 컵 (눈) · 물 나오는 곳 방의 늘 두는 자리 (꾸밈 표시).
+    /// </summary>
+    private int CupFor(Agent a, int here, int src)
+    {
+        if (!a.IsPerson || _st == null || a.C.Floated != 0) return -1;
+        int r0 = RoomOf(here), r1 = RoomOf(src), best = -1, bd = 25;
+        int direct = PathDist(here, src);
+        foreach (ref readonly var p in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_st.Props))
+        {
+            if (p.Kind != 0 || p.What != iCup || (p.Flags & Structure.DecorFlag) == 0 || p.State != 0 || p.On <= 0) continue;
+            int cc = _st.CellOf(p);
+            if (cc < 0) continue;
+            int rc = RoomOf(cc);
+            if (rc < 0 || rc != r0 && rc != r1) continue;
+            int d = PathDist(here, cc) + 2 * PathDist(cc, src) - direct;
+            if (d >= bd) continue;
+            bool taken = false;
+            foreach (var o in Agents)
+            {
+                if (o == a) continue;
+                for (int k = o.C.StepIndex; k < o.Plan.Count && !taken; k++) taken = o.Plan[k].Kind == StepKind.Gather && o.Plan[k].Target == p.Id;
+                if (taken) break;
+            }
+            if (taken) continue;
+            bd = d; best = p.Id;
+        }
+        return best;
+    }
 }

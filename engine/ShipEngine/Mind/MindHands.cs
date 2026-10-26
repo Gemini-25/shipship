@@ -76,6 +76,11 @@ public sealed partial class Mind
                 int refinery = NearestRefinery(here);
                 if (refinery >= 0) { plan.Add(Go(L.Furniture[refinery].Cells[0], 1)); plan.Add(new PlanStep { Kind = StepKind.Put, Target = refinery }); here = L.Furniture[refinery].Cells[0]; return; }
             }
+            else if (item == iCup)
+            {
+                int shelf = CupShelf(here);   // 마시다 끊긴 컵: 가까운 탁자 · 선반 빈 자리에 (5단 C10b — 컵은 보관함이 없다)
+                if (shelf >= 0) { int sc = L.Furniture[shelf].Cells[0]; plan.Add(Go(sc, 1)); plan.Add(new PlanStep { Kind = StepKind.CupBack, Cell = sc, Value = -1, Target = shelf }); here = sc; return; }
+            }
             else if (item != iWaste)
             {
                 int home = HomeFor(item, here);
@@ -132,7 +137,7 @@ public sealed partial class Mind
             var x = props[i];
             if (x.Kind != 0 || (x.Flags & Structure.DecorFlag) != 0 || x.State == 5) continue;   // 우주로 나간 것 (PH11) · 꾸밈 (제자리가 있다 — 탁자 위 컵 · 선반 위 책 · PH9)은 줍지 않는다
             int xc = book.CellOf(x); byte xi = (byte)x.What;
-            if (xi == iWaste || x.PlugAt != 0 || HomesOf(xi).Length == 0 && !IsFood(xi)) continue;
+            if (xi == iWaste || x.PlugAt != 0 || HomesOf(xi).Length == 0 && !IsFood(xi) && xi != iCup) continue;   // 바닥 컵은 탁자 · 선반으로 (5단 C10b)
             bool mine = assigned && x.Id == c.AssignedTarget;   // 맡긴 그 물체 (일감 대상은 물체 Id)
             if (!mine && (room < 0 || RoomOf(xc) != room)) continue;   // 제 눈에 보이는 것 (같은 방)
             int d = mine ? -1 : PathDist(here, xc);
@@ -201,6 +206,16 @@ public sealed partial class Mind
             if (store < 0) return false;
             plan.Add(Go(L.Furniture[store].Cells[0], 1));
             plan.Add(new PlanStep { Kind = StepKind.Stow, Target = store });
+            return true;
+        }
+        bool job0 = a.C.AssignedGoal == GoalKind.Gather && a.C.AssignedUntil > _nowTick && a.C.AssignedTarget == o.Target;
+        if (item == iCup && !job0)
+        {
+            int shelf = CupShelf(at);   // 바닥 컵: 가까운 탁자 · 선반 빈 자리에 (5단 C10b — 컵은 보관함이 없다)
+            if (shelf < 0) return false;
+            int sc = L.Furniture[shelf].Cells[0];
+            plan.Add(Go(sc, 1));
+            plan.Add(new PlanStep { Kind = StepKind.CupBack, Cell = sc, Value = -1, Target = shelf });
             return true;
         }
         int home = HomeFor(item, at);
@@ -307,13 +322,15 @@ public sealed partial class Mind
         long t = sim.Tick;
         var book = _st!;
         int at = LooseCell(st.Target);
+        if (at < 0 && c.Goal == GoalKind.Drink) { DropCupSteps(a); Next(a, t); return; }   // 누가 먼저 컵을 집었다 — 컵 없이 마신다 (5단 C10b)
         if (at < 0) { if (c.AssignedGoal == GoalKind.Gather) JobDone(a, t); else EndPlan(a); return; }   // 누가 벌써 주웠다
         if (!Reach(sim, a, st.Target, at, st.Arg)) return;
         var got = book.Props[book.IndexOf(st.Target)];
         if (c.Holding != 255) DropHeld(a);
-        c.Holding = (byte)got.What; c.HoldCharge = got.Charge;
-        book.TakeItem(got.Id);
-        Gathered++;
+        bool cup = got.What == iCup && (got.Flags & Structure.DecorFlag) != 0;
+        if (!book.TakeItem(got.Id)) { if (cup) { DropCupSteps(a); Next(a, t); } else EndPlan(a); return; }   // 움직이는 중 — 컵이면 컵 없이 마신다
+        c.Holding = (byte)got.What; c.HoldCharge = got.What == iCup ? got.Liquid : got.Charge;   // 컵은 담긴 물과 함께 든다 (5단 C10b — 바닥 컵도)
+        if (cup) { c.HeldSince = t; CupsTaken++; } else Gathered++;
         Next(a, t);
     }
 
@@ -342,6 +359,48 @@ public sealed partial class Mind
         if (c.Holding == 255) { c.Holding = item; c.HoldCharge = charge; return; }
         PutDown(a, item, charge, false);   // 제 원판 바깥에
         Laid++;
+    }
+
+    /// <summary>셈 (찍지 않는다 — 관찰): 마시려고 집은 컵 · 제자리에 둔 컵 (5단 C10b).</summary>
+    public long CupsTaken, CupsBack;
+
+    /// <summary>컵을 집지 못했다: 남은 '컵 제자리' 걸음과 그 앞 가기를 뺀다 (컵 없이 마신다).</summary>
+    private void DropCupSteps(Agent a)
+    {
+        for (int i = a.Plan.Count - 1; i > a.C.StepIndex; i--)
+            if (a.Plan[i].Kind == StepKind.CupBack) { a.Plan.RemoveAt(i); if (i - 1 > a.C.StepIndex && a.Plan[i - 1].Kind == StepKind.GoTo) a.Plan.RemoveAt(i - 1); }
+    }
+
+    /// <summary>컵을 두는 가구 (탁자 · 선반 — 설비 표 꾸밈에 컵이 있는 것) 가운데 길이 가장 가까운 것 (−1 없음).</summary>
+    private int CupShelf(int from)
+    {
+        int best = -1, bd = int.MaxValue;
+        foreach (var fu in L.Furniture)
+        {
+            if (fu.Cells.Length == 0) continue;
+            var e = T.Equip(fu.Type);
+            if (e.Decor == null || !e.Decor.Values.Any(l => Array.IndexOf(l, "컵") >= 0)) continue;
+            int d = PathDist(from, fu.Cells[0]);
+            if (d < bd) { bd = d; best = fu.Id; }
+        }
+        return best;
+    }
+
+    /// <summary>든 컵을 제자리에 내려놓는다 (④에 요청 — 같은 가구 윗면 그 자리 · 막혔으면 그 가구의 빈 자리 · 없으면 곁에 내려놓는다) · 컵을 들고 있지 않으면 (쏟아 떨궜다) 그냥 넘어간다.</summary>
+    private void CupBackStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        if (c.Holding != iCup || _st == null) { Next(a, t); return; }
+        if (Dist(c.Cell, st.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        int q = (int)st.Value, tag = ActorTag(a);
+        float water = Math.Max(0, c.HoldCharge);
+        double x = L.X(st.Cell) + (q >> 10) / 1023.0, y = L.Y(st.Cell) + (q & 1023) / 1023.0;
+        int id = q >= 0 ? _st.ReturnDecor(iCup, water, x, y, st.Target, c.GoalCause, tag) : -1;   // 집은 그 자리
+        if (id < 0) id = _st.ReturnDecorOn(iCup, water, st.Target, L.X(c.Cell) + 0.5, L.Y(c.Cell) + 0.5, c.GoalCause, tag);   // 그 가구의 빈 자리 (내게 가까운 차례)
+        if (id >= 0) { c.Holding = 255; c.HoldCharge = 0; CupsBack++; }
+        else { DropHeld(a); Laid++; }
+        Next(a, t);
     }
 
     private void SaveHands(StateWriter w) { w.List(Spent); w.I64(Stashed); w.I64(Refilled); w.I64(Gathered); w.I64(Laid); }

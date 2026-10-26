@@ -542,6 +542,20 @@ public sealed partial class Mind
                 int src = Nearest(here, _water, f => _net == null || _net.WaterAt(f));   // 물관이 끊긴 자리에선 물이 안 나온다
                 if (src < 0) return false;
                 int cell = L.Furniture[src].Cells[0];
+                int cup = CupFor(a, here, cell);   // 탁자 · 선반 위 컵을 집어 마시고 제자리에 (5단 C10b — 없거나 멀면 예전 길)
+                if (cup >= 0)
+                {
+                    var cp = _st!.Props[_st.IndexOf(cup)];
+                    int cc = _st.CellOf(cp);
+                    plan.Add(Go(cc, 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Gather, Cell = cc, Target = cup, Arg = iCup });
+                    plan.Add(Go(cell, 1));
+                    plan.Add(Use(UseKind.Drink, Time.Minutes(1), cell, src));
+                    plan.Add(Go(cc, 1));
+                    int qx = Math.Clamp((int)Math.Round((cp.X - L.X(cc)) * 1023), 0, 1023), qy = Math.Clamp((int)Math.Round((cp.Y - L.Y(cc)) * 1023), 0, 1023);
+                    plan.Add(new PlanStep { Kind = StepKind.CupBack, Cell = cc, Value = qx * 1024 + qy, Target = cp.On - 1 });
+                    return true;
+                }
                 plan.Add(Go(cell, 1));
                 plan.Add(Use(UseKind.Drink, Time.Minutes(1), cell, src));
                 return true;

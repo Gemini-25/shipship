@@ -36,6 +36,76 @@ public static partial class Program
                 $"마심 {m.Drinks - d0} · 장부 마셨다 {bookDrunk:0.0} · 쏟았다 {bookSpill:0.0}몰 · 바닥 물 +{floor:0.00} · 사실 {(fact.Kind == FactKind.Spilled ? $"{fact.Size:0.0}몰 몸 {fact.Actor}" : "없음")} · '{why}'");
         }
 
+        // (C10b) 컵을 들고 마신다: 식당 탁자 위 컵 하나 (꾸밈 · 물 5몰) · 목마른 이 — 컵을 집어 배식기에서 마시고 제자리 (같은 탁자 윗면 · 꾸밈)에 내려놓는다 · 물건 수 그대로
+        //     (나) 컵이 없으면 예전 길로 마신다 · (다) 몫 1로 쏟으면 든 컵이 손에서 떨어진다 (손이 빈다 · 탁자 꾸밈이 아니다 · 물건 수 = 처음 + 장부 흐름)
+        {
+            const string CupShip = @"
+###########
+#.........#
+#..t...m..#
+#.........#
+###########";
+            (long drinks, bool took, bool back, int n0, int n1, double flow, bool empty, bool onTable, double w0, double w1) Cup(bool withCup, bool fumble)
+            {
+                var lay = Worlds.Ascii(CupShip, new Dictionary<char, string> { ['t'] = "Table", ['m'] = "MealDispenser" });
+                lay.Rooms[lay.Room[Worlds.At(lay, 1, 1)]].Type = "Mess";
+                var s = Worlds.Full(lay, 3);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var st = s.Get<Structure>(); var f = s.Get<Field>(); var net = s.Get<Network>();
+                int cupItem = m.ItemNames.ToList().IndexOf("컵");
+                int table = lay.Furniture.First(x => x.Type == "Table").Id;
+                int id = -1;
+                if (withCup)
+                {
+                    id = st.PutItem(cupItem, 0, Worlds.At(lay, 3, 2), 0, 5);
+                    int i = st.IndexOf(id); var pr = st.Props[i]; pr.Flags |= Structure.DecorFlag; pr.Asleep = 1; st.Props[i] = pr;
+                }
+                int p = m.AddPerson(s, Worlds.At(lay, 1, 1));
+                s.Run(2);
+                if (fumble) life.CupFumble = 1;
+                double Booked() => Enumerable.Range(0, Book.Flows).Sum(fl => cupItem < s.Book.Items ? s.Book.ItemFlow[cupItem * Book.Flows + fl] : 0);
+                int n0 = m.CountAll(cupItem); double b0 = Booked();
+                long d0 = m.Drinks; bool took = false;
+                for (int k = 0; k < (int)Time.Minutes(20) && m.Drinks == d0; k++)
+                {
+                    ref var c = ref m[p].C; c.Thirst = 1; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0;
+                    s.Step();
+                    took |= withCup && st.IndexOf(id) < 0 && m[p].C.Holding == cupItem;
+                }
+                life.CupFumble = 0;
+                for (int k = 0; k < (int)Time.Minutes(3); k++) { ref var c = ref m[p].C; c.Thirst = 0; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; s.Step(); }
+                var cups = st.Props.Where(x => x.Kind == 0 && x.What == cupItem).ToList();
+                bool back = cups.Count == 1 && (cups[0].Flags & Structure.DecorFlag) != 0 && cups[0].On == table + 1 && cups[0].State == 0;
+                bool onTable = cups.Any(x => x.On == table + 1 && (x.Flags & Structure.DecorFlag) != 0);
+                return (m.Drinks - d0, took, back, n0, m.CountAll(cupItem), Booked() - b0, m[p].C.Holding == 255, onTable, withCup ? 5 : 0, cups.Sum(x => (double)x.Liquid) + m.HeldWater);
+            }
+            var a = Cup(true, false); var b = Cup(false, false); var c3 = Cup(true, true);
+            Check("컵 (C10b) (가): 탁자 위 컵 — 목마른 이가 컵을 집어 배식기에서 마시고 같은 탁자 윗면에 꾸밈으로 내려놓는다 (담긴 물과 함께) · 물건 수 그대로 · 손이 빈다",
+                a.drinks == 1 && a.took && a.back && a.n1 == a.n0 && a.empty && Math.Abs(a.w1 - a.w0) < 1e-6,
+                $"마심 {a.drinks} · 집음 {a.took} · 제자리 {a.back} · 컵 {a.n0}→{a.n1} · 빈손 {a.empty} · 컵에 담긴 물 {a.w0:0.00}→{a.w1:0.00}몰");
+            Check("컵 (C10b) (나): 컵이 없는 배 — 예전 길로 배식기에서 마신다", b.drinks == 1 && b.empty, $"마심 {b.drinks} · 빈손 {b.empty}");
+            // (라) 바닥에 놓인 컵 (덤벙대는 이가 내려놓았다): 꼼꼼한 이는 주워 탁자 빈 자리에 꾸밈으로 둔다 (예전: 컵은 둘 곳이 없어 아무도 줍지 않았다)
+            {
+                var lay = Worlds.Ascii(CupShip, new Dictionary<char, string> { ['t'] = "Table", ['m'] = "MealDispenser" });
+                lay.Rooms[lay.Room[Worlds.At(lay, 1, 1)]].Type = "Mess";
+                var s = Worlds.Full(lay, 3);
+                var m = s.Get<Mind>(); var st = s.Get<Structure>();
+                int cupItem = m.ItemNames.ToList().IndexOf("컵");
+                int table = lay.Furniture.First(x => x.Type == "Table").Id;
+                st.PutItem(cupItem, 0, Worlds.At(lay, 5, 3), 0, 2);
+                int p = m.AddPerson(s, Worlds.At(lay, 1, 1));
+                m.SetPersonality(p, 0.5f, 0.95f, 0.5f, 0.5f, 0.3f);
+                s.Run(2);
+                for (int k = 0; k < (int)Time.Minutes(10); k++) { ref var c = ref m[p].C; c.Thirst = 0; c.Hunger = 0; c.Sleepy = 0; c.Lonely = 0; c.Bored = 0; s.Step(); }
+                var cups = st.Props.Where(x => x.Kind == 0 && x.What == cupItem).ToList();
+                bool ok = cups.Count == 1 && cups[0].On == table + 1 && (cups[0].Flags & Structure.DecorFlag) != 0 && Math.Abs(cups[0].Liquid - 2) < 1e-6 && m[p].C.Holding == 255;
+                Check("컵 (C10b) (라): 바닥에 놓인 컵은 꼼꼼한 이가 주워 탁자 빈 자리에 꾸밈으로 둔다 (담긴 물과 함께)",
+                    ok, $"컵 {cups.Count} · {(cups.Count > 0 ? $"받침 {cups[0].On} (탁자 {table + 1}) · 꾸밈 {(cups[0].Flags & Structure.DecorFlag) != 0} · 물 {cups[0].Liquid:0.0}" : "")} · 손 {m[p].C.Holding}");
+            }
+            Check("컵 (C10b) (다): 몫 1로 쏟으면 든 컵이 손에서 떨어진다 — 손이 빈다 · 탁자 꾸밈으로 돌아가지 않는다 · 물건 수 = 처음 + 장부 흐름",
+                c3.drinks == 1 && c3.took && c3.empty && !c3.onTable && Math.Abs(c3.n1 - c3.n0 - c3.flow) < 1e-9,
+                $"마심 {c3.drinks} · 집음 {c3.took} · 빈손 {c3.empty} · 탁자 {c3.onTable} · 컵 {c3.n0}→{c3.n1} (장부 {c3.flow:+0;-0;0}) · 컵에 남은 물 {c3.w1:0.00}몰");
+        }
+
         // (C11) 쏟은 이: 컵을 한 번 쏟으면 (그 뒤 몫 0) — 성실 1.0인 이는 5분 안에 닦아 바닥 물 < 2몰 · 오수가 는다 · 성실 0.0인 이는 10분 뒤에도 쏟은 몫의 80% 넘게 남는다 (예전: 아무도 닦지 않았다)
         {
             (double spilled, double at5, double at10, double waste, float careful) Spill(float consc)

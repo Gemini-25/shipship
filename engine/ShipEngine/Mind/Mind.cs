@@ -42,6 +42,7 @@ public sealed partial class Mind : IEngine
     public readonly byte iRegen, iArtHeart, iArtLung, iHypnotic;             // ⑦ (라-2) 재생 젤 (의료 침대) · 인공 심장 · 인공 폐 (진단 장치)
     public readonly byte iChip, iScrap, iScrapElec, iFrame;                  // ⑪ 공급 사슬 — 전자 소자 · 헌 부품 · 헌 전기 부품 · 외장 틀
     public readonly byte iWaste;                                             // 화장실 (다) — 오물 통 (든 무게는 HoldCharge kg)
+    public readonly byte iCup;                                               // 5단 C10b — 컵 (든 물은 HoldCharge 몰)
     public readonly byte iBlanket;                                           // 꾸밈의 방화 담요 (함장 승인)
     /// <summary>⑪ 부품 갈래마다 갈아 끼울 부품 (전기 · 기계 · 봉함 · 거르개 — <see cref="Part"/> 차례).</summary>
     public readonly byte[] iSpare;
@@ -82,7 +83,7 @@ public sealed partial class Mind : IEngine
         iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품"); iCO2 = Item("이산화탄소 소화기"); iAed = Item("제세동기");
         iOpioid = Item("진통제"); iApap = Item("해열제"); iAbx = Item("항생제"); iAntidote = Item("해독제"); iEpi = Item("아드레날린");
         iRegen = Item("재생 젤"); iArtHeart = Item("인공 심장"); iArtLung = Item("인공 폐"); iHypnotic = Item("수면제");
-        iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품"); iFrame = Item("외장 틀"); iWaste = Item("오물 통");
+        iChip = Item("전자 소자"); iScrap = Item("헌 부품"); iScrapElec = Item("헌 전기 부품"); iFrame = Item("외장 틀"); iWaste = Item("오물 통"); iCup = Item("컵");
         iBlanket = Item("방화 담요");
         iSpare = new[] { Item("전기 부품"), Item("기계 부품"), Item("봉함재"), Item("거르개") };
 
@@ -390,6 +391,9 @@ public sealed partial class Mind : IEngine
     }
 
     /// <summary>배에 있는 그 물건 수 — 설비 안 · 손에 든 것 · 바닥에 떨어진 것 (⑪ 장부의 재고).</summary>
+    /// <summary>손에 든 컵에 담긴 물 (몰 — 물 보존 법칙 · 시험이 읽는다 · 5단 C10b).</summary>
+    public double HeldWater { get { double w = 0; foreach (var a in Agents) if (a.C.Holding == iCup) w += a.C.HoldCharge; return w; } }
+
     public int CountAll(int item)
     {
         int n = TotalOf(item);
@@ -690,11 +694,13 @@ public sealed partial class Mind : IEngine
         if (_st == null || cell < 0 || cell >= L.N) return -1;
         var (vx, vy) = WalkVelocity(a);
         int tag = ActorTag(a);
-        if (tag == int.MinValue) return _st.PutItem(item, charge, cell);   // 드론은 떠서 든다 — 그 칸에
+        float liquid = item == iCup ? Math.Max(0, charge) : 0;   // 컵은 담긴 물과 함께 (든 물은 HoldCharge — 5단 C10b)
+        if (item == iCup) charge = 0;
+        if (tag == int.MinValue) return _st.PutItem(item, charge, cell, 0, liquid);   // 드론은 떠서 든다 — 그 칸에
         bool walking = vx != 0 || vy != 0;
         double fx = walking ? vx : a.C.FaceX, fy = walking ? vy : a.C.FaceY;   // 앞 = 걷던 쪽 · 서 있었으면 바라보던 쪽 (④가 길이를 맞춘다)
         if (fx == 0 && fy == 0) fy = 1;   // 아직 걸은 적이 없다 — 남쪽
-        return _st.DropItem(item, charge, L.X(cell) + 0.5, L.Y(cell) + 0.5, thrown ? 1 : 0, thrown ? vx : 0, thrown ? vy : 0, a.C.GoalCause, tag, fx, fy);
+        return _st.DropItem(item, charge, L.X(cell) + 0.5, L.Y(cell) + 0.5, thrown ? 1 : 0, thrown ? vx : 0, thrown ? vy : 0, a.C.GoalCause, tag, fx, fy, liquid);
     }
 
     /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.

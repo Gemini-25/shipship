@@ -21,6 +21,7 @@ public static partial class Program
             for (int c = 0; c < lay.N; c++) w += f.Stored(f.T.sWater, c) + f.Drops[f.T.sWater * lay.N + c] + 6 * f.Stored(f.T.sFood, c);   // 음식(포도당)은 눌거나 썩으면 물 6몰이 된다 — 그만큼 물로 센다 · 떠 있는 방울도
             foreach (var d in net.Devices) w += net.PanWater[d.Id];
             foreach (var p in s.Get<Structure>().Props) w += p.Liquid;   // 컵 · 물병에 든 물 (PH8 — 깨지거나 넘어지면 바닥으로)
+            w += s.Get<Mind>().HeldWater;   // 손에 든 컵의 물 (5단 C10b)
             return w;
         }
         double w0 = Water(), tank0 = net.WaterTank, book0 = s.Book.BulkFlow[(int)Res.Water * Book.Flows + (int)Flow.Cooking];
@@ -51,6 +52,7 @@ public static partial class Program
                 for (int c = 0; c < lay3.N; c++) w += f3.Stored(f3.T.sWater, c) + f3.Drops[f3.T.sWater * lay3.N + c] + 6 * f3.Stored(f3.T.sFood, c);
                 foreach (var d in n3.Devices) w += n3.PanWater[d.Id];
                 foreach (var p in s3.Get<Structure>().Props) w += p.Liquid;
+                w += m3.HeldWater;
                 return w;
             }
             long d0 = m3.Drinks;

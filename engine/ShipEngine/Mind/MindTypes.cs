@@ -121,6 +121,7 @@ public enum StepKind : byte
     Gather,    // 바닥 물건을 줍는다 (Cell · Arg: 물건)
     Switch,    // 켜 둔 장치를 끈다 (Target: 장치 — DF5)
     Shroud,    // 숨진 이를 덮는다 (Target: 몸 — DF5)
+    CupBack,   // 든 컵을 제자리에 내려놓는다 (Cell: 칸 · Value: 칸 안 자리 x · y (1/1024 m) · Target: 가구 — 5단 C10b)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
