@@ -154,17 +154,14 @@ public sealed partial class ShipMind
         return best;
     }
 
-    /// <summary>배 안 문을 닫는다 (바깥문 · 끼인 문 · 사람이 지나는 문은 두고 — 지나는 이는 열고 지나 닫는다).</summary>
+    /// <summary>배 안 문을 닫는다 (바깥문 · 끼인 문 · 쓰는 중인 문은 두고 — 지나는 이는 열고 지나 닫는다).</summary>
     private void ShutInnerDoors()
     {
         if (_st == null || _mind == null) return;
         foreach (var d in L.Doors)
         {
             if (d.External || _st.DoorJam[d.Id] != 0 || F.DoorOpen[d.Id] <= 0 && _st.DoorTarget[d.Id] <= 0) continue;
-            bool busy = false;
-            foreach (var a in _mind.Agents) if (a.C.Up != 0 && _mind.Dist(a.C.Cell, d.Cell) <= 1) { busy = true; break; }
-            if (!busy && _life != null) foreach (var b in _life.Bodies) if (b.Cell == d.Cell) { busy = true; break; }
-            if (busy) continue;
+            if (DoorInUse(d.Id)) continue;   // 쓰는 중인 문 (봉쇄와 같은 잣대 — 5단 C3: 곁에서 충전하는 로봇 · 가만히 선 이는 아니다)
             if (_st.DoorTarget[d.Id] > 0) ShelterDoorsShut++;
             _st.RequestDoor(d.Id, 0);
         }

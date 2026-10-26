@@ -104,5 +104,50 @@ public static partial class Program
                 startEat >= 0 && closedAt >= 0 && closedAt - startEat <= Time.Minutes(2) && m.Meals == meals0 + 1,
                 $"먹기 시작 {startEat} · 문 닫힘 {closedAt} ({(closedAt >= 0 && startEat >= 0 ? (closedAt - startEat) * Time.SecondsPerTick / 60 : -1):0.0}분) · 먹음 {m.Meals - meals0}");
         }
+
+        // (라) C3 파편 대피: 해치 대각선 충전독 (12,1)에서 충전하는 로봇 (전지 0.3) — 12분 뒤 열어 둔 해치가 닫힌다 · 로봇은 독에 그대로 · 사람 둘은 대피실 (예전: 곁 한 칸의 깨어 있는 로봇 때문에 해치를 끝내 닫지 않았다)
+        {
+            var wl = new Dictionary<char, string> { ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['R'] = "SensorArray", ['r'] = "RobotDock" };
+            var wlay = Worlds.Ascii(WeatherShip.Replace("#..e.......#..R....#", "#..e.......#r.R....#"), wl);
+            int WAt(int x, int y) => Worlds.At(wlay, x, y);
+            var s = Worlds.Full(wlay, 7);
+            var m = s.Get<Mind>(); var o = s.Get<Outside>(); var f = s.Get<Field>(); var soc = s.Get<Society>(); var net = s.Get<Network>();
+            int a = m.AddPerson(s, WAt(3, 1)), b = m.AddPerson(s, WAt(3, 3));
+            int r = m.AddRobot(s, WAt(12, 1), AgentKind.Robot, WAt(12, 1));
+            s.Run(5);
+            foreach (int p in new[] { a, b }) { soc.TrustComputer[p] = 0.9f; m[p].C.Diligent = 0.8f; }
+            net.Robot(m[r].C.Mech).Battery = 0.3f;
+            int hatch = wlay.DoorAt[WAt(11, 2)];
+            f.SetDoor(hatch, 1); s.Get<Structure>().RequestDoor(hatch, 1);
+            o.AddCloud("kessler", 10000 * 12 * 60 + 400_000, 400_000, 0, 1, 0, s.Causes.Add(CauseKind.Setup, "파편 폭풍이 항로로 들어온다", s.Tick));
+            for (int k = 0; k < Time.Minutes(12); k++) { net.Robot(m[r].C.Mech).Battery = Math.Min(net.Robot(m[r].C.Mech).Battery, 0.3f); s.Step(); }
+            int right = wlay.Room[WAt(25, 2)];
+            bool gathered = new[] { a, b }.All(p => m.RoomOf(m[p].C.Cell) == right);
+            Check("문 칸 (C3) 파편 대피: 해치 대각선 독에서 충전하는 로봇이 있어도 12분 뒤 열어 둔 해치가 닫힌다 · 로봇은 독에 그대로 · 사람 둘은 대피실",
+                f.DoorOpen[hatch] < 0.01f && m[r].C.Cell == WAt(12, 1) && gathered,
+                $"해치 열림 {f.DoorOpen[hatch]:0.00} · 로봇 칸 ({wlay.X(m[r].C.Cell)},{wlay.Y(m[r].C.Cell)}) · 모임 {gathered}");
+        }
+
+        // (마) C3 봉쇄: 불난 방의 문 칸에 몸이 누워 있으면 그 문은 쓰는 중 — 몸이 있는 동안 주컴퓨터의 닫기 요청이 하나를 넘지 않는다 (예전: 10틱마다 되풀이)
+        {
+            var clay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+            int CAt(int x, int y) => Worlds.At(clay, x, y);
+            var s = Worlds.Full(clay, 1);
+            var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var sm = s.Get<ShipMind>(); var net = s.Get<Network>(); var life = s.Get<Life>();
+            s.Run(3);
+            int room = clay.Room[CAt(15, 3)];
+            int sdoor = s.Get<Structure>().RoomDoors(room).First(d => !clay.Doors[d].External);
+            int dc = clay.Doors[sdoor].Cell;
+            f.SetDoor(sdoor, 1); s.Get<Structure>().RequestDoor(sdoor, 1);
+            int body = life.AddBody(dc);
+            int bed = clay.Rooms[room].Cells.Where(c => net.LineAt[c] == 0 && clay.FurnitureAt[c] < 0).OrderBy(c => Math.Abs(clay.X(c) - 15) + Math.Abs(clay.Y(c) - 3)).First();
+            f.AddStore(bed, f.T.sPu, 300);
+            ch.Ignite(bed, 3e6, s.Causes.Add(CauseKind.Setup, "폼 침대에 불", s.Tick));
+            long req0 = sm.SealDoorRequests;
+            for (int k = 0; k < Time.Minutes(4); k++) { life[body].Cell = dc; s.Step(); }
+            int seals = s.Facts.Since(0).Count(x => x.Kind == FactKind.ComputerSeal && x.Other == room);
+            Check("문 칸 (C3) 봉쇄: 불난 방의 문 칸에 몸이 누워 있는 동안 주컴퓨터가 그 문에 닫기를 하나 넘게 요청하지 않는다 (봉쇄는 한다)",
+                seals == 1 && sm.SealDoorRequests - req0 <= 1, $"봉쇄 {seals} · 닫기 요청 {sm.SealDoorRequests - req0}");
+        }
     }
 }
