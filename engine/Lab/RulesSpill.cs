@@ -149,6 +149,27 @@ public static partial class Program
                 $"미끄러짐 모름 {sn} · 앎 {sk} · 미끄러지지 않는 판 젖은 칸을 지난 틱 앎 {dk:0.00} · 모름 {dn:0.00} · 배움 {string.Join("/", runs.Select(r => $"{r.learned}({r.nSlipped})"))} · 믿음 남음 {string.Join("/", runs.Select(r => r.kept))}");
         }
 
+        // (C15) 주컴퓨터 청소는 보이는 방만: 오른쪽 위 방에 고인 물 50몰 — 그 방 차단기가 내려가 (전기 없는 카메라) 보지 못하면 청소 일감 0 · 보이면 1 (예전: 카메라 없이 바닥 물을 읽었다)
+        {
+            int CleanJobs(bool blind)
+            {
+                var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+                var s = Worlds.Full(lay, 4);
+                var f = s.Get<Field>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+                s.Get<Mind>().AddRobot(s, Worlds.At(lay, 21, 4), AgentKind.Robot, Worlds.At(lay, 21, 4));   // 청소할 로봇 (독 r)
+                s.Run(3);
+                int wet = Worlds.At(lay, 15, 2), room = lay.Room[wet];
+                void Dark() { if (blind) net.Breaker[net.RoomFeed(room)] = 0; }   // 그 방 급전선 차단기가 내려갔다 — 전기가 없는 방의 카메라는 보지 못한다 (주컴퓨터가 다시 올리지 않게 틱마다)
+                Dark();
+                f.AddStore(wet, f.T.sWater, 50, s.Causes.Add(CauseKind.Setup, "시험: 바닥에 물이 고였다", s.Tick, wet));
+                int n = 0;
+                for (int k = 0; k < (int)Time.Minutes(6); k++) { Dark(); s.Step(); n = Math.Max(n, sm.Jobs.Count(j => j.Kind == GoalKind.Clean && lay.Room[j.Target] == room)); }
+                return blind && sm.RoomSeen[room] != 0 ? -1 : n;
+            }
+            int dark = CleanJobs(true), lit = CleanJobs(false);
+            Check("주컴퓨터 청소 (C15): 보지 못하는 방 (전기가 끊겼다)의 고인 물은 청소 일감 0 · 보이는 방은 1", dark == 0 && lit == 1, $"못 봄 {dark} (−1 = 그 방이 보였다) · 봄 {lit}");
+        }
+
         // (C11) 쏟은 이: 컵을 한 번 쏟으면 (그 뒤 몫 0) — 성실 1.0인 이는 5분 안에 닦아 바닥 물 < 2몰 · 오수가 는다 · 성실 0.0인 이는 10분 뒤에도 쏟은 몫의 80% 넘게 남는다 (예전: 아무도 닦지 않았다)
         {
             (double spilled, double at5, double at10, double waste, float careful) Spill(float consc)

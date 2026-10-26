@@ -16,6 +16,8 @@ public struct Access
 public sealed partial class ShipMind
 {
     public readonly List<Access> Accesses = new();
+    /// <summary>급전선마다 차단기가 알린 마지막 합선 자리 (−1 없음 — 보호 장치의 기록 · 5단 C15: 보이지 않는 방에서도 그 자리는 닦게 한다).</summary>
+    public int[] ShortAt = Array.Empty<int>();
     public long LogAnswers;
     private long _logCursor;
     public const int AccessDays = 3;
@@ -33,6 +35,10 @@ public sealed partial class ShipMind
                 case FactKind.Repaired or FactKind.Salvaged or FactKind.Sabotage when device && f.Actor >= 0:
                 case FactKind.Mistake when device && f.Actor >= 0 && f.Size >= Network.HandledSize && f.Size < 2:   // 손보다 (상하게 한 것은 기록에 없다 — 열었다는 것만)
                     Accesses.Add(new Access { Device = f.Other, Agent = f.Actor, Tick = f.Tick });
+                    break;
+                case FactKind.Short when f.Other >= 0 && f.Other < _net.Feeders.Count && f.Cell >= 0:   // 차단기 보호 장치가 알린 합선 자리
+                    if (ShortAt.Length != _net.Feeders.Count) { var old = ShortAt; ShortAt = Enumerable.Repeat(-1, _net.Feeders.Count).ToArray(); Array.Copy(old, ShortAt, Math.Min(old.Length, ShortAt.Length)); }
+                    ShortAt[f.Other] = f.Cell;
                     break;
                 case FactKind.LogAsked when device:
                     Answer(sim, f);
@@ -72,6 +78,6 @@ public sealed partial class ShipMind
         Say(sim, $"{dev.Name} 기록을 물었다 — " + string.Join(" · ", rows.Select(a => $"{Time.Clock(a.Tick)} {(_mind != null ? _mind.NameOf(a.Agent) : "?")}")));
     }
 
-    private void SaveLog(StateWriter w) { w.List(Accesses); w.I64(LogAnswers); w.I64(_logCursor); }
-    private void LoadLog(StateReader r) { Accesses.Clear(); Accesses.AddRange(r.List<Access>()); LogAnswers = r.I64(); _logCursor = r.I64(); }
+    private void SaveLog(StateWriter w) { w.List(Accesses); w.I64(LogAnswers); w.I64(_logCursor); w.Arr(ShortAt); }
+    private void LoadLog(StateReader r) { Accesses.Clear(); Accesses.AddRange(r.List<Access>()); LogAnswers = r.I64(); _logCursor = r.I64(); ShortAt = r.Arr<int>(); }
 }

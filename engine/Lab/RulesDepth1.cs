@@ -323,7 +323,8 @@ public static partial class Program
                 // (DF10 뒤 씨 1 · 3 → 6 · 5: 깬 이가 나쁜 공기에서 다시 잠들지 못하고 · 산소 포화 곡선과 숨참을 알아채는 문턱이 바뀌어 그 밤의 일이 달라졌다 —
                 //  씨 1 · 3은 첫 방법으로 다 막아 궁리할 일이 없다 · 씨 6은 궁리 둘 · 씨 5는 셋 · 씨 1~14 어느 것도 같은 계획을 둘 넘게 세우지 않는다)
                 //  (5단 C4와 합친 뒤 씨 6 · 5 → 1 · 12: 피할 곳이 문 곁에서 방 안쪽으로 물려 씨 6 · 5는 궁리할 일이 없다 — 씨 1은 궁리 넷 · 씨 12는 셋 · 씨 1~12 어느 것도 같은 계획을 둘 넘게 세우지 않는다)
-                var runs = new[] { 1UL, 12UL }.AsParallel().AsOrdered().Select(seed =>
+                //  (5단 C15 뒤 씨 1 · 12 → 5 · 6 · 10 · 12: 주컴퓨터가 보이는 방만 청소를 맡겨 그 밤의 일이 달라졌다 — 씨가 바뀔 때마다 고르지 않게 넷을 돌리고 둘 넘게 궁리가 서야 한다 · 씨 1~14 어느 것도 같은 계획을 둘 넘게 세우지 않는다)
+                var runs = new[] { 5UL, 6UL, 10UL, 12UL }.AsParallel().AsOrdered().Select(seed =>
                 {
                     var s = ShipWorld.Crewed("Didim", seed, 6, 3);
                     s.Run(Time.Minutes(80));   // 새벽 한 시 스무 분 — 모두 잠들었다
@@ -342,8 +343,8 @@ public static partial class Program
                     if (Debug) foreach (var t in dv) Console.WriteLine($"    ({seed}) 궁리: {t}");
                     return (seed, n: dv.Count, most);
                 }).ToList();
-                Check("같은 구멍 막기 계획을 세 번 세우지 않는다: 다 마쳤는데 그대로 새면 그 걸음은 통하지 않은 것으로 · 미리 돌려 보니 안 된 걸음은 10분 막힌 것으로 (같은 계획 둘까지 — 운석 장면 둘)",
-                    runs.All(r => r.most <= 2 && r.n > 0), string.Join(" / ", runs.Select(r => $"씨 {r.seed}: 궁리 {r.n}번 · 같은 계획 가장 많이 {r.most}번")));
+                Check("같은 구멍 막기 계획을 세 번 세우지 않는다: 다 마쳤는데 그대로 새면 그 걸음은 통하지 않은 것으로 · 미리 돌려 보니 안 된 걸음은 10분 막힌 것으로 (같은 계획 둘까지 — 운석 장면 넷 · 둘 넘게 궁리)",
+                    runs.All(r => r.most <= 2) && runs.Count(r => r.n > 0) >= 2, string.Join(" / ", runs.Select(r => $"씨 {r.seed}: 궁리 {r.n}번 · 같은 계획 가장 많이 {r.most}번")));
             }
 
             // 녹은 연장선: 왼쪽 생명유지실 (산소 발생기 · 대형 냉각 펌프 · 냉각 펌프 둘 — 짐 51A가 연장선 정격 32A의 1.5배를 넘는다) · 제 급전선 길이 젖어 다시 올릴 수 없다

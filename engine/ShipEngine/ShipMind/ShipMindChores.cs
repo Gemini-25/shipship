@@ -144,10 +144,19 @@ public sealed partial class ShipMind
                 if (Jobs.Any(j => j.Kind == GoalKind.LayOut && j.Target == a.C.Body)) continue;
                 Post(sim, new Job { Kind = GoalKind.LayOut, Target = a.C.Body }, b.Cell, person => !RobotFor(GoalKind.LayOut));   // 사람에게는 그 일을 할 로봇이 배에 없을 때만 (바쁜 로봇은 기다린다)
             }
-        // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다) · 깨진 조각 · 가루 · 넘어진 것 (PH13)
+        // 청소: 보이는 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다) · 깨진 조각 · 가루 · 넘어진 것 (PH13)
         foreach (var room in L.Rooms)
         {
             int worst = -1; double wm = 0;
+            if (room.Id >= RoomSeen.Length || RoomSeen[room.Id] == 0)
+            {
+                // 보이지 않는 방 (5단 C15 — 카메라 없이 곰팡이 · 고인 물을 읽지 않는다): 합선으로 차단기가 내려간 회로면 차단기가 알린 합선 자리를 닦게 한다 (젖은 바닥 밑 전선 — 닦아야 다시 올린다)
+                for (int fd = 0; fd < ShortAt.Length && _net != null; fd++)
+                    if (ShortAt[fd] >= 0 && L.Room[ShortAt[fd]] == room.Id && _net.Breaker[fd] == 0) { worst = ShortAt[fd]; break; }
+                if (worst < 0 || Jobs.Any(j => j.Kind == GoalKind.Clean && L.Room[j.Target] == room.Id)) continue;
+                Post(sim, new Job { Kind = GoalKind.Clean, Target = worst }, worst, person => true);
+                continue;
+            }
             foreach (int c in room.Cells)
             {
                 double dirt = (_life != null && _life.Mold[c] > 0.3f ? _life.Mold[c] : 0) + (F.Stored(T.sWater, c) > 5 ? F.Stored(T.sWater, c) / 100 + 0.3 : 0) + _litter.GetValueOrDefault(c) + (_heavy.Contains(c) ? 1 : 0);   // 둘이서 들 것 먼저 (둘을 함께 보낸다)
