@@ -355,6 +355,37 @@ public static partial class Program
                 five && days && roundTrip && keptOld && moved && three && tight.Scenes.Count > 0,
                 $"날 {string.Join(" ", byDay.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:{kv.Value.Count}"))} · 0시 세계 {v.DayWorlds.Count} (첫 {(v.DayWorlds.Count > 0 ? v.DayWorlds.Min(e => e.Day) : -1)}) · 풀기 {roundTrip} · 뒤 찍기 그대로 {keptOld} · 앞 찍기로 {moved} · 한도 {tight.Bytes}/{tight.MaxBytes} 날마다 {string.Join(",", tday)} · 남은 가장 가벼운 {lightKept} / 놓은 가장 무거운 {heavyGone}");
         }
+        // K3 곁 (V3·V4 검토 고침): 같은 고리 칸을 두 장면이 빌렸다 (같은 조짐 창의 두 장면 — RingFor가 같은 칸) — 먼저 끝난 압축이 돌려줘도 다른 장면이 압축을 마칠 때까지 빌린 채 ·
+        // 고리처럼 빌림이 풀린 칸은 곧바로 덮는다 → 두 장면 모두 처음 바이트 (고치기 전: 먼저 끝난 쪽이 빌림을 지워 고리가 압축 중인 칸을 다시 썼다 — 다시보기 · 금고 파일이 뒤 틱의 세계)
+        {
+            var lender = new Director(new Layout { W = 1, H = 1 }) { KeepRing = false };
+            var buf = new byte[4 << 20]; var rnd = new Random(33);
+            for (int i = 0; i < buf.Length; i++) buf[i] = (byte)(i % 7 == 0 ? rnd.Next(256) : i % 13);
+            var orig = (byte[])buf.Clone();
+            var v = new SceneVault();   // 다른 일꾼이 압축 (화면과 같이)
+            var ha = new Highlight { Tick = 100, StartTick = 70, Last = 100, Score = 90, Title = "앞 장면" };
+            var hb = new Highlight { Tick = 110, StartTick = 70, Last = 110, Score = 95, Title = "뒤 장면" };
+            v.Pin(ha, (60, buf, 4096), lender);          // 짧은 찍기 — 압축이 먼저 끝난다
+            v.Pin(hb, (60, buf, buf.Length), lender);
+            var (ea, eb) = (v.Of(ha)!, v.Of(hb)!);
+            int early = 0, polls = 0; bool overwritten = false, done = false;
+            var until = DateTime.UtcNow.AddSeconds(20);
+            while (DateTime.UtcNow < until)
+            {
+                bool lent = lender.Lent.ContainsKey(buf);   // 빌림을 먼저 본다 (돌려줌은 압축을 마친 뒤)
+                bool pending = !ea.Packed && ReferenceEquals(ea.Data, buf) || !eb.Packed && ReferenceEquals(eb.Data, buf);
+                polls++;
+                if (!lent && pending) early++;
+                if (!lent && !overwritten) { buf.AsSpan().Fill(0xAB); overwritten = true; }   // 고리가 그 칸에 새 틱을 찍는다
+                if (!lent && !pending) { done = true; break; }
+                Thread.Yield();
+            }
+            v.WaitPacked();
+            bool same = done && ea.Packed && eb.Packed && v.Raw(ea).AsSpan().SequenceEqual(orig.AsSpan(0, 4096)) && v.Raw(eb).AsSpan().SequenceEqual(orig);
+            Check("장면 금고 K3 곁: 같은 고리 칸을 두 장면이 빌리면 — 먼저 끝난 압축이 돌려줘도 다른 장면이 압축을 마칠 때까지 고리 칸은 빌린 채 (빌림을 센다) · 다 끝나면 돌려준다 · 두 장면 모두 처음 바이트",
+                done && early == 0 && same && lender.Lent.IsEmpty,
+                $"빌림 없이 압축 전 {early}번 / 살핌 {polls}번 · 끝 {done} · 두 장면 바이트 그대로 {same} · 남은 빌림 {lender.Lent.Count}");
+        }
         // K4: 장면 판 줄 표 — ● 고리 · ● 금고 · ◐ 닻 (0시 세계) + 감기 어림 초 · ○ 사진만 (▶ 옅게 · 까닭) / 기록 판 장의 장면도 같은 표
         {
             var show = new LiveShow(HandShip(75), "디딤호");
