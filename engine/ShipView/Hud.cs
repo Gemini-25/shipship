@@ -30,6 +30,8 @@ public enum UiAct
     Star,
     // 놓치지 않게 (docs/OBSERVER.md §6.3 ~ 6.5 — V7): 멈춤 카드 [보기] [계속] · '그사이' 카드 [닫기] · 메뉴 [알림 멈춤 ›] [창이 뒤로 가면 ›] · 갈래 고르기 (열쇠는 갈래 차례)
     StopSee, StopGo, AwayClose, MenuStops, MenuAway, StopPick, AwayPick,
+    // 경과 (docs/OBSERVER.md §7.1 · 7.2 — V8): 경과 카드 [▶ 다시보기] · 결산 띠 (누르면 그 카드 — 열쇠는 뿌리)
+    EpisodeReplay, TallyGo,
 }
 
 /// <summary>누를 자리 하나: 네모 · 하는 일 · 열쇠 (단추 번호 · 판 줄 열쇠 · 사람 번호) · 켜짐 · 누를 수 있나 · 풀이 글 · 못 누를 때의 까닭.</summary>
@@ -264,7 +266,7 @@ public sealed class HudState
         if (f.Armed != HandKind.None) return BackStep.Disarm;
         if (f.Panel != PanelKind.None && f.Detail is DetailKind.Person or DetailKind.Robot) return BackStep.CloseDetail;   // 주컴퓨터 판은 목록이 없다 — 판을 닫는다
         if (f.Panel != PanelKind.None) return BackStep.ClosePanel;
-        if (f.Selected >= 0 || f.CardIs == CardKind.Thing) return BackStep.Release;   // 고른 이 · 고른 물건
+        if (f.Selected >= 0 || f.CardIs is CardKind.Thing or CardKind.Episode) return BackStep.Release;   // 고른 이 · 고른 물건 · 경과 카드 (V8)
         return BackStep.None;
     }
 
@@ -415,16 +417,26 @@ public static class HudLayout
         {
             float lh = 0;
             for (int i = 0; i < f.Card.Length; i++) lh += Math.Max(26, Th(f.Card[i], i == 0 ? 19 : 16, CardW - 28, i == 0 ? 1 : 2) + 6);
-            bool thing = f.CardIs == CardKind.Thing, more = !thing && f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] · 물건 카드: [사고 ›] (docs/UI2.md §5.4)
-            var card = new RectF(Side, leftY, CardW, Math.Max(0, Math.Min(20 + lh + 8 + (more ? 36 : 0), lowTop - leftY - 40)));   // 아주 낮은 창에서는 0 (음수 높이를 그리지 않는다)
+            bool thing = f.CardIs == CardKind.Thing, episode = f.CardIs == CardKind.Episode, more = !thing && !episode && f.Selected >= 0;   // 사람 · 로봇 카드: 맨 아래 [자세히 보기] · 물건 카드: [사고 ›] (docs/UI2.md §5.4) · 경과 카드: 가로 시계 · [▶ 다시보기] (V8)
+            float head = Math.Max(26, Th(f.Card[0], 19, CardW - 28, 1) + 6);
+            if (f.CardIs == CardKind.Episode) { float h2 = Math.Max(26, Th(f.Card[0], 19, CardW - 72, 2) + 6); lh += h2 - head; head = h2; }   // 경과 카드 머리는 두 줄까지 (× 단추만 곁에)
+            var card = new RectF(Side, leftY, CardW, Math.Max(0, Math.Min(20 + lh + 8 + (more ? 36 : 0) + (episode ? EpisodeClockH + 6 + 38 : 0), lowTop - leftY - 40)));   // 아주 낮은 창에서는 0 (음수 높이를 그리지 않는다)
             if (more) h.Hits.Add(new UiHit(new RectF(Side + 8, card.Bottom - 36, CardW - 16, 28), UiAct.DetailOpen, 0, false, true, "자세히 보기 — 몸 · 마음 · 하는 일 · 아는 것 · 일지"));
             h.Areas["카드"] = card;
             h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28, leftY + 6, 28, 28), UiAct.CardClose, 0, false, true, "놓기 (Esc · 오른쪽 누르기)"));
-            if (thing) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.LookHand, 0, false, f.LookHandOk, "이것에 사고를 일으킨다 — 사고 판이 열리고 겨눈다", f.LookHandWhy));
+            if (episode)
+            {
+                // 경과 카드 (docs/OBSERVER.md §7.1 — V8): 머리 아래 가로 시계 (일어남 → 끝 · 마디마다 점) · 맨 아래 [▶ 다시보기] (그 뿌리의 장면이 없거나 볼 수 없으면 옅게)
+                var clock = new RectF(Side + 16, leftY + 8 + head, CardW - 32, EpisodeClockH);
+                if (clock.Bottom <= card.Bottom - 38) h.Areas["경과 시계"] = clock;
+                h.Hits.Add(new UiHit(new RectF(Side + 8, card.Bottom - 36, 170, 30), UiAct.EpisodeReplay, 0, false, f.EpisodeCanReplay, "그 장면 다시보기", "그 일의 장면이 없거나 이미 볼 수 없다"));
+                h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 8, 30), UiAct.CardName, 0, false, true, "그 자리로"));
+            }
+            else if (thing) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.LookHand, 0, false, f.LookHandOk, "이것에 사고를 일으킨다 — 사고 판이 열리고 겨눈다", f.LookHandWhy));
             else h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80, leftY + 6, 80, 28), UiAct.CardFollow, 0, f.FollowSelected, true, f.FollowSelected ? "따라가는 중" : "다시 따라가기"));
             bool star = !thing && f.Selected >= 0 && f.Crew.Any(c => c.Id == f.Selected);   // 사람 카드의 ☆ (V6 — 로봇은 없다)
             if (star) h.Hits.Add(new UiHit(new RectF(Side + CardW - 8 - 28 - 6 - 80 - 6 - 32, leftY + 6, 32, 28), UiAct.Star, f.Selected, f.Stars.Contains(f.Selected), true, StarTip(f.Stars.Contains(f.Selected))));
-            h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8 - (star ? 38 : 0), 30), UiAct.CardName, 0, false, true, "그 자리로"));
+            if (!episode) h.Hits.Add(new UiHit(new RectF(Side + 16, leftY + 4, CardW - 16 - 8 - 28 - 6 - 80 - 8 - (star ? 38 : 0), 30), UiAct.CardName, 0, false, true, "그 자리로"));
             h.Blocks.Add(("카드", card));
             leftY = card.Bottom + 8;
         }
@@ -573,6 +585,15 @@ public static class HudLayout
             h.Blocks.Add(("★ 띠", r));
             cy = r.Bottom + 8;
         }
+        if (f.Tally.Length > 0 && f.TallyAlpha > 0.02f)
+        {
+            // 결산 띠 (docs/OBSERVER.md §7.2 — V8 · 6초): '침실 둘 불 — 11분 · 다친 이 1 · 끈 이 로봇 1' — 띠 전체가 누를 자리 (그 경과 카드)
+            float tw = Math.Min(Tw(f.Tally, 17, true), colW - 40 - 24);
+            var r = Center(tw + 40 + 24, 40);
+            h.Areas["결산 띠"] = r;
+            h.Hits.Add(new UiHit(r, UiAct.TallyGo, 0, false, true, "경과 카드 보기 — 언제 알고 · 누가 맞서고 · 어떻게 끝났나"));
+            cy = r.Bottom + 8;
+        }
         float noticeBottom = -1;
         if (f.Notice.Length > 0)
         {
@@ -693,6 +714,9 @@ public static class HudLayout
             h.Modal = true;
         }
     }
+
+    /// <summary>경과 카드의 가로 시계 높이 (V8).</summary>
+    public const float EpisodeClockH = 26;
 
     /// <summary>메뉴 줄 글 (차례 — LiveMain이 그린다 · 시험이 글자를 본다).</summary>
     public static readonly string[] MenuWords = { "배 바꾸기 ›", "새 항해 ›", "항해 끝내기", "알림 멈춤 ›", "창이 뒤로 가면 ›", "소리", "소리 자막", "말풍선 (K)", "속마음 풍선 (I)", "도움말", "처음 화면으로" };

@@ -647,6 +647,29 @@ void fragment() {
                 s.LookAt(best);
                 break;
             }
+            // 경과 (V8): --ignite의 침대 불 (또는 침대 불씨 — 함장의 손) → 4분 → 그 경과 카드 · 결산 띠 (끝날 때까지 감고 띠를 다시 띄운다) · 손 결과 이름표 (불씨를 겨눈 채 침대 위)
+            case "episode" or "tally":
+            {
+                if (s.Dir.Episodes.Count == 0)
+                {
+                    var bed = s.Sim.Layout.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                    if (bed != null) s.Sim.Find<ShipEngine.Hand>()?.Enqueue(new HandOrder { Kind = HandKind.Fire, Cell = bed.Cells[0], Size = 2 });
+                }
+                s.FastForward(Time.Minutes(4));
+                for (int i = 0; i < 30 && parts[0] == "tally" && (s.Dir.Episodes.LastOrDefault()?.End ?? 0) < 0; i++) s.FastForward(Time.Minutes(1));
+                if (s.Dir.Episodes.LastOrDefault() is { } ep) { s.OpenEpisode(ep.Root); if (ep.Cell >= 0) s.LookAt(ep.Cell); if (parts[0] == "tally") s.TallyAgain(ep.Root); }
+                break;
+            }
+            case "handlabel":
+            {
+                var L = s.Sim.Layout;
+                var bed = L.Furniture.FirstOrDefault(fu => fu.Type == "Bed" && fu.Cells.Length > 0);
+                if (bed == null) break;
+                s.ArmHand(HandKind.Fire, 1);
+                s.SetHoverAt(L.X(bed.Cells[0]) + 0.5, L.Y(bed.Cells[0]) + 0.5, 0.2);
+                s.LookAt(bed.Cells[0]);
+                break;
+            }
             // 그사이 카드 (V7): 지금 손이 끊긴 것으로 적고 · 침대 불씨 (함장의 손) → 세 시간 감기 → 손이 닿는다
             case "away":
             {
@@ -1241,20 +1264,41 @@ void fragment() {
             }
             else if (h.Act == UiAct.CardClose) { DrawButton(h, ""); DrawCross(R(h.R).GetCenter(), 6 * U, Ink); }
             else if (h.Act == UiAct.DetailOpen) { DrawButton(h, "자세히 보기", 14); DrawChevron(R(h.R).GetCenter() + new Vector2(MeasureW("자세히 보기", Fs(14), false) / 2 + 12 * U, 0), 4 * U, +1, InkDim); }
+            else if (h.Act == UiAct.EpisodeReplay) DrawButton(h, "▶ 다시보기", 14);   // 경과 카드 (V8)
             else if (h.Act == UiAct.CardName && Hovered(h)) DrawLine(new Vector2(box.Position.X + 16 * U, cy + 4 * U), new Vector2(box.Position.X + 16 * U + _bold.GetStringSize(f.Card[0], HorizontalAlignment.Left, -1, Fs(19)).X, cy + 4 * U), new Color(1f, 0.92f, 0.65f), 1);
         }
-        float cardEnd = box.End.Y - (_hud.Hits.Any(x => x.Act == UiAct.DetailOpen) ? 36 * U : 0);
+        float cardEnd = box.End.Y - (_hud.Hits.Any(x => x.Act == UiAct.DetailOpen) ? 36 * U : 0) - (f.CardIs == CardKind.Episode ? 38 * U : 0);
         for (int i = 0; i < f.Card.Length; i++)
         {
             bool head = i == 0;
-            float avail = head ? w - 28 * U - 130 * U : w - 28 * U;
+            bool ep = f.CardIs == CardKind.Episode;   // 경과 카드 머리는 두 줄까지 (곁에 × 단추만 — V8)
+            float avail = head ? w - 28 * U - (ep ? 44 : 130) * U : w - 28 * U;
             int size = Fs(head ? 19 : 16);
-            float lh = Math.Max(26 * U, (head ? MeasureHB(f.Card[i], size, avail, 1) : MeasureH(f.Card[i], size, avail, 2)) + 6 * U);
+            float lh = Math.Max(26 * U, (head ? MeasureHB(f.Card[i], size, avail, ep ? 2 : 1) : MeasureH(f.Card[i], size, avail, 2)) + 6 * U);
             if (cy + lh - 20 * U > cardEnd) break;
             bool gloss = i == 1 && f.CardIs == CardKind.Thing;   // 물건 카드의 둘째 줄은 옅은 풀이
-            DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16 * U, cy), f.Card[i], HorizontalAlignment.Left, avail, size, head ? 1 : 2,
-                head ? new Color(1f, 0.92f, 0.65f) : gloss ? InkDim : new Color(0.86f, 0.89f, 0.95f));
+            DrawMultilineString(head ? _bold : _font, new Vector2(box.Position.X + 16 * U, cy), f.Card[i], HorizontalAlignment.Left, avail, size, head ? (ep ? 2 : 1) : 2,
+                head ? new Color(1f, 0.92f, 0.65f) : gloss ? InkDim : f.CardIs == CardKind.Episode && f.Card[i].StartsWith("까닭") ? new Color(1f, 0.78f, 0.55f) : new Color(0.86f, 0.89f, 0.95f));
             cy += lh;
+            if (head && f.CardIs == CardKind.Episode && _hud.Areas.TryGetValue("경과 시계", out var ck)) { DrawEpisodeClock(f, R(ck)); cy = R(ck).End.Y + 6 * U + 18 * U; }
+        }
+    }
+
+    /// <summary>경과 카드의 가로 시계 (V8): 일어남 → 끝 (열린 경과는 지금 — 깜빡인다) 줄 위에 마디마다 점 (갈래마다 빛깔 · 도형).</summary>
+    private void DrawEpisodeClock(LiveFrame f, Rect2 r)
+    {
+        float y = r.Position.Y + r.Size.Y / 2, x0 = r.Position.X + 6 * U, x1 = r.End.X - 6 * U;
+        DrawLine(new Vector2(x0, y), new Vector2(x1, y), new Color(0.5f, 0.6f, 0.78f, 0.8f), 2 * U);
+        Color[] tone = { new(1f, 0.42f, 0.36f), new(1f, 0.85f, 0.4f), new(0.5f, 0.75f, 1f), new(0.45f, 0.95f, 0.95f), new(0.55f, 0.95f, 0.6f), new(0.95f, 0.95f, 0.95f), new(0.65f, 0.68f, 0.75f) };
+        bool open = f.Card.Length > 0 && f.Card[0].Contains("— 아직 ·");
+        float blink = open ? 0.5f + 0.5f * Mathf.Sin(Godot.Time.GetTicksMsec() / 1000f * Mathf.Tau) : 1;
+        foreach (var d in f.EpisodeDots)
+        {
+            var c = new Vector2(x0 + (x1 - x0) * d.At, y);
+            var col = tone[Math.Min(d.Kind, (byte)6)];
+            if (d.Kind == 6) { DrawRect(new Rect2(c - new Vector2(3, 7) * U, new Vector2(6, 14) * U), new Color(col, open ? blink : 1)); continue; }   // 끝 (열렸으면 지금)
+            DrawCircle(c, 5 * U, new Color(0.03f, 0.04f, 0.07f));
+            DrawCircle(c, 4 * U, col);
         }
     }
 
@@ -1424,6 +1468,16 @@ void fragment() {
             bool btn = _hud.Hits.Any(h => h.Act == UiAct.BannerReplay);
             DrawMultilineString(_bold, new Vector2(r.Position.X + 20 * U, r.Position.Y + 9 * U + Fs(22) * 0.9f), "★ " + f.Banner, HorizontalAlignment.Left, r.Size.X - 40 * U - (btn ? 104 * U : 0), Fs(22), 2, new Color(1f, 0.86f, 0.6f, a));
             foreach (var h in _hud.Hits) if (h.Act == UiAct.BannerReplay) DrawButton(h, "▶ 다시보기", 14);
+        }
+        if (_hud.Areas.TryGetValue("결산 띠", out var tb))
+        {
+            // 결산 띠 (V8 — 6초): 끝난 경과 한 줄 · 누르면 그 경과 카드 (꺾쇠)
+            var r = R(tb); float a = f.TallyAlpha;
+            var hit = _hud.Hits.FirstOrDefault(x => x.Act == UiAct.TallyGo);
+            DrawRect(r, new Color(0.04f, 0.06f, 0.08f, (hit != null && Hovered(hit) ? 0.97f : 0.9f) * a));
+            DrawRect(r, new Color(0.55f, 0.95f, 0.75f, 0.9f * a), false, 1.5f);
+            DrawString(_bold, new Vector2(r.Position.X + 20 * U, r.Position.Y + r.Size.Y / 2 + Fs(17) * 0.36f), f.Tally, HorizontalAlignment.Left, r.Size.X - 60 * U, Fs(17), new Color(0.85f, 1f, 0.9f, a));
+            DrawChevron(new Vector2(r.End.X - 18 * U, r.Position.Y + r.Size.Y / 2), 5 * U, +1, new Color(0.7f, 0.95f, 0.8f, a));
         }
         if (_hud.Areas.TryGetValue("알림", out var nb))
         {
@@ -2079,7 +2133,9 @@ void fragment() {
             case UiAct.RobotMore: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Robots || s.Detail != DetailKind.None) { s.ClosePanel(); s.TogglePanel(PanelKind.Robots); } }); break;
             case UiAct.Robot: { int id = (int)k; _cmds.Enqueue(s => s.SelectAgent(id)); break; }
             case UiAct.Talk: _cmds.Enqueue(s => { if (s.Panel != PanelKind.Journal) s.TogglePanel(PanelKind.Journal); }); break;
-            case UiAct.Feed: if (f != null && k < f.Feed.Length) { int cell = f.Feed[k].Cell; _cmds.Enqueue(s => s.LookAt(cell)); } break;
+            case UiAct.Feed: if (f != null && k < f.Feed.Length) { int cell = f.Feed[k].Cell, root = f.Feed[k].Root; _cmds.Enqueue(s => s.FeedGo(cell, root)); } break;   // 그 자리로 · 그 경과 카드 (V8)
+            case UiAct.TallyGo: _cmds.Enqueue(s => s.TallyGo()); break;          // 결산 띠 → 그 경과 카드 (V8)
+            case UiAct.EpisodeReplay: _cmds.Enqueue(s => s.EpisodeReplay()); break;   // 경과 카드 [▶ 다시보기]
             case UiAct.Vital: if (f != null && k < f.Vitals.Length) { string icon = f.Vitals[k].Icon; _cmds.Enqueue(s => s.GaugeGo(icon)); } break;
             case UiAct.Notice: _cmds.Enqueue(s => s.NoticeGo()); break;
             case UiAct.BannerReplay: _cmds.Enqueue(s => s.StartReplay()); break;

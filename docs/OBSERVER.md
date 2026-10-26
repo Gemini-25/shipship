@@ -698,7 +698,7 @@ card.json: 배 · 배 이름 · 번호 · 항로 · 날 · 틱 · 산 이 · 탄
 - 지문: 같음. Godot: `v7_stop_card.png` (`--ui=stop`) · `v7_meanwhile.png` (`--ui=away`) · `v7_menu_stops.png`.
 - 비용: 멈춤 사실 보기 ≤ 2µs/틱 · 그사이 표는 손이 끊길 때 한 번.
 
-### V8 — 경과 카드 · 결산 띠 · 손 결과 이름표 (화면 · 같음) · 어림 3시간
+### V8 — 경과 카드 · 결산 띠 · 손 결과 이름표 (화면 · 같음) · 어림 3시간 ✔
 - 무엇: §7.1 ~ 7.3.
 - 파일 · 함수: 새 `engine/ShipEngine/Story/DirectorEpisodes.cs` (`Episode` · `Director.Episodes` · `EpisodeNote` — `Observe` 사실 고리 · 맡은 이 닿음 · 끝 · 견줌) · 새 `engine/ShipView/LiveEpisode.cs` (`OpenEpisode(root)` · 카드 줄 · `Tally`) · `LiveLook.cs` (`CardKind.Episode`) · `Live.cs` (`Feed` — `FeedItem`에 `Root`) · `LiveHand.cs` (`HandAimNow` 이름표) · `DirectorRecord.cs` (경과 마디) · `Hud.cs` · `LiveMain.cs` (`DrawCard` 경과 · 가로 시계).
 - 시험: E1 ~ E3 · M5.

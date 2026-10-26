@@ -188,7 +188,7 @@ public sealed partial class LiveShow
     public void SetOverlay(Overlay o) => Show = o;
     public void DirectorCam() { Follow = true; Overview = false; Selected = -1; FollowSelected = false; }
     public void ToggleOverview() => Overview = !Overview;
-    public void Release() { Selected = -1; FollowSelected = false; Look = default; }   // 고른 이 · 고른 물건을 놓는다
+    public void Release() { Selected = -1; FollowSelected = false; Look = default; _episodeRoot = 0; }   // 고른 이 · 고른 물건 · 경과 카드를 놓는다
     public void FollowAgain() { if (Selected >= 0) { FollowSelected = true; Overview = false; } }
 
     /// <summary>그 사람 · 로봇이 그려진 자리로 카메라를 (따라가기는 그대로 — 손으로 옮긴 것과 같다).</summary>

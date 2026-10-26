@@ -10,7 +10,7 @@ namespace ShipEngine;
 public sealed partial class Director
 {
     /// <summary>연출 기록 판 (세계 판과 따로 — 연출의 상태가 바뀌면 올린다): 2 — 장의 분위기 · 잃은 이 · 사람 일 장부 (V3 · 판 1도 읽는다 — 없는 것은 빈 채로).</summary>
-    public const int RecordVersion = 3;   // 3: 사람 일 장부의 지나온 길 (V6 — 판 2도 읽는다)
+    public const int RecordVersion = 4;   // 3: 사람 일 장부의 지나온 길 (V6 — 판 2도 읽는다) · 4: 경과 장부 (V8 — 판 3까지도 읽는다 · 경과는 빈 채로)
 
     /// <summary>연출 기록을 쓴다 (작업 스레드 · 틱 사이 — 미리 보기의 다른 코어 몫을 기다려 받은 뒤).</summary>
     public void SaveRecord(StateWriter w)
@@ -90,6 +90,7 @@ public sealed partial class Director
         w.I32(_episodePeak); w.I32(_omenRun); w.I64(_episodePeakAt);
         w.I32(_dayCast.Count); foreach (var (k, v) in _dayCast.OrderBy(x => x.Key)) { w.I32(k); w.F32(v); }
         w.I32(_dayMood); People.Save(w);
+        SaveEpisodes(w);   // 경과 장부 (V8)
 
         // 미리 보기 (DirectorForesight) — 앞선 세계는 찍기 바이트로
         w.I32(Foresights); w.I32(Predicted); w.I32(ForeCuts); w.I32(Resyncs); w.I64(AheadSteps);
@@ -187,6 +188,7 @@ public sealed partial class Director
         _episodePeak = r.I32(); _omenRun = r.I32(); _episodePeakAt = r.I64();
         _dayCast.Clear(); for (int i = 0, n = r.I32(); i < n; i++) _dayCast[r.I32()] = r.F32();
         if (ver >= 2) { _dayMood = r.I32(); People.Load(r, ver >= 3); } else { _dayMood = 0; People.Clear(); }
+        if (ver >= 4) LoadEpisodes(r); else { Episodes.Clear(); _openEpisodes = 0; }
 
         // 미리 보기
         Foresights = r.I32(); Predicted = r.I32(); ForeCuts = r.I32(); Resyncs = r.I32(); AheadSteps = r.I64();
