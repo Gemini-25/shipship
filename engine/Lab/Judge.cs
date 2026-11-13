@@ -22,7 +22,8 @@ public static partial class Program
 
     internal static void Judge(string[] args)
     {
-        var rest = args.SkipWhile(a => a != "--judge").Skip(1).ToArray();
+        var rest = args.SkipWhile(a => a != "--judge").Skip(1).Where(a => !a.StartsWith("--")).ToArray();
+        _judgeGate = args.Contains("--gate");
         var ships = (rest.Length > 0 ? rest[0] : "Didim").Split(',');
         double days = rest.Length > 1 ? double.Parse(rest[1]) : 3;
         int seeds = rest.Length > 2 ? int.Parse(rest[2]) : 3;
@@ -30,6 +31,29 @@ public static partial class Program
         int first = rest.Length > 4 ? int.Parse(rest[4]) : 0;
         foreach (var ship in ships)
             for (int k = first; k < first + seeds; k++) JudgeRun(ship, (ulong)(11 + k * 7), days, route);
+    }
+
+    /// <summary>문지기 (--gate · Actions 'voyage'): 평온한 때 까닭 없는 환경 해로 죽거나 떼로 다치면 빨강 (끝낼 때 1) · 사람이 선 칸이 45℃를 넘으면 노랑.
+    /// 짧은 규칙 시험이 다 초록이어도 긴 항해에서만 드러나는 결함을 잡는다 (샤워 온수기가 방을 데워 사람이 데던 것 — 규칙 577개 초록 · 새뜰호 사흘에 다침 32).</summary>
+    private static bool _judgeGate;
+
+    /// <summary>까닭 없는 환경 해: 몸의 해 마디(데었다 · 식었다 · 숨 · 중독 · 맞았다 · 쓰러졌다)가 뿌리인데 그 위로 원인(불 · 구멍 · 고장 · 사람 …)이 없다 —
+    /// 환경이 사람을 해쳤는데 엔진이 그 환경의 까닭을 대지 못한다는 뜻이다. 일상의 법칙이 틀렸을 때 이렇게 나온다 (온수기가 데운 공기).</summary>
+    private static readonly string[] EnvHarm = { "데었다", "식었다", "폐를 다쳤다", "맞았다", "숨을 못", "중독", "짙었다", "쓰러졌다" };
+    private static bool CalmChain(Sim s, int cause)
+    {
+        var ch = s.Causes.Chain(cause);
+        if (ch.Count == 0) return false;
+        foreach (int id in ch) if (s.Causes[id].Kind is not (CauseKind.Biology or CauseKind.None)) return false;
+        string root = s.Causes.Text(ch[0]);
+        foreach (var w in EnvHarm) if (root.Contains(w)) return true;
+        return false;
+    }
+
+    private static string NameOfBody(Mind mind, int body)
+    {
+        foreach (var a in mind.Agents) if (a.IsPerson && a.C.Body == body) return mind.NameOf(a.Id);
+        return "";
     }
 
     private static void JudgeRun(string ship, ulong seed, double days, int route)
@@ -60,6 +84,8 @@ public static partial class Program
         var dWeary = new double[nDays]; var dArgue = new long[nDays]; long argue0 = 0; var soc = s.Get<Society>();
         var loops = new Dictionary<string, int>(); var shipMind = s.Get<ShipMind>(); int agentFails = 0;   // 막힌 판단: 로봇을 여덟 번 넘게 보낸 사건 · 같은 목표에 다섯 번 넘게 막힌 사람 · 로봇
         for (int i = 0; i < nDays; i++) dO2[i] = 99;
+        long lastAcc = -Time.Hours(24) - 1; int calmDeaths = 0; var calm = new List<string>();
+        double hotK = 0; string hotRoom = ""; long hotAt = 0;
         int nan = 0;
         var pairs = new int[14, 14];
         var linkSeen = new HashSet<int>();
@@ -100,6 +126,14 @@ public static partial class Program
                     int ef = Director.EngineOf(f.Kind), el = ch.Count > 0 ? Director.EngineOf(s.Causes[ch[^1]].Kind) : 0;
                     if (ef > 0 && el > 0 && ef != el) pairs[el, ef]++;
                 }
+                if (f.Kind is FactKind.Hurt or FactKind.Collapsed or FactKind.Died && f.Tick - lastAcc > Time.Hours(24) && CalmChain(s, f.Cause))
+                {
+                    string who = f.Actor >= 0 && f.Actor < life.Bodies.Count ? NameOfBody(mind, f.Actor) + " " : "";
+                    string room = f.Cell >= 0 && lay.Room[f.Cell] >= 0 ? lay.Rooms[lay.Room[f.Cell]].Name : "";
+                    calm.Add($"{Time.Clock(f.Tick)} {FactNames.Of(f.Kind)} — {who}{room} · {s.Causes.Story(f.Cause)}");
+                    if (f.Kind == FactKind.Died) calmDeaths++;
+                }
+                if (Array.IndexOf(Accidents, f.Kind) >= 0) lastAcc = f.Tick;
                 if (Array.IndexOf(Accidents, f.Kind) >= 0) { acc[day]++; accKinds[f.Kind] = accKinds.GetValueOrDefault(f.Kind) + 1; }
                 else if (f.Kind is FactKind.Hurt or FactKind.Collapsed) hurt[day]++;
                 else if (f.Kind == FactKind.ShipSplit) { splits++; if (aliveAtSplit < 0) aliveAtSplit = Living(); }
@@ -116,6 +150,13 @@ public static partial class Program
             }
             cursor = s.Facts.Total;
             lastTick = t;
+            if (t % Time.Minutes(1) == 0 && t - lastAcc > Time.Hours(24))   // 평온한 때 사람이 서 있는 칸의 공기 (우주복 밖)
+                foreach (var b in life.Bodies)
+                {
+                    if (b.Alive == 0 || b.Suit != 0 || b.Cell < 0) continue;
+                    double k = f0.Temp(b.Cell);
+                    if (k > hotK) { hotK = k; hotAt = t; hotRoom = lay.Room[b.Cell] >= 0 ? lay.Rooms[lay.Room[b.Cell]].Name : ""; }
+                }
             if (t % Time.TicksPerHour == 0)
             {
                 double cm2 = 0, age = 0;
@@ -196,6 +237,12 @@ public static partial class Program
         Console.WriteLine($"\n  {ship} 시드 {seed} · 사람 {crew} · {ran:0.0}일 · {clock.Elapsed.TotalSeconds:0}초 — 산 사람 {alive}/{crew} · 죽음 {deadCount} ({string.Join(" · ", causes.Select(kv => $"{kv.Key} {kv.Value}"))})");
         Console.WriteLine($"    하이라이트 날마다 {string.Join(" ", hlDay.Take(fullDays))} (3~12인 날 {inRange}/{fullDays} · 사건과 사람이 섞인 날 {mixed}) · 작은 장면이 있던 시간 날마다 {string.Join(" ", small)} · 볼 거리 없는 가장 긴 시간 {gap:0}시간 · 가장 넓은 사슬 {wide?.Count ?? 0}개 엔진 ({wide?.Path}) · 여섯 개 넘게 {d.ChainsWith(6)} · 원인 없는 큰 일 {d.Orphans.Values.Sum()}{(d.Orphans.Count > 0 ? " (" + string.Join(" ", d.Orphans.OrderByDescending(kv => kv.Value).Take(5).Select(kv => $"{Director.FactText(kv.Key)} {kv.Value}")) + ")" : "")} · 배 갈라짐 {splits}{(splits > 0 ? $" (그때 산 사람 {aliveAtSplit} → 끝에 {alive})" : "")}");
         Console.WriteLine($"    사고 날마다 {string.Join(" ", acc.Take(fullDays))} ({string.Join(" ", accKinds.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{FactNames.Of(kv.Key)} {kv.Value}"))}) · 다침/쓰러짐 {string.Join(" ", hurt.Take(fullDays))} · 식량 {food:0}일 · 물 {water:0}일 · 예비 공기 {net.AirReserve:0}몰 · 마스크 {mind.MasksWorn} · 긴급 공기 {s.Get<ShipMind>().EmergencyAir} · 거짓말 {s.Get<Society>().LiesTold}(들통 {s.Get<Society>().LiesExposed}) · 회의 {s.Get<Society>().Councils}(재판 {s.Get<Society>().Trials} 유죄 {s.Get<Society>().Convictions} · 선거 {s.Get<Society>().Elections} · 반란 {s.Get<Society>().Mutinies} · 못 열림 {s.Get<Society>().CouncilsFailed} · 흩어짐 {s.Get<Society>().CouncilsBroken}) · 대화 {s.Get<Society>().Talks}(다툼 {s.Get<Society>().Arguments} · 사과 {s.Get<Society>().Apologies} · 소문 {s.Get<Society>().Rumors} · 편듦 {s.Get<Society>().Sides} · 말림 {s.Get<Society>().Mediations} · 몸싸움 {s.Get<Society>().Fights} · 밤 깸 {s.Get<Society>().NightWakes}) · 대피 {s.Get<ShipMind>().Shelters} · 되풀이한 판단 {loops.Count}{(loops.Count > 0 ? "(" + string.Join(" ", loops.OrderByDescending(kv => kv.Value).Take(4).Select(kv => $"{kv.Key} {kv.Value}번")) + ")" : "")} · 같은 목표에 막힌 이 {agentFails}명 · 한 틱 {msTick:0.00}ms (가장 느린 시간 {worstHourMs:0.00}ms → 60프레임 배속 {maxSpeed:0}배)");
+        int calmMax = Math.Max(1, crew / 6);   // 한둘은 살펴볼 일 (노랑) · 떼로 다치면 일상의 법칙이 틀렸다 (빨강)
+        bool red = calmDeaths > 0 || calm.Count > calmMax, warm = hotK > 273.15 + 45;   // 더운 칸은 알리기만 (깜빡 켜 둔 조리대 곁은 덥다 — 사람이 데면 위에서 잡힌다)
+        Console.WriteLine($"    평온한 때 (지난 하루 사고 없음) 까닭 없는 환경 해 {calm.Count} (죽음 {calmDeaths}) · 사람이 서 있던 가장 더운 칸 {hotRoom} {hotK - 273.15:0.0}℃ ({Time.Clock(hotAt)})"
+            + (red ? " — 🔴 문지기: 일상이 사람을 해친다 (까닭 없는 죽음 · 다침 떼)" : calm.Count > 0 || warm ? " — 🟡 살펴볼 것" : ""));
+        foreach (var line in calm.Take(8)) Console.WriteLine($"      {line}");
+        if (_judgeGate) { if (red) _fail++; else _pass++; }
         Console.WriteLine($"JUDGE {{\"ship\":\"{ship}\",\"seed\":{seed},\"crew\":{crew},\"days\":{days},\"ran\":{ran:0.00},\"alive\":{alive},\"deaths\":{deadCount},"
             + $"\"firstDeath\":{(firstDeath < 0 ? -1 : firstDeath / (double)dayTicks):0.00},\"halfDead\":{(halfDead < 0 ? -1 : halfDead / (double)dayTicks):0.00},"
             + $"\"causes\":{{{string.Join(",", causes.Select(kv => $"\"{Esc(kv.Key)}\":{kv.Value}"))}}},"
@@ -206,6 +253,6 @@ public static partial class Program
             + $"\"loops\":{loops.Count},\"stuckAgents\":{agentFails},"
             + $"\"dWeary\":{JD(dWeary.Take(fullDays).Select(x => Math.Round(x, 2)))},\"dArgue\":{J(dArgue.Take(fullDays).Select(x => (int)x))},"
             + $"\"dBroken\":{J(dBroken.Take(fullDays))},\"dHoleAge\":{JD(dHoleAge.Take(fullDays))},\"dHoleCm2\":{JD(dHoleCm2.Take(fullDays))},\"dO2\":{JD(dO2.Take(fullDays))},\"dStuck\":{J(dStuck.Take(fullDays))},"
-            + $"\"nan\":{nan},\"quietH\":{quiet:0.0},\"gapH\":{gap:0},\"small\":{J(small)},\"weekKinds\":{J(weekKinds)},\"pairs\":{{{string.Join(",", pairList)}}}}}");
+            + $"\"calmHurt\":{calm.Count},\"calmDeaths\":{calmDeaths},\"hotC\":{hotK - 273.15:0.0},\"nan\":{nan},\"quietH\":{quiet:0.0},\"gapH\":{gap:0},\"small\":{J(small)},\"weekKinds\":{J(weekKinds)},\"pairs\":{{{string.Join(",", pairList)}}}}}");
     }
 }

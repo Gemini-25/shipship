@@ -1,0 +1,41 @@
+# 오래 돌리기 문지기 — 기본 배(6~12명)를 며칠 항해시켜, 짧은 규칙 시험으로는 안 보이는 결함을 잡는다.
+#   빨강: 평온한 때(지난 하루 사고 없음) 까닭 없는 환경 해(데었다 · 식었다 · 숨 · 중독 … 그런데 위로 원인이 없다)로 죽거나 떼로 다쳤다 (사람이 서 있는 칸의 공기가 45℃를 넘으면 노랑 — 알리기만)
+#   → 일상의 법칙이 사람을 해친다는 뜻이다. 엔진 버그로 보고 고친다 (시험을 끄지 않는다).
+#   (샤워 온수기가 방을 데워 사람이 데던 결함 — 규칙 시험 577개가 초록인데 새뜰호 사흘에 다침 32)
+name: voyage
+
+on:
+  push:
+    paths: ['engine/**', '.github/workflows/voyage.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: voyage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  voyage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: 빌드
+        run: dotnet build engine/Lab -c Release -o build/lab --nologo -v q
+      - name: 항해 (디딤호 6명 · 나름호 8명 · 살핌호 12명 — 나흘씩 · 함께)
+        run: |
+          dotnet build/lab/Lab.dll --judge Didim 4 2 --gate > didim.txt 2>&1 &  p1=$!
+          dotnet build/lab/Lab.dll --judge Nareum 4 1 --gate > nareum.txt 2>&1 & p2=$!
+          dotnet build/lab/Lab.dll --judge Salpim 4 1 --gate > salpim.txt 2>&1 & p3=$!
+          bad=0
+          wait $p1 || bad=1
+          wait $p2 || bad=1
+          wait $p3 || bad=1
+          { echo '### 오래 돌리기 (나흘)'; echo '```'; grep -hv '^JUDGE' didim.txt nareum.txt salpim.txt | cut -c1-600; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $bad
