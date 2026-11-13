@@ -3,6 +3,7 @@
 //         o2gen(산소 발생기 — 물 전기분해) scrubber(이산화탄소 제거) dehumid(제습 — 물을 걷는다) recycler(물 재생)
 //         computer console sensor stove fridge grow charger industry appliance lamp engine gravity(인공 중력 발생기 — 몸마다 바닥 중력)
 //   kw: 켜져 있을 때 쓰는 전력 · gen: 내는 전력 · kwh: 저장 · heatKw: 옮기는 열 (펌프 · 공조)
+//   toRoom: 쓴 전기 가운데 방 공기로 가는 열의 몫 (없으면 1 · 샤워 온수기 0.02 — 나머지는 데운 물이 싣고 하수로)
 //   tiers: 재배 선반의 단 수 (재배 넓이 = 칸 × 단)
 //   on: 처음에 켜져 있나 (조리대 · 공장 기계는 꺼져 있다가 사람이 켠다)
 //   parts: 부품 → 평균 수명(시간). 부품마다 숨은 한계(와이블)가 있고, 마모(가동 · 열 · 습기 · 부하)가 그 한계를 넘으면 고장 — 확률이 아니라 상태에서.
@@ -58,6 +59,6 @@
   "SuitDryer":       { "role": "appliance","kw": 0.3,   "on": false, "db": 50, "parts": { "전기": 20000 } },
   "Treadmill":       { "role": "appliance","kw": 0.1,   "on": false, "db": 74, "parts": { "기계": 15000 } },
   "Toilet":          { "role": "appliance","kw": 0.02,  "on": true,  "db": 40, "parts": { "기계": 20000, "봉함": 30000 } },
-  "Shower":          { "role": "appliance","kw": 3,     "on": false, "db": 50, "parts": { "전기": 30000, "봉함": 25000 } },
+  "Shower":          { "role": "appliance","kw": 3,     "toRoom": 0.02, "on": false, "db": 50, "parts": { "전기": 30000, "봉함": 25000 } },
   "EngineCore":      { "role": "engine",   "kw": 2,     "on": true, "db": 70, "parts": { "기계": 20000, "전기": 30000 } }
 }

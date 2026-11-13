@@ -509,6 +509,7 @@ public sealed partial class Mind : IEngine
             t = Lap("몸의 필요", t);
         }
         BlockDoors();
+        ShowerValves();   // 손을 뗀 샤워 꼭지는 잠긴다
         Lap("문 붙잡기", t);
         TalkStep(sim);     // 판단 이관 (나): 말 걸기 · 이야기 · 대답 · 별명
         FeudStep(sim);     // 판단 이관 (다): 편들기 · 말리기 · 덤비기 · 주먹 · 헤어지기 · 몰래 방해

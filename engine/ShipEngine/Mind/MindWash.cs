@@ -238,6 +238,26 @@ public sealed partial class Mind
         }
     }
 
+    /// <summary>샤워 꼭지는 손을 떼면 잠긴다 (누르고 있어야 나오는 꼭지): 그 칸에서 씻고 있는 이가 없으면 온수기가 꺼진다 —
+    /// 씻다 말고 뛰쳐나가도 · 쓰러져도 3kW가 켜진 채 남지 않는다 (예전: 끝까지 씻어야만 꺼져서, 하다 만 샤워 뒤로 방이 달아올랐다).</summary>
+    private void ShowerValves()
+    {
+        if (_net == null) return;
+        foreach (int fu in _showers)
+        {
+            int d = WashDev(fu);
+            if (d < 0 || _net.On[d] == 0) continue;
+            bool held = false;
+            foreach (var a in Agents)
+            {
+                if (a.C.Up == 0 || a.C.StepIndex >= a.Plan.Count) continue;
+                var st = a.Plan[a.C.StepIndex];
+                if (st.Kind == StepKind.Use && (UseKind)st.Arg == UseKind.Shower && st.Target == fu) { held = true; break; }
+            }
+            if (!held) _net.SetOn(d, false);
+        }
+    }
+
     /// <summary>샤워 칸을 쓰는 동안: 처음에 온수기를 켠다 (전기 3kW — 꺼지면 찬물).</summary>
     private void ShowerStart(PlanStep st)
     {

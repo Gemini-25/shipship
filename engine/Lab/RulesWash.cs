@@ -152,6 +152,55 @@ public static partial class Program
                 $"처음 {t0 - 273.15:0.0}℃ · 가장 뜨거웠던 칸 {peak - 273.15:0.0}℃ · 화상 {life[m[p].C.Body].Burn:0.00}");
         }
 
+        // ── 온수기의 열 (월드 — 고친 결함): 온수기 전기(3kW)는 물을 데워 물과 함께 하수로 간다 — 방 공기로는 겉면 열만.
+        //    예전: 3kW가 6분 내내 샤워 칸 공기로 들어가, 몇 사람 씻고 나면 방이 사람을 데울 만큼 달아올랐다 ──
+        {
+            var s = Worlds.Full(lay, 15);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var f = s.Get<Field>();
+            int p = m.AddPerson(s, Worlds.At(lay, 2, 1));
+            s.Run(2);
+            var shower = s.Layout.Furniture.First(x => x.Type == "Shower");
+            var room = s.Layout.Rooms[s.Layout.Room[shower.Cells[0]]].Cells;
+            double t0 = f.Temp(shower.Cells[0]), peak = 0;
+            for (int k = 0; k < 3; k++)
+            {
+                life[m[p].C.Body].Dirt = 0.8f; m[p].C.ShoweredAt = 0;
+                long n0 = m.ShowersTaken;
+                for (long t = 0; t < Time.Minutes(20) && m.ShowersTaken == n0; t++)
+                {
+                    Calm(s, m, p); s.Step();
+                    foreach (int c in room) peak = Math.Max(peak, f.Temp(c));
+                }
+            }
+            Check("온수기의 열: 세 번 이어서 씻어도 (온수기 3kW · 6분씩) 샤워실 공기는 물(40℃)보다 뜨거워지지 않는다 — 전기의 열은 물이 싣고 간다",
+                m.ShowersTaken == 3 && peak <= 313.2 && life[m[p].C.Body].Burn == 0,
+                $"샤워 {m.ShowersTaken} · 처음 {t0 - 273.15:0.0}℃ · 가장 뜨거웠던 칸 {peak - 273.15:0.0}℃ · 화상 {life[m[p].C.Body].Burn:0.00}");
+        }
+
+        // ── 하다 만 샤워 (고친 결함): 씻다 말고 나가면 꼭지가 잠기고 온수기가 꺼진다 — 켜진 채 남지 않는다 (예전: 끝까지 씻어야만 꺼졌다) ──
+        {
+            var s = Worlds.Full(lay, 17);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var f = s.Get<Field>();
+            int p = m.AddPerson(s, Worlds.At(lay, 2, 1));
+            s.Run(2);
+            life[m[p].C.Body].Dirt = 0.8f;
+            var shower = s.Layout.Furniture.First(x => x.Type == "Shower");
+            int dev = net.Devices.First(d => d.Furniture == shower.Id).Id;
+            var room = s.Layout.Rooms[s.Layout.Room[shower.Cells[0]]].Cells;
+            bool on = false;
+            for (long t = 0; t < Time.Minutes(20) && !on; t++) { Calm(s, m, p); s.Step(); on = net.On[dev] != 0; }
+            for (int k = 0; k < 10; k++) { Calm(s, m, p); s.Step(); }   // 조금 씻다가
+            life[m[p].C.Body].Dirt = 0; life[m[p].C.Body].Wet = 0;
+            m[p].Plan.Clear(); m[p].C.StepIndex = 0;                    // 그만둔다 (계획이 바뀌었다)
+            for (int k = 0; k < 3; k++) { Calm(s, m, p); s.Step(); }
+            bool offSoon = net.On[dev] == 0;
+            double peak = 0;
+            for (long t = 0; t < Time.Minutes(30); t++) { Calm(s, m, p); s.Step(); foreach (int c in room) peak = Math.Max(peak, f.Temp(c)); }
+            Check("하다 만 샤워: 씻다 말고 나가면 꼭지가 잠기고 온수기가 꺼진다 — 30분 뒤에도 방이 달아오르지 않는다",
+                on && offSoon && net.On[dev] == 0 && m.ShowersTaken == 0 && peak <= 313.2,
+                $"켰다 {on} · 그만둔 뒤 꺼짐 {offSoon} · 샤워 끝냄 {m.ShowersTaken} · 30분 가장 뜨거웠던 칸 {peak - 273.15:0.0}℃");
+        }
+
         // ── 손 씻기: 성실한 이는 변기 뒤에 거의 늘 · 덜 성실한 이는 가끔 (세 번 볼일) ──
         {
             int Washes(float consc)

@@ -84,6 +84,8 @@ public sealed class DeviceDef
 {
     public string Role = "";
     public double Kw, Gen, Kwh, HeatKw, Mol;
+    /// <summary>쓴 전기 가운데 방 공기로 가는 열의 몫 (보통 1 — 전기는 결국 열. 온수기는 0.02: 나머지는 데운 물이 싣고 하수로 간다).</summary>
+    public double ToRoom = 1;
     /// <summary>돌아갈 때 1m에서의 소리 크기 (dBA) — 바탕 소음 (③ 소리).</summary>
     public double Db;
     /// <summary>재배 선반의 단 수 (재배 넓이 = 칸 × 단).</summary>

@@ -873,7 +873,8 @@ public sealed partial class Network : IEngine
                     break;
                 default:
                     // 전기는 결국 열 — 장치가 차지한 칸에 고루 (긴 재배 선반의 전등 열이 한 칸에 몰리지 않게)
-                    if (kw > 0) HeatInto(dev, kw * 1000 * dt);
+                    // 온수기는 겉면 열만 방으로 (toRoom) — 나머지는 데운 물이 싣고 간다 (그 물의 열 · 김은 씻을 때 ⑤가 방에 준다)
+                    if (kw > 0) HeatInto(dev, kw * 1000 * dev.Def.ToRoom * dt);
                     break;
             }
         }
