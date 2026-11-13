@@ -10,9 +10,9 @@ public static partial class Program
         if (!Do("빠른 길")) return;
         Console.WriteLine("\n[빠른 길 — 같은 답]");
 
-        // 구역 · 틈 곁 칸: 문을 마구 여닫고 벽을 뚫었다 막은 새터호 — 지금 구역 · 틈 곁 칸이 넓이 우선으로 처음부터 센 것과 같고 · 기억 없이 되살린 세계와도 같다
+        // 구역 · 틈 곁 칸: 문을 마구 여닫고 벽을 뚫었다 막은 살핌호 — 지금 구역 · 틈 곁 칸이 넓이 우선으로 처음부터 센 것과 같고 · 기억 없이 되살린 세계와도 같다
         {
-            var lay = Layout.Ship("Saetteul", Tables.Default);
+            var lay = Layout.Ship("Salpim", Tables.Default);
             var s = Worlds.FieldOnly(lay, 1);
             var f = s.Get<Field>();
             var rng = Rng.Stream(1, "빠른 길");
@@ -66,20 +66,20 @@ public static partial class Program
                 if (k.B >= 0) { var (cb, wb) = Near(k.B, k.RB); if (!k.NearB.AsSpan().SequenceEqual(cb) || !k.WB.AsSpan().SequenceEqual(wb)) nearBad++; }
             }
             // 기억 없이 되살린 세계 (구역 · 틈을 처음부터 짓는다)
-            var r = Worlds.FieldOnly(Layout.Ship("Saetteul", Tables.Default), 1);
+            var r = Worlds.FieldOnly(Layout.Ship("Salpim", Tables.Default), 1);
             r.Load(s.Save());
             var g = r.Get<Field>();
             bool linksSame = g.Links.Count == f.Links.Count && g.Links.Zip(f.Links).All(p => p.First.A == p.Second.A && p.First.B == p.Second.B && p.First.RA == p.Second.RA && p.First.RB == p.Second.RB
                 && p.First.Kind == p.Second.Kind && p.First.Area == p.Second.Area && p.First.NearA.AsSpan().SequenceEqual(p.Second.NearA) && p.First.WA.AsSpan().SequenceEqual(p.Second.WA)
                 && p.First.NearB.AsSpan().SequenceEqual(p.Second.NearB) && p.First.WB.AsSpan().SequenceEqual(p.Second.WB));
-            Check("구역 · 틈 곁 칸: 문 480번 여닫고 벽을 뚫었다 막은 새터호 — 구역이 넓이 우선으로 처음부터 센 것과 같고 · 틈 곁 칸이 옛 셈과 같고 · 기억 없이 되살린 세계의 틈과도 같다",
+            Check("구역 · 틈 곁 칸: 문 480번 여닫고 벽을 뚫었다 막은 살핌호 — 구역이 넓이 우선으로 처음부터 센 것과 같고 · 틈 곁 칸이 옛 셈과 같고 · 기억 없이 되살린 세계의 틈과도 같다",
                 regionsSame && nearBad == 0 && linksSame && f.Links.Count > 0,
                 $"구역 {f.Regions.Count} (옛 셈 {regs.Count}) 같음 {regionsSame} · 틈 {f.Links.Count} · 곁 칸 다름 {nearBad} · 되살린 세계 같음 {linksSame}");
         }
 
-        // 방사선 가림: 벽 하나를 크게 뚫은 새터호 — 칸마다 선량이 옛 셈(광선 다섯을 모두 반 칸씩 걷기 · 칸마다 재질을 그때 찾기)과 같다
+        // 방사선 가림: 벽 하나를 크게 뚫은 살핌호 — 칸마다 선량이 옛 셈(광선 다섯을 모두 반 칸씩 걷기 · 칸마다 재질을 그때 찾기)과 같다
         {
-            var s = ShipWorld.Create("Saetteul", 3);
+            var s = ShipWorld.Create("Salpim", 3);
             var f = s.Get<Field>(); var o = s.Get<Outside>(); var lay = s.Layout; var t = s.Tables;
             int wall = Enumerable.Range(1, lay.N - 2).First(c => lay.Kind[c] == CellKind.Wall && lay.X(c) > 0 && lay.X(c) < lay.W - 1 && lay.Kind[c - 1] == CellKind.Floor && lay.Kind[c + 1] == CellKind.Floor);
             f.SetHole(wall, 2.5f);
@@ -118,7 +118,7 @@ public static partial class Program
                 }
                 if ((float)(o.DoseOut * shield) != o.Dose[i]) bad++;
             }
-            Check("방사선 가림: 벽을 크게 뚫은 새터호 — 칸마다 선량이 옛 셈(광선 다섯을 반 칸씩 · 칸마다 재질을 그때 찾기)과 같다",
+            Check("방사선 가림: 벽을 크게 뚫은 살핌호 — 칸마다 선량이 옛 셈(광선 다섯을 반 칸씩 · 칸마다 재질을 그때 찾기)과 같다",
                 bad == 0 && cells > 1000, $"칸 {cells} · 다름 {bad}");
         }
 

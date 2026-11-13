@@ -102,7 +102,7 @@ public static partial class Program
         // ── 열화상의 헛경보: 평시 꾸민 배 한 시간 — 원자로 · 엔진 겉면이 늘 뜨거워도 열화상 경보는 없다 ──
         {
             var counts = new List<string>(); int alarms = 0;
-            foreach (var key in new[] { "Didim", "Salpim", "Saetteul" })
+            foreach (var key in new[] { "Didim", "Salpim", "Soedol" })
             {
                 var s = ShipWorld.Crewed(key, 4, 2, 1);
                 s.Run(Time.Hours(1));

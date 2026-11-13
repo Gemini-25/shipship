@@ -9,9 +9,9 @@ public static partial class Program
     {
         if (!Do("선과 관")) return;
         Console.WriteLine("\n[⑥ 칸마다 선 · 관]");
-        // ── 배 일곱 척: 처음에는 모두 이어져 있다 ──
+        // ── 배 다섯 척: 처음에는 모두 이어져 있다 ──
         var bad = new List<string>();
-        foreach (var key in new[] { "Hwasal", "Didim", "Salpim", "Nareum", "Soedol", "Saetteul", "Hannuri" })
+        foreach (var key in new[] { "Hwasal", "Didim", "Salpim", "Nareum", "Soedol" })
         {
             var s = ShipWorld.Create(key, 1);
             var net = s.Get<Network>(); var L = s.Layout;
@@ -26,7 +26,7 @@ public static partial class Program
             foreach (var fu in L.Furniture) if (!net.WaterAt(fu.Id)) bad.Add($"{L.Name} {fu.Type} 물이 안 옴");
             if (Math.Abs(net.Supplied - net.Demanded) > 1e-6) bad.Add($"{L.Name} 공급 {net.Supplied:0.0}/{net.Demanded:0.0}");
         }
-        Check("배 일곱 척: 아무것도 안 끊기면 섬 하나 · 장치마다 가지선 · 원자로 · 냉각판 장치는 펌프와 이어진 냉각관 · 물 쓰는 설비마다 물이 온다 · 공급이 수요를 채운다",
+        Check("배 다섯 척: 아무것도 안 끊기면 섬 하나 · 장치마다 가지선 · 원자로 · 냉각판 장치는 펌프와 이어진 냉각관 · 물 쓰는 설비마다 물이 온다 · 공급이 수요를 채운다",
             bad.Count == 0, string.Join(" · ", bad.Take(6)));
 
         // ── 끊긴 칸 너머로는 흐르지 않는다: 디딤호 관 칸을 마구 끊고 · 따로 센 이어짐(관 방향을 따라 끊긴 칸을 빼고)과 견준다 ──

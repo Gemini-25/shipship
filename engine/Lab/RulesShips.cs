@@ -43,7 +43,7 @@ public static partial class Program
                 if (Debug) Console.WriteLine($"    {L.Name} {L.W}×{L.H} · 침대 {beds} · 바닥 {space.Count} · 식량 {(double.IsInfinity(days) ? "끝없이" : $"{days:0}일")} · 재배 {grow / need * 100:0}%");
             }
             Check("배 일곱 척: 사람 수만큼 침대 · 모든 바닥이 문으로 이어진다 · 바깥문 · 식량이 항해 길이를 버틴다 (세대선은 다 기르고 90일 비상)",
-                bad.Count == 0 && Layout.ShipKeys().Count() == 7, bad.Count == 0 ? $"{Layout.ShipKeys().Count()}척 모두 맞다" : string.Join(" · ", bad));
+                bad.Count == 0 && Layout.ShipKeys().Count() == 5, bad.Count == 0 ? $"{Layout.ShipKeys().Count()}척 모두 맞다" : string.Join(" · ", bad));
         }
 
         // ── 비상 호흡기: 배마다 산소 마스크가 사람 수보다 많고 · 어느 침대에서든 마스크함이 걸어서 25칸 안 (ISS — 모듈마다 휴대용 호흡기)
@@ -144,17 +144,27 @@ public static partial class Program
 
         // ── 주컴퓨터 · 대형 냉각 펌프의 열은 냉각 고리로 — 그 칸이 45℃를 넘지 않는다 (예전: 방 공기로만 식혀 53℃ · 46℃) ──
         {
-            var s = ShipWorld.Create("Hannuri", 4);
-            var f = s.Get<Field>(); var L = s.Layout;
-            s.Run(Time.Hours(1));
-            var cells = L.Furniture.Where(fu => fu.Type is "MainComputer" or "LargeCoolantPump").SelectMany(fu => fu.Cells).ToList();
-            double hottest = cells.Max(c => f.Temp(c));
-            Check("주컴퓨터 · 대형 냉각 펌프의 열은 냉각 고리로 — 그 칸 공기가 45℃를 넘지 않는다", hottest < 318, $"가장 더운 칸 {hottest - 273.15:0.0}℃");
+            double hottest = 0; string where = "";
+            foreach (var key in new[] { "Nareum", "Soedol" })   // 큰 배(한누리호)를 뺀 뒤: 주컴퓨터실이 따로 있는 나름호 · 펌프 셋인 쇠돌호
+            {
+                var s = ShipWorld.Create(key, 4);
+                var f = s.Get<Field>(); var L = s.Layout;
+                s.Run(Time.Hours(1));
+                foreach (int c in L.Furniture.Where(fu => fu.Type is "MainComputer" or "CoolantPump" or "LargeCoolantPump").SelectMany(fu => fu.Cells))
+                    if (f.Temp(c) > hottest) { hottest = f.Temp(c); where = key; }
+            }
+            Check("주컴퓨터 · 냉각 펌프의 열은 냉각 고리로 — 그 칸 공기가 45℃를 넘지 않는다 (나름호 · 쇠돌호 한 시간)", hottest < 318, $"가장 더운 칸 {hottest - 273.15:0.0}℃ ({where})");
         }
 
         // ── 원자로가 여럿이면 저마다 맡은 몫만큼 노심이 덥다 (예전: 원자로마다 배 전체 출력의 열을 다 더했다) ──
         {
-            var s = ShipWorld.Create("Hannuri", 2);
+            // 원자로 둘인 작은 시험 배 (원자로 둘이던 큰 배들을 뺐다 — 법칙은 남는다)
+            var two = Worlds.Ascii(@"
+##############
+#R....R..u..p#
+#.....c..c..b#
+##############", new() { ['R'] = "ReactorCore", ['u'] = "CoolantPump", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "Console" });
+            var s = Worlds.Full(two, 2);
             var f = s.Get<Field>(); var net = s.Get<Network>();
             for (int d = 0; d < net.Devices.Count; d++) if (net.Devices[d].Def.Role == "pump") net.SetOn(d, false); // 냉각을 멈추고 노심에 쌓이는 열만 잰다
             var cores = net.Devices.Where(d => d.Def.Role == "reactor").ToList();

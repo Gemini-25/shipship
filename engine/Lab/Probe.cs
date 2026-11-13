@@ -512,7 +512,7 @@ public static partial class Program
     internal static void ProbeHoles(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-holes").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
+        string ship = rest.Length > 0 ? rest[0] : "Salpim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double from = rest.Length > 2 ? double.Parse(rest[2]) : 7;
         double hours = rest.Length > 3 ? double.Parse(rest[3]) : 3;
@@ -543,7 +543,7 @@ public static partial class Program
     internal static void ProbeCell(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-cell").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
+        string ship = rest.Length > 0 ? rest[0] : "Salpim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         int cell = rest.Length > 2 ? int.Parse(rest[2]) : 2919;
         double hours = rest.Length > 3 ? double.Parse(rest[3]) : 14;
@@ -571,7 +571,7 @@ public static partial class Program
     internal static void ProbeFlap(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-flap").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
+        string ship = rest.Length > 0 ? rest[0] : "Salpim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double days = rest.Length > 2 ? double.Parse(rest[2]) : 2;
         var lay = Layout.Ship(ship, Tables.Default);
@@ -605,7 +605,7 @@ public static partial class Program
     internal static void ProbeDoor(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-door").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
+        string ship = rest.Length > 0 ? rest[0] : "Salpim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 9.36;
         int d = rest.Length > 3 ? int.Parse(rest[3]) : 24;
@@ -663,7 +663,7 @@ public static partial class Program
     internal static void ProbeLeak(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-leak").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
+        string ship = rest.Length > 0 ? rest[0] : "Salpim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 45;
         var lay = Layout.Ship(ship, Tables.Default);

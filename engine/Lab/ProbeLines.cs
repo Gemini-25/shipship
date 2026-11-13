@@ -8,7 +8,7 @@ public static partial class Program
     private static void ProbeLines(string[] args)
     {
         int at = Array.IndexOf(args, "--lines");
-        var keys = at + 1 < args.Length && !args[at + 1].StartsWith("--") ? new[] { args[at + 1] } : new[] { "Hwasal", "Didim", "Salpim", "Nareum", "Soedol", "Saetteul", "Hannuri" };
+        var keys = at + 1 < args.Length && !args[at + 1].StartsWith("--") ? new[] { args[at + 1] } : new[] { "Hwasal", "Didim", "Salpim", "Nareum", "Soedol" };
         ulong seed = at + 2 < args.Length && ulong.TryParse(args[at + 2], out var sd) ? sd : 1;
         foreach (var key in keys)
         {

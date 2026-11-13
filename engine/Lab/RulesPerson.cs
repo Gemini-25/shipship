@@ -19,16 +19,15 @@ public static partial class Program
             return sxy / Math.Sqrt(sxx * syy + 1e-12);
         }
 
-        // ── 분포: 한누리호 100명 — 다섯 축은 평균 0.5 · 표준 편차 0.17 언저리 (정규) · 용기는 외향(+) · 신경성(−)과 함께 간다 ──
+        // ── 분포: 살핌호 12명 × 시드 아홉 (108명) — 다섯 축은 평균 0.5 · 표준 편차 0.17 언저리 (정규) · 용기는 외향(+) · 신경성(−)과 함께 간다 ──
         {
-            var s = ShipWorld.Crewed("Hannuri", 1, 100, 0);
-            var ps = s.Get<Mind>().Agents.Where(a => a.IsPerson).Select(a => a.C).ToList();
+            var ps = Enumerable.Range(1, 9).SelectMany(seed => ShipWorld.Crewed("Salpim", (ulong)seed, 12, 0).Get<Mind>().Agents.Where(a => a.IsPerson).Select(a => a.C)).ToList();
             var axes = new (string name, List<float> v)[] { ("열림", ps.Select(c => c.Open).ToList()), ("성실", ps.Select(c => c.Consc).ToList()), ("외향", ps.Select(c => c.Extra).ToList()), ("친화", ps.Select(c => c.Agree).ToList()), ("신경성", ps.Select(c => c.Neuro).ToList()) };
             double Sd(List<float> v) { double m = v.Average(); return Math.Sqrt(v.Average(x => (x - m) * (x - m))); }
             bool shape = axes.All(ax => Math.Abs(ax.v.Average() - 0.5) < 0.06 && Sd(ax.v) is > 0.12 and < 0.22);
             double be = Corr(ps.Select(c => c.Brave).ToList(), ps.Select(c => c.Sociable).ToList()), bn = Corr(ps.Select(c => c.Brave).ToList(), ps.Select(c => 1 - c.Calm).ToList());
-            Check("성격 분포: 한누리호 100명 — 다섯 축은 평균 0.5 · 표준 편차 0.12~0.22 · 용기는 사교성(외향)과 함께, 불안(신경성)과 거꾸로 간다",
-                shape && be > 0.2 && bn < -0.3 && ps.Count == 100,
+            Check("성격 분포: 살핌호 12명 × 시드 아홉 (108명) — 다섯 축은 평균 0.5 · 표준 편차 0.12~0.22 · 용기는 사교성(외향)과 함께, 불안(신경성)과 거꾸로 간다",
+                shape && be > 0.2 && bn < -0.3 && ps.Count == 108,
                 string.Join(" · ", axes.Select(ax => $"{ax.name} {ax.v.Average():0.00}±{Sd(ax.v):0.00}")) + $" · 용기~외향 {be:0.00} · 용기~신경성 {bn:0.00}");
         }
 

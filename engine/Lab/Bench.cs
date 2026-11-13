@@ -30,7 +30,7 @@ public static partial class Program
     /// <summary>--fingerprint: 배 몇 척을 몇 분 돌린 세계 지문 — 속도만 고친 뒤 결과가 한 비트도 안 바뀌었는지 (고치기 전과 견준다).</summary>
     private static void Fingerprints()
     {
-        foreach (var (ship, people, robots, ticks) in new[] { ("Didim", 6, 2, 3000), ("Salpim", 12, 4, 1500), ("Saetteul", 40, 10, 600), ("Hannuri", 100, 30, 300) })
+        foreach (var (ship, people, robots, ticks) in new[] { ("Didim", 6, 2, 3000), ("Salpim", 12, 4, 1500), ("Soedol", 10, 4, 1500), ("Nareum", 8, 3, 1500) })
         {
             var s = ShipWorld.Crewed(ship, 7, people, robots);
             s.Run(ticks);
@@ -39,7 +39,7 @@ public static partial class Program
     }
 
     /// <summary>
-    /// --budget: 엔진별 시간 예산 (docs/DEPTH.md ① — CI가 따로 잰다). 새터호 40명 · 로봇 10은 한 틱 4ms 안 · 엔진마다 제 몫 안 · 한누리호 100명 · 로봇 30은 9ms 안.
+    /// --budget: 엔진별 시간 예산 (docs/DEPTH.md ① — CI가 따로 잰다). 기본 배(6~12명)에서 가장 큰 살핌호 12명 · 로봇 4는 한 틱 3ms 안 · 엔진마다 제 몫 안 · 쇠돌호 10명 · 로봇 4도 3ms 안 (큰 배 새뜰 · 한누리호는 뺐다 — 2026-11-13 함장).
     /// 세 번 재어 가장 빠른 것을 쓴다 (같은 기계의 다른 일에 흔들리지 않게). 넘으면 1로 끝난다 (CI 빨강).
     /// </summary>
     private static void Budget()
@@ -66,13 +66,13 @@ public static partial class Program
             return best;
         }
         Console.WriteLine($"\n[① 시간 예산 — 코어 {Par.Threads}]");
-        var (t, per) = Measure("Saetteul", 40, 10, 300);
+        var (t, per) = Measure("Salpim", 12, 4, 600);
         Console.WriteLine("  " + string.Join(" · ", per.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:0.000}/{share.GetValueOrDefault(kv.Key, Other):0.00}")));
         var over = per.Where(kv => kv.Value > share.GetValueOrDefault(kv.Key, Other)).Select(kv => $"{kv.Key} {kv.Value:0.00}ms > {share.GetValueOrDefault(kv.Key, Other):0.00}").ToList();
-        Check("시간 예산: 새터호 40명 · 로봇 10 — 한 틱 4ms 안 (60프레임에 넉넉히)", t <= 4.0, $"{t:0.00}ms/틱 (하루 = {t * Time.TicksPerDay / 1000:0}초)");
+        Check("시간 예산: 살핌호 12명 · 로봇 4 (기본 배 가운데 가장 큰 배) — 한 틱 3ms 안", t <= 3.0, $"{t:0.00}ms/틱 (하루 = {t * Time.TicksPerDay / 1000:0}초)");
         Check("시간 예산: 엔진마다 제 몫 안 (장 1.8 · 마음 1.0 · 망 0.6 · 구조 · 화학 · 주컴퓨터 0.4 · 나머지 0.15ms)", over.Count == 0, over.Count == 0 ? "모두 안" : string.Join(" · ", over));
-        var (th, _) = Measure("Hannuri", 100, 30, 150);
-        Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");
+        var (th, _) = Measure("Soedol", 10, 4, 600);
+        Check("시간 예산: 쇠돌호 10명 · 로봇 4 — 한 틱 3ms 안", th <= 3.0, $"{th:0.00}ms/틱");
     }
 
     /// <summary>배 하나 · 엔진마다 한 틱 시간 (--profile 배 사람 로봇 [틱]) — 시험이 많이 쓰는 배가 어디에 시간을 쓰나.</summary>
@@ -228,10 +228,10 @@ public static partial class Program
             Field.Prof = null;
             Console.WriteLine($"  평시 100명 숨 · {f.Cells}칸 · 코어 {threads}: 틱마다 {ms:0.000}ms (게임 1시간 = {ms * Time.TicksPerHour / 1000:0.00}초)");
         }
-        // 100명 · 로봇 30이 탄 큰 배(한누리호): 마음 엔진 · 전체
+        // 12명 · 로봇 4가 탄 살핌호 (기본 배 가운데 가장 큰 배): 마음 엔진 · 전체
         {
             Par.Threads = Math.Max(2, Environment.ProcessorCount);
-            var s = ShipWorld.Crewed("hannuri", 1, 100, 30);
+            var s = ShipWorld.Crewed("Salpim", 1, 12, 4);
             s.Run(50);
             s.Measure = true;
             s.LastMs.Clear();
@@ -243,8 +243,8 @@ public static partial class Program
             Console.WriteLine("    " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / Ticks:0.000}")));
             var sm = s.Get<ShipMind>();
             if (Environment.GetEnvironmentVariable("BENCH_LOG") == "1") foreach (var (t, txt) in sm.Log) Console.WriteLine($"    {Time.Clock(t)} {txt}");
-            Console.WriteLine($"  한누리호 주컴퓨터: 사건 {sm.Incidents.Count(x => x.Active != 0)} · 상상 {sm.Imaginations.Count / 2}번 · 경보 {sm.Alarms} · 맡김 {sm.Assignments}");
-            Console.WriteLine($"  한누리호 사람 {m.Agents.Count(a => a.IsPerson)} · 로봇 {m.Agents.Count(a => !a.IsPerson)} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (마음 {s.LastMs.GetValueOrDefault("마음") / Ticks:0.000}ms) · 게임 1시간 = {ms * Time.TicksPerHour / 1000:0.00}초");
+            Console.WriteLine($"  살핌호 주컴퓨터: 사건 {sm.Incidents.Count(x => x.Active != 0)} · 상상 {sm.Imaginations.Count / 2}번 · 경보 {sm.Alarms} · 맡김 {sm.Assignments}");
+            Console.WriteLine($"  살핌호 사람 {m.Agents.Count(a => a.IsPerson)} · 로봇 {m.Agents.Count(a => !a.IsPerson)} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (마음 {s.LastMs.GetValueOrDefault("마음") / Ticks:0.000}ms) · 게임 1시간 = {ms * Time.TicksPerHour / 1000:0.00}초");
         }
         Par.Threads = Math.Max(1, Environment.ProcessorCount);
     }

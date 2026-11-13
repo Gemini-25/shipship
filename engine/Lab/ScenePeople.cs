@@ -10,7 +10,7 @@ public static partial class Program
 {
     private static void PeopleScene(string dir)
     {
-        var s = ShipWorld.Crewed("Hannuri", 3, 12, 0);
+        var s = ShipWorld.Crewed("Salpim", 3, 12, 0);
         while (Time.HourOfDay(s.Tick) < 10) s.Run(25);
         var L = s.Layout; var m = s.Get<Mind>(); var life = s.Get<Life>();
         var room = L.Rooms.Where(r => r.Type == "Mess").OrderByDescending(r => r.Cells.Length).First();

@@ -12,7 +12,7 @@ public static partial class Program
 {
     private static readonly (string Key, Func<ShipPlan> Make)[] Designs =
     {
-        ("Hwasal", Hwasal), ("Didim", Didim), ("Salpim", Salpim), ("Nareum", Nareum), ("Soedol", Soedol), ("Saetteul", Saetteul), ("Hannuri", Hannuri),
+        ("Hwasal", Hwasal), ("Didim", Didim), ("Salpim", Salpim), ("Nareum", Nareum), ("Soedol", Soedol),
     };
 
     private static (int, string, string, (string, int)[]) R(int w, string type, string name, params (string, int)[] furn) => (w, type, name, furn);
@@ -264,134 +264,6 @@ public static partial class Program
             s.StrutLine((lx + 0.5, 3.5 + o), (lx - 2.5, 2.5), 2);  s.StrutDisc(lx - 3, 2.5, 1.8);
             s.StrutLine((lx + 0.5, 52.5 + o), (lx - 2.5, 66), 2);  s.StrutDisc(lx - 3, 67, 1.8);
         }
-        return s;
-    }
-
-    /// <summary>이민선 새뜰호 — 40명 · 1년 (재배 60%). 두 줄 통로 · 북쪽 침실 여덟 · 가운데 공동 구역 · 남쪽 재배 갑판 셋과 셔틀 격납고.</summary>
-    private static ShipPlan Saetteul()
-    {
-        var s = new ShipPlan("Saetteul", "새뜰호", 134, 62, 40, 6000, 800, "이민선 · 40명 · 1년 · 재배 60% · 셔틀") { Robots = 16, Drones = 4 };
-        int cor = s.Corridor(16, 18, 108, 19, "북쪽 통로");
-        s.Extend(cor, Box(16, 42, 108, 43));
-        s.Extend(cor, Box(16, 10, 17, 51));
-        var north = new List<(int, string, string, (string, int)[])>();
-        string[] q = { "가", "나", "다", "라", "마", "바", "사", "아" };
-        for (int i = 0; i < q.Length; i++)
-        {
-            north.Add(R(6, "Quarters", $"침실 {q[i]}", F("Bed", 5), F("Shelf")));
-            if (i == 3) north.Add(R(5, "Washroom", "화장실 · 샤워실 하나", Wash(3, 3, 2)));   // 침실 넷마다 하나
-        }
-        north.Add(R(5, "Washroom", "화장실 · 샤워실 둘", Wash(3, 3, 2)));
-        north.Add(R(7, "Lounge", "휴게실", F("GameTable"), F("Bookshelf"), F("Projector"), F("Aquarium"), F("Seat", 4)));
-        north.Add(R(6, "Chapel", "추모실", F("MemorialWall"), F("Seat", 4)));
-        north.Add(R(8, "School", "배움방", F("Table", 2), F("Bookshelf"), F("Seat", 6)));
-        s.Row(18, 18, 19, 'N', 7, cor, north.ToArray());
-        void Middle(int y0, int y1, params (int W, string T, string N, (string, int)[] F)[] rs)
-        {
-            int x = 18;
-            for (int i = 0; i < rs.Length; i++)
-            {
-                int x1 = x + rs[i].W - 1 + (i > 0 ? 1 : 0);
-                s.Link(s.Rect(x, y0, x1, y1, rs[i].T, rs[i].N, null, rs[i].F), cor);
-                x = x1 + 1;
-            }
-            if (x != 109) throw new InvalidOperationException($"새뜰호 가운데 줄 끝이 {x - 1} (108이어야)");
-        }
-        Middle(20, 30,
-            R(8, "Galley", "주방 하나", F("Stove", 2), F("Oven"), F("Fridge", 3), F("Shelf")),
-            R(18, "Mess", "식당 하나", F("Table", 4), F("MealDispenser", 2), F("Seat", 16)),
-            R(10, "Medbay", "의무실", F("MedBed", 3), F("DiagnosticScanner"), F("Autoclave"), F("Shelf")),
-            R(8, "Gym", "운동실", F("Treadmill", 3)),
-            R(16, "Workshop", "정비실", F("Workbench", 2), F("Lathe"), F("SolderStation"), F("Shelf"), F("RobotDock", 10)),
-            R(6, "Comms", "통신실", F("Console"), F("SensorArray", 2)),
-            R(10, "Lounge", "작은 휴게실", F("GameTable"), F("Bookshelf"), F("Seat", 4)),
-            R(8, "ComputerRoom", "주컴퓨터실", F("MainComputer"), F("Console", 2)));
-        Middle(31, 41,
-            R(10, "Storage", "식량 창고 하나", F("FoodLocker", 13), F("Shelf")),
-            R(10, "Storage", "식량 창고 둘", F("FoodLocker", 13), F("RobotDock", 6)),
-            R(12, "LifeSupport", "생명유지실 하나", F("OxygenGenerator", 5), F("WaterRecycler", 2), F("Scrubber", 3), F("Dehumidifier", 2), F("HeatExchanger", 2)),
-            R(12, "LifeSupport", "생명유지실 둘", F("OxygenGenerator", 4), F("WaterRecycler"), F("Scrubber", 2), F("Dehumidifier", 2), F("HeatExchanger", 2)),
-            R(8, "Galley", "주방 둘", F("Stove", 2), F("Fridge", 3), F("Shelf")),
-            R(18, "Mess", "식당 둘", F("Table", 4), F("MealDispenser", 2), F("Seat", 16)),
-            R(15, "Cooling", "냉각실", F("LargeCoolantPump"), F("CoolantPump", 2), F("HeatExchanger", 2)));
-        var south = s.Row(18, 42, 43, 'S', 11, cor,
-            R(16, "Hydroponics", "재배 갑판 하나", F("GrowRack", 13), F("NutrientDoser")),
-            R(16, "Hydroponics", "재배 갑판 둘", F("GrowRack", 12), F("NutrientDoser")),
-            R(16, "Hydroponics", "재배 갑판 셋", F("GrowRack", 12), F("NutrientDoser")),
-            R(16, "Hangar", "셔틀 격납고", F("Shuttle"), F("SuitLocker", 4), F("DroneDock", 4)),
-            R(6, "Airlock", "에어락", F("SuitLocker", 4), F("OxygenMaskBox")));
-        s.SetLinkKind(south[3], "pressure"); s.SetLinkKind(south[4], "pressure");
-        s.Exit(south[3], 'S'); s.Exit(south[4], 'S');
-        s.Link(s.Rect(3, 10, 15, 21, "Reactor", "원자로실", null, F("ReactorCore", 2), F("Console")), cor);
-        s.Link(s.Rect(3, 22, 15, 37, "Engine", "엔진실", null, F("EngineCore", 3), F("Console")), cor);
-        s.Link(s.Rect(3, 38, 15, 51, "Power", "배전실", null, F("AuxGenerator", 2), F("PowerPanel", 2), F("Battery", 4), F("SurgeProtector"), F("CapacitorBank")), cor);
-        int br = s.Rect(109, 10, 128, 55, "Bridge", "함교", (x, y) => Math.Abs(y + 0.5 - 31) <= (128.5 - x) * 1.25 + 1,
-            F("NavComputer"), F("Console", 4), F("SensorArray", 2), F("CrashSeat", 6));
-        s.Link(br, cor, (108, 18.5)); s.Link(br, cor, (108, 42.5));
-        return s;
-    }
-
-    /// <summary>세대선 한누리호 — 100명 · 먹을 것을 다 기른다 (+ 90일 비상 식량). 도는 고리(안쪽 침실 · 바깥 재배 갑판) · 바퀴살 넷 · 가운데 축(엔진 · 원자로 · 함교 · 셔틀).</summary>
-    private static ShipPlan Hannuri()
-    {
-        const double c = 71;
-        var s = new ShipPlan("Hannuri", "한누리호", 142, 142, 100, 15000, 2000, "세대선 · 100명 · 다 기른다 · 90일 비상 식량 · 도는 고리 · 셔틀") { Robots = 36, Drones = 4 };
-        double Rr(int x, int y) => Math.Sqrt((x + 0.5 - c) * (x + 0.5 - c) + (y + 0.5 - c) * (y + 0.5 - c));
-        double A(int x, int y) => Ang(x + 0.5 - c, y + 0.5 - c);
-        bool Spoke(int x, int y) => Math.Abs(x + 0.5 - c) < 1 || Math.Abs(y + 0.5 - c) < 1;
-        int cor = s.Corridor(0, 0, 141, 141, "고리 통로", (x, y) => Rr(x, y) >= 50 && Rr(x, y) < 52.5);
-        s.Extend(cor, Box(0, 0, 141, 141, (x, y) => Spoke(x, y) && Rr(x, y) >= 7.5 && Rr(x, y) < 50));
-        // 가운데 축
-        s.Link(s.Rect(0, 0, 141, 141, "Engine", "엔진실", (x, y) => Rr(x, y) < 6, F("EngineCore", 2), F("Console")), cor);
-        var hub = new (double A0, double R0, double R1, string T, string N, (string, int)[] F)[]
-        {
-            (270, 13, 20, "Bridge", "함교", new[] { F("MainComputer"), F("NavComputer"), F("Console", 4), F("SensorArray", 2), F("CrashSeat", 4) }),
-            (270, 7.5, 13, "Comms", "통신실", new[] { F("Console", 2), F("SensorArray") }),
-            (180, 13, 20, "Reactor", "원자로실", new[] { F("LargeReactorCore"), F("ReactorCore"), F("Console") }),
-            (180, 7.5, 13, "Power", "배전실", new[] { F("AuxGenerator", 2), F("PowerPanel", 2), F("Battery", 4), F("SurgeProtector"), F("CapacitorBank") }),
-            (90, 13, 20, "Cooling", "냉각실", new[] { F("LargeCoolantPump", 4), F("CoolantPump", 2), F("HeatExchanger", 2) }),
-            (90, 7.5, 13, "Workshop", "축 정비실", new[] { F("Workbench"), F("Lathe"), F("SolderStation"), F("RobotDock", 10) }),
-            (0, 13, 20, "Hangar", "셔틀 격납고", new[] { F("Shuttle"), F("SuitLocker", 6), F("DroneDock", 4) }),
-            (0, 7.5, 13, "Storage", "부품 창고", new[] { F("Shelf", 3), F("RobotDock", 4) }),
-        };
-        foreach (var h in hub)
-        {
-            int r = s.Rect(0, 0, 141, 141, h.T, h.N, (x, y) => !Spoke(x, y) && Rr(x, y) >= h.R0 && Rr(x, y) < h.R1 && InAng(A(x, y), h.A0, h.A0 + 90), h.F);
-            s.Link(r, cor);
-            if (h.T == "Hangar") s.Exit(r, 'S');
-        }
-        // 고리: 사분면마다 여섯 조각 (안쪽 · 바깥쪽 띠) — 0도 = 동쪽 · 시계 방향
-        var quarters = Enumerable.Range(0, 13).Select(i => ("Quarters", $"침실 {i + 1}", new[] { F("Bed", i < 9 ? 8 : 7), F("Shelf") })).ToList();   // 침실 열셋 (8 × 9 + 7 × 4 = 100)
-        int wi = 0;
-        (string, string, (string, int)[]) W() => ("Washroom", $"화장실 · 샤워실 {++wi}", Wash(4, 3, 2));   // 사분면마다 하나
-        int qi = 0;
-        (string, string, (string, int)[]) Q() => quarters[qi++];
-        var inner = new[]
-        {
-            new[] { Q(), Q(), W(), Q(), Q(), ("Medbay", "의무실 하나", new[] { F("MedBed", 3), F("DiagnosticScanner"), F("Shelf") }) },
-            new[] { Q(), Q(), ("School", "배움방", new[] { F("Table", 2), F("Bookshelf"), F("Seat", 8) }), Q(), W(), ("Gym", "운동실", new[] { F("Treadmill", 4) }) },
-            new[] { Q(), W(), ("Chapel", "추모실", new[] { F("MemorialWall"), F("Seat", 6) }), Q(), Q(), ("Lounge", "휴게실 하나", new[] { F("GameTable"), F("Bookshelf"), F("Projector"), F("Seat", 4) }) },
-            new[] { Q(), Q(), ("Medbay", "의무실 둘", new[] { F("MedBed", 3), F("DiagnosticScanner"), F("Autoclave") }), W(), Q(), ("Lounge", "휴게실 둘", new[] { F("GameTable"), F("Aquarium"), F("Seat", 4) }) },
-        };
-        (string, string, (string, int)[]) Farm(int n) => ("Hydroponics", $"재배 갑판 {n}", new[] { Fill("GrowRack", 16), F("NutrientDoser") });
-        var outer = new[]
-        {
-            new[] { Farm(1), Farm(2), ("Galley", "주방 하나", new[] { F("Stove", 2), F("Oven"), F("Fridge", 3), F("Shelf") }), ("Mess", "식당 하나", new[] { F("Table", 5), F("MealDispenser", 2), F("Seat", 20) }), Farm(3), ("Airlock", "에어락", new[] { F("SuitLocker", 6), F("OxygenMaskBox") }) },
-            new[] { Farm(4), Farm(5), ("Storage", "식량 창고 하나", new[] { F("FoodLocker", 14), F("RobotDock", 4) }), ("LifeSupport", "생명유지실 하나", new[] { F("OxygenGenerator", 7), F("WaterRecycler", 2), F("Scrubber", 4), F("Dehumidifier", 3), F("HeatExchanger", 2) }), Farm(6), ("Workshop", "정비실", new[] { F("Workbench", 2), F("Lathe"), F("SolderStation"), F("Shelf"), F("RobotDock", 12) }) },
-            new[] { Farm(7), Farm(8), ("Galley", "주방 둘", new[] { F("Stove", 2), F("Oven"), F("Fridge", 3), F("Shelf") }), ("Mess", "식당 둘", new[] { F("Table", 5), F("MealDispenser", 2), F("Seat", 20) }), Farm(9), ("LifeSupport", "생명유지실 둘", new[] { F("OxygenGenerator", 7), F("WaterRecycler", 2), F("Scrubber", 4), F("Dehumidifier", 3), F("HeatExchanger", 2) }) },
-            new[] { Farm(10), Farm(11), ("Storage", "식량 창고 둘", new[] { F("FoodLocker", 13), F("RobotDock", 3) }), ("Storage", "식량 창고 셋", new[] { F("FoodLocker", 13), F("RobotDock", 3) }), Farm(12), ("LifeSupport", "생명유지실 셋", new[] { F("OxygenGenerator", 7), F("WaterRecycler", 2), F("Scrubber", 5), F("Dehumidifier", 3), F("HeatExchanger", 2) }) },
-        };
-        for (int qd = 0; qd < 4; qd++)
-            for (int k = 0; k < 6; k++)
-            {
-                double a0 = qd * 90 + k * 15;
-                var (ti, ni, fi) = inner[qd][k];
-                s.Link(s.Rect(0, 0, 141, 141, ti, ni, (x, y) => !Spoke(x, y) && Rr(x, y) >= 42 && Rr(x, y) < 50 && InAng(A(x, y), a0, a0 + 15), fi), cor);
-                var (to, no, fo) = outer[qd][k];
-                int r = s.Rect(0, 0, 141, 141, to, no, (x, y) => Rr(x, y) >= 52.5 && Rr(x, y) < 64 && InAng(A(x, y), a0, a0 + 15), fo);
-                s.Link(r, cor, kind: to == "Airlock" ? "pressure" : "normal");
-                if (to == "Airlock") s.Exit(r, 'S');
-            }
         return s;
     }
 
