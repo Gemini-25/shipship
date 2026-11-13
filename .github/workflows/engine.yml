@@ -54,3 +54,7 @@ jobs:
           timeout 300 $G --headless --path game --import > /dev/null 2>&1 || true
           timeout 120 $G --headless --path game -- --new --ship=Didim --seed=18 --for=10 2>&1 | tee godot.log | grep -E "화면|ERROR|Exception" || true
           grep -qE "화면 [0-9]+초 · 그림 [1-9][0-9]*장" godot.log
+          # 새 그림 (매끈한 반입체 — G 키): 같은 배를 새 그리개로도 띄워 본다
+          timeout 120 $G --headless --path game -- --new --ship=Didim --seed=18 --look=new --for=10 2>&1 | tee godot-new.log | grep -E "화면|ERROR|Exception" || true
+          grep -qE "화면 [0-9]+초 · 그림 [1-9][0-9]*장" godot-new.log
+          ! grep -qE "Exception|SCRIPT ERROR" godot-new.log

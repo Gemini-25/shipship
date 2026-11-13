@@ -37,6 +37,8 @@ public sealed class LiveFrame
     public FeedItem[] Feed = Array.Empty<FeedItem>();
     /// <summary>멈춤 (빠르기 단추 — UI U5).</summary>
     public bool Paused;
+    /// <summary>새 그림 (매끈한 반입체): 도트 그림 대신 실린 장면 값 — 없으면 옛 도트 그림 (Img).</summary>
+    public VFrame? V;
 }
 
 /// <summary>사건 띠의 한 줄: 때 · 글 · 단계 (0 알림 · 1 조심 · 2 위험) · 자리 칸 (-1 없음) · 아직인가.</summary>
@@ -66,6 +68,8 @@ public sealed class LiveShow
     public readonly Sim Sim;              // 산 세계
     public readonly Director Dir;         // 산 세계의 연출 (다시보기 고리: 2분마다 찍기 1시간치)
     public readonly Painter Painter;
+    /// <summary>새 그림: 도트 그림을 찍지 않고 장면 값(VFrame)만 싣는다 — 그리기는 게임 쪽 그래픽 카드가 한다.</summary>
+    public bool Vector;
     public readonly string ShipName;
     /// <summary>소리 엔진의 귀 — 화면이 한 장 나아갈 때마다 들은 것을 섞개로 보낸다 (Audio/Acoustics.cs).</summary>
     public readonly ShipView.Audio.Acoustics Ears = new();
@@ -504,7 +508,8 @@ public sealed class LiveShow
     {
         var (left, top, w, h) = Camera();
         int x0 = (int)Math.Floor(left), y0 = (int)Math.Floor(top);
-        int wc = (int)Math.Ceiling(w) + 1, hc = (int)Math.Ceiling(h) + 1; // 줌이 바뀔 때만 크기가 바뀐다 (텍스처를 덜 새로 만든다)
+        bool vec = Vector;
+        int wc = vec ? 1 : (int)Math.Ceiling(w) + 1, hc = vec ? 1 : (int)Math.Ceiling(h) + 1; // 줌이 바뀔 때만 크기가 바뀐다 (텍스처를 덜 새로 만든다)
         // 그림판은 넉넉히 (그리는 칸은 그대로) — 확대가 부드럽게 바뀌는 동안 장마다 새 그림판(몇 MB) · 새 텍스처를 만들지 않게:
         // 남은 그림판이 담을 수 있고 넓이가 1.5배 안이면 그대로 쓰고 (가장 작은 것) · 새로 잡을 때는 가로세로 1/8과 한 칸씩 더
         int needW = wc * Painter.T, needH = hc * Painter.T;
@@ -533,7 +538,8 @@ public sealed class LiveShow
         }
         else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
         Painter.Sub = Math.Clamp(_carry, 0, 1);
-        var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
+        var img = vec ? reuse : Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
+        var vframe = vec ? Painter.VectorFrame(World, (int)(_anim * AnimFps), _anim, DrawnAt) : null;
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         var (shx, shy) = Shake();
         float srcX = Math.Clamp((float)((left - x0) * Painter.T) + shx, 0, Math.Max(0, needW - (float)(w * Painter.T)));   // 그린 칸 안에서만 (그림판의 나머지는 지난 장)
@@ -555,7 +561,7 @@ public sealed class LiveShow
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
             Vitals = Vitals(),
             Crew = CrewBar(), Faces = _facesShown, FacesVersion = _facesVersion, Selected = Selected,
-            Feed = Feed(), Paused = Paused,
+            Feed = Feed(), Paused = Paused, V = vframe,
         };
     }
 

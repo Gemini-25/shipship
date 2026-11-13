@@ -74,6 +74,11 @@ public partial class LiveMain : Node2D
     private int _shotN, _picsTotal, _pick = -1;
     private PanelKind _openPanel;
     private bool _ignite;                                      // --ignite: 감은 뒤 침대 하나에 불씨 (화면 사진용 — 사건 띠 · 불 연출)
+    // 새 그림 (매끈한 반입체 — docs/GRAPHICS.md 시안 3): G로 옛 도트 그림과 바꿔 본다 · --look=new로 처음부터
+    private VectorView? _vec;
+    private volatile bool _newLook;
+    private (double x, double y)? _startAt;                   // --at=x,y: 처음에 보는 곳 (칸)
+    private double _zoomBy = 1; private bool _startOverview;   // 화면 사진용: 처음 확대 · 배 전체 보기
     private double _skipHours;                                 // --skip=시간: 띄우기 전에 그만큼 앞으로 감는다 (화면 사진용)                              // --panel=L|T|J: 3초 뒤 그 판을 연다 (화면 사진용)
     private readonly System.Collections.Generic.List<double> _frameMs = new();
 
@@ -98,11 +103,18 @@ public partial class LiveMain : Node2D
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a == "--ignite") _ignite = true;
+            else if (a == "--look=new") _newLook = true;
+            else if (a.StartsWith("--zoom=") && double.TryParse(a[7..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var zm)) _zoomBy = zm;
+            else if (a == "--overview") _startOverview = true;
+            else if (a.StartsWith("--at=")) { var xy = a[5..].Split(','); if (xy.Length == 2 && double.TryParse(xy[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ax) && double.TryParse(xy[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ay)) _startAt = (ax, ay); }
             else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Route, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
             else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
         }
         if (_shotDir != null) { System.IO.Directory.CreateDirectory(_shotDir); _help = true; _helpLeft = 4; }
         _shipAt = Math.Max(0, Array.IndexOf(_ships, ship));
+        _vec = new VectorView { Name = "새 그림", ZIndex = -4096, Visible = false };
+        _vec.Fonts(_font, _bold);
+        AddChild(_vec);
         Launch(ship, _seed);
         _running = true;
         _worker = new Thread(Work) { IsBackground = true, Name = "세계" };
@@ -139,6 +151,9 @@ public partial class LiveMain : Node2D
                 gen = _gen;
                 while (_cmds.TryDequeue(out _)) { }               // 옛 배에 내린 손은 버린다
                 _show = LiveShow.Crewed(want, _launchSeed);
+                if (_zoomBy != 1) { _show.ZoomBy(_zoomBy); _zoomBy = 1; }
+                if (_startOverview) { _show.Overview = true; _startOverview = false; }
+                if (_startAt is { } sa) { _show.Follow = false; _show.FollowSelected = false; _show.CamX = sa.x; _show.CamY = sa.y; _startAt = null; }
                 if (_skipHours > 0) { _show.FastForward(Time.Hours(_skipHours)); _skipHours = 0; }
                 if (_ignite)
                 {
@@ -155,6 +170,7 @@ public partial class LiveMain : Node2D
             last = now;
             while (_cmds.TryDequeue(out var cmd)) cmd(show);
             show.Aspect = _aspect;
+            show.Vector = _newLook;
             show.Advance(dt);
             var pic = new Pic { F = show.Render(), Gen = gen };
             var old = Interlocked.Exchange(ref _ready, pic);
@@ -191,7 +207,10 @@ public partial class LiveMain : Node2D
         {
             var f = pic.F;
             var img = f.Img;
-            if (_image == null || _image.GetWidth() != img.W || _image.GetHeight() != img.H)
+            if (f.V != null) { _vec!.Visible = true; _vec.Show(f.V, f.CamLeft, f.CamTop, f.CamW, size, f.Selected); }
+            else if (_vec!.Visible) _vec.Visible = false;
+            if (f.V != null) { }
+            else if (_image == null || _image.GetWidth() != img.W || _image.GetHeight() != img.H)
             {
                 _image = Image.CreateFromData(img.W, img.H, false, Image.Format.Rgba8, img.Px);
                 _tex = ImageTexture.CreateFromImage(_image);
@@ -269,13 +288,13 @@ public partial class LiveMain : Node2D
     public override void _Draw()
     {
         var vp = GetViewportRect().Size;
-        if (_tex == null || _shown == null)
+        if (_shown == null || _tex == null && _shown.V == null)
         {
             DrawCentered("새 엔진으로 배를 띄우는 중…", vp / 2, 26, new Color(0.8f, 0.85f, 0.95f));
             return;
         }
         var f = _shown;
-        DrawTextureRectRegion(_tex, new Rect2(Vector2.Zero, vp), new Rect2(f.SrcX, f.SrcY, f.SrcW, f.SrcH));
+        if (f.V == null) DrawTextureRectRegion(_tex, new Rect2(Vector2.Zero, vp), new Rect2(f.SrcX, f.SrcY, f.SrcW, f.SrcH));
         if (_cutDip > 0) DrawRect(new Rect2(Vector2.Zero, vp), new Color(0, 0, 0, (float)(0.7 * _cutDip / CutDipSec)));   // 컷 전환
 
         // 위 줄: 배 · 시각 · 분위기 · 빠르기 · 사람
@@ -655,6 +674,7 @@ public partial class LiveMain : Node2D
             "J  주컴퓨터 (지금 사건 · 배 형편 · 일지)",
             "C  사슬 (지금 장면은 어디서 시작됐나)      P  사람",
             "O  겹쳐 보기: 공기 → 열 → 연기 → 사슬 선 → 끔",
+            "G  새 그림 (매끈한 반입체) ↔ 옛 도트 그림",
             "M  다 켬 → 음악 끔 → 소리 끔      U  소리 자막 (켬 / 끔)",
             "H  도움말      Esc  처음 화면 (기존 판 · 새 엔진 판 고르기)",
             $"지금 항로: {_shown?.Route}",
@@ -711,6 +731,7 @@ public partial class LiveMain : Node2D
                 case Key.N: _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.R: _seed++; _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.H: _help = !_help; _helpLeft = 0; break;
+                case Key.G: _newLook = !_newLook; _cmds.Enqueue(s => s.Notify(_newLook ? "새 그림 (매끈한 반입체) — G로 옛 도트 그림" : "옛 도트 그림 — G로 새 그림", 4)); break;
                 case Key.T: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Route)); break;
                 case Key.L: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Highlights)); break;
                 case Key.J: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Journal)); break;
