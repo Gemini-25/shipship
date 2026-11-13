@@ -131,6 +131,27 @@ public static partial class Program
                 $"샤워 {m.ShowersTaken} · 더러움 0.80 → {life[m[p].C.Body].Dirt:0.00} · 물탱크 −{used:0}몰 · 오수 +{waste:0}몰 · 온수기 켬 {heater} · 끔 {net.On[dev] == 0} · 습기 {h2o0:0} → {h2oPeak:0}ppm");
         }
 
+        // ── 샤워의 열 (월드 — 고친 결함): 여섯이 이어서 씻어도 샤워실 공기는 물(40℃)보다 뜨거워지지 않는다 — 데지 않는다 (예전: 열을 샤워 칸 한 칸에 몰아 넣어 57℃를 넘겼다 · 디딤호 시드 11 이틀째 화상 죽음) ──
+        {
+            var s = Worlds.Full(lay, 13);
+            var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>();
+            int p = m.AddPerson(s, Worlds.At(lay, 9, 2));
+            s.Run(2);
+            int cell = s.Layout.Furniture.First(x => x.Type == "Shower").Cells[0];
+            var room = s.Layout.Rooms[s.Layout.Room[cell]].Cells;
+            double t0 = f.Temp(cell), peak = 0;
+            for (int k = 0; k < 6; k++)
+            {
+                life.Wash(s, m[p].C.Body, Mind.ShowerWater, 313, cell);
+                foreach (int c in room) peak = Math.Max(peak, f.Temp(c));
+                s.Run(Time.Minutes(6));
+                foreach (int c in room) peak = Math.Max(peak, f.Temp(c));
+            }
+            Check("샤워의 열: 여섯이 이어서 씻어도 샤워실 공기는 물(40℃)보다 뜨거워지지 않는다 — 아무도 데지 않는다 (열 · 김은 방 전체로)",
+                peak <= 313.2 && peak > t0 + 0.5 && life[m[p].C.Body].Burn == 0,
+                $"처음 {t0 - 273.15:0.0}℃ · 가장 뜨거웠던 칸 {peak - 273.15:0.0}℃ · 화상 {life[m[p].C.Body].Burn:0.00}");
+        }
+
         // ── 손 씻기: 성실한 이는 변기 뒤에 거의 늘 · 덜 성실한 이는 가끔 (세 번 볼일) ──
         {
             int Washes(float consc)

@@ -39,7 +39,7 @@ public sealed partial class Life
 
     /// <summary>
     /// 물로 씻는다 (월드 — 샤워 칸 · 세면대): 물 water몰(망의 물탱크에서 이미 꺼낸 것)이 더러움을 water/ShowerMol만큼 씻고 · 지린 옷도 (물 200몰 넘게) ·
-    /// 쓴 물은 오수로 · 따뜻한 물이면 그 3%가 김으로 칸의 공기에 (습도) · 열의 15%가 칸으로.
+    /// 쓴 물은 오수로 · 따뜻한 물이면 그 1%가 김으로 방의 공기에 (습도) · 열의 15%가 방 전체의 공기로 (공기는 물 온도를 넘지 않는다).
     /// </summary>
     public void Wash(Sim sim, int body, double water, double waterK, int cell)
     {
@@ -47,7 +47,19 @@ public sealed partial class Life
         b.Dirt = (float)Math.Max(0, b.Dirt - water / ShowerMol);
         if (water >= 200) { b.Wet = 0; Showers++; }
         double steam = waterK > 305 ? water * 0.01 : 0;   // 따뜻한 물의 1%가 김으로 (8L면 80mL)
-        if (steam > 0 && cell >= 0) { F.AddGas(cell, T.gH2O, steam, waterK); F.AddHeat(cell, water * 75.3 * (waterK - F.Temp(cell)) * 0.15); }
+        if (steam > 0 && cell >= 0)
+        {
+            // 김과 열은 방 전체의 공기로 (샤워 칸 한 칸이 아니다) · 공기는 물보다 뜨거워질 수 없다 — 칸마다 물 온도까지의 반만 (나머지 열은 물과 함께 배수구로)
+            int room = L.Room[cell];
+            var cells = room >= 0 ? L.Rooms[room].Cells : new[] { cell };
+            double share = water * 75.3 * 0.15 / cells.Length;   // 물이 식으며 방 공기에 내놓는 몫 (J/K — 칸마다)
+            foreach (int c in cells)
+            {
+                F.AddGas(c, T.gH2O, steam / cells.Length, Math.Max(F.Temp(c), Math.Min(waterK, F.Temp(c) + 5)));
+                double dT = waterK - F.Temp(c);
+                if (dT > 0) F.AddHeat(c, Math.Min(share, 0.5 * F.GasC(c)) * dT);
+            }
+        }
         if (_net != null) _net.WasteWater += water - steam;
     }
 
